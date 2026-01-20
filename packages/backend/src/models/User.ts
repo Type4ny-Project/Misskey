@@ -164,6 +164,12 @@ export class MiUser {
 	})
 	public score: number;
 
+	@Column('integer', {
+		default: 0,
+		comment: 'The accumulated points from login bonus and other sources.',
+	})
+	public points: number;
+
 	@Column('boolean', {
 		default: false,
 		comment: 'Whether the User is suspended.',

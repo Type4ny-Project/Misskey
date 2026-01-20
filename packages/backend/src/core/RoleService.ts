@@ -71,6 +71,7 @@ export type RolePolicies = {
 	noteDraftLimit: number;
 	scheduledNoteLimit: number;
 	watermarkAvailable: boolean;
+	loginBonusGrantEnabled: boolean;
 };
 
 export const DEFAULT_POLICIES: RolePolicies = {
@@ -118,6 +119,7 @@ export const DEFAULT_POLICIES: RolePolicies = {
 	noteDraftLimit: 10,
 	scheduledNoteLimit: 1,
 	watermarkAvailable: true,
+	loginBonusGrantEnabled: true,
 };
 
 @Injectable()
@@ -443,6 +445,7 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 			noteDraftLimit: calc('noteDraftLimit', vs => Math.max(...vs)),
 			scheduledNoteLimit: calc('scheduledNoteLimit', vs => Math.max(...vs)),
 			watermarkAvailable: calc('watermarkAvailable', vs => vs.some(v => v === true)),
+			loginBonusGrantEnabled: calc('loginBonusGrantEnabled', vs => vs.some(v => v === true)),
 		};
 	}
 

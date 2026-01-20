@@ -10,6 +10,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import { MetaService } from '@/core/MetaService.js';
+import { RoleService } from '@/core/RoleService.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '../error.js';
 
@@ -53,6 +54,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private userEntityService: UserEntityService,
 		private notificationService: NotificationService,
 		private metaService: MetaService,
+		private roleService: RoleService,
 	) {
 		super(meta, paramDef, async (ps, user, token) => {
 			const isSecure = token == null;
@@ -76,14 +78,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				// ログインボーナス付与
 				const meta = await this.metaService.fetch();
 				if (meta.enableLoginBonus) {
-					const bonusPoints = randomInt(1, 6); // 1-5 points
-					const currentUser = await this.usersRepository.findOneByOrFail({ id: user.id });
-					await this.usersRepository.update(user.id, {
-						points: currentUser.points + bonusPoints,
-					});
-					this.notificationService.createNotification(user.id, 'loginBonus', {
-						points: bonusPoints,
-					});
+					const policies = await this.roleService.getUserPolicies(user.id);
+					if (policies.loginBonusGrantEnabled) {
+						const bonusPoints = randomInt(1, 6); // 1-5 points
+						const currentUser = await this.usersRepository.findOneByOrFail({ id: user.id });
+						await this.usersRepository.update(user.id, {
+							points: currentUser.points + bonusPoints,
+						});
+						this.notificationService.createNotification(user.id, 'loginBonus', {
+							points: bonusPoints,
+						});
+					}
 				}
 
 				this.userProfilesRepository.update({ userId: user.id }, {

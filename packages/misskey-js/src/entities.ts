@@ -327,3 +327,21 @@ export type SigninWithPasskeyResponse = {
 type Values<T extends Record<PropertyKey, unknown>> = T[keyof T];
 
 export type PartialRolePolicyOverride = Partial<{ [k in keyof RolePolicies]: Omit<Values<Role['policies']>, 'value'> & { value: RolePolicies[k] } }>;
+
+export type EmojiRequest = {
+	id: string;
+	createdAt: string;
+	updatedAt: string | null;
+	name: string;
+	category: string | null;
+	originalUrl: string;
+	aliases: string[];
+	license: string | null;
+	comment: string;
+	status: 'pending' | 'approved' | 'rejected';
+	rejectionReason: string | null;
+};
+
+export type EmojiRequestAdmin = EmojiRequest & {
+	userId: string | null;
+};

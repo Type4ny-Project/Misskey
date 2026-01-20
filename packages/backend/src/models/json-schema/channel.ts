@@ -98,5 +98,13 @@ export const packedChannelSchema = {
 				ref: 'Note',
 			},
 		},
+		collaboratorIds: {
+			type: 'array',
+			optional: true, nullable: false,
+			items: {
+				type: 'string',
+				format: 'id',
+			},
+		},
 	},
 } as const;

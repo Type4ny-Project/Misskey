@@ -4,11 +4,13 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { In } from 'typeorm';
 import { Endpoint } from '@/server/api/endpoint-base.js';
-import type { DriveFilesRepository, ChannelsRepository } from '@/models/_.js';
+import type { DriveFilesRepository, ChannelsRepository, UsersRepository } from '@/models/_.js';
 import { ChannelEntityService } from '@/core/entities/ChannelEntityService.js';
 import { DI } from '@/di-symbols.js';
 import { RoleService } from '@/core/RoleService.js';
+import { ChannelService } from '@/core/ChannelService.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -62,6 +64,10 @@ export const paramDef = {
 		color: { type: 'string', minLength: 1, maxLength: 16 },
 		isSensitive: { type: 'boolean', nullable: true },
 		allowRenoteToExternal: { type: 'boolean', nullable: true },
+		collaboratorIds: {
+			type: 'array',
+			items: { type: 'string', format: 'misskey:id' },
+		},
 	},
 	required: ['channelId'],
 } as const;
@@ -75,9 +81,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.driveFilesRepository)
 		private driveFilesRepository: DriveFilesRepository,
 
+		@Inject(DI.usersRepository)
+		private usersRepository: UsersRepository,
+
 		private channelEntityService: ChannelEntityService,
 
 		private roleService: RoleService,
+		private channelService: ChannelService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const channel = await this.channelsRepository.findOneBy({
@@ -89,11 +99,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			const iAmModerator = await this.roleService.isModerator(me);
-			if (channel.userId !== me.id && !iAmModerator) {
+			const canEdit = await this.channelService.canEditChannel(channel, me, iAmModerator);
+			if (!canEdit) {
 				throw new ApiError(meta.errors.accessDenied);
 			}
 
-			// eslint:disable-next-line:no-unnecessary-initializer
 			let banner = undefined;
 			if (ps.bannerId != null) {
 				banner = await this.driveFilesRepository.findOneBy({
@@ -108,11 +118,28 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				banner = null;
 			}
 
+			if (ps.collaboratorIds !== undefined) {
+				if (channel.userId !== me.id && !iAmModerator) {
+					throw new ApiError(meta.errors.accessDenied);
+				}
+				const users = await this.usersRepository.findBy({
+					id: In(ps.collaboratorIds),
+				});
+				if (users.length !== ps.collaboratorIds.length) {
+					throw new ApiError({
+						message: 'One or more collaborator user IDs are invalid.',
+						code: 'INVALID_COLLABORATOR_USER_IDS',
+						id: '3e7c9a2b-4f8c-4d1e-9b7a-3f6e8c7d9a1b',
+					});
+				}
+				await this.channelService.setCollaborators(channel, ps.collaboratorIds);
+			}
+
 			await this.channelsRepository.update(channel.id, {
-				...(ps.name !== undefined ? { name: ps.name } : {}),
+				...(ps.name ? { name: ps.name } : {}),
 				...(ps.description !== undefined ? { description: ps.description } : {}),
-				...(ps.pinnedNoteIds !== undefined ? { pinnedNoteIds: ps.pinnedNoteIds } : {}),
-				...(ps.color !== undefined ? { color: ps.color } : {}),
+				...(ps.pinnedNoteIds ? { pinnedNoteIds: ps.pinnedNoteIds } : {}),
+				...(ps.color ? { color: ps.color } : {}),
 				...(typeof ps.isArchived === 'boolean' ? { isArchived: ps.isArchived } : {}),
 				...(banner ? { bannerId: banner.id } : {}),
 				...(typeof ps.isSensitive === 'boolean' ? { isSensitive: ps.isSensitive } : {}),

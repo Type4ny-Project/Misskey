@@ -98,4 +98,11 @@ export class MiChannel {
 		default: true,
 	})
 	public allowRenoteToExternal: boolean;
+
+	@Column({
+		...id(),
+		array: true, default: '{}',
+		comment: 'Collaborator user IDs.',
+	})
+	public collaboratorIds: MiUser['id'][];
 }

@@ -78,13 +78,13 @@ export class ApInboxService {
 		private noteCreateService: NoteCreateService,
 		private noteDeleteService: NoteDeleteService,
 		private apResolverService: ApResolverService,
-		private apDbResolverService: ApDbResolverService,
-		private apLoggerService: ApLoggerService,
 		private apNoteService: ApNoteService,
 		private apPersonService: ApPersonService,
 		private apQuestionService: ApQuestionService,
 		private queueService: QueueService,
 		private globalEventService: GlobalEventService,
+		private apLoggerService: ApLoggerService,
+		private apDbResolverService: ApDbResolverService,
 	) {
 		this.logger = this.apLoggerService.logger;
 	}
@@ -767,11 +767,13 @@ export class ApInboxService {
 
 	@bindThis
 	private async update(actor: MiRemoteUser, activity: IUpdate, resolver?: Resolver): Promise<string> {
+		const uri = getApId(activity);
+
 		if (actor.uri !== activity.actor) {
 			return 'skip: invalid actor';
 		}
 
-		this.logger.debug('Update');
+		this.logger.debug(`Update: ${uri}`);
 
 		// eslint-disable-next-line no-param-reassign
 		resolver ??= await this.apResolverService.createResolver();
@@ -787,8 +789,45 @@ export class ApInboxService {
 		} else if (getApType(object) === 'Question') {
 			await this.apQuestionService.updateQuestion(object, actor, resolver).catch(err => console.error(err));
 			return 'ok: Question updated';
+		} else if (getApType(object) === 'Note') {
+			await this.updateNote(resolver, actor, object, false, activity);
+			return 'ok: Note updated';
 		} else {
 			return `skip: Unknown type: ${getApType(object)}`;
+		}
+	}
+
+	@bindThis
+	private async updateNote(resolver: Resolver, actor: MiRemoteUser, note: IObject, silent = false, activity?: IUpdate): Promise<string> {
+		const uri = getApId(note);
+
+		if (typeof note === 'object') {
+			if (actor.uri !== note.attributedTo) {
+				return 'skip: actor.uri !== note.attributedTo';
+			}
+
+			if (typeof note.id === 'string') {
+				if (this.utilityService.extractDbHost(actor.uri) !== this.utilityService.extractDbHost(note.id)) {
+					return 'skip: host in actor.uri !== note.id';
+				}
+			}
+		}
+
+		const unlock = await acquireApObjectLock(this.redisClient, uri);
+
+		try {
+			//const exist = await this.apNoteService.fetchNote(note);
+			//if (exist) return 'skip: note exists';
+			await this.apNoteService.updateNote(note, resolver, silent);
+			return 'ok';
+		} catch (err) {
+			if (err instanceof StatusError && err.isClientError) {
+				return `skip ${err.statusCode}`;
+			} else {
+				throw err;
+			}
+		} finally {
+			unlock();
 		}
 	}
 

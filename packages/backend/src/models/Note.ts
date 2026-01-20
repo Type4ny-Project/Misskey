@@ -200,6 +200,27 @@ export class MiNote {
 	})
 	public hasPoll: boolean;
 
+	@Column('timestamp with time zone', {
+		nullable: true,
+		comment: 'The updated date of the Note.',
+	})
+	public updatedAt: Date | null;
+
+	@Column('timestamp with time zone', {
+		array: true,
+		nullable: true,
+		comment: 'History of update timestamps.',
+	})
+	public updatedAtHistory: Date[] | null;
+
+	@Column('varchar', {
+		length: 3000,
+		array: true,
+		default: '{}',
+		comment: 'History of previous note texts.',
+	})
+	public noteEditHistory: string[];
+
 	@Index()
 	@Column({
 		...id(),

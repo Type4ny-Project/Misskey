@@ -131,6 +131,7 @@ export interface IPost extends IObject {
 	_misskey_quote?: string;
 	_misskey_content?: string;
 	quoteUrl?: string;
+	updated?: string;
 }
 
 export interface IQuestion extends IObject {

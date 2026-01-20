@@ -4,9 +4,12 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import type { UserProfilesRepository } from '@/models/_.js';
+import { randomInt } from 'node:crypto';
+import type { UserProfilesRepository, UsersRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import { NotificationService } from '@/core/NotificationService.js';
+import { MetaService } from '@/core/MetaService.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '../error.js';
 
@@ -44,7 +47,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.userProfilesRepository)
 		private userProfilesRepository: UserProfilesRepository,
 
+		@Inject(DI.usersRepository)
+		private usersRepository: UsersRepository,
+
 		private userEntityService: UserEntityService,
+		private notificationService: NotificationService,
+		private metaService: MetaService,
 	) {
 		super(meta, paramDef, async (ps, user, token) => {
 			const isSecure = token == null;
@@ -65,6 +73,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			if (!userProfile.loggedInDates.includes(today)) {
+				// ログインボーナス付与
+				const meta = await this.metaService.fetch();
+				if (meta.enableLoginBonus) {
+					const bonusPoints = randomInt(1, 6); // 1-5 points
+					const currentUser = await this.usersRepository.findOneByOrFail({ id: user.id });
+					await this.usersRepository.update(user.id, {
+						points: currentUser.points + bonusPoints,
+					});
+					this.notificationService.createNotification(user.id, 'loginBonus', {
+						points: bonusPoints,
+					});
+				}
+
 				this.userProfilesRepository.update({ userId: user.id }, {
 					loggedInDates: [...userProfile.loggedInDates, today],
 				});

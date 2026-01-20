@@ -191,6 +191,12 @@ export class MiMeta {
 
 	@Column('boolean', {
 		default: false,
+		comment: 'Whether to enable login bonus feature.',
+	})
+	public enableLoginBonus: boolean;
+
+	@Column('boolean', {
+		default: false,
 	})
 	public enableHcaptcha: boolean;
 

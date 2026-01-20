@@ -270,6 +270,12 @@ export class MiUserProfile {
 	})
 	public loggedInDates: string[];
 
+	@Column('boolean', {
+		default: true,
+		comment: 'Whether to show login bonus points on profile.',
+	})
+	public loginBonusIsVisible: boolean;
+
 	@Column('jsonb', {
 		default: [],
 	})

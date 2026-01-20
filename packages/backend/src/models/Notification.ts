@@ -142,6 +142,11 @@ export type MiNotification = {
 	type: 'test';
 	id: string;
 	createdAt: string;
+} | {
+	type: 'loginBonus';
+	id: string;
+	createdAt: string;
+	points: number;
 };
 
 export type MiGroupedNotification = MiNotification | {

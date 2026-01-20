@@ -46,6 +46,7 @@ export const notificationTypes = [
 	'createToken',
 	'app',
 	'test',
+	'loginBonus',
 ] as const;
 
 export const groupedNotificationTypes = [

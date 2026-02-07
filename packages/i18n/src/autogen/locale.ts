@@ -89,6 +89,10 @@ export interface Locale extends ILocale {
      */
     "enterUsername": string;
     /**
+     * 続行するには入力してください
+     */
+    "pleaseEnterToContinue": string;
+    /**
      * {user}がリノート
      */
     "renotedBy": ParameterizedString<"user">;
@@ -160,6 +164,10 @@ export interface Locale extends ILocale {
      * 保存
      */
     "save": string;
+    /**
+     * 送信
+     */
+    "submit": string;
     /**
      * ユーザー
      */
@@ -352,6 +360,18 @@ export interface Locale extends ILocale {
      * {name}からのフォロー申請を拒否しますか？
      */
     "rejectFollowRequestConfirm": ParameterizedString<"name">;
+    /**
+     * {x}を承認しますか？
+     */
+    "approveConfirm": ParameterizedString<"x">;
+    /**
+     * {x}を却下しますか？理由: {reason}
+     */
+    "rejectConfirm": ParameterizedString<"x" | "reason">;
+    /**
+     * 必須項目を入力してください。
+     */
+    "fillIsRequired": string;
     /**
      * エクスポートをリクエストしました。これには時間がかかる場合があります。エクスポートが終わると、「ドライブ」に追加されます。
      */
@@ -700,6 +720,110 @@ export interface Locale extends ILocale {
      * 絵文字を追加
      */
     "addEmoji": string;
+    /**
+     * 絵文字申請
+     */
+    "emojiRequest": string;
+    /**
+     * 絵文字申請を送信
+     */
+    "emojiRequestCreate": string;
+    /**
+     * このインスタンスに新しいカスタム絵文字を追加申請します
+     */
+    "emojiRequestCreateDescription": string;
+    /**
+     * 絵文字名
+     */
+    "emojiRequestName": string;
+    /**
+     * 例: myemoji (半角英数字、_ と - のみ)
+     */
+    "emojiRequestNamePlaceholder": string;
+    /**
+     * カテゴリー
+     */
+    "emojiRequestCategory": string;
+    /**
+     * 例: リアクション
+     */
+    "emojiRequestCategoryPlaceholder": string;
+    /**
+     * 絵文字のURL
+     */
+    "emojiRequestUrl": string;
+    /**
+     * https://example.com/emoji.png
+     */
+    "emojiRequestUrlPlaceholder": string;
+    /**
+     * エイリアス
+     */
+    "emojiRequestAliases": string;
+    /**
+     * 代替名をスペース区切りで入力
+     */
+    "emojiRequestAliasesPlaceholder": string;
+    /**
+     * ライセンス
+     */
+    "emojiRequestLicense": string;
+    /**
+     * 例: CC-BY-NC
+     */
+    "emojiRequestLicensePlaceholder": string;
+    /**
+     * コメント
+     */
+    "emojiRequestComment": string;
+    /**
+     * 管理者へのメモ
+     */
+    "emojiRequestCommentPlaceholder": string;
+    /**
+     * ステータス
+     */
+    "emojiRequestStatus": string;
+    /**
+     * 保留中
+     */
+    "emojiRequestStatusPending": string;
+    /**
+     * 承認済み
+     */
+    "emojiRequestStatusApproved": string;
+    /**
+     * 却下済み
+     */
+    "emojiRequestStatusRejected": string;
+    /**
+     * 却下理由
+     */
+    "emojiRequestRejectReason": string;
+    /**
+     * 絵文字申請がありません
+     */
+    "emojiRequestNoRequests": string;
+    /**
+     * 絵文字申請を送信しました
+     */
+    "emojiRequestCreated": string;
+    /**
+     * 絵文字申請を更新しました
+     */
+    "emojiRequestUpdated": string;
+    /**
+     * 絵文字申請を承認しました
+     */
+    "emojiRequestApproved": string;
+    /**
+     * 絵文字申請を却下しました
+     */
+    "emojiRequestRejected": string;
+    /**
+     * あなたの絵文字申請
+     */
+    "emojiRequestYourRequests": string;
     /**
      * おすすめ設定
      */
@@ -1492,6 +1616,10 @@ export interface Locale extends ILocale {
      * 許可
      */
     "accept": string;
+    /**
+     * 承認
+     */
+    "approve": string;
     /**
      * 拒否
      */
@@ -9602,6 +9730,22 @@ export interface Locale extends ILocale {
          * 絵文字を見る
          */
         "read:admin:emoji": string;
+        /**
+         * 絵文字申請を操作する
+         */
+        "write:admin:emoji-request": string;
+        /**
+         * 絵文字申請を見る
+         */
+        "read:admin:emoji-request": string;
+        /**
+         * 絵文字申請を送信する
+         */
+        "write:emoji-request": string;
+        /**
+         * 絵文字申請を見る
+         */
+        "read:emoji-request": string;
         /**
          * ジョブキューを操作する
          */

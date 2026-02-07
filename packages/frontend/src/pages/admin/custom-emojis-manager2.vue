@@ -15,13 +15,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, ref } from 'vue';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
+import { useRouter } from '@/router.js';
 import XGridLocalComponent from '@/pages/admin/custom-emojis-manager.local.list.vue';
 import XGridRemoteComponent from '@/pages/admin/custom-emojis-manager.remote.vue';
 import XRegisterComponent from '@/pages/admin/custom-emojis-manager.register.vue';
 
-type PageMode = 'local' | 'remote';
+type PageMode = 'local' | 'remote' | 'register' | 'requests';
 
 const headerTab = ref<PageMode>('local');
+const router = useRouter();
 
 const headerTabs = computed(() => [{
 	key: 'local',
@@ -32,6 +34,12 @@ const headerTabs = computed(() => [{
 }, {
 	key: 'register',
 	title: i18n.ts._customEmojisManager._local.tabTitleRegister,
+}, {
+	key: 'requests',
+	title: i18n.ts.emojiRequest,
+	onClick: () => {
+		router.push('/admin/emoji-requests');
+	},
 }]);
 
 definePage(computed(() => ({

@@ -28,7 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<div class="name">:{{ request.name }}:</div>
 								<div class="meta">
 									<span v-if="request.category" class="category">{{ request.category }}</span>
-									<span class="status" :class="request.status">{{ i18n.ts['emojiRequestStatus' + capitalizeFirst(request.status)] }}</span>
+								<span class="status" :class="request.status">{{ statusLabel(request.status) }}</span>
 								</div>
 							</div>
 						</div>
@@ -78,8 +78,17 @@ interface EmojiRequest {
 
 const requests = ref<EmojiRequest[]>([]);
 
-function capitalizeFirst(str: string): string {
-	return str.charAt(0).toUpperCase() + str.slice(1);
+function statusLabel(status: EmojiRequest['status']): string {
+	switch (status) {
+		case 'pending':
+			return i18n.ts.emojiRequestStatusPending;
+		case 'approved':
+			return i18n.ts.emojiRequestStatusApproved;
+		case 'rejected':
+			return i18n.ts.emojiRequestStatusRejected;
+		default:
+			return status;
+	}
 }
 
 async function fetchRequests() {

@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-export class AddChannelCollaborators1769106528 {
-    name = 'AddChannelCollaborators1769106528'
+export class AddChannelCollaborators1769106528000 {
+	name = 'AddChannelCollaborators1769106528000'
 
     async up(queryRunner) {
         await queryRunner.query(`ALTER TABLE "channel" ADD "collaboratorIds" character varying(64)[] DEFAULT '{}'`);

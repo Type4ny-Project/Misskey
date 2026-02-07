@@ -6,6 +6,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div class="_gaps">
 	<MkButton v-if="$i && ($i.isModerator || $i.policies.canManageCustomEmojis)" primary link to="/custom-emojis-manager">{{ i18n.ts.manageCustomEmojis }}</MkButton>
+	<div v-if="$i" class="_buttons">
+		<MkButton link to="/emoji-requests">{{ i18n.ts.emojiRequestYourRequests }}</MkButton>
+		<MkButton primary @click="createEmojiRequest">{{ i18n.ts.emojiRequestCreate }}</MkButton>
+	</div>
 
 	<div class="query">
 		<MkInput v-model="q" class="" :placeholder="i18n.ts.search" autocapitalize="off">
@@ -39,6 +43,7 @@ import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import { customEmojis, customEmojiCategories } from '@/custom-emojis.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
+import * as os from '@/os.js';
 
 const q = ref('');
 const searchEmojis = ref<Misskey.entities.EmojiSimple[] | null>(null);
@@ -63,6 +68,13 @@ function search() {
 watch(q, () => {
 	search();
 });
+
+async function createEmojiRequest() {
+	const { dispose } = await os.popupAsyncWithDialog(import('@/components/MkEmojiRequestDialog.vue').then(x => x.default), {
+	}, {
+		closed: () => dispose(),
+	});
+}
 </script>
 
 <style lang="scss" module>

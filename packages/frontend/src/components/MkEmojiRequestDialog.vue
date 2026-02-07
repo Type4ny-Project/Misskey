@@ -6,8 +6,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <MkWindow
 	ref="windowEl"
-	:initialWidth="500"
-	:initialHeight="550"
+	:initialWidth="600"
+	:initialHeight="600"
 	:canResize="true"
 	@close="windowEl?.close()"
 	@closed="emit('closed')"
@@ -19,9 +19,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div class="_gaps_m">
 				<MkInfo>{{ i18n.ts.emojiRequestCreateDescription }}</MkInfo>
 
-				<div v-if="previewUrl != null" :class="$style.previewContainer">
-					<img :src="previewUrl" :class="$style.previewImg"/>
+				<div v-if="previewUrl != null" :class="$style.previews">
+					<div :class="$style.previewCell" style="background: #000;">
+						<img :src="previewUrl" :class="$style.previewImg"/>
+					</div>
+					<div :class="$style.previewCell" style="background: #222;">
+						<img :src="previewUrl" :class="$style.previewImg"/>
+					</div>
+					<div :class="$style.previewCell" style="background: #ddd;">
+						<img :src="previewUrl" :class="$style.previewImg"/>
+					</div>
+					<div :class="$style.previewCell" style="background: #fff;">
+						<img :src="previewUrl" :class="$style.previewImg"/>
+					</div>
 				</div>
+
+				<MkButton rounded style="margin: 0 auto;" @click="selectImage">{{ i18n.ts.selectFile }}</MkButton>
 
 				<MkInput v-model="name" pattern="[a-z0-9_-]" autocapitalize="off">
 					<template #label>{{ i18n.ts.emojiRequestName }}</template>
@@ -40,7 +53,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 				<MkInput v-model="aliases" autocapitalize="off">
 					<template #label>{{ i18n.ts.emojiRequestAliases }}</template>
-					<template #caption>{{ i18n.ts.emojiRequestAliasesPlaceholder }}</template>
+					<template #caption>
+						{{ i18n.ts.emojiRequestAliasesPlaceholder }}<br/>
+						{{ i18n.ts.setMultipleBySeparatingWithSpace }}
+					</template>
 				</MkInput>
 
 				<MkInput v-model="license">
@@ -55,17 +71,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 		<div :class="$style.footer">
-			<MkButton primary rounded style="margin: 0 auto;" :disabled="submitting" @click="submit">
-				<i v-if="submitting" class="ti ti-loader ti-fw" :class="$style.spinner"></i>
-				{{ i18n.ts.submit }}
-			</MkButton>
+			<div :class="$style.footerButtons">
+				<MkButton primary rounded style="margin: 0 auto;" :disabled="submitting || !canSubmit" @click="submit">
+					<i v-if="submitting" class="ti ti-loader ti-fw" :class="$style.spinner"></i>
+					{{ i18n.ts.submit }}
+				</MkButton>
+			</div>
 		</div>
 	</div>
 </MkWindow>
 </template>
 
 <script lang="ts" setup>
-import { ref, watch, useTemplateRef } from 'vue';
+import { computed, ref, watch, useTemplateRef } from 'vue';
 import MkWindow from '@/components/MkWindow.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
@@ -73,6 +91,8 @@ import MkTextarea from '@/components/MkTextarea.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
+import { customEmojiCategories } from '@/custom-emojis.js';
+import { selectFile } from '@/utility/drive.js';
 
 const emit = defineEmits<{
 	(ev: 'done', v: { created: { id: string; createdAt: string; status: string } }): void,
@@ -89,16 +109,16 @@ const comment = ref('');
 const submitting = ref(false);
 const previewUrl = ref<string | null>(null);
 
-const categories = [
-	'Reactions',
-	'Animals',
-	'Food',
-	'Activities',
-	'Travel',
-	'Objects',
-	'Symbols',
-	'Flags',
-];
+const categories = computed(() => customEmojiCategories.value.filter((x): x is string => x != null));
+
+const canSubmit = computed(() => {
+	if (name.value === '' || originalUrl.value === '') return false;
+	const namePattern = /^[a-z0-9_-]+$/;
+	if (!namePattern.test(name.value)) return false;
+	const urlPattern = /^https?:\/\/.+/;
+	if (!urlPattern.test(originalUrl.value)) return false;
+	return true;
+});
 
 watch(originalUrl, (newUrl) => {
 	if (newUrl && newUrl.match(/^https?:\/\/.+/)) {
@@ -107,6 +127,21 @@ watch(originalUrl, (newUrl) => {
 		previewUrl.value = null;
 	}
 });
+
+async function selectImage(ev: MouseEvent) {
+	const file = await selectFile({
+		anchorElement: ev.currentTarget ?? ev.target,
+		multiple: false,
+	});
+	originalUrl.value = file.url;
+
+	if (name.value === '') {
+		const candidate = file.name.replace(/\.(.+)$/, '');
+		if (candidate.match(/^[a-z0-9_-]+$/)) {
+			name.value = candidate;
+		}
+	}
+}
 
 async function submit() {
 	if (submitting.value) return;
@@ -144,7 +179,7 @@ async function submit() {
 			name: name.value,
 			category: category.value === '' ? null : category.value,
 			originalUrl: originalUrl.value,
-			aliases: aliases.value.split(' ').filter(x => x !== ''),
+			aliases: aliases.value.replaceAll('　', ' ').split(' ').filter(x => x !== ''),
 			license: license.value === '' ? null : license.value,
 			comment: comment.value === '' ? '' : comment.value,
 		});
@@ -168,11 +203,19 @@ async function submit() {
 </script>
 
 <style lang="scss" module>
-.previewContainer {
+.previews {
 	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
 	justify-content: center;
-	padding: 16px;
+
+	.previewCell {
+		padding: 8px;
+		border-radius: 6px;
+	}
+
 	background: var(--MI_THEME-panel);
+	padding: 12px;
 	border-radius: 8px;
 }
 
@@ -201,5 +244,11 @@ async function submit() {
 	background: color(from var(--MI_THEME-bg) srgb r g b / 0.5);
 	-webkit-backdrop-filter: var(--MI-blur, blur(15px));
 	backdrop-filter: var(--MI-blur, blur(15px));
+}
+
+.footerButtons {
+	display: flex;
+	gap: 8px;
+	justify-content: center;
 }
 </style>

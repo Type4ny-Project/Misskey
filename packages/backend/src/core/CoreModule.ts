@@ -25,6 +25,7 @@ import { AchievementService } from './AchievementService.js';
 import { AvatarDecorationService } from './AvatarDecorationService.js';
 import { CaptchaService } from './CaptchaService.js';
 import { CustomEmojiService } from './CustomEmojiService.js';
+import { EmojiRequestService } from './EmojiRequestService.js';
 import { DeleteAccountService } from './DeleteAccountService.js';
 import { DownloadService } from './DownloadService.js';
 import { DriveService } from './DriveService.js';
@@ -76,6 +77,7 @@ import { ClipService } from './ClipService.js';
 import { FeaturedService } from './FeaturedService.js';
 import { FanoutTimelineService } from './FanoutTimelineService.js';
 import { ChannelFollowingService } from './ChannelFollowingService.js';
+import { ChannelService } from './ChannelService.js';
 import { ChatService } from './ChatService.js';
 import { RegistryApiService } from './RegistryApiService.js';
 import { ReversiService } from './ReversiService.js';
@@ -228,6 +230,7 @@ const $FanoutTimelineService: Provider = { provide: 'FanoutTimelineService', use
 const $FanoutTimelineEndpointService: Provider = { provide: 'FanoutTimelineEndpointService', useExisting: FanoutTimelineEndpointService };
 const $ChannelFollowingService: Provider = { provide: 'ChannelFollowingService', useExisting: ChannelFollowingService };
 const $ChannelMutingService: Provider = { provide: 'ChannelMutingService', useExisting: ChannelMutingService };
+const $ChannelService: Provider = { provide: 'ChannelService', useExisting: ChannelService };
 const $ChatService: Provider = { provide: 'ChatService', useExisting: ChatService };
 const $RegistryApiService: Provider = { provide: 'RegistryApiService', useExisting: RegistryApiService };
 const $ReversiService: Provider = { provide: 'ReversiService', useExisting: ReversiService };
@@ -326,6 +329,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AvatarDecorationService,
 		CaptchaService,
 		CustomEmojiService,
+		EmojiRequestService,
 		DeleteAccountService,
 		DownloadService,
 		DriveService,
@@ -383,6 +387,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		FanoutTimelineEndpointService,
 		ChannelFollowingService,
 		ChannelMutingService,
+		ChannelService,
 		ChatService,
 		RegistryApiService,
 		ReversiService,
@@ -534,6 +539,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$FanoutTimelineEndpointService,
 		$ChannelFollowingService,
 		$ChannelMutingService,
+		$ChannelService,
 		$ChatService,
 		$RegistryApiService,
 		$ReversiService,
@@ -629,6 +635,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AvatarDecorationService,
 		CaptchaService,
 		CustomEmojiService,
+		EmojiRequestService,
 		DeleteAccountService,
 		DownloadService,
 		DriveService,
@@ -686,6 +693,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		FanoutTimelineEndpointService,
 		ChannelFollowingService,
 		ChannelMutingService,
+		ChannelService,
 		ChatService,
 		RegistryApiService,
 		ReversiService,
@@ -835,6 +843,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$FanoutTimelineEndpointService,
 		$ChannelFollowingService,
 		$ChannelMutingService,
+		$ChannelService,
 		$ChatService,
 		$RegistryApiService,
 		$ReversiService,

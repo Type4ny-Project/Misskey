@@ -4,22 +4,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader :actions="headerActions" :tabs="headerTabs">
+<PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs">
 	<div class="_spacer" style="--MI_SPACER-w: 900px;">
 		<div class="_gaps">
-			<MkSelect v-model="statusFilter">
-				<template #label>{{ i18n.ts.filter }}</template>
-				<template #default>
-					<option :value="null">{{ i18n.ts.all }}</option>
-					<option value="pending">{{ i18n.ts.emojiRequestStatusPending }}</option>
-					<option value="approved">{{ i18n.ts.emojiRequestStatusApproved }}</option>
-					<option value="rejected">{{ i18n.ts.emojiRequestStatusRejected }}</option>
-				</template>
-			</MkSelect>
-
 			<MkLoading v-if="loading"/>
 
-			<div v-else-if="requests.length === 0" class="_panel">
+			<div v-else-if="requests.length === 0">
 				<div class="_fullInfo">
 					<span>{{ i18n.ts.emojiRequestNoRequests }}</span>
 				</div>
@@ -37,7 +27,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div class="name">:{{ request.name }}:</div>
 							<div class="meta">
 								<span v-if="request.category" class="category">{{ request.category }}</span>
-								<span class="status" :class="request.status">{{ i18n.ts['emojiRequestStatus' + capitalizeFirst(request.status)] }}</span>
+								<span class="status" :class="request.status">{{ statusLabel(request.status) }}</span>
 							</div>
 						</div>
 						<div class="actions">
@@ -90,11 +80,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted } from 'vue';
-import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
-import MkSelect from '@/components/MkSelect.vue';
 import MkUserLink from '@/components/MkUserLink.vue';
-import MkLoading from '@/components/MkLoading.vue';
+import MkLoading from '@/components/global/MkLoading.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
@@ -116,13 +104,22 @@ interface EmojiRequest {
 }
 
 const requests = ref<EmojiRequest[]>([]);
-const statusFilter = ref<string | null>(null);
+const tab = ref<'all' | 'pending' | 'approved' | 'rejected'>('all');
 const loading = ref(true);
 const hasMore = ref(false);
 const untilId = ref<string | null>(null);
 
-function capitalizeFirst(str: string): string {
-	return str.charAt(0).toUpperCase() + str.slice(1);
+function statusLabel(status: EmojiRequest['status']): string {
+	switch (status) {
+		case 'pending':
+			return i18n.ts.emojiRequestStatusPending;
+		case 'approved':
+			return i18n.ts.emojiRequestStatusApproved;
+		case 'rejected':
+			return i18n.ts.emojiRequestStatusRejected;
+		default:
+			return status;
+	}
 }
 
 async function fetchRequests(limit = 50, append = false) {
@@ -131,7 +128,7 @@ async function fetchRequests(limit = 50, append = false) {
 	try {
 		const result = await misskeyApi('admin/emoji/list-request', {
 			limit,
-			status: statusFilter.value ?? undefined,
+			status: tab.value === 'all' ? undefined : tab.value,
 			untilId: untilId.value ?? undefined,
 		});
 
@@ -233,7 +230,9 @@ const headerTabs = computed(() => [{
 	title: i18n.ts.emojiRequestStatusRejected,
 }]);
 
-watch(statusFilter, () => {
+watch(tab, () => {
+	untilId.value = null;
+	requests.value = [];
 	fetchRequests();
 });
 

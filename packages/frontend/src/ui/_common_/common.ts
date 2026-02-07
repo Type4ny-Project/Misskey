@@ -38,6 +38,15 @@ function toolsMenuItems(): MenuItem[] {
 		});
 	}
 
+	if ($i) {
+		items.push({
+			type: 'link',
+			to: '/emoji-requests',
+			text: i18n.ts.emojiRequestYourRequests,
+			icon: 'ti ti-icons',
+		});
+	}
+
 	if ($i && ($i.isAdmin || $i.policies.canManageAvatarDecorations)) {
 		items.push({
 			type: 'link' as const,

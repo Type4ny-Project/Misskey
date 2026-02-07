@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-export class AddNoteEditColumns1769028471 {
-    name = 'AddNoteEditColumns1769028471'
+export class AddNoteEditColumns1769028471000 {
+	name = 'AddNoteEditColumns1769028471000'
 
     async up(queryRunner) {
         await queryRunner.query(`ALTER TABLE "note" ADD "updatedAtHistory" TIMESTAMP WITH TIME ZONE[]`);

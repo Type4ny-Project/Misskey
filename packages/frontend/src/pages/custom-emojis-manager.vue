@@ -86,6 +86,7 @@ import { getProxiedImageUrl } from '@/utility/media-proxy.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { Paginator } from '@/utility/paginator.js';
+import { useRouter } from '@/router.js';
 
 const tab = ref('local');
 const query = ref<string | null>(null);
@@ -93,6 +94,7 @@ const queryRemote = ref<string | null>(null);
 const host = ref<string | null>(null);
 const selectMode = ref(false);
 const selectedEmojis = ref<string[]>([]);
+const router = useRouter();
 
 type RemoteEmoji = Misskey.entities.AdminEmojiListRemoteResponse[number] & { host: string };
 
@@ -341,6 +343,12 @@ const headerTabs = computed(() => [{
 }, {
 	key: 'remote',
 	title: i18n.ts.remote,
+}, {
+	key: 'requests',
+	title: i18n.ts.emojiRequest,
+	onClick: () => {
+		router.push('/admin/emoji-requests');
+	},
 }]);
 
 definePage(() => ({

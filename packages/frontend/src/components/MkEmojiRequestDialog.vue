@@ -35,6 +35,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 
 				<MkButton rounded style="margin: 0 auto;" @click="selectImage">{{ i18n.ts.selectFile }}</MkButton>
+				<MkInfo v-if="fileId === null">{{ i18n.ts.pleaseEnterToContinue }}</MkInfo>
 
 				<MkInput v-model="name" pattern="[a-z0-9_-]" autocapitalize="off">
 					<template #label>{{ i18n.ts.emojiRequestName }}</template>
@@ -44,11 +45,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkInput v-model="category" :datalist="categories">
 					<template #label>{{ i18n.ts.emojiRequestCategory }}</template>
 					<template #caption>{{ i18n.ts.emojiRequestCategoryPlaceholder }}</template>
-				</MkInput>
-
-				<MkInput v-model="originalUrl" type="url">
-					<template #label>{{ i18n.ts.emojiRequestUrl }}</template>
-					<template #caption>{{ i18n.ts.emojiRequestUrlPlaceholder }}</template>
 				</MkInput>
 
 				<MkInput v-model="aliases" autocapitalize="off">
@@ -83,7 +79,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, ref, watch, useTemplateRef } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 import MkWindow from '@/components/MkWindow.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
@@ -102,7 +98,7 @@ const emit = defineEmits<{
 const windowEl = useTemplateRef('windowEl');
 const name = ref('');
 const category = ref('');
-const originalUrl = ref('');
+const fileId = ref<string | null>(null);
 const aliases = ref('');
 const license = ref('');
 const comment = ref('');
@@ -112,20 +108,10 @@ const previewUrl = ref<string | null>(null);
 const categories = computed(() => customEmojiCategories.value.filter((x): x is string => x != null));
 
 const canSubmit = computed(() => {
-	if (name.value === '' || originalUrl.value === '') return false;
+	if (name.value === '' || fileId.value == null) return false;
 	const namePattern = /^[a-z0-9_-]+$/;
 	if (!namePattern.test(name.value)) return false;
-	const urlPattern = /^https?:\/\/.+/;
-	if (!urlPattern.test(originalUrl.value)) return false;
 	return true;
-});
-
-watch(originalUrl, (newUrl) => {
-	if (newUrl && newUrl.match(/^https?:\/\/.+/)) {
-		previewUrl.value = newUrl;
-	} else {
-		previewUrl.value = null;
-	}
 });
 
 async function selectImage(ev: MouseEvent) {
@@ -133,7 +119,8 @@ async function selectImage(ev: MouseEvent) {
 		anchorElement: ev.currentTarget ?? ev.target,
 		multiple: false,
 	});
-	originalUrl.value = file.url;
+	fileId.value = file.id;
+	previewUrl.value = file.url;
 
 	if (name.value === '') {
 		const candidate = file.name.replace(/\.(.+)$/, '');
@@ -146,7 +133,7 @@ async function selectImage(ev: MouseEvent) {
 async function submit() {
 	if (submitting.value) return;
 
-	if (name.value === '' || originalUrl.value === '') {
+	if (name.value === '' || fileId.value == null) {
 		os.alert({
 			type: 'error',
 			text: i18n.ts.fillIsRequired,
@@ -163,22 +150,13 @@ async function submit() {
 		return;
 	}
 
-	const urlPattern = /^https?:\/\/.+/;
-	if (!urlPattern.test(originalUrl.value)) {
-		os.alert({
-			type: 'error',
-			text: i18n.ts.emojiRequestUrlPlaceholder,
-		});
-		return;
-	}
-
 	submitting.value = true;
 
 	try {
 		const result = await os.apiWithDialog('emoji-request/create', {
 			name: name.value,
 			category: category.value === '' ? null : category.value,
-			originalUrl: originalUrl.value,
+			fileId: fileId.value,
 			aliases: aliases.value.replaceAll('　', ' ').split(' ').filter(x => x !== ''),
 			license: license.value === '' ? null : license.value,
 			comment: comment.value === '' ? '' : comment.value,

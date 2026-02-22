@@ -6,8 +6,6 @@
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { EmojiRequestService } from '@/core/EmojiRequestService.js';
-import { CustomEmojiService } from '@/core/CustomEmojiService.js';
-import { DriveService } from '@/core/DriveService.js';
 import { ApiError } from '../../../error.js';
 
 export const meta = {
@@ -43,10 +41,10 @@ export const meta = {
 			code: 'NO_SUCH_REQUEST',
 			id: '3e7c9a2b-4f8c-4d1e-9b7a-3f6e8c7d9a1d',
 		},
-		duplicateName: {
-			message: 'Duplicate name.',
-			code: 'DUPLICATE_NAME',
-			id: 'f7a3462c-4e6e-4069-8421-b9bd4f4c3975',
+		invalidName: {
+			message: 'Invalid emoji name.',
+			code: 'INVALID_NAME',
+			id: 'f0f5c4e0-4d32-40d8-8e8a-6e9f67563279',
 		},
 	},
 } as const;
@@ -55,16 +53,41 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		requestId: { type: 'string', format: 'misskey:id' },
+		name: {
+			type: 'string',
+			minLength: 1,
+			maxLength: 128,
+			pattern: '^[a-z0-9_-]+$',
+		},
+		category: {
+			type: 'string',
+			nullable: true,
+			maxLength: 128,
+		},
+		aliases: {
+			type: 'array',
+			items: { type: 'string', maxLength: 128 },
+			maxItems: 16,
+			default: [],
+		},
+		license: {
+			type: 'string',
+			nullable: true,
+			maxLength: 1024,
+		},
+		comment: {
+			type: 'string',
+			maxLength: 2048,
+			default: '',
+		},
 	},
-	required: ['requestId'],
+	required: ['requestId', 'name'],
 } as const;
 
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> {
 	constructor(
 		private emojiRequestService: EmojiRequestService,
-		private customEmojiService: CustomEmojiService,
-		private driveService: DriveService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const emojiRequest = await this.emojiRequestService.findById(ps.requestId);
@@ -81,45 +104,31 @@ export default class extends Endpoint<typeof meta, typeof paramDef> {
 				});
 			}
 
-			const isDuplicate = await this.customEmojiService.checkDuplicate(emojiRequest.name);
-			if (isDuplicate) {
-				throw new ApiError(meta.errors.duplicateName);
+			const namePattern = /^[a-z0-9_-]+$/;
+			if (!namePattern.test(ps.name)) {
+				throw new ApiError(meta.errors.invalidName);
 			}
 
-			const driveFile = await this.driveService.uploadFromUrl({
-				url: emojiRequest.originalUrl,
-				user: null,
-				force: true,
+			await this.emojiRequestService.update(emojiRequest, {
+				name: ps.name,
+				category: ps.category ?? null,
+				aliases: ps.aliases ?? [],
+				license: ps.license ?? null,
+				comment: ps.comment ?? '',
 			});
-
-			await this.customEmojiService.add({
-				originalUrl: driveFile.url,
-				publicUrl: driveFile.webpublicUrl ?? driveFile.url,
-				fileType: driveFile.webpublicType ?? driveFile.type,
-				name: emojiRequest.name,
-				category: emojiRequest.category,
-				aliases: emojiRequest.aliases,
-				host: null,
-				license: emojiRequest.license,
-				isSensitive: false,
-				localOnly: false,
-				roleIdsThatCanBeUsedThisEmojiAsReaction: [],
-			}, me);
-
-			await this.emojiRequestService.approve(emojiRequest);
 
 			return {
 				id: emojiRequest.id,
 				createdAt: emojiRequest.createdAt.toISOString(),
-				updatedAt: emojiRequest.updatedAt?.toISOString() ?? null,
-				name: emojiRequest.name,
-				category: emojiRequest.category,
+				updatedAt: new Date().toISOString(),
+				name: ps.name,
+				category: ps.category ?? null,
 				originalUrl: emojiRequest.originalUrl,
-				aliases: emojiRequest.aliases,
-				license: emojiRequest.license,
-				comment: emojiRequest.comment,
-				status: 'approved',
-				rejectionReason: null,
+				aliases: ps.aliases ?? [],
+				license: ps.license ?? null,
+				comment: ps.comment ?? '',
+				status: emojiRequest.status,
+				rejectionReason: emojiRequest.rejectionReason,
 			};
 		});
 	}

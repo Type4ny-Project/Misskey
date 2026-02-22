@@ -7,6 +7,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 <PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs">
 	<div class="_spacer" style="--MI_SPACER-w: 900px;">
 		<div class="_gaps">
+			<MkSwitch :modelValue="autoApproveEmojiRequest" :disabled="settingUpdating" @update:modelValue="onChange_autoApproveEmojiRequest">
+				<template #label>{{ i18n.ts.auto }} {{ i18n.ts.emojiRequestApproved }}</template>
+				<template #caption>ON: submit -> approve immediately / OFF: stay pending for manual review</template>
+			</MkSwitch>
+
 			<MkLoading v-if="loading"/>
 
 			<div v-else-if="requests.length === 0">
@@ -31,10 +36,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 						<div class="actions">
-							<MkButton v-if="request.status === 'pending'" primary rounded @click="approve(request)">
+							<MkButton v-if="request.status === 'pending'" rounded :disabled="autoApproving" @click="editRequest(request)">
+								<i class="ti ti-pencil"></i> {{ i18n.ts.edit }}
+							</MkButton>
+							<MkButton v-if="request.status === 'pending'" primary rounded :disabled="autoApproving" @click="approve(request)">
 								<i class="ti ti-check"></i> {{ i18n.ts.approve }}
 							</MkButton>
-							<MkButton v-if="request.status === 'pending'" danger rounded @click="reject(request)">
+							<MkButton v-if="request.status === 'pending'" danger rounded :disabled="autoApproving" @click="reject(request)">
 								<i class="ti ti-x"></i> {{ i18n.ts.reject }}
 							</MkButton>
 						</div>
@@ -54,7 +62,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<span class="value">{{ request.comment }}</span>
 						</div>
 						<div class="detail">
-							<span class="label">{{ i18n.ts.registeredAt }}:</span>
+							<span class="label">{{ i18n.ts.createdAt }}:</span>
 							<span class="value">{{ new Date(request.createdAt).toLocaleString() }}</span>
 						</div>
 						<div v-if="request.userId" class="detail">
@@ -81,6 +89,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted } from 'vue';
 import MkButton from '@/components/MkButton.vue';
+import MkSwitch from '@/components/MkSwitch.vue';
 import MkUserLink from '@/components/MkUserLink.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -108,6 +117,9 @@ const tab = ref<'all' | 'pending' | 'approved' | 'rejected'>('all');
 const loading = ref(true);
 const hasMore = ref(false);
 const untilId = ref<string | null>(null);
+const autoApproving = ref(false);
+const autoApproveEmojiRequest = ref(true);
+const settingUpdating = ref(false);
 
 function statusLabel(status: EmojiRequest['status']): string {
 	switch (status) {
@@ -155,12 +167,37 @@ async function fetchRequests(limit = 50, append = false) {
 	}
 }
 
+async function fetchAutoApproveSetting() {
+	try {
+		const result = await misskeyApi('admin/emoji/request-settings');
+		autoApproveEmojiRequest.value = result.autoApproveEmojiRequest;
+	} catch (err) {
+		console.error(err);
+	}
+}
+
+async function onChange_autoApproveEmojiRequest(value: boolean) {
+	if (settingUpdating.value) return;
+	settingUpdating.value = true;
+
+	try {
+		await os.apiWithDialog('admin/emoji/update-request-settings', {
+			autoApproveEmojiRequest: value,
+		});
+		autoApproveEmojiRequest.value = value;
+	} finally {
+		settingUpdating.value = false;
+	}
+}
+
 async function fetchMore() {
 	if (!hasMore.value || loading.value) return;
 	await fetchRequests(50, true);
 }
 
 async function approve(request: EmojiRequest) {
+	if (autoApproving.value) return;
+
 	const { canceled } = await os.confirm({
 		type: 'info',
 		text: i18n.tsx.approveConfirm({ x: ':' + request.name + ':' }),
@@ -175,6 +212,133 @@ async function approve(request: EmojiRequest) {
 		os.alert({
 			type: 'success',
 			text: i18n.ts.emojiRequestApproved,
+		});
+
+		await fetchRequests();
+	} catch (err) {
+		console.error(err);
+	}
+}
+
+async function fetchAllPendingRequests(limit = 100): Promise<EmojiRequest[]> {
+	const all: EmojiRequest[] = [];
+	let nextUntilId: string | null = null;
+
+	for (;;) {
+		const batch = await misskeyApi('admin/emoji/list-request', {
+			limit,
+			status: 'pending',
+			untilId: nextUntilId ?? undefined,
+		});
+
+		all.push(...batch);
+
+		if (batch.length < limit) break;
+		nextUntilId = batch[batch.length - 1].id;
+		if (nextUntilId == null) break;
+	}
+
+	return all;
+}
+
+async function autoApprovePending() {
+	if (autoApproving.value) return;
+
+	const pendingRequests = await fetchAllPendingRequests();
+	if (pendingRequests.length === 0) {
+		os.alert({
+			type: 'info',
+			text: i18n.ts.emojiRequestNoRequests,
+		});
+		return;
+	}
+
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: i18n.tsx.approveConfirm({ x: `${pendingRequests.length} requests` }),
+	});
+	if (canceled) return;
+
+	autoApproving.value = true;
+	let success = 0;
+	let failed = 0;
+
+	try {
+		for (const request of pendingRequests) {
+			try {
+				await misskeyApi('admin/emoji/approve-request', {
+					requestId: request.id,
+				});
+				success++;
+			} catch (err) {
+				console.error(err);
+				failed++;
+			}
+		}
+
+		os.alert({
+			type: failed === 0 ? 'success' : 'warning',
+			text: failed === 0
+				? `Approved ${success} requests.`
+				: `Approved ${success} requests, ${failed} failed.`,
+		});
+
+		await fetchRequests();
+	} finally {
+		autoApproving.value = false;
+	}
+}
+
+async function editRequest(request: EmojiRequest) {
+	if (autoApproving.value) return;
+
+	const { canceled, result } = await os.form(i18n.ts.edit, {
+		name: {
+			type: 'string',
+			label: i18n.ts.emojiRequestName,
+			default: request.name,
+		},
+		category: {
+			type: 'string',
+			required: false,
+			label: i18n.ts.emojiRequestCategory,
+			default: request.category ?? '',
+		},
+		aliases: {
+			type: 'string',
+			required: false,
+			label: i18n.ts.emojiRequestAliases,
+			default: request.aliases.join(' '),
+		},
+		license: {
+			type: 'string',
+			required: false,
+			label: i18n.ts.emojiRequestLicense,
+			default: request.license ?? '',
+		},
+		comment: {
+			type: 'string',
+			required: false,
+			multiline: true,
+			label: i18n.ts.emojiRequestComment,
+			default: request.comment,
+		},
+	});
+	if (canceled) return;
+
+	try {
+		await os.apiWithDialog('admin/emoji/update-request', {
+			requestId: request.id,
+			name: result.name,
+			category: result.category === '' ? null : result.category,
+			aliases: result.aliases.replaceAll('　', ' ').split(' ').filter((x: string) => x !== ''),
+			license: result.license === '' ? null : result.license,
+			comment: result.comment ?? '',
+		});
+
+		os.alert({
+			type: 'success',
+			text: i18n.ts.saved,
 		});
 
 		await fetchRequests();
@@ -214,7 +378,11 @@ async function reject(request: EmojiRequest) {
 	}
 }
 
-const headerActions = computed(() => []);
+const headerActions = computed(() => [{
+	icon: 'ti ti-checks',
+	text: `${i18n.ts.approve} (${i18n.ts.emojiRequestStatusPending})`,
+	handler: autoApprovePending,
+}]);
 
 const headerTabs = computed(() => [{
 	key: 'all',
@@ -237,6 +405,7 @@ watch(tab, () => {
 });
 
 onMounted(() => {
+	fetchAutoApproveSetting();
 	fetchRequests();
 });
 

@@ -112,6 +112,27 @@ export class EmojiRequestService {
 	}
 
 	@bindThis
+	public async update(
+		emojiRequest: MiEmojiRequest,
+		data: {
+			name?: string;
+			category?: string | null;
+			aliases?: string[];
+			license?: string | null;
+			comment?: string;
+		},
+	): Promise<void> {
+		await this.emojiRequestsRepository.update(emojiRequest.id, {
+			name: data.name,
+			category: data.category,
+			aliases: data.aliases,
+			license: data.license,
+			comment: data.comment,
+			updatedAt: new Date(),
+		});
+	}
+
+	@bindThis
 	public async findById(
 		id: MiEmojiRequest['id'],
 	): Promise<MiEmojiRequest | null> {

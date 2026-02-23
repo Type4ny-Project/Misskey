@@ -27,6 +27,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template #label>{{ i18n.ts._channel.allowRenoteToExternal }}</template>
 			</MkSwitch>
 
+			<MkSwitch v-model="isLocalOnly">
+				<template #label>{{ i18n.ts._channel.isLocalOnly }}</template>
+			</MkSwitch>
+
 			<div>
 				<MkButton v-if="bannerId == null" @click="setBannerImage"><i class="ti ti-plus"></i> {{ i18n.ts._channel.setBanner }}</MkButton>
 				<div v-else-if="bannerUrl">
@@ -57,9 +61,35 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
+			<MkFolder v-if="isRoot" :defaultOpen="true">
+				<template #label>{{ i18n.ts._channel.collaborators }}</template>
+				<div class="_gaps">
+					<MkButton @click="addUser()">
+						{{ i18n.ts._channel.addCollaborator }}
+					</MkButton>
+					<div v-for="( user, i ) in collaboratorUsers" :key="user.id" :class="$style.userItem">
+						<div :class="$style.userItemMain">
+							<MkA :class="$style.userItemMainBody" :to="`${userPage(user)}`">
+								<MkUserCardMini :user="user"/>
+							</MkA>
+							<button class="_button" :class="$style.unassign" @click="collaboratorUserDelete(i)"><i class="ti ti-x"></i></button>
+						</div>
+					</div>
+				</div>
+			</MkFolder>
+
+			<MkFolder v-if="isRoot">
+				<template #label>{{ i18n.ts._channel.dangerSettings }}</template>
+
+				<MkButton style="margin: 16px" danger @click="transferAdmin()">
+					{{ i18n.ts._channel.transferAdminConfirmTitle }}
+				</MkButton>
+				<MkButton v-if="channelId" style="margin: 16px" danger @click="archive()"><i class="ti ti-trash"></i> {{ i18n.ts.archive }}</MkButton>
+			</MkFolder>
+
 			<div class="_buttons">
 				<MkButton primary @click="save()"><i class="ti ti-device-floppy"></i> {{ channelId ? i18n.ts.save : i18n.ts.create }}</MkButton>
-				<MkButton v-if="channelId" danger @click="archive()"><i class="ti ti-trash"></i> {{ i18n.ts.archive }}</MkButton>
+				<MkButton v-if="channelId && !isRoot" danger @click="archive()"><i class="ti ti-trash"></i> {{ i18n.ts.archive }}</MkButton>
 			</div>
 		</div>
 	</div>
@@ -82,6 +112,9 @@ import MkSwitch from '@/components/MkSwitch.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkDraggable from '@/components/MkDraggable.vue';
 import { useRouter } from '@/router.js';
+import { $i, iAmModerator } from '@/i.js';
+import { userPage } from '@/filters/user.js';
+import MkUserCardMini from '@/components/MkUserCardMini.vue';
 
 const router = useRouter();
 
@@ -97,7 +130,10 @@ const bannerId = ref<string | null>(null);
 const color = ref('#000');
 const isSensitive = ref(false);
 const allowRenoteToExternal = ref(true);
+const isLocalOnly = ref(false);
 const pinnedNoteIds = ref<Misskey.entities.Note['id'][]>([]);
+const isRoot = ref(false);
+const collaboratorUsers = ref<Misskey.entities.User[]>([]);
 
 watch(() => bannerId.value, async () => {
 	if (bannerId.value == null) {
@@ -124,6 +160,9 @@ async function fetchChannel() {
 	pinnedNoteIds.value = result.pinnedNoteIds;
 	color.value = result.color;
 	allowRenoteToExternal.value = result.allowRenoteToExternal;
+	isLocalOnly.value = result.isLocalOnly;
+	collaboratorUsers.value = result.collaboratorUsers || [];
+	isRoot.value = ($i && $i.id === result.userId) || iAmModerator;
 
 	channel.value = result;
 }
@@ -146,6 +185,55 @@ function removePinnedNote(id: string) {
 	pinnedNoteIds.value = pinnedNoteIds.value.filter(x => x !== id);
 }
 
+function transferAdmin() {
+	os.selectUser({ includeSelf: true, multiple: false, localOnly: true }).then(user => {
+		if (Array.isArray(user)) return;
+		os.confirm({
+			type: 'warning',
+			title: i18n.ts._channel.transferAdminConfirmTitle,
+			text: i18n.tsx._channel.transferAdminConfirmDescription({ user: user.username }),
+		}).then(({ canceled }) => {
+			if (canceled) return;
+			os.confirm({
+				type: 'warning',
+				title: i18n.ts._channel.transferAdminConfirmTitle,
+				text: i18n.ts._channel.transferAdminReConfirmDescription,
+			}).then(({ canceled: a }) => {
+				if (a) return;
+
+				misskeyApi('channels/update', {
+					channelId: props.channelId,
+					transferAdminUserId: user.id,
+				}).then(() => {
+					os.success();
+				});
+			});
+		});
+	});
+}
+
+function addUser() {
+	os.selectUser({ includeSelf: true, multiple: true, localOnly: true }).then(user => {
+		if (Array.isArray(user)) {
+			collaboratorUsers.value = [
+				...collaboratorUsers.value,
+				...user,
+			];
+		} else {
+			collaboratorUsers.value = [
+				...collaboratorUsers.value,
+				user,
+			];
+		}
+		save();
+	});
+}
+
+function collaboratorUserDelete(i: number) {
+	collaboratorUsers.value.splice(i, 1);
+	save();
+}
+
 function save() {
 	const params = {
 		name: name.value,
@@ -154,6 +242,8 @@ function save() {
 		color: color.value,
 		isSensitive: isSensitive.value,
 		allowRenoteToExternal: allowRenoteToExternal.value,
+		isLocalOnly: isLocalOnly.value,
+		collaboratorIds: collaboratorUsers.value.map(x => x.id),
 	} satisfies Misskey.entities.ChannelsCreateRequest;
 
 	if (props.channelId != null) {
@@ -161,6 +251,7 @@ function save() {
 			...params,
 			channelId: props.channelId,
 			pinnedNoteIds: pinnedNoteIds.value,
+			collaboratorIds: collaboratorUsers.value.map(x => x.id),
 		});
 	} else {
 		os.apiWithDialog('channels/create', params).then(created => {

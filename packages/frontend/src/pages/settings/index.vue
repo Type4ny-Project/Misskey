@@ -128,11 +128,15 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		text: i18n.ts.sounds,
 		to: '/settings/sounds',
 		active: currentPage.value?.route.name === 'sounds',
-	}, {
+	}, 	{
 		icon: 'ti ti-plug',
 		text: i18n.ts.plugins,
 		to: '/settings/plugin',
 		active: currentPage.value?.route.name === 'plugin',
+	}, {
+		icon: 'ti ti-columns',
+		text: i18n.ts._timelineHeader.timelineHeader,
+		action: () => router.push('/settings/timelineHeader'),
 	}],
 }, {
 	items: [{

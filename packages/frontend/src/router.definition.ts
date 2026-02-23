@@ -188,10 +188,13 @@ export const ROUTE_DEF = [{
 		path: '/accounts',
 		name: 'profile',
 		component: page(() => import('@/pages/settings/accounts.vue')),
-	}, {
+	}, 	{
 		path: '/other',
 		name: 'other',
 		component: page(() => import('@/pages/settings/other.vue')),
+	}, {
+		path: '/settings/timelineHeader',
+		component: () => import('@/pages/settings/timelineHeader.vue').then(m => m.default),
 	}, {
 		path: '/',
 		component: page(() => import('@/pages/_empty_.vue')),

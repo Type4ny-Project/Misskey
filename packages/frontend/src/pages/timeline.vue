@@ -45,6 +45,8 @@ import { deepMerge } from '@/utility/merge.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { availableBasicTimelines, hasWithReplies, isAvailableBasicTimeline, isBasicTimeline, basicTimelineIconClass } from '@/timelines.js';
 import { prefer } from '@/preferences.js';
+import { timelineHeaderItemDef } from '@/timeline-header.js';
+import { isLocalTimelineAvailable, isGlobalTimelineAvailable } from '@/env.js';
 
 const tlComponent = useTemplateRef('tlComponent');
 
@@ -264,32 +266,36 @@ const headerActions = computed<PageHeaderItem[]>(() => {
 	return items;
 });
 
-const headerTabs = computed(() => [...(prefer.r.pinnedUserLists.value.map(l => ({
-	key: 'list:' + l.id,
-	title: l.name,
-	icon: 'ti ti-star',
-	iconOnly: true,
-}))), ...availableBasicTimelines().map(tl => ({
-	key: tl,
-	title: i18n.ts._timelines[tl],
-	icon: basicTimelineIconClass(tl),
-	iconOnly: true,
-})), {
-	icon: 'ti ti-list',
-	title: i18n.ts.lists,
-	iconOnly: true,
-	onClick: chooseList,
-}, {
-	icon: 'ti ti-antenna',
-	title: i18n.ts.antennas,
-	iconOnly: true,
-	onClick: chooseAntenna,
-}, {
-	icon: 'ti ti-device-tv',
-	title: i18n.ts.channel,
-	iconOnly: true,
-	onClick: chooseChannel,
-}] as Tab[]);
+const headerTabs = computed(() => store.r.timelineHeader.value.map(tab => {
+	if ((tab === 'local' || tab === 'social') && !isLocalTimelineAvailable) {
+		return {};
+	} else if (tab === 'global' && !isGlobalTimelineAvailable) {
+		return {};
+	}
+
+	const tabDef = timelineHeaderItemDef[tab];
+	if (!tabDef) {
+		return {};
+	}
+
+	return {
+		...(!['channels', 'antennas', 'lists'].includes(tab) ? {
+			key: tab,
+		} : {}),
+		title: tabDef.title,
+		icon: tabDef.icon,
+		iconOnly: tabDef.iconOnly,
+		...(tab === 'lists' ? {
+			onClick: (ev: PointerEvent) => chooseList(ev),
+		} : {}),
+		...(tab === 'antennas' ? {
+			onClick: (ev: PointerEvent) => chooseAntenna(ev),
+		} : {}),
+		...(tab === 'channels' ? {
+			onClick: (ev: PointerEvent) => chooseChannel(ev),
+		} : {}),
+	};
+}) as Tab[]);
 
 const headerTabsWhenNotLogin = computed(() => [...availableBasicTimelines().map(tl => ({
 	key: tl,

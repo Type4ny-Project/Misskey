@@ -11,6 +11,8 @@ import type { DeviceKind } from '@/utility/device-kind.js';
 import type { TIPS } from '@/tips.js';
 import { Pizzax } from '@/lib/pizzax.js';
 import { DEFAULT_DEVICE_KIND } from '@/utility/device-kind.js';
+import type { TimelineHeaderItem } from '@/timeline-header.js';
+import { isLocalTimelineAvailable, isGlobalTimelineAvailable } from '@/env.js';
 
 /**
  * 「状態」を管理するストア(not「設定」)
@@ -60,6 +62,17 @@ export const store = markRaw(new Pizzax('base', {
 				onlyFiles: false,
 			},
 		},
+	},
+	timelineHeader: {
+		where: 'deviceAccount',
+		default: [
+			'home',
+			...(isLocalTimelineAvailable ? ['local', 'social'] : []),
+			...(isGlobalTimelineAvailable ? ['global'] : []),
+			'lists',
+			'antennas',
+			'channels',
+		] as TimelineHeaderItem[],
 	},
 	darkMode: {
 		where: 'device',

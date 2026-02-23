@@ -64,6 +64,8 @@ export const paramDef = {
 		color: { type: 'string', minLength: 1, maxLength: 16 },
 		isSensitive: { type: 'boolean', nullable: true },
 		allowRenoteToExternal: { type: 'boolean', nullable: true },
+		isLocalOnly: { type: 'boolean', optional: true },
+		transferAdminUserId: { type: 'string', format: 'misskey:id', optional: true },
 		collaboratorIds: {
 			type: 'array',
 			items: { type: 'string', format: 'misskey:id' },
@@ -135,6 +137,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				await this.channelService.setCollaborators(channel, ps.collaboratorIds);
 			}
 
+			if (ps.isLocalOnly !== undefined) channel.isLocalOnly = ps.isLocalOnly;
+			if (ps.transferAdminUserId !== undefined && channel.userId === me.id) {
+				channel.userId = ps.transferAdminUserId;
+			}
+
 			await this.channelsRepository.update(channel.id, {
 				...(ps.name ? { name: ps.name } : {}),
 				...(ps.description !== undefined ? { description: ps.description } : {}),
@@ -144,6 +151,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...(banner ? { bannerId: banner.id } : {}),
 				...(typeof ps.isSensitive === 'boolean' ? { isSensitive: ps.isSensitive } : {}),
 				...(typeof ps.allowRenoteToExternal === 'boolean' ? { allowRenoteToExternal: ps.allowRenoteToExternal } : {}),
+				...(ps.isLocalOnly !== undefined ? { isLocalOnly: ps.isLocalOnly } : {}),
+				...(ps.transferAdminUserId !== undefined && channel.userId === ps.transferAdminUserId ? { userId: ps.transferAdminUserId } : {}),
 			});
 
 			return await this.channelEntityService.pack(channel.id, me);

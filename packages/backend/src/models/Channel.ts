@@ -99,6 +99,12 @@ export class MiChannel {
 	})
 	public allowRenoteToExternal: boolean;
 
+	@Column('boolean', {
+		default: false,
+		comment: 'Whether the channel is local only',
+	})
+	public isLocalOnly: boolean;
+
 	@Column({
 		...id(),
 		array: true, default: '{}',

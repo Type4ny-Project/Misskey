@@ -13,6 +13,7 @@ import { DEFAULT_POLICIES } from '@/core/RoleService.js';
 import { SystemAccountService } from '@/core/SystemAccountService.js';
 import { envOption } from '@/env.js';
 import type { MiUser } from '@/models/User.js';
+import type {UsersRepository} from "@/models/_.js";
 
 export const meta = {
 	tags: ['meta'],
@@ -414,6 +415,21 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			backgroundImageUrls: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: {
+					type: 'object',
+					optional: false, nullable: false,
+					properties: {
+						url: {
+							type: 'string',
+							optional: false, nullable: false,
+							format: 'url',
+						},
+					},
+				},
+			},
 			deeplAuthKey: {
 				type: 'string',
 				optional: false, nullable: true,
@@ -617,7 +633,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private config: Config,
 
 		@Inject(DI.usersRepository)
-		private usersRepository: typeof DI.usersRepository,
+		private usersRepository: UsersRepository,
 
 		private metaService: MetaService,
 		private systemAccountService: SystemAccountService,
@@ -666,6 +682,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				app192IconUrl: instance.app192IconUrl,
 				app512IconUrl: instance.app512IconUrl,
 				backgroundImageUrl: instance.backgroundImageUrl,
+				backgroundImageUrls: instance.backgroundImageUrls,
 				logoImageUrl: instance.logoImageUrl,
 				defaultLightTheme: instance.defaultLightTheme,
 				defaultDarkTheme: instance.defaultDarkTheme,

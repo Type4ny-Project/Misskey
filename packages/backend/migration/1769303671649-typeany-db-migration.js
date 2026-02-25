@@ -189,6 +189,22 @@ export class TypeAnyDbMigration1769303671649 {
         await queryRunner.query(`DROP TABLE IF EXISTS "legacy_note_unread"`);
         await queryRunner.query(`DROP TABLE IF EXISTS "legacy_inbox_rule"`);
         await queryRunner.query(`DROP TABLE IF EXISTS "legacy_emoji_request"`);
+
+        // Add backgroundImageUrls column to meta table
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'meta'
+                      AND column_name = 'backgroundImageUrls'
+                ) THEN
+                    ALTER TABLE "meta" ADD "backgroundImageUrls" jsonb NOT NULL DEFAULT '[]';
+                END IF;
+            END $$;
+        `);
     }
 
     async down(queryRunner) {

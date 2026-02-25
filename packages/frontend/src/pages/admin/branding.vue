@@ -71,7 +71,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #label><SearchLabel>{{ i18n.ts.bannerUrl }}</SearchLabel></template>
 					</MkInput>
 				</SearchMarker>
-
+				</SearchMarker>
+				<SearchMarker :keywords="['background', 'images']">
+					<MkFolder>
+						<template #icon><i class="ti ti-images"></i></template>
+						<template #label><SearchLabel>{{ i18n.ts.backgroundImageUrls }}</SearchLabel></template>
+						<div class="_gaps">
+							<MkButton @click="addBackgroundImage"><i class="ti ti-plus"></i> {{ i18n.ts.add }}</MkButton>
+							<div v-for="(item, i) in backgroundImageUrls" :key="i" class="_gaps_s" style="display: flex; align-items: center; gap: 8px;">
+								<MkInput v-model="backgroundImageUrls[i].url" type="url" style="flex: 1;">
+									<template #label>{{ i18n.ts.backgroundImageUrl }} {{ i + 1 }}</template>
+								</MkInput>
+								<MkButton danger @click="removeBackgroundImage(i)"><i class="ti ti-trash"></i></MkButton>
+							</div>
+						</div>
+					</MkFolder>
+				</SearchMarker>
 				<SearchMarker :keywords="['background', 'image']">
 					<MkInput v-model="backgroundImageUrl" type="url">
 						<template #prefix><i class="ti ti-link"></i></template>
@@ -169,6 +184,7 @@ import MkColorInput from '@/components/MkColorInput.vue';
 import MkRadios from '@/components/MkRadios.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
 
+import MkFolder from '@/components/MkFolder.vue';
 const meta = await misskeyApi('admin/meta');
 
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -183,6 +199,7 @@ const app192IconUrl = ref(meta.app192IconUrl);
 const app512IconUrl = ref(meta.app512IconUrl);
 const bannerUrl = ref(meta.bannerUrl);
 const backgroundImageUrl = ref(meta.backgroundImageUrl);
+	const backgroundImageUrls = ref<{ url: string }[]>(meta.backgroundImageUrls || []);
 const themeColor = ref(meta.themeColor);
 const defaultLightTheme = ref(meta.defaultLightTheme);
 const defaultDarkTheme = ref(meta.defaultDarkTheme);
@@ -204,7 +221,8 @@ function save() {
 		app192IconUrl: app192IconUrl.value,
 		app512IconUrl: app512IconUrl.value,
 		bannerUrl: bannerUrl.value,
-		backgroundImageUrl: backgroundImageUrl.value,
+backgroundImageUrl: backgroundImageUrl.value,
+			backgroundImageUrls: backgroundImageUrls.value,
 		themeColor: themeColor.value === '' ? null : themeColor.value,
 		defaultLightTheme: defaultLightTheme.value === '' ? null : defaultLightTheme.value,
 		defaultDarkTheme: defaultDarkTheme.value === '' ? null : defaultDarkTheme.value,
@@ -217,6 +235,14 @@ function save() {
 	}).then(() => {
 		fetchInstance(true);
 	});
+}
+
+function addBackgroundImage() {
+	backgroundImageUrls.value.push({ url: '' });
+}
+
+function removeBackgroundImage(index: number) {
+	backgroundImageUrls.value.splice(index, 1);
 }
 
 const headerTabs = computed(() => []);

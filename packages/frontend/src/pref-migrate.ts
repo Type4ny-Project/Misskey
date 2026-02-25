@@ -45,7 +45,8 @@ export function migrateOldSettings() {
 			prefer.commit('deck.profiles', profiles);
 		});
 
-		prefer.commit('emojiPalettes', [{
+		// reactionsとpinnedEmojisをパレットに変換
+		const palettes = [{
 			id: 'reactions',
 			name: '',
 			emojis: store.s.reactions,
@@ -53,7 +54,44 @@ export function migrateOldSettings() {
 			id: 'pinnedEmojis',
 			name: '',
 			emojis: store.s.pinnedEmojis,
-		}]);
+		}];
+
+		// Type4nyの複数プロフィール（pickerProfileName1-5 + reactions1-5）をパレットに変換
+		// 型アサーションで安全にアクセス（store.tsに定義がない場合もあるため）
+		const s = store.s as any;
+		const profileNames = [
+			s.pickerProfileName1 ?? '1',
+			s.pickerProfileName2 ?? '2',
+			s.pickerProfileName3 ?? '3',
+			s.pickerProfileName4 ?? '4',
+			s.pickerProfileName5 ?? '5',
+		];
+		const defaultReactions = ['👍', '❤️', '😆', '🤔', '😮', '🎉', '💢', '😥', '😇', '🍮'];
+		const profileReactions = [
+			s.reactions1 ?? defaultReactions,
+			s.reactions2 ?? defaultReactions,
+			s.reactions3 ?? defaultReactions,
+			s.reactions4 ?? defaultReactions,
+			s.reactions5 ?? defaultReactions,
+		];
+
+		// デフォルト値と異なる、または名前が設定されているプロフィールをパレットとして追加
+		for (let i = 0; i < 5; i++) {
+			const name = profileNames[i];
+			const emojis = profileReactions[i];
+			const isDefaultName = name === String(i + 1) || (i === 0 && name === 'default');
+			const isDefaultEmojis = JSON.stringify(emojis) === JSON.stringify(defaultReactions);
+
+			// カスタマイズされている場合のみパレットとして追加
+			if (!isDefaultName || !isDefaultEmojis) {
+				palettes.push({
+					id: genId(),
+					name: isDefaultName ? `プロフィール ${i + 1}` : name,
+					emojis: emojis,
+				});
+			}
+		}
+
 		prefer.commit('emojiPaletteForMain', 'pinnedEmojis');
 		prefer.commit('emojiPaletteForReaction', 'reactions');
 		prefer.commit('overridedDeviceKind', store.s.overridedDeviceKind);

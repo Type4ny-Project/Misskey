@@ -13,6 +13,7 @@ import { Pizzax } from '@/lib/pizzax.js';
 import { DEFAULT_DEVICE_KIND } from '@/utility/device-kind.js';
 import type { TimelineHeaderItem } from '@/timeline-header.js';
 import { isLocalTimelineAvailable, isGlobalTimelineAvailable } from '@/scripts/get-timeline-available.js';
+import {genId} from "@/utility/id";
 
 /**
  * 「状態」を管理するストア(not「設定」)

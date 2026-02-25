@@ -62,6 +62,16 @@ export const paramDef = {
 		app192IconUrl: { type: 'string', nullable: true },
 		app512IconUrl: { type: 'string', nullable: true },
 		backgroundImageUrl: { type: 'string', nullable: true },
+		backgroundImageUrls: {
+			type: 'array', nullable: true,
+			items: {
+				type: 'object',
+				properties: {
+					url: { type: 'string' },
+				},
+				required: ['url'],
+			},
+		},
 		logoImageUrl: { type: 'string', nullable: true },
 		name: { type: 'string', nullable: true },
 		shortName: { type: 'string', nullable: true },
@@ -313,6 +323,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.backgroundImageUrl !== undefined) {
 				set.backgroundImageUrl = ps.backgroundImageUrl;
+			}
+
+			if (ps.backgroundImageUrls !== undefined) {
+				set.backgroundImageUrls = ps.backgroundImageUrls.filter(x => x.url != null && x.url !== '');
 			}
 
 			if (ps.logoImageUrl !== undefined) {

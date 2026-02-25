@@ -1755,6 +1755,10 @@ export interface Locale extends ILocale {
      */
     "backgroundImageUrl": string;
     /**
+     * 背景画像のURL（複数可）
+     */
+    "backgroundImageUrls": string;
+    /**
      * 基本情報
      */
     "basicInfo": string;

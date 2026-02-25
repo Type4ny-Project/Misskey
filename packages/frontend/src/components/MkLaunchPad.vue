@@ -104,19 +104,36 @@ function close() {
 			border-radius: 10px;
 			padding: 10px;
 			box-sizing: border-box;
+			transition: all 0.2s ease;
 
-			&:hover {
-				color: var(--MI_THEME-accent);
+			&::before {
+				content: "";
+				display: block;
+				position: absolute;
+				inset: 0;
+				opacity: 0;
+				border-radius: 10px;
 				background: var(--MI_THEME-accentedBg);
+				transition: opacity 0.1s ease;
+			}
+
+			&:hover, &.active, &:focus {
+				color: var(--MI_THEME-accent);
 				text-decoration: none;
+
+				&::before {
+					opacity: 1;
+				}
 			}
 
 			> .icon {
+				position: relative;
 				font-size: 24px;
 				height: 24px;
 			}
 
 			> .text {
+				position: relative;
 				margin-top: 12px;
 				font-size: 0.8em;
 				line-height: 1.5em;

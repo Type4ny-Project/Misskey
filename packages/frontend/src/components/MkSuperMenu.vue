@@ -279,7 +279,7 @@ function searchOnKeyDown(ev: KeyboardEvent) {
 
 				&:hover {
 					text-decoration: none;
-					color: var(--MI_THEME-navHoverFg);
+					color: var(--MI_THEME-accent);
 
 					&::before {
 						opacity: 1;
@@ -440,7 +440,7 @@ function searchOnKeyDown(ev: KeyboardEvent) {
 
 		&:hover {
 			text-decoration: none;
-			color: var(--MI_THEME-navHoverFg);
+			color: var(--MI_THEME-accent);
 
 			&::before {
 				opacity: 1;

@@ -5503,6 +5503,9 @@ export type components = {
             mediaProxy: string;
             enableUrlPreview: boolean;
             backgroundImageUrl: string | null;
+            backgroundImageUrls: {
+                url: string;
+            }[];
             impressumUrl: string | null;
             logoImageUrl: string | null;
             privacyPolicyUrl: string | null;
@@ -9470,6 +9473,9 @@ export interface operations {
                         enableReactionsBuffering: boolean;
                         notesPerOneAd: number;
                         backgroundImageUrl: string | null;
+                        backgroundImageUrls: {
+                            url: string;
+                        }[];
                         deeplAuthKey: string | null;
                         deeplIsPro: boolean;
                         defaultDarkTheme: string | null;
@@ -12724,6 +12730,9 @@ export interface operations {
                     app192IconUrl?: string | null;
                     app512IconUrl?: string | null;
                     backgroundImageUrl?: string | null;
+                    backgroundImageUrls?: {
+                        url: string;
+                    }[] | null;
                     logoImageUrl?: string | null;
                     name?: string | null;
                     shortName?: string | null;

@@ -235,6 +235,7 @@ export class TypeAnyDbMigration1769303671649 {
             END $$;
         `);
 
+        // Handle legacy emoji_request table (old Type4ny schema without userId)
         await queryRunner.query(`
             DO $$
             BEGIN
@@ -247,6 +248,43 @@ export class TypeAnyDbMigration1769303671649 {
                       AND column_name = 'userId'
                    ) THEN
                     ALTER TABLE "emoji_request" RENAME TO "legacy_emoji_request";
+                END IF;
+            END $$;
+        `);
+
+        // Create emoji_request table if it doesn't exist (either new install or after renaming legacy)
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF to_regclass('public.emoji_request') IS NULL THEN
+                    CREATE TABLE "emoji_request" (
+                        "id" character varying(64) NOT NULL,
+                        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP WITH TIME ZONE,
+                        "userId" character varying(64) NOT NULL,
+                        "name" character varying(128) NOT NULL,
+                        "category" character varying(128),
+                        "originalUrl" character varying(512) NOT NULL,
+                        "publicUrl" character varying(512),
+                        "aliases" character varying(128)[] DEFAULT '{}',
+                        "license" character varying(1024),
+                        "comment" character varying(2048) DEFAULT '',
+                        "status" character varying(32) DEFAULT 'pending',
+                        "rejectionReason" text,
+                        CONSTRAINT "PK_emoji_request_id" PRIMARY KEY ("id")
+                    );
+                END IF;
+            END $$;
+        `);
+
+        // Create indexes for emoji_request table (runs for both new install and legacy migration)
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF to_regclass('public.emoji_request') IS NOT NULL THEN
+                    CREATE INDEX IF NOT EXISTS "IDX_EMOJI_REQUEST_USER_ID" ON "emoji_request" ("userId");
+                    CREATE INDEX IF NOT EXISTS "IDX_EMOJI_REQUEST_STATUS" ON "emoji_request" ("status");
+                    CREATE INDEX IF NOT EXISTS "IDX_EMOJI_REQUEST_CREATED_AT" ON "emoji_request" ("createdAt");
                 END IF;
             END $$;
         `);

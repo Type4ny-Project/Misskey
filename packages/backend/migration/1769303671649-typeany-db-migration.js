@@ -7,6 +7,159 @@ export class TypeAnyDbMigration1769303671649 {
     name = 'TypeAnyDbMigration1769303671649'
 
     async up(queryRunner) {
+        // Add points column to user table
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'user'
+                      AND column_name = 'points'
+                ) THEN
+                    ALTER TABLE "user" ADD COLUMN "points" integer NOT NULL DEFAULT 0;
+                END IF;
+            END $$;
+        `);
+
+        // Add loginBonusIsVisible column to user_profile table
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'user_profile'
+                      AND column_name = 'loginBonusIsVisible'
+                ) THEN
+                    ALTER TABLE "user_profile" ADD COLUMN "loginBonusIsVisible" boolean NOT NULL DEFAULT true;
+                END IF;
+            END $$;
+        `);
+
+        // Add updatedAtHistory and noteEditHistory columns to note table
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'note'
+                      AND column_name = 'updatedAtHistory'
+                ) THEN
+                    ALTER TABLE "note" ADD COLUMN "updatedAtHistory" TIMESTAMP WITH TIME ZONE[];
+                END IF;
+            END $$;
+        `);
+
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'note'
+                      AND column_name = 'noteEditHistory'
+                ) THEN
+                    ALTER TABLE "note" ADD COLUMN "noteEditHistory" VARCHAR(3000)[] DEFAULT '{}';
+                END IF;
+            END $$;
+        `);
+
+        // Add collaboratorIds column to channel table
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'channel'
+                      AND column_name = 'collaboratorIds'
+                ) THEN
+                    ALTER TABLE "channel" ADD COLUMN "collaboratorIds" character varying(64)[] DEFAULT '{}';
+                END IF;
+            END $$;
+        `);
+
+        // Add updatedAt column to note table
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'note'
+                      AND column_name = 'updatedAt'
+                ) THEN
+                    ALTER TABLE "note" ADD COLUMN "updatedAt" TIMESTAMP WITH TIME ZONE;
+                END IF;
+            END $$;
+        `);
+
+        // Add enableLoginBonus column to meta table
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'meta'
+                      AND column_name = 'enableLoginBonus'
+                ) THEN
+                    ALTER TABLE "meta" ADD COLUMN "enableLoginBonus" boolean NOT NULL DEFAULT false;
+                END IF;
+            END $$;
+        `);
+
+        // Create emoji_request table if not exists
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF to_regclass('public.emoji_request') IS NULL THEN
+                    CREATE TABLE "emoji_request" (
+                        "id" character varying(64) NOT NULL,
+                        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP WITH TIME ZONE,
+                        "userId" character varying(64) NOT NULL,
+                        "name" character varying(128) NOT NULL,
+                        "category" character varying(128),
+                        "originalUrl" character varying(512) NOT NULL,
+                        "publicUrl" character varying(512),
+                        "aliases" character varying(128)[] DEFAULT '{}',
+                        "license" character varying(1024),
+                        "comment" character varying(2048) DEFAULT '',
+                        "status" character varying(32) DEFAULT 'pending',
+                        "rejectionReason" text,
+                        CONSTRAINT "PK_emoji_request_id" PRIMARY KEY ("id")
+                    );
+                END IF;
+            END $$;
+        `);
+
+        await queryRunner.query(`
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'emoji_request'
+                      AND column_name = 'userId'
+                ) THEN
+                    CREATE INDEX IF NOT EXISTS "IDX_EMOJI_REQUEST_USER_ID" ON "emoji_request" ("userId");
+                    CREATE INDEX IF NOT EXISTS "IDX_EMOJI_REQUEST_STATUS" ON "emoji_request" ("status");
+                    CREATE INDEX IF NOT EXISTS "IDX_EMOJI_REQUEST_CREATED_AT" ON "emoji_request" ("createdAt");
+                END IF;
+            END $$;
+        `);
+
         await queryRunner.query(`
             DO $$
             BEGIN
@@ -99,34 +252,6 @@ export class TypeAnyDbMigration1769303671649 {
         `);
 
         await queryRunner.query(`
-            DO $$
-            BEGIN
-                IF to_regclass('public.legacy_emoji_request') IS NOT NULL
-                   AND to_regclass('public.emoji_request') IS NULL THEN
-                    CREATE TABLE "emoji_request" (
-                        "id" character varying(64) NOT NULL,
-                        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        "updatedAt" TIMESTAMP WITH TIME ZONE,
-                        "userId" character varying(64) NOT NULL,
-                        "name" character varying(128) NOT NULL,
-                        "category" character varying(128),
-                        "originalUrl" character varying(512) NOT NULL,
-                        "publicUrl" character varying(512),
-                        "aliases" character varying(128)[] DEFAULT '{}',
-                        "license" character varying(1024),
-                        "comment" character varying(2048) DEFAULT '',
-                        "status" character varying(32) DEFAULT 'pending',
-                        "rejectionReason" text,
-                        CONSTRAINT "PK_emoji_request_id" PRIMARY KEY ("id")
-                    );
-                    CREATE INDEX "IDX_EMOJI_REQUEST_USER_ID" ON "emoji_request" ("userId");
-                    CREATE INDEX "IDX_EMOJI_REQUEST_STATUS" ON "emoji_request" ("status");
-                    CREATE INDEX "IDX_EMOJI_REQUEST_CREATED_AT" ON "emoji_request" ("createdAt");
-                END IF;
-            END $$;
-        `);
-
-		await queryRunner.query(`
 			DO $$
 			BEGIN
 				IF to_regclass('public.legacy_emoji_request') IS NOT NULL
@@ -208,6 +333,18 @@ export class TypeAnyDbMigration1769303671649 {
     }
 
     async down(queryRunner) {
-        await queryRunner.query(`SELECT 1`);
+        // Drop columns with IF EXISTS
+        await queryRunner.query(`ALTER TABLE "meta" DROP COLUMN IF EXISTS "backgroundImageUrls"`);
+        await queryRunner.query(`ALTER TABLE "meta" DROP COLUMN IF EXISTS "enableLoginBonus"`);
+        await queryRunner.query(`ALTER TABLE "note" DROP COLUMN IF EXISTS "updatedAt"`);
+        await queryRunner.query(`ALTER TABLE "note" DROP COLUMN IF EXISTS "noteEditHistory"`);
+        await queryRunner.query(`ALTER TABLE "note" DROP COLUMN IF EXISTS "updatedAtHistory"`);
+        await queryRunner.query(`ALTER TABLE "channel" DROP COLUMN IF EXISTS "collaboratorIds"`);
+        await queryRunner.query(`ALTER TABLE "user_profile" DROP COLUMN IF EXISTS "loginBonusIsVisible"`);
+        await queryRunner.query(`ALTER TABLE "user" DROP COLUMN IF EXISTS "points"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "IDX_EMOJI_REQUEST_CREATED_AT"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "IDX_EMOJI_REQUEST_STATUS"`);
+        await queryRunner.query(`DROP INDEX IF EXISTS "IDX_EMOJI_REQUEST_USER_ID"`);
+        await queryRunner.query(`DROP TABLE IF EXISTS "emoji_request"`);
     }
 }

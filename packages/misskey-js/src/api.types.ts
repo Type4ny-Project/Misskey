@@ -1,5 +1,5 @@
 import { Endpoints as Gen } from './autogen/endpoint.js';
-import { UserDetailed } from './autogen/models.js';
+import { UserDetailed, Note } from './autogen/models.js';
 import {
 	AdminRolesCreateRequest,
 	AdminRolesCreateResponse,
@@ -116,6 +116,18 @@ export type Endpoints = Overwrite<
 		'clear-browser-cache': {
 			req: EmptyRequest;
 			res: EmptyResponse;
+		},
+		'notes/media-timeline': {
+			req: {
+				withRenotes?: boolean;
+				limit?: number;
+				sinceId?: string;
+				untilId?: string;
+				allowPartial?: boolean;
+				sinceDate?: number;
+				untilDate?: number;
+			};
+			res: Note[];
 		},
 	}
 >;

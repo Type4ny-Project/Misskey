@@ -541,7 +541,63 @@ function menuEdit() {
 		border-top: solid 0.5px var(--MI_THEME-divider);
 	}
 
-	.item {
+  .item {
+    position: relative;
+    display: block;
+    padding-left: 30px;
+    line-height: 2.85rem;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    width: 100%;
+    text-align: left;
+    box-sizing: border-box;
+    color: var(--MI_THEME-navFg);
+    transition: all 0.2s ease;
+
+    &:hover {
+      text-decoration: none;
+      color: light-dark(hsl(from var(--MI_THEME-navFg) h s calc(l - 17)), hsl(from var(--MI_THEME-navFg) h s calc(l + 17)));
+    }
+
+    &.active {
+      color: var(--MI_THEME-navActive);
+    }
+
+    &:focus-visible {
+      outline: none;
+
+      &::before {
+        outline: 2px solid var(--MI_THEME-focus);
+        outline-offset: -2px;
+      }
+    }
+
+    &::before {
+      content: "";
+      display: block;
+      width: calc(100% - 34px);
+      height: 100%;
+      margin: auto;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      opacity: 0;
+      border-radius: 999px;
+      background: var(--MI_THEME-accentedBg);
+      transition: opacity 0.1s ease;
+    }
+
+    &:hover, &.active, &:focus {
+      color: var(--MI_THEME-accent);
+
+      &::before {
+        opacity: 1;
+      }
+    }
+  }
 		position: relative;
 		display: block;
 		padding-left: 30px;
@@ -771,6 +827,24 @@ function menuEdit() {
 		padding: 16px 0;
 		width: 100%;
 		text-align: center;
+		transition: all 0.1s ease;
+
+		&::before {
+			content: "";
+			display: block;
+			height: 100%;
+			aspect-ratio: 1;
+			margin: auto;
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			opacity: 0;
+			border-radius: 999px;
+			background: var(--MI_THEME-accentedBg);
+			transition: opacity 0.2s ease;
+		}
 
 		&:focus-visible {
 			outline: none;
@@ -786,18 +860,7 @@ function menuEdit() {
 			color: var(--MI_THEME-accent);
 
 			&::before {
-				content: "";
-				display: block;
-				height: 100%;
-				aspect-ratio: 1;
-				margin: auto;
-				position: absolute;
-				top: 0;
-				left: 0;
-				right: 0;
-				bottom: 0;
-				border-radius: 999px;
-				background: var(--MI_THEME-accentedBg);
+				opacity: 1;
 			}
 
 			> .icon,

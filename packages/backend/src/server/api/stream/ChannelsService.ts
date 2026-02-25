@@ -18,10 +18,10 @@ import { AntennaChannel } from './channels/antenna.js';
 import { DriveChannel } from './channels/drive.js';
 import { HashtagChannel } from './channels/hashtag.js';
 import { RoleTimelineChannel } from './channels/role-timeline.js';
-import { ChatUserChannel } from './channels/chat-user.js';
 import { ChatRoomChannel } from './channels/chat-room.js';
 import { ReversiChannel } from './channels/reversi.js';
 import { ReversiGameChannel } from './channels/reversi-game.js';
+import { MediaTimelineChannel } from './channels/media-timeline.js';
 import type { ChannelConstructor } from './channel.js';
 import { bindThis } from '@/decorators.js';
 
@@ -42,8 +42,8 @@ export class ChannelsService {
 			case 'userList': return UserListChannel;
 			case 'hashtag': return HashtagChannel;
 			case 'roleTimeline': return RoleTimelineChannel;
-			case 'antenna': return AntennaChannel;
 			case 'channel': return ChannelChannel;
+			case 'mediaTimeline': return MediaTimelineChannel;
 			case 'drive': return DriveChannel;
 			case 'serverStats': return ServerStatsChannel;
 			case 'queueStats': return QueueStatsChannel;

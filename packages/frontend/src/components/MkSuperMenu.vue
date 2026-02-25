@@ -256,10 +256,34 @@ function searchOnKeyDown(ev: KeyboardEvent) {
 				padding: 9px 16px 9px 8px;
 				border-radius: 9px;
 				font-size: 0.9em;
+				position: relative;
+				transition: all 0.2s ease;
+
+				&::before {
+					content: "";
+					display: block;
+					position: absolute;
+					top: 0;
+					left: 0;
+					right: 0;
+					bottom: 0;
+					margin: auto;
+					width: calc(100% - 8px);
+					height: calc(100% - 4px);
+					opacity: 0;
+					border-radius: 6px;
+					background: var(--MI_THEME-accentedBg);
+					transition: opacity 0.1s ease;
+					z-index: -1;
+				}
 
 				&:hover {
 					text-decoration: none;
-					background: var(--MI_THEME-panelHighlight);
+					color: var(--MI_THEME-navHoverFg);
+
+					&::before {
+						opacity: 1;
+					}
 				}
 
 				&:focus-visible {
@@ -268,7 +292,11 @@ function searchOnKeyDown(ev: KeyboardEvent) {
 
 				&.active {
 					color: var(--MI_THEME-accent);
-					background: var(--MI_THEME-accentedBg);
+
+					&::before {
+						opacity: 1;
+						background: var(--MI_THEME-accentedBg);
+					}
 				}
 
 				&.danger {
@@ -281,12 +309,14 @@ function searchOnKeyDown(ev: KeyboardEvent) {
 					flex-shrink: 0;
 					text-align: center;
 					opacity: 0.8;
+					position: relative;
 				}
 
 				> .text {
 					white-space: normal;
 					padding-right: 12px;
 					flex-shrink: 1;
+					position: relative;
 				}
 
 			}
@@ -319,14 +349,37 @@ function searchOnKeyDown(ev: KeyboardEvent) {
 					flex-direction: column;
 					text-align: center;
 					padding: 0;
+					position: relative;
+					transition: all 0.2s ease;
+
+					&::before {
+						content: "";
+						display: block;
+						position: absolute;
+						top: 0;
+						left: 0;
+						right: 0;
+						bottom: 0;
+						margin: auto;
+						width: 60px;
+						height: 60px;
+						opacity: 0;
+						border-radius: 100%;
+						background: var(--MI_THEME-accentedBg);
+						transition: opacity 0.1s ease;
+						z-index: -1;
+					}
 
 					&:hover {
 						text-decoration: none;
-						background: none;
 						color: var(--MI_THEME-accent);
 
+						&::before {
+							opacity: 1;
+						}
+
 						> .icon {
-							background: var(--MI_THEME-accentedBg);
+							background: transparent;
 						}
 					}
 
@@ -341,12 +394,15 @@ function searchOnKeyDown(ev: KeyboardEvent) {
 						aspect-ratio: 1;
 						background: var(--MI_THEME-panel);
 						border-radius: 100%;
+						position: relative;
+						transition: background 0.2s ease;
 					}
 
 					> .text {
 						padding-right: 0;
 						width: 100%;
 						font-size: 0.8em;
+						position: relative;
 					}
 				}
 			}
@@ -361,10 +417,34 @@ function searchOnKeyDown(ev: KeyboardEvent) {
 		padding: 9px 16px 9px 8px;
 		border-radius: 9px;
 		font-size: 0.9em;
+		position: relative;
+		transition: all 0.2s ease;
+
+		&::before {
+			content: "";
+			display: block;
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			margin: auto;
+			width: calc(100% - 8px);
+			height: calc(100% - 4px);
+			opacity: 0;
+			border-radius: 6px;
+			background: var(--MI_THEME-accentedBg);
+			transition: opacity 0.1s ease;
+			z-index: -1;
+		}
 
 		&:hover {
 			text-decoration: none;
-			background: var(--MI_THEME-panelHighlight);
+			color: var(--MI_THEME-navHoverFg);
+
+			&::before {
+				opacity: 1;
+			}
 		}
 
 		&.selected {
@@ -378,7 +458,10 @@ function searchOnKeyDown(ev: KeyboardEvent) {
 
 		&.active {
 			color: var(--MI_THEME-accent);
-			background: var(--MI_THEME-accentedBg);
+
+			&::before {
+				opacity: 1;
+			}
 		}
 
 		&.danger {
@@ -391,12 +474,14 @@ function searchOnKeyDown(ev: KeyboardEvent) {
 			flex-shrink: 0;
 			text-align: center;
 			opacity: 0.8;
+			position: relative;
 		}
 
 		> .text {
 			white-space: normal;
 			padding-right: 12px;
 			flex-shrink: 1;
+			position: relative;
 		}
 	}
 }

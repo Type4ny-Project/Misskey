@@ -6852,6 +6852,10 @@ export interface Locale extends ILocale {
              */
             "global": string;
             /**
+             * このサーバーにいるユーザーがファイルを添付した投稿を見られます。
+             */
+            "media": string;
+            /**
              * それぞれのタイムラインは、画面上部でいつでも切り替えられます。
              */
             "description2": string;
@@ -6988,6 +6992,10 @@ export interface Locale extends ILocale {
          * グローバルタイムラインでは、接続している他のすべてのサーバーからの投稿を見られます。
          */
         "global": string;
+        /**
+         * メディアタイムラインでは、このサーバーにいるユーザーがファイルを添付した投稿を見られます。
+         */
+        "media": string;
     };
     "_serverRules": {
         /**

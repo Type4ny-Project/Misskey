@@ -357,6 +357,38 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 
 		// フォローしたとしても user.isFollowing はリアルタイム更新されないので不便なため
 		//if (user.isFollowing) {
+
+		if ($i && $i.policies && $i.policies.canSendPoints) {
+			const pointName = instance.pointName ?? i18n.ts.point;
+			menuItems.push({
+				icon: 'ti ti-coin',
+				text: i18n.tsx.sendPoints({ pointName }),
+				action: async () => {
+					const { canceled, result } = await os.inputNumber({
+						title: i18n.tsx.sendPointsTo({ name: user.name ?? user.username, pointName: pointName }),
+					});
+					if (canceled || !result) return;
+					const points = result;
+					if (points <= 0) {
+						await os.alert({ type: 'error', text: i18n.ts.pointsMustBePositive });
+						return;
+					}
+					if ($i.getPoints != null && points >= $i.getPoints) {
+						await os.alert({ type: 'error', text: i18n.tsx.notEnoughPoints({ pointName }) });
+						return;
+					}
+					os.confirm({
+						type: 'warning',
+						text: i18n.tsx.sendPointsConfirm({ name: user.name ?? user.username, pointName, points }),
+					}).then(async ({ canceled }) => {
+						if (canceled) return;
+						await misskeyApi('point/send', { userId: user.id, points });
+						await refreshAccount();
+					});
+				},
+			});
+		}
+
 		const withRepliesRef = ref(user.withReplies ?? false);
 
 		menuItems.push({

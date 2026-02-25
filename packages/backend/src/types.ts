@@ -81,6 +81,7 @@ export const userExportableEntities = ['antenna', 'blocking', 'clip', 'customEmo
 export const userImportableEntities = ['antenna', 'blocking', 'customEmoji', 'following', 'muting', 'userList'] as const;
 
 export const moderationLogTypes = [
+	'inboxRejected',
 	'updateServerSettings',
 	'suspend',
 	'unsuspend',
@@ -136,6 +137,11 @@ export const moderationLogTypes = [
 ] as const;
 
 export type ModerationLogPayloads = {
+	inboxRejected: {
+		activity: any;
+		rule: any;
+	};
+
 	updateServerSettings: {
 		before: any | null;
 		after: any | null;

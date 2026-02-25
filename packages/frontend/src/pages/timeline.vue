@@ -45,8 +45,8 @@ import { deepMerge } from '@/utility/merge.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { availableBasicTimelines, hasWithReplies, isAvailableBasicTimeline, isBasicTimeline, basicTimelineIconClass } from '@/timelines.js';
 import { prefer } from '@/preferences.js';
-import { timelineHeaderItemDef } from '@/timeline-header.js';
-import { isLocalTimelineAvailable, isGlobalTimelineAvailable } from '@/env.js';
+import {type TimelineHeaderItem, timelineHeaderItemDef} from '@/timeline-header.js';
+import { isLocalTimelineAvailable, isGlobalTimelineAvailable } from '@/scripts/get-timeline-available.js';
 
 const tlComponent = useTemplateRef('tlComponent');
 
@@ -266,7 +266,7 @@ const headerActions = computed<PageHeaderItem[]>(() => {
 	return items;
 });
 
-const headerTabs = computed(() => store.r.timelineHeader.value.map(tab => {
+const headerTabs = computed(() => store.r.timelineHeader.value.map((tab: TimelineHeaderItem) => {
 	if ((tab === 'local' || tab === 'social') && !isLocalTimelineAvailable) {
 		return {};
 	} else if (tab === 'global' && !isGlobalTimelineAvailable) {

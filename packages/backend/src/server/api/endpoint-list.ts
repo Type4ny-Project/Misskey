@@ -406,6 +406,7 @@ export * as 'users/lists/create' from './endpoints/users/lists/create.js';
 export * as 'users/lists/create-from-public' from './endpoints/users/lists/create-from-public.js';
 export * as 'users/lists/delete' from './endpoints/users/lists/delete.js';
 export * as 'users/lists/favorite' from './endpoints/users/lists/favorite.js';
+export * as 'users/lists/list-favorite' from './endpoints/users/lists/list-favorite.js';
 export * as 'users/lists/get-memberships' from './endpoints/users/lists/get-memberships.js';
 export * as 'users/lists/list' from './endpoints/users/lists/list.js';
 export * as 'users/lists/pull' from './endpoints/users/lists/pull.js';
@@ -451,3 +452,8 @@ export * as 'chat/rooms/invitations/outbox' from './endpoints/chat/rooms/invitat
 export * as 'chat/history' from './endpoints/chat/history.js';
 export * as 'chat/read-all' from './endpoints/chat/read-all.js';
 export * as 'v2/admin/emoji/list' from './endpoints/v2/admin/emoji/list.js';
+
+export * as 'admin/inbox-rule/edit' from './endpoints/admin/inbox-rule/edit.js';
+export * as 'admin/inbox-rule/set' from './endpoints/admin/inbox-rule/set.js';
+export * as 'admin/inbox-rule/delete' from './endpoints/admin/inbox-rule/delete.js';
+export * as 'admin/inbox-rule/list' from './endpoints/admin/inbox-rule/list.js';

@@ -83,6 +83,8 @@ import { RegistryApiService } from './RegistryApiService.js';
 import { ReversiService } from './ReversiService.js';
 import { PageService } from './PageService.js';
 import { PointService } from './PointService.js';
+import { InboxRuleService } from './InboxRuleService.js';
+import { LoginBonusService } from './LoginBonusService.js';
 
 import { ChartLoggerService } from './chart/ChartLoggerService.js';
 import FederationChart from './chart/charts/federation.js';
@@ -236,6 +238,8 @@ const $RegistryApiService: Provider = { provide: 'RegistryApiService', useExisti
 const $ReversiService: Provider = { provide: 'ReversiService', useExisting: ReversiService };
 const $PageService: Provider = { provide: 'PageService', useExisting: PageService };
 const $PointService: Provider = { provide: 'PointService', useExisting: PointService };
+const $InboxRuleService: Provider = { provide: 'InboxRuleService', useExisting: InboxRuleService };
+const $LoginBonusService: Provider = { provide: 'LoginBonusService', useExisting: LoginBonusService };
 
 const $ChartLoggerService: Provider = { provide: 'ChartLoggerService', useExisting: ChartLoggerService };
 const $FederationChart: Provider = { provide: 'FederationChart', useExisting: FederationChart };
@@ -393,6 +397,8 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		ReversiService,
 		PageService,
 		PointService,
+		InboxRuleService,
+		LoginBonusService,
 
 		ChartLoggerService,
 		FederationChart,
@@ -545,6 +551,8 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$ReversiService,
 		$PageService,
 		$PointService,
+		$InboxRuleService,
+		$LoginBonusService,
 
 		$ChartLoggerService,
 		$FederationChart,
@@ -699,6 +707,8 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		ReversiService,
 		PageService,
 		PointService,
+		InboxRuleService,
+		LoginBonusService,
 
 		FederationChart,
 		NotesChart,
@@ -849,6 +859,8 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$ReversiService,
 		$PageService,
 		$PointService,
+		$InboxRuleService,
+		$LoginBonusService,
 
 		$FederationChart,
 		$NotesChart,

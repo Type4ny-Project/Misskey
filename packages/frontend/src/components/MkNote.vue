@@ -8,7 +8,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 	v-if="!hardMuted && !hideByPlugin && muted === false"
 	ref="rootEl"
 	v-hotkey="keymap"
-	:class="[$style.root, { [$style.showActionsOnlyHover]: prefer.s.showNoteActionsOnlyHover, [$style.skipRender]: prefer.s.skipNoteRender }]"
+	:class="[$style.root, {
+		[$style.showActionsOnlyHover]: prefer.s.showNoteActionsOnlyHover,
+		[$style.skipRender]: prefer.s.skipNoteRender,
+		[$style.home]: prefer.s.showVisibilityColor && note.visibility === 'home',
+		[$style.followers]: prefer.s.showVisibilityColor && note.visibility === 'followers',
+		[$style.specified]: prefer.s.showVisibilityColor && note.visibility === 'specified',
+		[$style.localonly]: prefer.s.showVisibilityColor && note.localOnly
+	}]"
 	tabindex="0"
 >
 	<MkNoteSub v-if="appearNote.replyId && !renoteCollapsed" :note="appearNote?.reply ?? null" :class="$style.replyTo"/>
@@ -1169,5 +1176,25 @@ function emitUpdReaction(emoji: string, delta: number) {
 	background-size: auto auto;
 	background-image: repeating-linear-gradient(135deg, transparent, transparent 10px, var(--color) 4px, var(--color) 14px);
 	border-radius: 8px;
+}
+
+.home {
+	background-color: rgba(var(--homeColor), 0.20) !important;
+}
+
+.followers {
+	background-color: rgba(var(--followerColor), 0.20) !important;
+}
+
+.specified {
+	background-color: rgba(var(--specifiedColor), 0.20) !important;
+}
+
+.localonly {
+	background-color: rgba(var(--localOnlyColor), 0.20) !important;
+}
+
+.root:has(.ti-home) {
+	background-color: rgba(255, 255, 100, 0.10) !important;
 }
 </style>

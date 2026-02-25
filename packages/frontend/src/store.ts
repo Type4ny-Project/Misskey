@@ -12,7 +12,7 @@ import type { TIPS } from '@/tips.js';
 import { Pizzax } from '@/lib/pizzax.js';
 import { DEFAULT_DEVICE_KIND } from '@/utility/device-kind.js';
 import type { TimelineHeaderItem } from '@/timeline-header.js';
-import { isLocalTimelineAvailable, isGlobalTimelineAvailable } from '@/env.js';
+import { isLocalTimelineAvailable, isGlobalTimelineAvailable } from '@/scripts/get-timeline-available.js';
 
 /**
  * 「状態」を管理するストア(not「設定」)
@@ -470,6 +470,18 @@ export const store = markRaw(new Pizzax('base', {
 		default: { type: 'syuilo/bubble2', volume: 1 },
 	},
 	dropAndFusion: {
+		where: 'device',
+		default: {
+			bgmVolume: 0.25,
+			sfxVolume: 1,
+		},
+	},
+	remoteLocalTimeline: {
+		where: 'device',
+		default: [],
+	},
+	//#endregion
+	sound:{
 		where: 'device',
 		default: {
 			bgmVolume: 0.25,

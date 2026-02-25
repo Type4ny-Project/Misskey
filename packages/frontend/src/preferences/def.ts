@@ -299,6 +299,21 @@ export const PREF_DEF = definePreferences({
 	showNoteActionsOnlyHover: {
 		default: false,
 	},
+	showVisibilityColor: {
+		default: false,
+	},
+	specifiedColor: {
+		default: '#FFFF64',
+	},
+	followerColor: {
+		default: '#FF00FF',
+	},
+	homeColor: {
+		default: '#00FFFF',
+	},
+	localOnlyColor: {
+		default: '#2b2c41',
+	},
 	showClipButtonInNoteFooter: {
 		default: false,
 	},

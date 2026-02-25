@@ -4,12 +4,15 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { IsNull, Not, In } from 'typeorm';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { MetaService } from '@/core/MetaService.js';
 import type { Config } from '@/config.js';
 import { DI } from '@/di-symbols.js';
 import { DEFAULT_POLICIES } from '@/core/RoleService.js';
 import { SystemAccountService } from '@/core/SystemAccountService.js';
+import { envOption } from '@/env.js';
+import type { MiUser } from '@/models/User.js';
 
 export const meta = {
 	tags: ['meta'],
@@ -613,15 +616,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.config)
 		private config: Config,
 
+		@Inject(DI.usersRepository)
+		private usersRepository: typeof DI.usersRepository,
+
 		private metaService: MetaService,
 		private systemAccountService: SystemAccountService,
 	) {
-		super(meta, paramDef, async () => {
+		super(meta, paramDef, async (ps, me: MiUser) => {
 			const instance = await this.metaService.fetch(true);
 
 			const proxy = await this.systemAccountService.fetch('proxy');
 
-			return {
+			const commonResponse = {
 				maintainerName: instance.maintainerName,
 				maintainerEmail: instance.maintainerEmail,
 				version: this.config.version,
@@ -752,7 +758,39 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				remoteNotesCleaningExpiryDaysForEachNotes: instance.remoteNotesCleaningExpiryDaysForEachNotes,
 				remoteNotesCleaningMaxProcessingDurationInMinutes: instance.remoteNotesCleaningMaxProcessingDurationInMinutes,
 				showRoleBadgesOfRemoteUsers: instance.showRoleBadgesOfRemoteUsers,
+				isManaged: envOption.managed,
+				...(envOption.managed ? {
+					nowLocalUsers: await this.usersRepository.count({ where: { host: IsNull(), username: Not(In(['instance.actor', 'relay.actor', this.config.adminUserName ?? '', this.config.rootUserName ?? ''])) } }),
+					maxLocalUsers: this.config.maxLocalUsers,
+				} : {
+					nowLocalUsers: 0,
+					maxLocalUsers: 0,
+				}),
 			};
+
+			const isRootUser = this.config.rootUserName === me.username;
+			if (!envOption.managed || isRootUser) {
+				return commonResponse;
+			} else {
+				return {
+					...commonResponse,
+					useObjectStorage: true,
+					objectStorageBaseUrl: 'Masked',
+					objectStorageBucket: 'Masked',
+					objectStoragePrefix: 'Masked',
+					objectStorageEndpoint: 'Masked',
+					objectStorageRegion: 'Masked',
+					objectStoragePort: 0,
+					objectStorageAccessKey: 'Masked',
+					objectStorageSecretKey: 'Masked',
+					objectStorageUseSSL: false,
+					objectStorageUseProxy: false,
+					objectStorageSetPublicRead: false,
+					objectStorageS3ForcePathStyle: false,
+					summalyProxy: 'Masked',
+					deeplAuthKey: 'Masked',
+				};
+			}
 		});
 	}
 }

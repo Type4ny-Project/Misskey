@@ -73,6 +73,27 @@ type Source = {
 		replayIntegration?: Parameters<typeof SentryVue.replayIntegration>[0] | null;
 	};
 
+	adminUserName?: string;
+	adminPassword?: string;
+	rootUserName?: string;
+	rootPassword?: string;
+
+	objectStorage?: {
+		useObjectStorage: boolean;
+		objectStorageBaseUrl: string;
+		objectStorageBucket: string;
+		objectStoragePrefix: string;
+		objectStorageEndpoint: string;
+		objectStorageRegion: string;
+		objectStoragePort?: number;
+		objectStorageAccessKey: string;
+		objectStorageSecretKey: string;
+		objectStorageUseSSL?: boolean;
+		objectStorageUseProxy?: boolean;
+		objectStorageSetPublicRead?: boolean;
+		objectStorageS3ForcePathStyle?: boolean;
+	};
+
 	publishTarballInsteadOfProvideRepositoryUrl?: boolean;
 
 	setupPassword?: string;
@@ -107,6 +128,7 @@ type Source = {
 	perChannelMaxNoteCacheCount?: number;
 	perUserNotificationsMaxCount?: number;
 	deactivateAntennaThreshold?: number;
+	maxLocalUsers?: number;
 	pidFile: string;
 
 	logging?: {
@@ -211,6 +233,26 @@ export type Config = {
 	perChannelMaxNoteCacheCount: number;
 	perUserNotificationsMaxCount: number;
 	deactivateAntennaThreshold: number;
+	maxLocalUsers: number;
+	adminUserName: string | undefined;
+	adminPassword: string | undefined;
+	rootUserName: string | undefined;
+	rootPassword: string | undefined;
+	objectStorage?: {
+		useObjectStorage?: boolean;
+		objectStorageBaseUrl?: string;
+		objectStorageBucket?: string;
+		objectStoragePrefix?: string;
+		objectStorageEndpoint?: string;
+		objectStorageRegion?: string;
+		objectStoragePort?: number;
+		objectStorageAccessKey?: string;
+		objectStorageSecretKey?: string;
+		objectStorageUseSSL?: boolean;
+		objectStorageUseProxy?: boolean;
+		objectStorageSetPublicRead?: boolean;
+		objectStorageS3ForcePathStyle?: boolean;
+	};
 	pidFile: string;
 };
 
@@ -344,6 +386,12 @@ export function loadConfig(): Config {
 		perChannelMaxNoteCacheCount: config.perChannelMaxNoteCacheCount ?? 1000,
 		perUserNotificationsMaxCount: config.perUserNotificationsMaxCount ?? 500,
 		deactivateAntennaThreshold: config.deactivateAntennaThreshold ?? (1000 * 60 * 60 * 24 * 7),
+		maxLocalUsers: config.maxLocalUsers ?? -1,
+		adminUserName: config.adminUserName,
+		adminPassword: config.adminPassword,
+		rootUserName: config.rootUserName,
+		rootPassword: config.rootPassword,
+		objectStorage: config.objectStorage ?? {},
 		pidFile: config.pidFile,
 		logging: config.logging,
 	};

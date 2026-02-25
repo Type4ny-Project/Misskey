@@ -405,6 +405,32 @@ export interface Locale extends ILocale {
      */
     "followers": string;
     /**
+     * ポイント
+     */
+    "point": string;
+    /**
+     * {pointName}を送る
+     */
+    "sendPoints": ParameterizedString<"pointName">;
+    /**
+     * {name}に{pointName}を送る
+     */
+    "sendPointsTo": ParameterizedString<"name" | "pointName">;
+    /**
+     * {name}に{points}{pointName}を送信します。
+     * よろしいですか？
+     * ※送信後は取り消すことができません。
+     */
+    "sendPointsConfirm": ParameterizedString<"name" | "points" | "pointName">;
+    /**
+     * {pointName}が足りません
+     */
+    "notEnoughPoints": ParameterizedString<"pointName">;
+    /**
+     * {pointName}は数字で入力してください
+     */
+    "pointsMustBeNumber": ParameterizedString<"pointName">;
+    /**
      * フォローされています
      */
     "followsYou": string;
@@ -2041,6 +2067,14 @@ export interface Locale extends ILocale {
      */
     "resetPassword": string;
     /**
+     * {pointName}を付与する
+     */
+    "grantPoints": ParameterizedString<"pointName">;
+    /**
+     * {pointName}を剥奪する
+     */
+    "revokePoints": ParameterizedString<"pointName">;
+    /**
      * 新しいパスワードは「{password}」です
      */
     "newPasswordIs": ParameterizedString<"password">;
@@ -2352,6 +2386,16 @@ export interface Locale extends ILocale {
      * アピアランス
      */
     "appearance": string;
+    "_timelineHeader": {
+        /**
+         * タイムラインのヘッダー
+         */
+        "timelineHeader": string;
+    };
+    /**
+     * タイムラインのヘッダー
+     */
+    "timelineHeader": string;
     /**
      * クライアント設定
      */
@@ -4440,6 +4484,10 @@ export interface Locale extends ILocale {
      * リアクションやリノートをしたことがあるノートをたたんで表示します。
      */
     "collapseRenotesDescription": string;
+    /**
+     * 公開範囲を色でわかりやすく表示する
+     */
+    "showVisibilityColor": string;
     /**
      * サーバー内部エラー
      */
@@ -10648,6 +10696,10 @@ export interface Locale extends ILocale {
          * ソーシャル
          */
         "social": string;
+        /**
+         * メディア
+         */
+        "media": string;
         /**
          * グローバル
          */

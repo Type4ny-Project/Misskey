@@ -61,6 +61,7 @@ import { MiSignin } from '@/models/Signin.js';
 import { MiSwSubscription } from '@/models/SwSubscription.js';
 import { MiUsedUsername } from '@/models/UsedUsername.js';
 import { MiUser } from '@/models/User.js';
+import { MiInboxRule } from '@/models/InboxRule.js';
 import { MiUserIp } from '@/models/UserIp.js';
 import { MiUserKeypair } from '@/models/UserKeypair.js';
 import { MiUserList } from '@/models/UserList.js';
@@ -179,6 +180,7 @@ class MyCustomLogger implements Logger {
 }
 
 export const entities = [
+	MiInboxRule,
 	MiAnnouncement,
 	MiAnnouncementRead,
 	MiMeta,

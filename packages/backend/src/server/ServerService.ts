@@ -6,6 +6,12 @@
 import cluster from 'node:cluster';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { envOption } from '@/env.js';
+import { createHash } from 'node:crypto';
+import { RoleService } from '@/core/RoleService.js';
+import { SignupService } from '@/core/SignupService.js';
+import { IdService } from '@/core/IdService.js';
+import { generateSecureRandomString } from '@/misc/math-secure-random.js';
 import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
@@ -68,6 +74,9 @@ export class ServerService implements OnApplicationShutdown {
 		private globalEventService: GlobalEventService,
 		private loggerService: LoggerService,
 		private oauth2ProviderService: OAuth2ProviderService,
+		private idService: IdService,
+		private roleService: RoleService,
+		private signupService: SignupService,
 	) {
 		this.logger = this.loggerService.getLogger('server', 'gray');
 	}
@@ -276,7 +285,67 @@ export class ServerService implements OnApplicationShutdown {
 			fastify.listen({ port: this.config.port, host: '0.0.0.0' });
 		}
 
+
+
+		if (envOption.managed && this.config.rootUserName && this.config.adminUserName && this.config.rootPassword && this.config.adminPassword) {
+			const hasUsers = await this.usersRepository.count() > 0;
+			if (!hasUsers) {
+				this.logger.info('MANAGED mode: No users found. Creating root and admin users...');
+
+				const rootUser = await this.signupService.signup({
+					username: this.config.rootUserName,
+					password: this.config.rootPassword,
+					ignorePreservedUsernames: true
+				});
+
+				const adminUser = await this.signupService.signup({
+					username: this.config.adminUserName,
+					password: this.config.adminPassword,
+					ignorePreservedUsernames: true
+				});
+
+				const rootRole = await this.roleService.create({
+					name: 'root',
+					description: 'Root System Administrator',
+					color: '#ff0000',
+					iconUrl: null,
+					target: 'manual',
+					condFormula: {},
+					isPublic: false,
+					isExplorable: false,
+					isModerator: true,
+					isAdministrator: true,
+					asBadge: true,
+					canEditMembersByModerator: true,
+					displayOrder: 0,
+				});
+
+				const adminRole = await this.roleService.create({
+					name: 'admin',
+					description: 'System Administrator',
+					color: '#ff0000',
+					iconUrl: null,
+					target: 'manual',
+					condFormula: {},
+					isPublic: false,
+					isExplorable: false,
+					isModerator: true,
+					isAdministrator: true,
+					asBadge: true,
+					canEditMembersByModerator: true,
+					displayOrder: 1,
+				});
+
+				await this.roleService.assign(rootUser.id, rootRole.id);
+				await this.roleService.assign(adminUser.id, adminRole.id);
+
+				this.logger.info('MANAGED mode: Users created successfully.');
+			}
+		}
+
 		await fastify.ready();
+
+
 	}
 
 	@bindThis

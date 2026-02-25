@@ -85,9 +85,17 @@ import {
 	MiChatRoomMembership,
 	MiChatRoomInvitation,
 	MiChatApproval,
+	MiInboxRule,
 } from './_.js';
 import type { Provider } from '@nestjs/common';
 import type { DataSource } from 'typeorm';
+
+
+const $inboxRuleRepository: Provider = {
+	provide: DI.inboxRuleRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiInboxRule),
+	inject: [DI.db],
+};
 
 const $usersRepository: Provider = {
 	provide: DI.usersRepository,
@@ -554,6 +562,7 @@ const $reversiGamesRepository: Provider = {
 @Module({
 	imports: [],
 	providers: [
+		$inboxRuleRepository,
 		$usersRepository,
 		$notesRepository,
 		$announcementsRepository,
@@ -633,6 +642,7 @@ const $reversiGamesRepository: Provider = {
 		$reversiGamesRepository,
 	],
 	exports: [
+		$inboxRuleRepository,
 		$usersRepository,
 		$notesRepository,
 		$announcementsRepository,

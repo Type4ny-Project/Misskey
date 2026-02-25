@@ -13,6 +13,7 @@ import { DeleteObjectCommandInput, PutObjectCommandInput, NoSuchKey } from '@aws
 import { DI } from '@/di-symbols.js';
 import type { DriveFilesRepository, UsersRepository, DriveFoldersRepository, UserProfilesRepository, MiMeta } from '@/models/_.js';
 import type { Config } from '@/config.js';
+import { envOption } from '@/env.js';
 import Logger from '@/logger.js';
 import type { MiRemoteUser, MiUser } from '@/models/User.js';
 import { MiDriveFile } from '@/models/DriveFile.js';
@@ -94,6 +95,10 @@ export class DriveService {
 	private downloaderLogger: Logger;
 	private deleteLogger: Logger;
 
+	private getStorageConfig() {
+		return (envOption.managed && this.config.objectStorage?.useObjectStorage) ? this.config.objectStorage : this.meta;
+	}
+
 	constructor(
 		@Inject(DI.config)
 		private config: Config,
@@ -150,7 +155,8 @@ export class DriveService {
 	// thunbnail, webpublic を必要なら生成
 		const alts = await this.generateAlts(path, type, !file.uri);
 
-		if (this.meta.useObjectStorage) {
+		const storage = this.getStorageConfig();
+		if (this.meta.useObjectStorage || storage.useObjectStorage) {
 		//#region ObjectStorage params
 			let [ext] = (name.match(/\.([a-zA-Z0-9_-]+)$/) ?? ['']);
 
@@ -169,11 +175,11 @@ export class DriveService {
 				ext = '';
 			}
 
-			const baseUrl = this.meta.objectStorageBaseUrl
-				?? `${ this.meta.objectStorageUseSSL ? 'https' : 'http' }://${ this.meta.objectStorageEndpoint }${ this.meta.objectStoragePort ? `:${this.meta.objectStoragePort}` : '' }/${ this.meta.objectStorageBucket }`;
+			const baseUrl = storage.objectStorageBaseUrl
+				?? `${ storage.objectStorageUseSSL ? 'https' : 'http' }://${ storage.objectStorageEndpoint }${ storage.objectStoragePort ? `:${storage.objectStoragePort}` : '' }/${ this.getStorageConfig().objectStorageBucket }`;
 
 			// for original
-			const prefix = this.meta.objectStoragePrefix ? `${this.meta.objectStoragePrefix}/` : '';
+			const prefix = storage.objectStoragePrefix ? `${storage.objectStoragePrefix}/` : '';
 			const key = `${prefix}${randomUUID()}${ext}`;
 			const url = `${ baseUrl }/${ key }`;
 
@@ -377,7 +383,7 @@ export class DriveService {
 		if (!FILE_TYPE_BROWSERSAFE.includes(type)) type = 'application/octet-stream';
 
 		const params = {
-			Bucket: this.meta.objectStorageBucket,
+			Bucket: this.getStorageConfig().objectStorageBucket!,
 			Key: key,
 			Body: stream,
 			ContentType: type,
@@ -390,7 +396,7 @@ export class DriveService {
 			// 許可されているファイル形式でしか拡張子をつけない
 			ext ? correctFilename(filename, ext) : filename,
 		);
-		if (this.meta.objectStorageSetPublicRead) params.ACL = 'public-read';
+		if (this.getStorageConfig().objectStorageSetPublicRead) params.ACL = 'public-read';
 
 		await this.s3Service.upload(this.meta, params)
 			.then(
@@ -857,7 +863,7 @@ export class DriveService {
 	public async deleteObjectStorageFile(key: string) {
 		try {
 			const param = {
-				Bucket: this.meta.objectStorageBucket,
+				Bucket: this.getStorageConfig().objectStorageBucket!,
 				Key: key,
 			} as DeleteObjectCommandInput;
 

@@ -19,6 +19,9 @@ import { acquireApObjectLock } from '@/misc/distributed-lock.js';
 import { concat, toArray, toSingle, unique } from '@/misc/prelude/array.js';
 import type Logger from '@/logger.js';
 import { IdService } from '@/core/IdService.js';
+import { InboxRuleService } from '@/core/InboxRuleService.js';
+import { ModerationLogService } from '@/core/ModerationLogService.js';
+import type { InboxRuleRepository } from '@/models/_.js';
 import { StatusError } from '@/misc/status-error.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
@@ -68,6 +71,9 @@ export class ApInboxService {
 		private noteEntityService: NoteEntityService,
 		private utilityService: UtilityService,
 		private idService: IdService,
+		private inboxRuleService: InboxRuleService,
+		private moderationLogService: ModerationLogService,
+		@Inject(DI.inboxRuleRepository) private inboxRuleRepository: InboxRuleRepository,
 		private abuseReportService: AbuseReportService,
 		private userFollowingService: UserFollowingService,
 		private apAudienceService: ApAudienceService,
@@ -142,6 +148,18 @@ export class ApInboxService {
 	@bindThis
 	public async performOneActivity(actor: MiRemoteUser, activity: IObject, resolver?: Resolver): Promise<string | void> {
 		if (actor.isSuspended) return;
+
+		const rules = await this.inboxRuleRepository.find();
+		for (const rule of rules) {
+			const result = await this.inboxRuleService.evalCond(activity, actor, rule.condFormula);
+			if (result && rule.action.type === 'reject') {
+				await this.moderationLogService.log(actor, 'inboxRejected', {
+					activity,
+					rule: rule,
+				});
+				return 'skip: rejected by rule' + rule.id;
+			}
+		}
 
 		if (isCreate(activity)) {
 			return await this.create(actor, activity, resolver);

@@ -207,6 +207,30 @@ export async function common(createVue: () => Promise<App<Element>>) {
 		}
 	}, { immediate: true });
 
+	function hexToRgb(hex: string) {
+		hex = hex.replace(/^#/, '');
+		const r = parseInt(hex.substring(0, 2), 16);
+		const g = parseInt(hex.substring(2, 4), 16);
+		const b = parseInt(hex.substring(4, 6), 16);
+		return `${r},${g},${b}`;
+	}
+
+	watch(prefer.r.homeColor, v => {
+		window.document.documentElement.style.setProperty('--homeColor', hexToRgb(v));
+	}, { immediate: true });
+
+	watch(prefer.r.followerColor, v => {
+		window.document.documentElement.style.setProperty('--followerColor', hexToRgb(v));
+	}, { immediate: true });
+
+	watch(prefer.r.specifiedColor, v => {
+		window.document.documentElement.style.setProperty('--specifiedColor', hexToRgb(v));
+	}, { immediate: true });
+
+	watch(prefer.r.localOnlyColor, v => {
+		window.document.documentElement.style.setProperty('--localOnlyColor', hexToRgb(v));
+	}, { immediate: true });
+
 	// Keep screen on
 	const onVisibilityChange = () => window.document.addEventListener('visibilitychange', () => {
 		if (window.document.visibilityState === 'visible') {

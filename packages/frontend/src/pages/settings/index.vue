@@ -136,6 +136,7 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 	}, {
 		icon: 'ti ti-columns',
 		text: i18n.ts._timelineHeader.timelineHeader,
+		type: 'button',
 		action: () => router.push('/settings/timelineHeader'),
 	}],
 }, {

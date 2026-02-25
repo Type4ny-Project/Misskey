@@ -6,7 +6,7 @@
 import { generateKeyPair } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
-import { DataSource, IsNull } from 'typeorm';
+import { DataSource, IsNull, Not, In } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { MiMeta, UsedUsernamesRepository, UsersRepository } from '@/models/_.js';
 import { MiUser } from '@/models/User.js';
@@ -22,6 +22,8 @@ import { UtilityService } from '@/core/UtilityService.js';
 import { UserService } from '@/core/UserService.js';
 import { SystemAccountService } from '@/core/SystemAccountService.js';
 import { MetaService } from '@/core/MetaService.js';
+import { envOption } from '@/env.js';
+import type { Config } from '@/config.js';
 
 @Injectable()
 export class SignupService {
@@ -31,6 +33,9 @@ export class SignupService {
 
 		@Inject(DI.meta)
 		private meta: MiMeta,
+
+		@Inject(DI.config)
+		private config: Config,
 
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
@@ -62,6 +67,16 @@ export class SignupService {
 		// Validate username
 		if (!this.userEntityService.validateLocalUsername(username)) {
 			throw new Error('INVALID_USERNAME');
+		}
+
+		// Check maxLocalUsers in managed mode
+		if (
+			envOption.managed &&
+			this.config.maxLocalUsers !== -1 &&
+			(await this.usersRepository.count({ where: { host: IsNull(), username: Not(In(['instance.actor', 'relay.actor', this.config.adminUserName ?? '', this.config.rootUserName ?? ''])) } })) >=
+				this.config.maxLocalUsers
+		) {
+			throw new Error('MAX_LOCAL_USERS');
 		}
 
 		if (password != null && passwordHash == null) {

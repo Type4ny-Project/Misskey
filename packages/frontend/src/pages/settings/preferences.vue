@@ -175,6 +175,46 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</MkPreferenceContainer>
 							</SearchMarker>
 
+							<SearchMarker :keywords="['color', 'visibility']">
+								<MkPreferenceContainer k="showVisibilityColor">
+									<MkSwitch v-model="showVisibilityColor">
+										<template #label><SearchLabel>{{ i18n.ts.showVisibilityColor }}</SearchLabel></template>
+									</MkSwitch>
+								</MkPreferenceContainer>
+							</SearchMarker>
+
+							<SearchMarker v-if="showVisibilityColor" :keywords="['color', 'visibility', 'home']">
+								<MkPreferenceContainer k="homeColor">
+									<MkColorInput v-model="homeColor">
+										<template #label><SearchLabel>{{ i18n.ts._visibility.home }}</SearchLabel></template>
+									</MkColorInput>
+								</MkPreferenceContainer>
+							</SearchMarker>
+
+							<SearchMarker v-if="showVisibilityColor" :keywords="['color', 'visibility', 'followers']">
+								<MkPreferenceContainer k="followerColor">
+									<MkColorInput v-model="followerColor">
+										<template #label><SearchLabel>{{ i18n.ts._visibility.followers }}</SearchLabel></template>
+									</MkColorInput>
+								</MkPreferenceContainer>
+							</SearchMarker>
+
+							<SearchMarker v-if="showVisibilityColor" :keywords="['color', 'visibility', 'specified']">
+								<MkPreferenceContainer k="specifiedColor">
+									<MkColorInput v-model="specifiedColor">
+										<template #label><SearchLabel>{{ i18n.ts._visibility.specified }}</SearchLabel></template>
+									</MkColorInput>
+								</MkPreferenceContainer>
+							</SearchMarker>
+
+							<SearchMarker v-if="showVisibilityColor" :keywords="['color', 'visibility', 'local']">
+								<MkPreferenceContainer k="localOnlyColor">
+									<MkColorInput v-model="localOnlyColor">
+										<template #label><SearchLabel>{{ i18n.ts.localOnly }}</SearchLabel></template>
+									</MkColorInput>
+								</MkPreferenceContainer>
+							</SearchMarker>
+
 							<SearchMarker :keywords="['pinned', 'list']">
 								<MkFolder>
 									<template #label><SearchLabel>{{ i18n.ts.pinnedList }}</SearchLabel></template>
@@ -884,6 +924,7 @@ import { miLocalStorage } from '@/local-storage.js';
 import { prefer } from '@/preferences.js';
 import MkPreferenceContainer from '@/components/MkPreferenceContainer.vue';
 import MkFeatureBanner from '@/components/MkFeatureBanner.vue';
+import MkColorInput from '@/components/MkColorInput.vue';
 import { globalEvents } from '@/events.js';
 import { claimAchievement } from '@/utility/achievements.js';
 import { instance } from '@/instance.js';
@@ -903,6 +944,11 @@ const showTitlebar = prefer.model('showTitlebar');
 const keepCw = prefer.model('keepCw');
 const serverDisconnectedBehavior = prefer.model('serverDisconnectedBehavior');
 const hemisphere = prefer.model('hemisphere');
+const showVisibilityColor = prefer.model('showVisibilityColor');
+const homeColor = prefer.model('homeColor');
+const followerColor = prefer.model('followerColor');
+const specifiedColor = prefer.model('specifiedColor');
+const localOnlyColor = prefer.model('localOnlyColor');
 const showNoteActionsOnlyHover = prefer.model('showNoteActionsOnlyHover');
 const showClipButtonInNoteFooter = prefer.model('showClipButtonInNoteFooter');
 const collapseRenotes = prefer.model('collapseRenotes');
@@ -986,6 +1032,7 @@ watch([
 	realtimeMode,
 	pollingInterval,
 	enableInfiniteScroll,
+	showVisibilityColor,
 	showNoteActionsOnlyHover,
 	overridedDeviceKind,
 	alwaysConfirmFollow,

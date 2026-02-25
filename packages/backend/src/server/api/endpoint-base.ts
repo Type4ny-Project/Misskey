@@ -16,6 +16,9 @@ const Ajv = _Ajv.default;
 const ajv = new Ajv({
 	useDefaults: true,
 });
+ajv.addKeyword('optional');
+ajv.addKeyword('selfRef');
+ajv.addKeyword('ref');
 
 ajv.addFormat('misskey:id', /^[a-zA-Z0-9]+$/);
 

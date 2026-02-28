@@ -123,7 +123,7 @@ export class LoginBonusService {
       throw new ApiError({ id: 'login-bonus-profile-not-found', message: 'User profile not found', code: 'USER_PROFILE_NOT_FOUND' });
     }
 
-    return userProfile.loginBonusIsVisible;
+    return userProfile.pointsVisibility === 'public';
   }
 
   /**
@@ -131,7 +131,7 @@ export class LoginBonusService {
    */
   async setLoginBonusVisibility(userId: string, isVisible: boolean): Promise<void> {
     await this.userProfilesRepository.update({ userId }, {
-      loginBonusIsVisible: isVisible,
+      pointsVisibility: isVisible ? 'public' : 'private',
     });
   }
 

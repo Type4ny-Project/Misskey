@@ -17,6 +17,8 @@ import type {
 	AdminAccountsDeleteRequest,
 	AdminAccountsFindByEmailRequest,
 	AdminAccountsFindByEmailResponse,
+	AdminAccountsPresentPointsRequest,
+	AdminAccountsPresentPointsResponse,
 	AdminAdCreateRequest,
 	AdminAdCreateResponse,
 	AdminAdDeleteRequest,
@@ -46,6 +48,8 @@ import type {
 	AdminEmojiAddRequest,
 	AdminEmojiAddResponse,
 	AdminEmojiAddAliasesBulkRequest,
+	AdminEmojiApproveRequestRequest,
+	AdminEmojiApproveRequestResponse,
 	AdminEmojiCopyRequest,
 	AdminEmojiCopyResponse,
 	AdminEmojiDeleteRequest,
@@ -55,11 +59,20 @@ import type {
 	AdminEmojiListResponse,
 	AdminEmojiListRemoteRequest,
 	AdminEmojiListRemoteResponse,
+	AdminEmojiListRequestRequest,
+	AdminEmojiListRequestResponse,
+	AdminEmojiRejectRequestRequest,
+	AdminEmojiRejectRequestResponse,
 	AdminEmojiRemoveAliasesBulkRequest,
+	AdminEmojiRequestSettingsResponse,
 	AdminEmojiSetAliasesBulkRequest,
 	AdminEmojiSetCategoryBulkRequest,
 	AdminEmojiSetLicenseBulkRequest,
 	AdminEmojiUpdateRequest,
+	AdminEmojiUpdateRequestRequest,
+	AdminEmojiUpdateRequestResponse,
+	AdminEmojiUpdateRequestSettingsRequest,
+	AdminEmojiUpdateRequestSettingsResponse,
 	AdminFederationDeleteAllFilesRequest,
 	AdminFederationRefreshRemoteInstanceMetadataRequest,
 	AdminFederationRemoveAllFollowingRequest,
@@ -69,6 +82,13 @@ import type {
 	AdminGetTableStatsResponse,
 	AdminGetUserIpsRequest,
 	AdminGetUserIpsResponse,
+	AdminInboxRuleDeleteRequest,
+	AdminInboxRuleDeleteResponse,
+	AdminInboxRuleEditRequest,
+	AdminInboxRuleEditResponse,
+	AdminInboxRuleListResponse,
+	AdminInboxRuleSetRequest,
+	AdminInboxRuleSetResponse,
 	AdminInviteCreateRequest,
 	AdminInviteCreateResponse,
 	AdminInviteListRequest,
@@ -317,6 +337,10 @@ import type {
 	EmailAddressAvailableResponse,
 	EmojiRequest,
 	EmojiResponse,
+	EmojiRequestCreateRequest,
+	EmojiRequestCreateResponse,
+	EmojiRequestsRequest,
+	EmojiRequestsResponse,
 	EmojisResponse,
 	EndpointRequest,
 	EndpointResponse,
@@ -561,6 +585,8 @@ import type {
 	PagesUpdateRequest,
 	PingResponse,
 	PinnedUsersResponse,
+	PointSendRequest,
+	PointSendResponse,
 	PromoReadRequest,
 	RenoteMuteCreateRequest,
 	RenoteMuteDeleteRequest,
@@ -630,6 +656,8 @@ import type {
 	UsersListsGetMembershipsResponse,
 	UsersListsListRequest,
 	UsersListsListResponse,
+	UsersListsListFavoriteRequest,
+	UsersListsListFavoriteResponse,
 	UsersListsPullRequest,
 	UsersListsPushRequest,
 	UsersListsShowRequest,
@@ -671,6 +699,7 @@ export type Endpoints = {
 	'admin/accounts/create': { req: AdminAccountsCreateRequest; res: AdminAccountsCreateResponse };
 	'admin/accounts/delete': { req: AdminAccountsDeleteRequest; res: EmptyResponse };
 	'admin/accounts/find-by-email': { req: AdminAccountsFindByEmailRequest; res: AdminAccountsFindByEmailResponse };
+	'admin/accounts/present-points': { req: AdminAccountsPresentPointsRequest; res: AdminAccountsPresentPointsResponse };
 	'admin/ad/create': { req: AdminAdCreateRequest; res: AdminAdCreateResponse };
 	'admin/ad/delete': { req: AdminAdDeleteRequest; res: EmptyResponse };
 	'admin/ad/list': { req: AdminAdListRequest; res: AdminAdListResponse };
@@ -693,17 +722,23 @@ export type Endpoints = {
 	'admin/drive/show-file': { req: AdminDriveShowFileRequest; res: AdminDriveShowFileResponse };
 	'admin/emoji/add': { req: AdminEmojiAddRequest; res: AdminEmojiAddResponse };
 	'admin/emoji/add-aliases-bulk': { req: AdminEmojiAddAliasesBulkRequest; res: EmptyResponse };
+	'admin/emoji/approve-request': { req: AdminEmojiApproveRequestRequest; res: AdminEmojiApproveRequestResponse };
 	'admin/emoji/copy': { req: AdminEmojiCopyRequest; res: AdminEmojiCopyResponse };
 	'admin/emoji/delete': { req: AdminEmojiDeleteRequest; res: EmptyResponse };
 	'admin/emoji/delete-bulk': { req: AdminEmojiDeleteBulkRequest; res: EmptyResponse };
 	'admin/emoji/import-zip': { req: AdminEmojiImportZipRequest; res: EmptyResponse };
 	'admin/emoji/list': { req: AdminEmojiListRequest; res: AdminEmojiListResponse };
 	'admin/emoji/list-remote': { req: AdminEmojiListRemoteRequest; res: AdminEmojiListRemoteResponse };
+	'admin/emoji/list-request': { req: AdminEmojiListRequestRequest; res: AdminEmojiListRequestResponse };
+	'admin/emoji/reject-request': { req: AdminEmojiRejectRequestRequest; res: AdminEmojiRejectRequestResponse };
 	'admin/emoji/remove-aliases-bulk': { req: AdminEmojiRemoveAliasesBulkRequest; res: EmptyResponse };
+	'admin/emoji/request-settings': { req: EmptyRequest; res: AdminEmojiRequestSettingsResponse };
 	'admin/emoji/set-aliases-bulk': { req: AdminEmojiSetAliasesBulkRequest; res: EmptyResponse };
 	'admin/emoji/set-category-bulk': { req: AdminEmojiSetCategoryBulkRequest; res: EmptyResponse };
 	'admin/emoji/set-license-bulk': { req: AdminEmojiSetLicenseBulkRequest; res: EmptyResponse };
 	'admin/emoji/update': { req: AdminEmojiUpdateRequest; res: EmptyResponse };
+	'admin/emoji/update-request': { req: AdminEmojiUpdateRequestRequest; res: AdminEmojiUpdateRequestResponse };
+	'admin/emoji/update-request-settings': { req: AdminEmojiUpdateRequestSettingsRequest; res: AdminEmojiUpdateRequestSettingsResponse };
 	'admin/federation/delete-all-files': { req: AdminFederationDeleteAllFilesRequest; res: EmptyResponse };
 	'admin/federation/refresh-remote-instance-metadata': { req: AdminFederationRefreshRemoteInstanceMetadataRequest; res: EmptyResponse };
 	'admin/federation/remove-all-following': { req: AdminFederationRemoveAllFollowingRequest; res: EmptyResponse };
@@ -712,6 +747,10 @@ export type Endpoints = {
 	'admin/get-index-stats': { req: EmptyRequest; res: AdminGetIndexStatsResponse };
 	'admin/get-table-stats': { req: EmptyRequest; res: AdminGetTableStatsResponse };
 	'admin/get-user-ips': { req: AdminGetUserIpsRequest; res: AdminGetUserIpsResponse };
+	'admin/inbox-rule/delete': { req: AdminInboxRuleDeleteRequest; res: AdminInboxRuleDeleteResponse };
+	'admin/inbox-rule/edit': { req: AdminInboxRuleEditRequest; res: AdminInboxRuleEditResponse };
+	'admin/inbox-rule/list': { req: EmptyRequest; res: AdminInboxRuleListResponse };
+	'admin/inbox-rule/set': { req: AdminInboxRuleSetRequest; res: AdminInboxRuleSetResponse };
 	'admin/invite/create': { req: AdminInviteCreateRequest; res: AdminInviteCreateResponse };
 	'admin/invite/list': { req: AdminInviteListRequest; res: AdminInviteListResponse };
 	'admin/meta': { req: EmptyRequest; res: AdminMetaResponse };
@@ -868,6 +907,8 @@ export type Endpoints = {
 	'drive/stream': { req: DriveStreamRequest; res: DriveStreamResponse };
 	'email-address/available': { req: EmailAddressAvailableRequest; res: EmailAddressAvailableResponse };
 	'emoji': { req: EmojiRequest; res: EmojiResponse };
+	'emoji-request/create': { req: EmojiRequestCreateRequest; res: EmojiRequestCreateResponse };
+	'emoji-requests': { req: EmojiRequestsRequest; res: EmojiRequestsResponse };
 	'emojis': { req: EmptyRequest; res: EmojisResponse };
 	'endpoint': { req: EndpointRequest; res: EndpointResponse };
 	'endpoints': { req: EmptyRequest; res: EndpointsResponse };
@@ -1034,6 +1075,7 @@ export type Endpoints = {
 	'pages/update': { req: PagesUpdateRequest; res: EmptyResponse };
 	'ping': { req: EmptyRequest; res: PingResponse };
 	'pinned-users': { req: EmptyRequest; res: PinnedUsersResponse };
+	'point/send': { req: PointSendRequest; res: PointSendResponse };
 	'promo/read': { req: PromoReadRequest; res: EmptyResponse };
 	'renote-mute/create': { req: RenoteMuteCreateRequest; res: EmptyResponse };
 	'renote-mute/delete': { req: RenoteMuteDeleteRequest; res: EmptyResponse };
@@ -1077,6 +1119,7 @@ export type Endpoints = {
 	'users/lists/favorite': { req: UsersListsFavoriteRequest; res: EmptyResponse };
 	'users/lists/get-memberships': { req: UsersListsGetMembershipsRequest; res: UsersListsGetMembershipsResponse };
 	'users/lists/list': { req: UsersListsListRequest; res: UsersListsListResponse };
+	'users/lists/list-favorite': { req: UsersListsListFavoriteRequest; res: UsersListsListFavoriteResponse };
 	'users/lists/pull': { req: UsersListsPullRequest; res: EmptyResponse };
 	'users/lists/push': { req: UsersListsPushRequest; res: EmptyResponse };
 	'users/lists/show': { req: UsersListsShowRequest; res: UsersListsShowResponse };

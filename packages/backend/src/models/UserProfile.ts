@@ -4,7 +4,7 @@
  */
 
 import { Entity, Column, Index, OneToOne, JoinColumn, PrimaryColumn } from 'typeorm';
-import { obsoleteNotificationTypes, followingVisibilities, followersVisibilities, notificationTypes } from '@/types.js';
+import { obsoleteNotificationTypes, followingVisibilities, followersVisibilities, notificationTypes, pointsVisibilities } from '@/types.js';
 import { id } from './util/id.js';
 import { MiUser } from './User.js';
 import { MiPage } from './Page.js';
@@ -270,11 +270,12 @@ export class MiUserProfile {
 	})
 	public loggedInDates: string[];
 
-	@Column('boolean', {
-		default: true,
-		comment: 'Whether to show login bonus points on profile.',
+	@Column('enum', {
+		enum: pointsVisibilities,
+		default: 'public',
+		comment: 'Who can view points on profile.',
 	})
-	public loginBonusIsVisible: boolean;
+	public pointsVisibility: typeof pointsVisibilities[number];
 
 	@Column('jsonb', {
 		default: [],

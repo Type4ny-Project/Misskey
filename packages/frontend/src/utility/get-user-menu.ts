@@ -20,6 +20,8 @@ import { mainRouter } from '@/router.js';
 import { genEmbedCode } from '@/utility/get-embed-code.js';
 import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
+import { instance } from '@/instance.js';
+import { refreshCurrentAccount } from '@/accounts.js';
 
 export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router = mainRouter) {
 	const meId = $i ? $i.id : null;
@@ -358,7 +360,8 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 		// フォローしたとしても user.isFollowing はリアルタイム更新されないので不便なため
 		//if (user.isFollowing) {
 
-		if ($i && $i.policies && $i.policies.canSendPoints) {
+		if ($i) {
+			const me = $i;
 			const pointName = instance.pointName ?? i18n.ts.point;
 			menuItems.push({
 				icon: 'ti ti-coin',
@@ -370,11 +373,11 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 					if (canceled || !result) return;
 					const points = result;
 					if (points <= 0) {
-						await os.alert({ type: 'error', text: i18n.ts.pointsMustBePositive });
+						await os.alert({ type: 'error', text: String(i18n.ts.pointsMustBePositive) });
 						return;
 					}
-					if ($i.getPoints != null && points >= $i.getPoints) {
-						await os.alert({ type: 'error', text: i18n.tsx.notEnoughPoints({ pointName }) });
+					if (me.points != null && points > me.points) {
+						await os.alert({ type: 'error', text: String(i18n.tsx.notEnoughPoints({ pointName })) });
 						return;
 					}
 					os.confirm({
@@ -383,7 +386,7 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 					}).then(async ({ canceled }) => {
 						if (canceled) return;
 						await misskeyApi('point/send', { userId: user.id, points });
-						await refreshAccount();
+						await refreshCurrentAccount();
 					});
 				},
 			});

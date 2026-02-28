@@ -75,6 +75,7 @@ export const paramDef = {
 		logoImageUrl: { type: 'string', nullable: true },
 		name: { type: 'string', nullable: true },
 		shortName: { type: 'string', nullable: true },
+		pointName: { type: 'string', nullable: true },
 		description: { type: 'string', nullable: true },
 		defaultLightTheme: { type: 'string', nullable: true },
 		defaultDarkTheme: { type: 'string', nullable: true },
@@ -339,6 +340,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.shortName !== undefined) {
 				set.shortName = ps.shortName;
+			}
+
+			if (ps.pointName !== undefined) {
+				set.pointName = ps.pointName;
 			}
 
 			if (ps.description !== undefined) {

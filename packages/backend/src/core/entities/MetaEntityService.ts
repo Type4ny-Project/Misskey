@@ -74,6 +74,7 @@ export class MetaEntityService {
 
 			name: instance.name,
 			shortName: instance.shortName,
+			pointName: instance.pointName,
 			uri: this.config.url,
 			description: instance.description,
 			langs: instance.langs,
@@ -176,4 +177,3 @@ export class MetaEntityService {
 		return packDetailed;
 	}
 }
-

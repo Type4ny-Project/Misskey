@@ -477,6 +477,10 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			pointName: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
 			objectStorageS3ForcePathStyle: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -649,6 +653,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				version: this.config.version,
 				name: instance.name,
 				shortName: instance.shortName,
+				pointName: instance.pointName,
 				uri: this.config.url,
 				description: instance.description,
 				langs: instance.langs,

@@ -58,9 +58,9 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		userId: { type: 'string', format: 'misskey:id' },
-		amount: { type: 'integer', minimum: 1 },
+		points: { type: 'integer', minimum: 1 },
 	},
-	required: ['userId', 'amount'],
+	required: ['userId', 'points'],
 } as const;
 
 @Injectable()
@@ -74,7 +74,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			// Validate amount
-			if (ps.amount <= 0 || !Number.isInteger(ps.amount)) {
+			if (ps.points <= 0 || !Number.isInteger(ps.points)) {
 				throw new ApiError(meta.errors.invalidAmount);
 			}
 
@@ -90,7 +90,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			// Add points
-			const newBalance = await this.pointService.addPoints(ps.userId, ps.amount);
+			const newBalance = await this.pointService.addPoints(ps.userId, ps.points);
 
 			return {
 				success: true,

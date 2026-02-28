@@ -19,6 +19,7 @@ export * as 'admin/abuse-user-reports' from './endpoints/admin/abuse-user-report
 export * as 'admin/accounts/create' from './endpoints/admin/accounts/create.js';
 export * as 'admin/accounts/delete' from './endpoints/admin/accounts/delete.js';
 export * as 'admin/accounts/find-by-email' from './endpoints/admin/accounts/find-by-email.js';
+export * as 'admin/accounts/present-points' from './endpoints/admin/accounts/present-points.js';
 export * as 'admin/ad/create' from './endpoints/admin/ad/create.js';
 export * as 'admin/ad/delete' from './endpoints/admin/ad/delete.js';
 export * as 'admin/ad/list' from './endpoints/admin/ad/list.js';
@@ -364,6 +365,7 @@ export * as 'pages/show' from './endpoints/pages/show.js';
 export * as 'pages/unlike' from './endpoints/pages/unlike.js';
 export * as 'pages/update' from './endpoints/pages/update.js';
 export * as 'ping' from './endpoints/ping.js';
+export * as 'point/send' from './endpoints/point/send.js';
 export * as 'pinned-users' from './endpoints/pinned-users.js';
 export * as 'promo/read' from './endpoints/promo/read.js';
 export * as 'renote-mute/create' from './endpoints/renote-mute/create.js';

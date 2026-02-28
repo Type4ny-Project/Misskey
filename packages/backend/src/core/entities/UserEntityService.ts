@@ -471,6 +471,11 @@ export class UserEntityService implements OnModuleInit {
 			(profile.followersVisibility === 'followers') && (relation && relation.isFollowing) ? user.followersCount :
 			null;
 
+		const points = profile == null ? null :
+			(profile.pointsVisibility === 'public') || isMe || iAmModerator ? user.points :
+			(profile.pointsVisibility === 'followers') && (relation && relation.isFollowing) ? user.points :
+			null;
+
 		const isModerator = isMe && isDetailed ? this.roleService.isModerator(user) : undefined;
 		const isAdmin = isMe && isDetailed ? this.roleService.isAdministrator(user) : undefined;
 		const unreadAnnouncements = isMe && isDetailed ?
@@ -557,6 +562,8 @@ export class UserEntityService implements OnModuleInit {
 				publicReactions: this.isLocalUser(user) ? profile!.publicReactions : false, // https://github.com/misskey-dev/misskey/issues/12964
 				followersVisibility: profile!.followersVisibility,
 				followingVisibility: profile!.followingVisibility,
+				points: points,
+				pointsVisibility: profile!.pointsVisibility,
 				chatScope: user.chatScope,
 				canChat: this.roleService.getUserPolicies(user.id).then(r => r.chatAvailability === 'available'),
 				roles: this.roleService.getUserRoles(user.id).then(roles => roles.filter(role => role.isPublic).sort((a, b) => b.displayOrder - a.displayOrder).map(role => ({

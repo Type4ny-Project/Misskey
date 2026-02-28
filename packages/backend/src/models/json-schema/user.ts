@@ -358,6 +358,15 @@ export const packedUserDetailedNotMeOnlySchema = {
 			nullable: false, optional: false,
 			enum: ['public', 'followers', 'private'],
 		},
+		points: {
+			type: 'number',
+			nullable: true, optional: true,
+		},
+		pointsVisibility: {
+			type: 'string',
+			nullable: false, optional: true,
+			enum: ['public', 'followers', 'private'],
+		},
 		chatScope: {
 			type: 'string',
 			nullable: false, optional: false,

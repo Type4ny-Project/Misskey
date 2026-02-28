@@ -44,6 +44,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</MkSelect>
 		</SearchMarker>
 
+		<SearchMarker :keywords="['point', 'visibility']">
+			<MkSelect v-model="pointsVisibility" :items="pointsVisibilityDef" @update:modelValue="save()">
+				<template #label><SearchLabel>{{ i18n.ts.visibility }} ({{ i18n.ts.point }})</SearchLabel></template>
+			</MkSelect>
+		</SearchMarker>
+
 		<SearchMarker :keywords="['online', 'status']">
 			<MkSwitch v-model="hideOnlineStatus" @update:modelValue="save()">
 				<template #label><SearchLabel>{{ i18n.ts.hideOnlineStatus }}</SearchLabel></template>
@@ -278,6 +284,17 @@ const {
 	],
 	initialValue: $i.chatScope,
 });
+const {
+	model: pointsVisibility,
+	def: pointsVisibilityDef,
+} = useMkSelect({
+	items: [
+		{ label: i18n.ts.public, value: 'public' },
+		{ label: i18n.ts.followers, value: 'followers' },
+		{ label: i18n.ts.private, value: 'private' },
+	],
+	initialValue: $i.pointsVisibility,
+});
 
 const makeNotesFollowersOnlyBefore_type = computed({
 	get: () => {
@@ -414,6 +431,7 @@ function save() {
 		publicReactions: !!publicReactions.value,
 		followingVisibility: followingVisibility.value,
 		followersVisibility: followersVisibility.value,
+		pointsVisibility: pointsVisibility.value,
 		chatScope: chatScope.value,
 	});
 }

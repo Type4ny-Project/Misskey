@@ -31,6 +31,10 @@ export const packedMetaLiteSchema = {
 			type: 'string',
 			optional: false, nullable: true,
 		},
+		pointName: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
 		uri: {
 			type: 'string',
 			optional: false, nullable: false,

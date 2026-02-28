@@ -125,6 +125,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<b>{{ number(user.followersCount) }}</b>
 								<span>{{ i18n.ts.followers }}</span>
 							</MkA>
+							<div v-if="user.points != null">
+								<b>{{ number(user.points) }}</b>
+								<span>{{ pointLabel }}</span>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -187,6 +191,7 @@ import MkSparkle from '@/components/MkSparkle.vue';
 import { prefer } from '@/preferences.js';
 import MkPullToRefresh from '@/components/MkPullToRefresh.vue';
 import { isBirthday } from '@/utility/is-birthday.js';
+import { instance } from '@/instance.js';
 
 function calcAge(birthdate: string): number {
 	const date = new Date(birthdate);
@@ -251,6 +256,8 @@ const style = computed(() => {
 const age = computed(() => {
 	return props.user.birthday ? calcAge(props.user.birthday) : NaN;
 });
+
+const pointLabel = computed(() => instance.pointName ?? i18n.ts.point);
 
 function menu(ev: PointerEvent) {
 	const { menu, cleanup } = getUserMenu(user.value, router);

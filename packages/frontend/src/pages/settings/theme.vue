@@ -36,6 +36,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #label><SearchLabel>{{ i18n.ts.syncDeviceDarkMode }}</SearchLabel></template>
 					</MkSwitch>
 				</SearchMarker>
+				<SearchMarker :keywords="['sky', 'dynamic', 'background', 'theme']">
+					<MkSwitch v-model="dynamicSkyTheme">
+						<template #label><SearchLabel>Dynamic sky background</SearchLabel></template>
+					</MkSwitch>
+				</SearchMarker>
 			</div>
 		</div>
 
@@ -268,6 +273,7 @@ const lightThemeId = computed({
 });
 
 const syncDeviceDarkMode = prefer.model('syncDeviceDarkMode');
+const dynamicSkyTheme = prefer.model('dynamicSkyTheme');
 const themesCount = installedThemes.value.length;
 
 watch(syncDeviceDarkMode, () => {

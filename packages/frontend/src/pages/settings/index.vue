@@ -263,11 +263,21 @@ definePage(() => INFO.value);
 				width: 34%;
 				padding-right: 32px;
 				box-sizing: border-box;
+				background: var(--MI-realtimeSkySidebarBg, color(from var(--MI_THEME-navBg) srgb r g b / 0.55));
+				-webkit-backdrop-filter: var(--MI-blur, blur(14px));
+				backdrop-filter: var(--MI-blur, blur(14px));
+				border-radius: 12px;
+				padding: 16px;
 			}
 
 			> .main {
 				flex: 1;
 				min-width: 0;
+				background: var(--MI-realtimeSkySidebarBg, color(from var(--MI_THEME-panel) srgb r g b / 0.55));
+				-webkit-backdrop-filter: var(--MI-blur, blur(14px));
+				backdrop-filter: var(--MI-blur, blur(14px));
+				border-radius: 12px;
+				padding: 16px;
 			}
 		}
 	}

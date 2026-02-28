@@ -12,6 +12,10 @@
 	--MI-marginHalf: 10px;
 
 	--MI-margin: var(--MI-marginFull);
+	--MI-realtimeSkyBackground: var(--MI_THEME-bg);
+	--MI-realtimeSkyNavBg: var(--MI_THEME-navBg);
+	--MI-realtimeSkySidebarBg: color(from var(--MI_THEME-navBg) srgb r g b / 0.55);
+	--MI-realtimeSkyPanelBg: var(--MI_THEME-panel);
 
 	// switch dynamically
 	--MI-minBottomSpacingMobile: calc(72px + max(12px, env(safe-area-inset-bottom, 0px)));
@@ -221,7 +225,7 @@ rt {
 	main thread scrolling になってしまい、パフォーマンスが(多分)落ちる。
 	backgroundが透明だと裏側を描画しないといけなくなるとかそういう理由かもしれない
 	*/
-	background: var(--MI_THEME-bg);
+	background: var(--MI-realtimeSkyBackground, var(--MI_THEME-bg));
 }
 
 ._pageScrollableReversed {
@@ -423,7 +427,7 @@ rt {
 }
 
 ._acrylic {
-	background: color(from var(--MI_THEME-panel) srgb r g b / 0.5);
+	background: color(from var(--MI-realtimeSkyPanelBg, var(--MI_THEME-panel)) srgb r g b / 0.5);
 	-webkit-backdrop-filter: var(--MI-blur, blur(15px));
 	backdrop-filter: var(--MI-blur, blur(15px));
 }

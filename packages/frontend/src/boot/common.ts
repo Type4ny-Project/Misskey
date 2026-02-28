@@ -30,6 +30,7 @@ import { fetchCustomEmojis } from '@/custom-emojis.js';
 import { prefer } from '@/preferences.js';
 import { $i } from '@/i.js';
 import { launchPlugins } from '@/plugin.js';
+import { startRealtimeSkyBackground, stopRealtimeSkyBackground } from '@/utility/realtime-sky-background.js';
 
 export async function common(createVue: () => Promise<App<Element>>) {
 	console.info(`Misskey v${version}`);
@@ -254,6 +255,14 @@ export async function common(createVue: () => Promise<App<Element>>) {
 	if (prefer.s.makeEveryTextElementsSelectable) {
 		window.document.documentElement.classList.add('forceSelectableAll');
 	}
+
+	watch(prefer.r.dynamicSkyTheme, enabled => {
+		if (enabled) {
+			void startRealtimeSkyBackground();
+		} else {
+			stopRealtimeSkyBackground();
+		}
+	}, { immediate: true });
 
 	//#region Fetch user
 	if ($i && $i.token) {

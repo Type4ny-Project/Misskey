@@ -82,7 +82,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div :class="$style.subButton">
 			<svg viewBox="0 0 16 64" :class="$style.subButtonShape">
 				<g transform="matrix(0.333333,0,0,0.222222,0.000895785,21.3333)">
-					<path d="M47.488,7.995C47.79,10.11 47.943,12.266 47.943,14.429C47.997,26.989 47.997,84 47.997,84C47.997,84 44.018,118.246 23.997,133.5C-0.374,152.07 -0.003,192 -0.003,192L-0.003,-96C-0.003,-96 0.151,-56.216 23.997,-37.5C40.861,-24.265 46.043,-1.243 47.488,7.995Z" style="fill:var(--MI_THEME-navBg);"/>
+					<path d="M47.488,7.995C47.79,10.11 47.943,12.266 47.943,14.429C47.997,26.989 47.997,84 47.997,84C47.997,84 44.018,118.246 23.997,133.5C-0.374,152.07 -0.003,192 -0.003,192L-0.003,-96C-0.003,-96 0.151,-56.216 23.997,-37.5C40.861,-24.265 46.043,-1.243 47.488,7.995Z" style="fill:var(--MI-realtimeSkyNavBg, var(--MI_THEME-navBg));"/>
 				</g>
 			</svg>
 			<button class="_button" :class="$style.subButtonClickable" @click="menuEdit"><i :class="$style.subButtonIcon" class="ti ti-settings-2"></i></button>
@@ -93,7 +93,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.subButton">
 				<svg viewBox="0 0 16 64" :class="$style.subButtonShape">
 					<g transform="matrix(0.333333,0,0,0.222222,0.000895785,21.3333)">
-						<path d="M47.488,7.995C47.79,10.11 47.943,12.266 47.943,14.429C47.997,26.989 47.997,84 47.997,84C47.997,84 44.018,118.246 23.997,133.5C-0.374,152.07 -0.003,192 -0.003,192L-0.003,-96C-0.003,-96 0.151,-56.216 23.997,-37.5C40.861,-24.265 46.043,-1.243 47.488,7.995Z" style="fill:var(--MI_THEME-navBg);"/>
+						<path d="M47.488,7.995C47.79,10.11 47.943,12.266 47.943,14.429C47.997,26.989 47.997,84 47.997,84C47.997,84 44.018,118.246 23.997,133.5C-0.374,152.07 -0.003,192 -0.003,192L-0.003,-96C-0.003,-96 0.151,-56.216 23.997,-37.5C40.861,-24.265 46.043,-1.243 47.488,7.995Z" style="fill:var(--MI-realtimeSkyNavBg, var(--MI_THEME-navBg));"/>
 					</g>
 				</svg>
 				<button class="_button" :class="$style.subButtonClickable" @click="toggleIconOnly"><i v-if="iconOnly" class="ti ti-chevron-right" :class="$style.subButtonIcon"></i><i v-else class="ti ti-chevron-left" :class="$style.subButtonIcon"></i></button>
@@ -202,7 +202,7 @@ function menuEdit() {
 .root {
 	--nav-width: 250px;
 	--nav-icon-only-width: 80px;
-	--nav-bg-transparent: color(from var(--MI_THEME-navBg) srgb r g b / 0.5);
+	--nav-bg-transparent: color(from var(--MI-realtimeSkySidebarBg, var(--MI_THEME-navBg)) srgb r g b / 0.8);
 
 	--subButtonWidth: 20px;
 
@@ -219,7 +219,7 @@ function menuEdit() {
 	overflow: auto;
 	overflow-x: clip;
 	overscroll-behavior: contain;
-	background: var(--MI_THEME-navBg);
+	background: var(--MI-realtimeSkySidebarBg, var(--MI_THEME-navBg));
 	contain: strict;
 
 	/* 画面が縦に長い、設置している項目数が少ないなどの環境においても確実にbottomを最下部に表示するため */
@@ -388,7 +388,7 @@ function menuEdit() {
 	margin-top: -32px;
 	margin-bottom: -32px;
 	pointer-events: none;
-	background: var(--MI_THEME-navBg);
+	background: var(--MI-realtimeSkySidebarBg, var(--MI_THEME-navBg));
 }
 
 .subButtonGapFillDivider {

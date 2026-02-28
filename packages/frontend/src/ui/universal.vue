@@ -130,7 +130,7 @@ $widgets-hide-threshold: 1090px;
 	contain: strict;
 	display: flex;
 	flex-direction: column;
-	background: var(--MI_THEME-navBg);
+	background: var(--MI-realtimeSkyBackground, var(--MI_THEME-navBg));
 }
 
 .nonTitlebarArea {
@@ -151,7 +151,7 @@ $widgets-hide-threshold: 1090px;
 	min-width: 0;
 
 	&.withSidebarAndTitlebar {
-		background: var(--MI_THEME-navBg);
+		background: var(--MI-realtimeSkySidebarBg, color(from var(--MI_THEME-navBg) srgb r g b / 0.55));
 		border-radius: 12px 0 0 0;
 		overflow: clip;
 	}
@@ -175,7 +175,7 @@ $widgets-hide-threshold: 1090px;
 	overflow: auto;
 	padding: var(--MI-margin) var(--MI-margin) calc(var(--MI-margin) + env(safe-area-inset-bottom, 0px));
 	border-left: solid 0.5px var(--MI_THEME-divider);
-	background: var(--MI_THEME-bg);
+	background: var(--MI-realtimeSkySidebarBg, color(from var(--MI_THEME-navBg) srgb r g b / 0.55));
 
 	@media (max-width: $widgets-hide-threshold) {
 		display: none;

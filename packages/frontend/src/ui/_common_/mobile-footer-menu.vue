@@ -84,7 +84,7 @@ watch(rootEl, () => {
 	grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
 	width: 100%;
 	box-sizing: border-box;
-	background: var(--MI_THEME-navBg);
+	background: var(--MI-realtimeSkySidebarBg, var(--MI_THEME-navBg));
 	color: var(--MI_THEME-navFg);
 	border-top: solid 0.5px var(--MI_THEME-divider);
 }

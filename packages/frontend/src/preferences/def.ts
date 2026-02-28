@@ -166,6 +166,9 @@ export const PREF_DEF = definePreferences({
 	syncDeviceDarkMode: {
 		default: true,
 	},
+	dynamicSkyTheme: {
+		default: false,
+	},
 	defaultNoteVisibility: {
 		default: 'public' as (typeof Misskey.noteVisibilities)[number],
 	},

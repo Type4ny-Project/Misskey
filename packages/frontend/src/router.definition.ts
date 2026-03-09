@@ -188,7 +188,7 @@ export const ROUTE_DEF = [{
 		path: '/accounts',
 		name: 'profile',
 		component: page(() => import('@/pages/settings/accounts.vue')),
-	},  {
+	}, {
 		path: '/other',
 		name: 'other',
 		component: page(() => import('@/pages/settings/other.vue')),

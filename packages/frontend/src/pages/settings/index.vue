@@ -130,7 +130,7 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		text: i18n.ts.sounds,
 		to: '/settings/sounds',
 		active: currentPage.value?.route.name === 'sounds',
-	}, 	{
+	}, {
 		icon: 'ti ti-plug',
 		text: i18n.ts.plugins,
 		to: '/settings/plugin',
@@ -138,8 +138,8 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 	}, {
 		icon: 'ti ti-columns',
 		text: i18n.ts._timelineHeader.timelineHeader,
-		type: 'button',
-		action: () => router.push('/settings/timelineHeader'),
+		to: '/settings/timelineHeader',
+		active: currentPage.value?.route.name === 'timelineHeader',
 	}],
 }, {
 	items: [{
@@ -268,7 +268,7 @@ definePage(() => INFO.value);
 				background: var(--MI-realtimeSkySidebarBg, color(from var(--MI_THEME-navBg) srgb r g b / 0.55));
 				-webkit-backdrop-filter: var(--MI-blur, blur(14px));
 				backdrop-filter: var(--MI-blur, blur(14px));
-				border-radius: 12px;
+				border-radius: 12px 0 0 12px;
 				padding: 16px;
 			}
 
@@ -278,7 +278,7 @@ definePage(() => INFO.value);
 				background: var(--MI-realtimeSkySidebarBg, color(from var(--MI_THEME-panel) srgb r g b / 0.55));
 				-webkit-backdrop-filter: var(--MI-blur, blur(14px));
 				backdrop-filter: var(--MI-blur, blur(14px));
-				border-radius: 12px;
+				border-radius: 0 12px 12px 0;
 				padding: 16px;
 			}
 		}

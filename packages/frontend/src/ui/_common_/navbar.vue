@@ -388,7 +388,6 @@ function menuEdit() {
 	margin-top: -32px;
 	margin-bottom: -32px;
 	pointer-events: none;
-	background: var(--MI-realtimeSkySidebarBg, var(--MI_THEME-navBg));
 }
 
 .subButtonGapFillDivider {

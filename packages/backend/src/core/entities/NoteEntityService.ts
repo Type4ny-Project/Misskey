@@ -120,6 +120,7 @@ export class NoteEntityService implements OnModuleInit {
 	@bindThis
 	private treatVisibility(packedNote: Packed<'Note'>): Packed<'Note'>['visibility'] {
 		if (packedNote.visibility === 'public' || packedNote.visibility === 'home') {
+			// FIXME https://github.com/Type4ny-Project/Misskey/issues/1 完全に消したい
 			const followersOnlyBefore = packedNote.user.makeNotesFollowersOnlyBefore;
 			if (shouldHideNoteByTime(followersOnlyBefore, packedNote.createdAt)) {
 				packedNote.visibility = 'followers';

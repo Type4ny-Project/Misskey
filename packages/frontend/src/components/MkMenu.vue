@@ -563,6 +563,7 @@ onBeforeUnmount(() => {
 	text-overflow: ellipsis;
 	text-decoration: none !important;
 	color: var(--menuFg, var(--MI_THEME-fg));
+	transition: all 0.2s ease;
 
 	&::before {
 		content: "";
@@ -576,6 +577,8 @@ onBeforeUnmount(() => {
 		width: calc(100% - 16px);
 		height: 100%;
 		border-radius: 6px;
+		opacity: 0;
+		transition: opacity 0.1s ease;
 	}
 
 	&:focus-visible {
@@ -594,6 +597,7 @@ onBeforeUnmount(() => {
 			color: var(--menuHoverFg, var(--MI_THEME-accent));
 
 			&::before {
+				opacity: 1;
 				background-color: var(--menuHoverBg, var(--MI_THEME-accentedBg));
 			}
 		}
@@ -603,6 +607,7 @@ onBeforeUnmount(() => {
 			color: var(--menuActiveFg, var(--MI_THEME-fgOnAccent));
 
 			&::before {
+				opacity: 1;
 				background-color: var(--menuActiveBg, var(--MI_THEME-accent));
 			}
 		}

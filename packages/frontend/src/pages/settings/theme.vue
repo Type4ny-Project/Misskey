@@ -644,6 +644,9 @@ definePage(() => ({
 	}
 
 	> .sync {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
 		padding: 14px 16px;
 		border-top: solid 0.5px var(--MI_THEME-divider);
 	}

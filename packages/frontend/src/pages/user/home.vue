@@ -125,7 +125,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<b>{{ number(user.followersCount) }}</b>
 								<span>{{ i18n.ts.followers }}</span>
 							</MkA>
-							<div v-if="user.points != null">
+							<div v-if="user.points != null" :class="$style.point">
 								<b>{{ number(user.points) }}</b>
 								<span>{{ pointLabel }}</span>
 							</div>
@@ -780,5 +780,18 @@ onDeactivated(disposeBannerParallaxResizeObserver);
 .verifiedLink {
 	margin-left: 4px;
 	color: var(--MI_THEME-success);
+}
+
+.point {
+	text-align: center;
+	flex: 1;
+}
+.point b {
+	line-height: 16px;
+	display: block;
+}
+
+.point span {
+	font-size: 70%;
 }
 </style>

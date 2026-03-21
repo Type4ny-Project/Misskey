@@ -748,6 +748,35 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</MkFolder>
 			</SearchMarker>
 
+			<SearchMarker v-slot="slotProps" :keywords="['external', 'media', 'player', 'embed', 'youtube', 'niconico', 'twitter', 'x']">
+				<MkFolder :defaultOpen="slotProps.isParentOfTarget">
+					<template #label><SearchLabel>{{ i18n.ts._settings.externalMedia }}</SearchLabel></template>
+					<template #icon><SearchIcon><i class="ti ti-player-play"></i></SearchIcon></template>
+
+					<div class="_gaps_m">
+						<div class="_gaps_s">
+							<SearchMarker :keywords="['player', 'youtube', 'nicovideo', 'always', 'auto', 'expand']">
+								<MkPreferenceContainer k="alwaysShowPlayer">
+									<MkSwitch v-model="alwaysShowPlayer">
+										<template #label><SearchLabel>{{ i18n.ts._settings.alwaysShowPlayer }}</SearchLabel></template>
+										<template #caption><SearchText>{{ i18n.ts._settings.alwaysShowPlayerDescription }}</SearchText></template>
+									</MkSwitch>
+								</MkPreferenceContainer>
+							</SearchMarker>
+
+							<SearchMarker :keywords="['tweet', 'twitter', 'x', 'always', 'auto', 'expand']">
+								<MkPreferenceContainer k="alwaysExpandTweet">
+									<MkSwitch v-model="alwaysExpandTweet">
+										<template #label><SearchLabel>{{ i18n.ts._settings.alwaysExpandTweet }}</SearchLabel></template>
+										<template #caption><SearchText>{{ i18n.ts._settings.alwaysExpandTweetDescription }}</SearchText></template>
+									</MkSwitch>
+								</MkPreferenceContainer>
+							</SearchMarker>
+						</div>
+					</div>
+				</MkFolder>
+			</SearchMarker>
+
 			<SearchMarker v-slot="slotProps" :keywords="['datasaver']">
 				<MkFolder :defaultOpen="slotProps.isParentOfTarget">
 					<template #label><SearchLabel>{{ i18n.ts.dataSaver }}</SearchLabel></template>
@@ -997,6 +1026,8 @@ const disableShowingAnimatedImages = prefer.model('disableShowingAnimatedImages'
 const keepScreenOn = prefer.model('keepScreenOn');
 const enableHorizontalSwipe = prefer.model('enableHorizontalSwipe');
 const showPageTabBarBottom = prefer.model('showPageTabBarBottom');
+const alwaysShowPlayer = prefer.model('alwaysShowPlayer');
+const alwaysExpandTweet = prefer.model('alwaysExpandTweet');
 const enablePullToRefresh = prefer.model('enablePullToRefresh');
 const useNativeUiForVideoAudioPlayer = prefer.model('useNativeUiForVideoAudioPlayer');
 const contextMenu = prefer.model('contextMenu');

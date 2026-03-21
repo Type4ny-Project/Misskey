@@ -83,7 +83,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { defineAsyncComponent, onDeactivated, onUnmounted, ref } from 'vue';
+import { defineAsyncComponent, onDeactivated, onMounted, onUnmounted, ref } from 'vue';
 import { url as local } from '@@/js/config.js';
 import { versatileLang } from '@@/js/intl-const.js';
 import type { summaly } from '@misskey-dev/summaly';
@@ -137,6 +137,15 @@ const unknownUrl = ref(false);
 
 onDeactivated(() => {
 	playerEnabled.value = false;
+});
+
+onMounted(() => {
+	if (prefer.s.alwaysShowPlayer) {
+		playerEnabled.value = true;
+	}
+	if (prefer.s.alwaysExpandTweet) {
+		tweetExpanded.value = true;
+	}
 });
 
 const requestUrl = new URL(props.url);

@@ -419,6 +419,12 @@ export const PREF_DEF = definePreferences({
 	showPageTabBarBottom: {
 		default: false,
 	},
+	alwaysShowPlayer: {
+		default: true,
+	},
+	alwaysExpandTweet: {
+		default: false,
+	},
 	plugins: {
 		default: [] as (OmitStrict<Plugin, 'config'> & { config: Record<string, any> })[],
 		mergeStrategy: (a, b) => {

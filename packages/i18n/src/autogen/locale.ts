@@ -6374,6 +6374,26 @@ export interface Locale extends ILocale {
          */
         "showPageTabBarBottom": string;
         /**
+         * 外部メディア
+         */
+        "externalMedia": string;
+        /**
+         * Youtube.comや、nicovideo.jpのプレイヤーを全て開いた状態にする
+         */
+        "alwaysShowPlayer": string;
+        /**
+         * YouTubeやニコニコ動画のリンクを展開したときに、プレイヤーを自動的に開きます。
+         */
+        "alwaysShowPlayerDescription": string;
+        /**
+         * Xのポストを常時表示させる
+         */
+        "alwaysExpandTweet": string;
+        /**
+         * X (旧Twitter) のポストリンクを展開したときに、埋め込みを自動的に表示します。
+         */
+        "alwaysExpandTweetDescription": string;
+        /**
          * 絵文字ピッカーに固定表示するプリセットをパレットとして登録したり、ピッカーの表示方法をカスタマイズしたりできます。
          */
         "emojiPaletteBanner": string;

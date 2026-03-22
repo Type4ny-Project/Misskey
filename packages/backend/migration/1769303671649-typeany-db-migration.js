@@ -348,10 +348,6 @@ export class TypeAnyDbMigration1769303671649 {
         await queryRunner.query(`ALTER TABLE IF EXISTS "note_schedule" RENAME TO "legacy_note_schedule"`);
         await queryRunner.query(`ALTER TABLE IF EXISTS "note_unread" RENAME TO "legacy_note_unread"`);
         await queryRunner.query(`ALTER TABLE IF EXISTS "inbox_rule" RENAME TO "legacy_inbox_rule"`);
-        await queryRunner.query(`DROP TABLE IF EXISTS "legacy_note_schedule"`);
-        await queryRunner.query(`DROP TABLE IF EXISTS "legacy_note_unread"`);
-        await queryRunner.query(`DROP TABLE IF EXISTS "legacy_inbox_rule"`);
-        await queryRunner.query(`DROP TABLE IF EXISTS "legacy_emoji_request"`);
 
         // Add backgroundImageUrls column to meta table
         await queryRunner.query(`

@@ -5,166 +5,166 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <PageWithHeader :tabs="headerTabs">
-  <div class="_spacer" style="--MI_SPACER-w: 700px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
-	<SearchMarker path="/admin/branding" :label="i18n.ts.branding" :keywords="['branding']" icon="ti ti-paint">
-	  <div class="_gaps_m">
-		<SearchMarker :keywords="['entrance', 'welcome', 'landing', 'front', 'home', 'page', 'style']">
-		  <MkRadios
-			v-model="entrancePageStyle"
-			:options="[
-			  { value: 'classic' },
-			  { value: 'simple' },
-			]"
-		  >
-			<template #label><SearchLabel>{{ i18n.ts._serverSettings.entrancePageStyle }}</SearchLabel></template>
-		  </MkRadios>
-		</SearchMarker>
+	<div class="_spacer" style="--MI_SPACER-w: 700px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
+		<SearchMarker path="/admin/branding" :label="i18n.ts.branding" :keywords="['branding']" icon="ti ti-paint">
+			<div class="_gaps_m">
+				<SearchMarker :keywords="['entrance', 'welcome', 'landing', 'front', 'home', 'page', 'style']">
+					<MkRadios
+						v-model="entrancePageStyle"
+						:options="[
+							{ value: 'classic' },
+							{ value: 'simple' },
+						]"
+					>
+						<template #label><SearchLabel>{{ i18n.ts._serverSettings.entrancePageStyle }}</SearchLabel></template>
+					</MkRadios>
+				</SearchMarker>
 
-		<SearchMarker :keywords="['timeline']">
-		  <MkSwitch v-model="showTimelineForVisitor">
-			<template #label><SearchLabel>{{ i18n.ts._serverSettings.showTimelineForVisitor }}</SearchLabel></template>
-		  </MkSwitch>
-		</SearchMarker>
+				<SearchMarker :keywords="['timeline']">
+					<MkSwitch v-model="showTimelineForVisitor">
+						<template #label><SearchLabel>{{ i18n.ts._serverSettings.showTimelineForVisitor }}</SearchLabel></template>
+					</MkSwitch>
+				</SearchMarker>
 
-		<SearchMarker :keywords="['activity', 'activities']">
-		  <MkSwitch v-model="showActivitiesForVisitor">
-			<template #label><SearchLabel>{{ i18n.ts._serverSettings.showActivitiesForVisitor }}</SearchLabel></template>
-		  </MkSwitch>
-		</SearchMarker>
+				<SearchMarker :keywords="['activity', 'activities']">
+					<MkSwitch v-model="showActivitiesForVisitor">
+						<template #label><SearchLabel>{{ i18n.ts._serverSettings.showActivitiesForVisitor }}</SearchLabel></template>
+					</MkSwitch>
+				</SearchMarker>
 
-		<SearchMarker :keywords="['icon', 'image']">
-		  <MkInput v-model="iconUrl" type="url">
-			<template #prefix><i class="ti ti-link"></i></template>
-			<template #label><SearchLabel>{{ i18n.ts._serverSettings.iconUrl }}</SearchLabel></template>
-		  </MkInput>
-		</SearchMarker>
+				<SearchMarker :keywords="['icon', 'image']">
+					<MkInput v-model="iconUrl" type="url">
+						<template #prefix><i class="ti ti-link"></i></template>
+						<template #label><SearchLabel>{{ i18n.ts._serverSettings.iconUrl }}</SearchLabel></template>
+					</MkInput>
+				</SearchMarker>
 
-		<SearchMarker :keywords="['icon', 'image']">
-		  <MkInput v-model="app192IconUrl" type="url">
-			<template #prefix><i class="ti ti-link"></i></template>
-			<template #label><SearchLabel>{{ i18n.ts._serverSettings.iconUrl }} (App/192px)</SearchLabel></template>
-			<template #caption>
-			  <div>{{ i18n.tsx._serverSettings.appIconDescription({ host: instance.name ?? host }) }}</div>
-			  <div>({{ i18n.ts._serverSettings.appIconUsageExample }})</div>
-			  <div>{{ i18n.ts._serverSettings.appIconStyleRecommendation }}</div>
-			  <div><strong>{{ i18n.tsx._serverSettings.appIconResolutionMustBe({ resolution: '192x192px' }) }}</strong></div>
-			</template>
-		  </MkInput>
-		</SearchMarker>
+				<SearchMarker :keywords="['icon', 'image']">
+					<MkInput v-model="app192IconUrl" type="url">
+						<template #prefix><i class="ti ti-link"></i></template>
+						<template #label><SearchLabel>{{ i18n.ts._serverSettings.iconUrl }} (App/192px)</SearchLabel></template>
+						<template #caption>
+							<div>{{ i18n.tsx._serverSettings.appIconDescription({ host: instance.name ?? host }) }}</div>
+							<div>({{ i18n.ts._serverSettings.appIconUsageExample }})</div>
+							<div>{{ i18n.ts._serverSettings.appIconStyleRecommendation }}</div>
+							<div><strong>{{ i18n.tsx._serverSettings.appIconResolutionMustBe({ resolution: '192x192px' }) }}</strong></div>
+						</template>
+					</MkInput>
+				</SearchMarker>
 
-		<SearchMarker :keywords="['icon', 'image']">
-		  <MkInput v-model="app512IconUrl" type="url">
-			<template #prefix><i class="ti ti-link"></i></template>
-			<template #label><SearchLabel>{{ i18n.ts._serverSettings.iconUrl }} (App/512px)</SearchLabel></template>
-			<template #caption>
-			  <div>{{ i18n.tsx._serverSettings.appIconDescription({ host: instance.name ?? host }) }}</div>
-			  <div>({{ i18n.ts._serverSettings.appIconUsageExample }})</div>
-			  <div>{{ i18n.ts._serverSettings.appIconStyleRecommendation }}</div>
-			  <div><strong>{{ i18n.tsx._serverSettings.appIconResolutionMustBe({ resolution: '512x512px' }) }}</strong></div>
-			</template>
-		  </MkInput>
-		</SearchMarker>
+				<SearchMarker :keywords="['icon', 'image']">
+					<MkInput v-model="app512IconUrl" type="url">
+						<template #prefix><i class="ti ti-link"></i></template>
+						<template #label><SearchLabel>{{ i18n.ts._serverSettings.iconUrl }} (App/512px)</SearchLabel></template>
+						<template #caption>
+							<div>{{ i18n.tsx._serverSettings.appIconDescription({ host: instance.name ?? host }) }}</div>
+							<div>({{ i18n.ts._serverSettings.appIconUsageExample }})</div>
+							<div>{{ i18n.ts._serverSettings.appIconStyleRecommendation }}</div>
+							<div><strong>{{ i18n.tsx._serverSettings.appIconResolutionMustBe({ resolution: '512x512px' }) }}</strong></div>
+						</template>
+					</MkInput>
+				</SearchMarker>
 
-		<SearchMarker :keywords="['banner', 'image']">
-		  <MkInput v-model="bannerUrl" type="url">
-			<template #prefix><i class="ti ti-link"></i></template>
-			<template #label><SearchLabel>{{ i18n.ts.bannerUrl }}</SearchLabel></template>
-		  </MkInput>
-		</SearchMarker>
+				<SearchMarker :keywords="['banner', 'image']">
+					<MkInput v-model="bannerUrl" type="url">
+						<template #prefix><i class="ti ti-link"></i></template>
+						<template #label><SearchLabel>{{ i18n.ts.bannerUrl }}</SearchLabel></template>
+					</MkInput>
+				</SearchMarker>
 
-		<SearchMarker :keywords="['background', 'images']">
-		  <MkFolder>
-			<template #icon><i class="ti ti-images"></i></template>
-			<template #label><SearchLabel>{{ i18n.ts.backgroundImageUrls }}</SearchLabel></template>
-			<div class="_gaps">
-			  <MkButton @click="addBackgroundImage"><i class="ti ti-plus"></i> {{ i18n.ts.add }}</MkButton>
-			  <div v-for="(item, i) in backgroundImageUrls" :key="i" class="_gaps_s" style="display: flex; align-items: center; gap: 8px;">
-				<MkInput v-model="backgroundImageUrls[i].url" type="url" style="flex: 1;">
-				  <template #label>{{ i18n.ts.backgroundImageUrl }} {{ i + 1 }}</template>
-				</MkInput>
-				<MkButton danger @click="removeBackgroundImage(i)"><i class="ti ti-trash"></i></MkButton>
-			  </div>
+				<SearchMarker :keywords="['background', 'images']">
+					<MkFolder>
+						<template #icon><i class="ti ti-images"></i></template>
+						<template #label><SearchLabel>{{ i18n.ts.backgroundImageUrls }}</SearchLabel></template>
+						<div class="_gaps">
+							<MkButton @click="addBackgroundImage"><i class="ti ti-plus"></i> {{ i18n.ts.add }}</MkButton>
+							<div v-for="(item, i) in backgroundImageUrls" :key="i" class="_gaps_s" style="display: flex; align-items: center; gap: 8px;">
+								<MkInput v-model="backgroundImageUrls[i].url" type="url" style="flex: 1;">
+									<template #label>{{ i18n.ts.backgroundImageUrl }} {{ i + 1 }}</template>
+								</MkInput>
+								<MkButton danger @click="removeBackgroundImage(i)"><i class="ti ti-trash"></i></MkButton>
+							</div>
+						</div>
+					</MkFolder>
+				</SearchMarker>
+
+				<SearchMarker :keywords="['background', 'image']">
+					<MkInput v-model="backgroundImageUrl" type="url">
+						<template #prefix><i class="ti ti-link"></i></template>
+						<template #label><SearchLabel>{{ i18n.ts.backgroundImageUrl }}</SearchLabel></template>
+					</MkInput>
+				</SearchMarker>
+
+				<SearchMarker :keywords="['image']">
+					<MkInput v-model="notFoundImageUrl" type="url">
+						<template #prefix><i class="ti ti-link"></i></template>
+						<template #label><SearchLabel>{{ i18n.ts.notFoundDescription }}</SearchLabel></template>
+					</MkInput>
+				</SearchMarker>
+
+				<SearchMarker :keywords="['image']">
+					<MkInput v-model="infoImageUrl" type="url">
+						<template #prefix><i class="ti ti-link"></i></template>
+						<template #label><SearchLabel>{{ i18n.ts.nothing }}</SearchLabel></template>
+					</MkInput>
+				</SearchMarker>
+
+				<SearchMarker :keywords="['image']">
+					<MkInput v-model="serverErrorImageUrl" type="url">
+						<template #prefix><i class="ti ti-link"></i></template>
+						<template #label><SearchLabel>{{ i18n.ts.somethingHappened }}</SearchLabel></template>
+					</MkInput>
+				</SearchMarker>
+
+				<SearchMarker :keywords="['theme', 'color']">
+					<MkColorInput v-model="themeColor">
+						<template #label><SearchLabel>{{ i18n.ts.themeColor }}</SearchLabel></template>
+					</MkColorInput>
+				</SearchMarker>
+
+				<SearchMarker :keywords="['theme', 'default', 'light']">
+					<MkTextarea v-model="defaultLightTheme">
+						<template #label><SearchLabel>{{ i18n.ts.instanceDefaultLightTheme }}</SearchLabel></template>
+						<template #caption>{{ i18n.ts.instanceDefaultThemeDescription }}</template>
+					</MkTextarea>
+				</SearchMarker>
+
+				<SearchMarker :keywords="['theme', 'default', 'dark']">
+					<MkTextarea v-model="defaultDarkTheme">
+						<template #label><SearchLabel>{{ i18n.ts.instanceDefaultDarkTheme }}</SearchLabel></template>
+						<template #caption>{{ i18n.ts.instanceDefaultThemeDescription }}</template>
+					</MkTextarea>
+				</SearchMarker>
+
+				<SearchMarker>
+					<MkInput v-model="repositoryUrl" type="url">
+						<template #prefix><i class="ti ti-link"></i></template>
+						<template #label><SearchLabel>{{ i18n.ts.repositoryUrl }}</SearchLabel></template>
+					</MkInput>
+				</SearchMarker>
+
+				<SearchMarker>
+					<MkInput v-model="feedbackUrl" type="url">
+						<template #prefix><i class="ti ti-link"></i></template>
+						<template #label><SearchLabel>{{ i18n.ts.feedbackUrl }}</SearchLabel></template>
+					</MkInput>
+				</SearchMarker>
+
+				<SearchMarker>
+					<MkTextarea v-model="manifestJsonOverride">
+						<template #label><SearchLabel>{{ i18n.ts._serverSettings.manifestJsonOverride }}</SearchLabel></template>
+					</MkTextarea>
+				</SearchMarker>
 			</div>
-		  </MkFolder>
+			<template #footer>
+				<div :class="$style.footer">
+					<div class="_spacer" style="--MI_SPACER-w: 700px; --MI_SPACER-min: 16px; --MI_SPACER-max: 16px;">
+						<MkButton primary rounded @click="save"><i class="ti ti-check"></i> {{ i18n.ts.save }}</MkButton>
+					</div>
+				</div>
+			</template>
 		</SearchMarker>
-
-		<SearchMarker :keywords="['background', 'image']">
-		  <MkInput v-model="backgroundImageUrl" type="url">
-			<template #prefix><i class="ti ti-link"></i></template>
-			<template #label><SearchLabel>{{ i18n.ts.backgroundImageUrl }}</SearchLabel></template>
-		  </MkInput>
-		</SearchMarker>
-
-		<SearchMarker :keywords="['image']">
-		  <MkInput v-model="notFoundImageUrl" type="url">
-			<template #prefix><i class="ti ti-link"></i></template>
-			<template #label><SearchLabel>{{ i18n.ts.notFoundDescription }}</SearchLabel></template>
-		  </MkInput>
-		</SearchMarker>
-
-		<SearchMarker :keywords="['image']">
-		  <MkInput v-model="infoImageUrl" type="url">
-			<template #prefix><i class="ti ti-link"></i></template>
-			<template #label><SearchLabel>{{ i18n.ts.nothing }}</SearchLabel></template>
-		  </MkInput>
-		</SearchMarker>
-
-		<SearchMarker :keywords="['image']">
-		  <MkInput v-model="serverErrorImageUrl" type="url">
-			<template #prefix><i class="ti ti-link"></i></template>
-			<template #label><SearchLabel>{{ i18n.ts.somethingHappened }}</SearchLabel></template>
-		  </MkInput>
-		</SearchMarker>
-
-		<SearchMarker :keywords="['theme', 'color']">
-		  <MkColorInput v-model="themeColor">
-			<template #label><SearchLabel>{{ i18n.ts.themeColor }}</SearchLabel></template>
-		  </MkColorInput>
-		</SearchMarker>
-
-		<SearchMarker :keywords="['theme', 'default', 'light']">
-		  <MkTextarea v-model="defaultLightTheme">
-			<template #label><SearchLabel>{{ i18n.ts.instanceDefaultLightTheme }}</SearchLabel></template>
-			<template #caption>{{ i18n.ts.instanceDefaultThemeDescription }}</template>
-		  </MkTextarea>
-		</SearchMarker>
-
-		<SearchMarker :keywords="['theme', 'default', 'dark']">
-		  <MkTextarea v-model="defaultDarkTheme">
-			<template #label><SearchLabel>{{ i18n.ts.instanceDefaultDarkTheme }}</SearchLabel></template>
-			<template #caption>{{ i18n.ts.instanceDefaultThemeDescription }}</template>
-		  </MkTextarea>
-		</SearchMarker>
-
-		<SearchMarker>
-		  <MkInput v-model="repositoryUrl" type="url">
-			<template #prefix><i class="ti ti-link"></i></template>
-			<template #label><SearchLabel>{{ i18n.ts.repositoryUrl }}</SearchLabel></template>
-		  </MkInput>
-		</SearchMarker>
-
-		<SearchMarker>
-		  <MkInput v-model="feedbackUrl" type="url">
-			<template #prefix><i class="ti ti-link"></i></template>
-			<template #label><SearchLabel>{{ i18n.ts.feedbackUrl }}</SearchLabel></template>
-		  </MkInput>
-		</SearchMarker>
-
-		<SearchMarker>
-		  <MkTextarea v-model="manifestJsonOverride">
-			<template #label><SearchLabel>{{ i18n.ts._serverSettings.manifestJsonOverride }}</SearchLabel></template>
-		  </MkTextarea>
-		</SearchMarker>
-	  </div>
-	  <template #footer>
-		<div :class="$style.footer">
-		  <div class="_spacer" style="--MI_SPACER-w: 700px; --MI_SPACER-min: 16px; --MI_SPACER-max: 16px;">
-			<MkButton primary rounded @click="save"><i class="ti ti-check"></i> {{ i18n.ts.save }}</MkButton>
-		  </div>
-		</div>
-	  </template>
-	</SearchMarker>
-  </div>
+	</div>
 </PageWithHeader>
 </template>
 
@@ -200,7 +200,7 @@ const app192IconUrl = ref(meta.app192IconUrl);
 const app512IconUrl = ref(meta.app512IconUrl);
 const bannerUrl = ref(meta.bannerUrl);
 const backgroundImageUrl = ref(meta.backgroundImageUrl);
-	const backgroundImageUrls = ref<{ url: string }[]>(meta.backgroundImageUrls || []);
+const backgroundImageUrls = ref<{ url: string }[]>(meta.backgroundImageUrls || []);
 const themeColor = ref(meta.themeColor);
 const defaultLightTheme = ref(meta.defaultLightTheme);
 const defaultDarkTheme = ref(meta.defaultDarkTheme);
@@ -222,8 +222,8 @@ function save() {
 		app192IconUrl: app192IconUrl.value,
 		app512IconUrl: app512IconUrl.value,
 		bannerUrl: bannerUrl.value,
-backgroundImageUrl: backgroundImageUrl.value,
-			backgroundImageUrls: backgroundImageUrls.value,
+		backgroundImageUrl: backgroundImageUrl.value,
+		backgroundImageUrls: backgroundImageUrls.value,
 		themeColor: themeColor.value === '' ? null : themeColor.value,
 		defaultLightTheme: defaultLightTheme.value === '' ? null : defaultLightTheme.value,
 		defaultDarkTheme: defaultDarkTheme.value === '' ? null : defaultDarkTheme.value,

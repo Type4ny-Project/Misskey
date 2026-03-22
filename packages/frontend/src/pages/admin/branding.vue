@@ -16,7 +16,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							{ value: 'simple' },
 						]"
 					>
-						<template #label><SearchLabel>{{ i18n.ts._serverSettings.entrancePageStyle }}</SearchLabel></template>
+						<template #label><SearchLabel>{{ i18n.ts._serverSettings.entrancePageStyle }}</SearchLabel></template>l
 					</MkRadios>
 				</SearchMarker>
 

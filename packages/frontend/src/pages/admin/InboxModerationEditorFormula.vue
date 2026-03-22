@@ -5,41 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div class="_gaps">
 	<div :class="$style.header">
-		<MkSelect v-model="type" :class="$style.typeSelect">
-			<optgroup :label="i18n.ts.accounts">
-				<option value="isLocked">{{ i18n.ts._role._condition.isLocked }}</option>
-				<option value="isBot">{{ i18n.ts._role._condition.isBot }}</option>
-				<option value="isCat">{{ i18n.ts._role._condition.isCat }}</option>
-				<option value="createdLessThan">{{ i18n.ts._role._condition.createdLessThan }}</option>
-				<option value="createdMoreThan">{{ i18n.ts._role._condition.createdMoreThan }}</option>
-				<option value="followersLessThanOrEq">{{ i18n.ts._role._condition.followersLessThanOrEq }}</option>
-				<option value="followersMoreThanOrEq">{{ i18n.ts._role._condition.followersMoreThanOrEq }}</option>
-				<option value="followingLessThanOrEq">{{ i18n.ts._role._condition.followingLessThanOrEq }}</option>
-				<option value="followingMoreThanOrEq">{{ i18n.ts._role._condition.followingMoreThanOrEq }}</option>
-				<option value="notesLessThanOrEq">{{ i18n.ts._role._condition.notesLessThanOrEq }}</option>
-				<option value="notesMoreThanOrEq">{{ i18n.ts._role._condition.notesMoreThanOrEq }}</option>
-			</optgroup>
-			<optgroup :label="i18n.ts._inboxRule.notes">
-				<option value="maxMentionsMoreThanOrEq">{{ i18n.ts._inboxRule.maxMentionsMoreThanOrEq }}</option>
-				<option value="attachmentFileMoreThanOrEq">{{ i18n.ts._inboxRule.attachmentFileMoreThanOrEq }}</option>
-				<option value="isIncludeThisWord">{{ i18n.ts._inboxRule.isIncludeThisWord }}</option>
-			</optgroup>
-			<optgroup label="Servers">
-				<option value="serverHost">{{ i18n.ts._inboxRule.serverHost }}</option>
-				<option value="serverSoftware">{{ i18n.ts._inboxRule.serverSoftware }}</option>
-				<option value="serverIsSilenced">{{ i18n.ts._inboxRule.serverIsSilenced }}</option>
-				<option value="serverPubLessThanOrEq">{{ i18n.ts._inboxRule.serverPubLessThanOrEq }}</option>
-				<option value="serverPubMoreThanOrEq">{{ i18n.ts._inboxRule.serverPubMoreThanOrEq }}</option>
-				<option value="serverSubLessThanOrEq">{{ i18n.ts._inboxRule.serverSubLessThanOrEq }}</option>
-				<option value="serverSubMoreThanOrEq">{{ i18n.ts._inboxRule.serverSubMoreThanOrEq }}</option>
-			</optgroup>
-			<optgroup :label="i18n.ts._inboxRule.conditions">
-				<option v-if="!isNote" value="thisActivityIsNote">{{ i18n.ts._inboxRule.thisActivityIsNote }}</option>
-				<option value="and">{{ i18n.ts._inboxRule.and }}</option>
-				<option value="or">{{ i18n.ts._inboxRule.or }}</option>
-				<option value="not">{{ i18n.ts._inboxRule.not }}</option>
-			</optgroup>
-		</MkSelect>
+		<MkSelect v-model="type" :items="conditionTypeItems" :class="$style.typeSelect" />
 		<button v-if="draggable" class="drag-handle _button" :class="$style.dragHandle">
 			<i class="ti ti-menu-2"></i>
 		</button>
@@ -49,7 +15,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<div v-if="type === 'and' || type === 'or' || type === 'thisActivityIsNote'" class="_gaps">
-		<MkDraggable v-model="v.values" direction="vertical" group="inboxRuleFormula" withGaps>
+		<MkDraggable v-model="nestedValues" direction="vertical" group="inboxRuleFormula" withGaps>
 			<template #default="{ item }">
 				<div :class="$style.item">
 					<InboxModerationEditorFormula :modelValue="item" :isNote="type === 'thisActivityIsNote'" draggable @update:modelValue="updated => valuesItemUpdated(updated)" @remove="removeItem(item)"/>
@@ -60,10 +26,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<div v-else-if="type === 'not'" :class="$style.item">
-		<InboxModerationEditorFormula v-model="v.value"/>
+		<InboxModerationEditorFormula v-model="nestedValue"/>
 	</div>
 
-	<MkInput v-else-if="type === 'createdLessThan' || type === 'createdMoreThan'" v-model="v.sec" type="number">
+	<MkInput v-else-if="type === 'createdLessThan' || type === 'createdMoreThan'" v-model="secValue" type="number">
 		<template #suffix>sec</template>
 	</MkInput>
 
@@ -81,7 +47,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			'serverSubMoreThanOrEq',
 			'maxMentionsMoreThanOrEq',
 			'attachmentFileMoreThanOrEq',
-		].includes(type)" v-model="v.value" type="number"
+		].includes(type)" v-model="numericValue" type="number"
 	>
 	</MkInput>
 
@@ -90,7 +56,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			'serverHost',
 			'serverSoftware',
 			'isIncludeThisWord',
-		].includes(type)" v-model="v.value"
+		].includes(type)" v-model="textValue"
 	>
 	</MkInput>
 </div>
@@ -98,30 +64,240 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue';
-import { v4 as uuid } from 'uuid';
 import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
+import type { MkSelectItem } from '@/components/MkSelect.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkDraggable from '@/components/MkDraggable.vue';
 import { i18n } from '@/i18n.js';
-import { deepClone } from '@/scripts/clone.js';
+import { deepClone } from '@/utility/clone.js';
+import { genId } from '@/utility/id.js';
+
+type FormulaType =
+	| 'and'
+	| 'or'
+	| 'not'
+	| 'thisActivityIsNote'
+	| 'isLocked'
+	| 'isBot'
+	| 'isCat'
+	| 'createdLessThan'
+	| 'createdMoreThan'
+	| 'followersLessThanOrEq'
+	| 'followersMoreThanOrEq'
+	| 'followingLessThanOrEq'
+	| 'followingMoreThanOrEq'
+	| 'notesLessThanOrEq'
+	| 'notesMoreThanOrEq'
+	| 'maxMentionsMoreThanOrEq'
+	| 'attachmentFileMoreThanOrEq'
+	| 'isIncludeThisWord'
+	| 'serverHost'
+	| 'serverSoftware'
+	| 'serverIsSilenced'
+	| 'serverPubLessThanOrEq'
+	| 'serverPubMoreThanOrEq'
+	| 'serverSubLessThanOrEq'
+	| 'serverSubMoreThanOrEq'
+	| 'roleAssignedTo'
+	| 'isRemote';
+
+type FormulaNode = {
+	id: string;
+	type: string;
+	value?: FormulaNode | string | number | boolean | null;
+	values?: FormulaNode[];
+	sec?: number | null;
+	roleId?: string;
+} & Record<string, unknown>;
+
+function normalizeType(value: string | undefined): FormulaType {
+	switch (value) {
+		case 'and':
+		case 'or':
+		case 'not':
+		case 'thisActivityIsNote':
+		case 'isLocked':
+		case 'isBot':
+		case 'isCat':
+		case 'createdLessThan':
+		case 'createdMoreThan':
+		case 'followersLessThanOrEq':
+		case 'followersMoreThanOrEq':
+		case 'followingLessThanOrEq':
+		case 'followingMoreThanOrEq':
+		case 'notesLessThanOrEq':
+		case 'notesMoreThanOrEq':
+		case 'maxMentionsMoreThanOrEq':
+		case 'attachmentFileMoreThanOrEq':
+		case 'isIncludeThisWord':
+		case 'serverHost':
+		case 'serverSoftware':
+		case 'serverIsSilenced':
+		case 'serverPubLessThanOrEq':
+		case 'serverPubMoreThanOrEq':
+		case 'serverSubLessThanOrEq':
+		case 'serverSubMoreThanOrEq':
+		case 'roleAssignedTo':
+		case 'isRemote':
+			return value;
+		default:
+			return 'isLocked';
+	}
+}
+
+function normalizeNode(value: FormulaNode): FormulaNode {
+	const next: FormulaNode = {
+		...value,
+		id: value.id ?? genId(),
+		type: value.type ?? 'isLocked',
+	};
+
+	if (Array.isArray(value.values)) {
+		next.values = value.values.map((item) => normalizeNode(item));
+	}
+
+	if (typeof value.value === 'object' && value.value != null) {
+		next.value = normalizeNode(value.value as FormulaNode);
+	}
+
+	return next;
+}
 
 const emit = defineEmits<{
-	(ev: 'update:modelValue', value: any): void;
+	(ev: 'update:modelValue', value: FormulaNode): void;
 	(ev: 'remove'): void;
 }>();
 
 const props = defineProps<{
-	modelValue: any;
+	modelValue: FormulaNode;
 	draggable?: boolean;
 	isNote?: boolean;
 }>();
 
-const v = ref(deepClone(props.modelValue));
+const v = ref(normalizeNode(deepClone(props.modelValue)));
+
+const nestedValues = computed<FormulaNode[]>({
+	get: () => v.value.values ?? [],
+	set: (values) => {
+		v.value.values = values;
+	},
+});
+
+const nestedValue = computed<FormulaNode>({
+	get: () => {
+		if (typeof v.value.value === 'object' && v.value.value != null) {
+			return normalizeNode(v.value.value as FormulaNode);
+		}
+
+		return { id: genId(), type: 'isRemote' };
+	},
+	set: (value: FormulaNode) => {
+		v.value.value = value;
+	},
+});
+
+const secValue = computed<number | null>({
+	get: () => v.value.sec ?? null,
+	set: (value) => {
+		v.value.sec = value;
+	},
+});
+
+const numericValue = computed<number | null>({
+	get: () => typeof v.value.value === 'number' ? v.value.value : null,
+	set: (value) => {
+		v.value.value = value;
+	},
+});
+
+const textValue = computed<string | null>({
+	get: () => typeof v.value.value === 'string' ? v.value.value : null,
+	set: (value) => {
+		v.value.value = value;
+	},
+});
+
+const conditionTypeItems = computed<MkSelectItem<FormulaType>[]>(() => [{
+	type: 'group',
+	label: i18n.ts.accounts,
+	items: [{ value: 'isLocked', label: i18n.ts._role._condition.isLocked }, {
+		value: 'isBot',
+		label: i18n.ts._role._condition.isBot,
+	}, {
+		value: 'isCat',
+		label: i18n.ts._role._condition.isCat,
+	}, {
+		value: 'createdLessThan',
+		label: i18n.ts._role._condition.createdLessThan,
+	}, {
+		value: 'createdMoreThan',
+		label: i18n.ts._role._condition.createdMoreThan,
+	}, {
+		value: 'followersLessThanOrEq',
+		label: i18n.ts._role._condition.followersLessThanOrEq,
+	}, {
+		value: 'followersMoreThanOrEq',
+		label: i18n.ts._role._condition.followersMoreThanOrEq,
+	}, {
+		value: 'followingLessThanOrEq',
+		label: i18n.ts._role._condition.followingLessThanOrEq,
+	}, {
+		value: 'followingMoreThanOrEq',
+		label: i18n.ts._role._condition.followingMoreThanOrEq,
+	}, {
+		value: 'notesLessThanOrEq',
+		label: i18n.ts._role._condition.notesLessThanOrEq,
+	}, {
+		value: 'notesMoreThanOrEq',
+		label: i18n.ts._role._condition.notesMoreThanOrEq,
+	}],
+}, {
+	type: 'group',
+	label: i18n.ts._inboxRule.notes,
+	items: [{ value: 'maxMentionsMoreThanOrEq', label: i18n.ts._inboxRule.maxMentionsMoreThanOrEq }, {
+		value: 'attachmentFileMoreThanOrEq',
+		label: i18n.ts._inboxRule.attachmentFileMoreThanOrEq,
+	}, {
+		value: 'isIncludeThisWord',
+		label: i18n.ts._inboxRule.isIncludeThisWord,
+	}],
+}, {
+	type: 'group',
+	label: 'Servers',
+	items: [{ value: 'serverHost', label: i18n.ts._inboxRule.serverHost }, {
+		value: 'serverSoftware',
+		label: i18n.ts._inboxRule.serverSoftware,
+	}, {
+		value: 'serverIsSilenced',
+		label: i18n.ts._inboxRule.serverIsSilenced,
+	}, {
+		value: 'serverPubLessThanOrEq',
+		label: i18n.ts._inboxRule.serverPubLessThanOrEq,
+	}, {
+		value: 'serverPubMoreThanOrEq',
+		label: i18n.ts._inboxRule.serverPubMoreThanOrEq,
+	}, {
+		value: 'serverSubLessThanOrEq',
+		label: i18n.ts._inboxRule.serverSubLessThanOrEq,
+	}, {
+		value: 'serverSubMoreThanOrEq',
+		label: i18n.ts._inboxRule.serverSubMoreThanOrEq,
+	}],
+}, {
+	type: 'group',
+	label: i18n.ts._inboxRule.conditions,
+	items: [
+		...(!props.isNote ? [{ value: 'thisActivityIsNote' as const, label: i18n.ts._inboxRule.thisActivityIsNote }] : []),
+		{ value: 'and', label: i18n.ts._inboxRule.and },
+		{ value: 'or', label: i18n.ts._inboxRule.or },
+		{ value: 'not', label: i18n.ts._inboxRule.not },
+	],
+}]);
 
 watch(() => props.modelValue, () => {
 	if (JSON.stringify(props.modelValue) === JSON.stringify(v.value)) return;
-	v.value = deepClone(props.modelValue);
+	v.value = normalizeNode(deepClone(props.modelValue));
 }, { deep: true });
 
 watch(v, () => {
@@ -129,12 +305,12 @@ watch(v, () => {
 }, { deep: true });
 
 const type = computed({
-	get: () => v.value.type,
+	get: () => normalizeType(v.value.type),
 	set: (t) => {
 		if (t === 'and') v.value.values = [];
 		if (t === 'or') v.value.values = [];
 		if (t === 'thisActivityIsNote') v.value.values = [];
-		if (t === 'not') v.value.value = { id: uuid(), type: 'isRemote' };
+		if (t === 'not') v.value.value = { id: genId(), type: 'isRemote' };
 		if (t === 'roleAssignedTo') v.value.roleId = '';
 		if (t === 'createdLessThan') v.value.sec = 86400;
 		if (t === 'createdMoreThan') v.value.sec = 86400;
@@ -158,16 +334,21 @@ const type = computed({
 });
 
 function addValue() {
-	v.value.values.push({ id: uuid(), type: 'isRemote' });
+	v.value.values ??= [];
+	v.value.values.push({ id: genId(), type: 'isRemote' });
 }
 
-function valuesItemUpdated(item) {
-	const i = v.value.values.findIndex(_item => _item.id === item.id);
-	v.value.values[i] = item;
+function valuesItemUpdated(item: FormulaNode) {
+	if (v.value.values == null) return;
+	const i = v.value.values.findIndex((_item: FormulaNode) => _item.id === item.id);
+	if (i !== -1) {
+		v.value.values[i] = item;
+	}
 }
 
-function removeItem(item) {
-	v.value.values = v.value.values.filter(_item => _item.id !== item.id);
+function removeItem(item: FormulaNode) {
+	if (v.value.values == null) return;
+	v.value.values = v.value.values.filter((_item: FormulaNode) => _item.id !== item.id);
 }
 
 function removeSelf() {

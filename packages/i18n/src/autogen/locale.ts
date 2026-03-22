@@ -2019,6 +2019,10 @@ export interface Locale extends ILocale {
      */
     "moderation": string;
     /**
+     * 受信ルール
+     */
+    "inboxRule": string;
+    /**
      * モデレーションノート
      */
     "moderationNote": string;
@@ -8543,6 +8547,100 @@ export interface Locale extends ILocale {
          */
         "analyzeVideosDescription": string;
     };
+    "_inboxRule": {
+        /**
+         * 受信ルールを追加
+         */
+        "add": string;
+        /**
+         * 無名のルール
+         */
+        "unnamedRule": string;
+        /**
+         * ルール名
+         */
+        "name": string;
+        /**
+         * 説明
+         */
+        "description": string;
+        /**
+         * アクション
+         */
+        "action": string;
+        /**
+         * 拒否
+         */
+        "reject": string;
+        /**
+         * 次のアクションを実行
+         */
+        "then": string;
+        /**
+         * ノート条件
+         */
+        "notes": string;
+        /**
+         * 複合条件
+         */
+        "conditions": string;
+        /**
+         * サーバーホスト
+         */
+        "serverHost": string;
+        /**
+         * サーバーソフトウェア
+         */
+        "serverSoftware": string;
+        /**
+         * サーバーがサイレンス済み
+         */
+        "serverIsSilenced": string;
+        /**
+         * メンション数が～以上
+         */
+        "maxMentionsMoreThanOrEq": string;
+        /**
+         * 添付ファイル数が～以上
+         */
+        "attachmentFileMoreThanOrEq": string;
+        /**
+         * この単語を含む
+         */
+        "isIncludeThisWord": string;
+        /**
+         * サーバー公開投稿数が～以下
+         */
+        "serverPubLessThanOrEq": string;
+        /**
+         * サーバー公開投稿数が～以上
+         */
+        "serverPubMoreThanOrEq": string;
+        /**
+         * サーバー購読数が～以下
+         */
+        "serverSubLessThanOrEq": string;
+        /**
+         * サーバー購読数が～以上
+         */
+        "serverSubMoreThanOrEq": string;
+        /**
+         * このアクティビティがノート
+         */
+        "thisActivityIsNote": string;
+        /**
+         * すべて満たす
+         */
+        "and": string;
+        /**
+         * いずれかを満たす
+         */
+        "or": string;
+        /**
+         * 条件に一致しない
+         */
+        "not": string;
+    };
     "_emailUnavailable": {
         /**
          * 既に使用されています
@@ -11145,6 +11243,10 @@ export interface Locale extends ILocale {
          */
         "login": string;
         /**
+         * ログインボーナス
+         */
+        "loginBonus": string;
+        /**
          * アクセストークンが作成されました
          */
         "createToken": string;
@@ -11225,6 +11327,10 @@ export interface Locale extends ILocale {
              * ログイン
              */
             "login": string;
+            /**
+             * ログインボーナス
+             */
+            "loginBonus": string;
             /**
              * アクセストークンの作成
              */

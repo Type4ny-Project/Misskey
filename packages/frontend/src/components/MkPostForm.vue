@@ -119,7 +119,7 @@ import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
 import insertTextAtCursor from 'insert-text-at-cursor';
 import { toASCII } from 'punycode.js';
-import { host, url } from '@@/js/config.js';
+import { apiUrl, host, url } from '@@/js/config.js';
 import MkUploaderItems from './MkUploaderItems.vue';
 import type { ShallowRef } from 'vue';
 import type { PostFormProps } from '@/types/post-form.js';
@@ -235,6 +235,10 @@ const uploader = useUploader({
 	multiple: true,
 });
 
+type NoteUpdateResponse = {
+	updatedNote: Misskey.entities.Note;
+};
+
 onUnmounted(() => {
 	uploader.dispose();
 });
@@ -245,6 +249,10 @@ uploader.events.on('itemUploaded', ctx => {
 });
 
 const draftKey = computed((): string => {
+	if (props.updateMode && props.initialNote) {
+		return `edit:${props.initialNote.id}`;
+	}
+
 	let key = targetChannel.value ? `channel:${targetChannel.value.id}` : '';
 
 	if (renoteTargetNote.value) {
@@ -281,6 +289,8 @@ const placeholder = computed((): string => {
 const submitText = computed((): string => {
 	return scheduledAt.value != null
 		? i18n.ts.schedule
+		: props.updateMode
+			? i18n.ts.edit
 		: renoteTargetNote.value
 			? i18n.ts.quote
 			: replyTargetNote.value
@@ -289,7 +299,7 @@ const submitText = computed((): string => {
 });
 
 const submitIcon = computed((): string => {
-	return posted.value ? 'ti ti-check' : scheduledAt.value != null ? 'ti ti-calendar-time' : replyTargetNote.value ? 'ti ti-arrow-back-up' : renoteTargetNote.value ? 'ti ti-quote' : 'ti ti-send';
+	return posted.value ? 'ti ti-check' : scheduledAt.value != null ? 'ti ti-calendar-time' : props.updateMode ? 'ti ti-edit' : replyTargetNote.value ? 'ti ti-arrow-back-up' : renoteTargetNote.value ? 'ti ti-quote' : 'ti ti-send';
 });
 
 const textLength = computed((): number => {
@@ -1076,14 +1086,39 @@ async function post(ev?: PointerEvent) {
 	}
 
 	posting.value = true;
-	misskeyApi('notes/create', postData, token).then((res) => {
+	const postPromise: Promise<NoteUpdateResponse | { createdNote: Misskey.entities.Note }> = props.updateMode
+		? window.fetch(`${apiUrl}/notes/update`, {
+			method: 'POST',
+			body: JSON.stringify({
+				...postData,
+				noteId: props.initialNote!.id,
+				i: token ?? $i.token,
+			}),
+			credentials: 'omit',
+			cache: 'no-cache',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+		}).then(async (response) => {
+			const body = response.status === 204 ? null : await response.json();
+			if (response.status === 200) return body as NoteUpdateResponse;
+			throw body.error;
+		})
+		: misskeyApi('notes/create', postData, token);
+
+	postPromise.then((res) => {
+		const returnedNote = 'updatedNote' in res ? res.updatedNote : res.createdNote;
 		if (props.freezeAfterPosted) {
 			posted.value = true;
 		} else {
 			clear();
 		}
 
-		globalEvents.emit('notePosted', res.createdNote);
+		if ('updatedNote' in res) {
+			globalEvents.emit('noteUpdated', returnedNote);
+		} else {
+			globalEvents.emit('notePosted', returnedNote);
+		}
 
 		nextTick(() => {
 			deleteDraft();

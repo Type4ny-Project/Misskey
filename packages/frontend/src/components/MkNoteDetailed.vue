@@ -132,6 +132,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 			<footer>
 				<div :class="$style.noteFooterInfo">
+					<div v-if="appearNote.updatedAt">
+						{{ i18n.ts.edited }}: <MkTime :time="appearNote.updatedAt" mode="detail"/>
+					</div>
 					<MkA :to="notePage(appearNote)">
 						<MkTime :time="appearNote.createdAt" mode="detail" colored/>
 					</MkA>
@@ -180,6 +183,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<button class="_button" :class="[$style.tab, { [$style.tabActive]: tab === 'replies' }]" @click="tab = 'replies'"><i class="ti ti-arrow-back-up"></i> {{ i18n.ts.replies }}</button>
 			<button class="_button" :class="[$style.tab, { [$style.tabActive]: tab === 'renotes' }]" @click="tab = 'renotes'"><i class="ti ti-repeat"></i> {{ i18n.ts.renotes }}</button>
 			<button class="_button" :class="[$style.tab, { [$style.tabActive]: tab === 'reactions' }]" @click="tab = 'reactions'"><i class="ti ti-icons"></i> {{ i18n.ts.reactions }}</button>
+			<button class="_button" :class="[$style.tab, { [$style.tabActive]: tab === 'history' }]" @click="tab = 'history'"><i class="ti ti-pencil"></i> {{ i18n.ts.history }}</button>
 		</div>
 		<div>
 			<div v-if="tab === 'replies'">
@@ -216,6 +220,32 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</template>
 				</MkPagination>
 			</div>
+			<div v-else-if="tab === 'history'" :class="$style.tab_history">
+				<div v-if="editHistoryEntries.length === 0" class="_fullinfo">{{ i18n.ts.noHistory }}</div>
+				<div v-for="entry in editHistoryEntries" :key="entry.id" :class="$style.historyEntry">
+					<div :class="$style.historyMeta">
+						<MkTime v-if="entry.updatedAt" :time="entry.updatedAt" mode="detail"/>
+					</div>
+					<div :class="$style.historyBody">
+						<Mfm
+							v-if="entry.text"
+							:text="entry.text"
+							:author="appearNote.user"
+							:nyaize="'respect'"
+							:emojiUrls="appearNote.emojis"
+							class="_selectable"
+						/>
+						<div v-else :class="$style.historyEmpty">-</div>
+						<CodeDiff
+							:oldString="entry.previousText"
+							:newString="entry.text"
+							:hideHeader="true"
+							diffStyle="char"
+							:trim="true"
+						/>
+					</div>
+				</div>
+			</div>
 		</div>
 	</template>
 </div>
@@ -231,9 +261,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, markRaw, provide, ref, useTemplateRef } from 'vue';
+import { computed, inject, markRaw, provide, reactive, ref, useTemplateRef } from 'vue';
 import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
+import { CodeDiff } from 'v-code-diff';
 import { isLink } from '@@/js/is-link.js';
 import { host } from '@@/js/config.js';
 import type { OpenOnRemoteOptions } from '@/utility/please-login.js';
@@ -288,7 +319,7 @@ const props = withDefaults(defineProps<{
 
 const inChannel = inject('inChannel', null);
 
-let note = deepClone(props.note);
+const note = reactive(deepClone(props.note)) as Misskey.entities.Note;
 
 // plugin
 const noteViewInterruptors = getPluginHandlers('note_view_interruptor');
@@ -305,7 +336,7 @@ if (noteViewInterruptors.length > 0) {
 	if (result == null) {
 		hideByPlugin.value = true;
 	} else {
-		note = result as Misskey.entities.Note;
+		Object.assign(note, result);
 	}
 }
 
@@ -329,12 +360,33 @@ const isDeleted = ref(false);
 const muted = ref($i ? checkWordMute(appearNote, $i, $i.mutedWords) : false);
 const translation = ref<Misskey.entities.NotesTranslateResponse | null>(null);
 const translating = ref(false);
-const parsed = appearNote.text ? mfm.parse(appearNote.text) : null;
-const urls = parsed ? extractUrlFromMfm(parsed).filter((url) => appearNote.renote?.url !== url && appearNote.renote?.uri !== url) : null;
+const parsed = computed(() => appearNote.text ? mfm.parse(appearNote.text) : null);
+const urls = computed(() => parsed.value ? extractUrlFromMfm(parsed.value).filter((url) => appearNote.renote?.url !== url && appearNote.renote?.uri !== url) : null);
 const showTicker = (prefer.s.instanceTicker === 'always') || (prefer.s.instanceTicker === 'remote' && appearNote.user.instance);
 const conversation = ref<Misskey.entities.Note[]>([]);
 const replies = ref<Misskey.entities.Note[]>([]);
 const canRenote = computed(() => ['public', 'home'].includes(appearNote.visibility) || appearNote.userId === $i?.id);
+const editHistoryEntries = computed(() => {
+	const history = appearNote.noteEditHistory ?? [];
+	const updatedAtHistory = (appearNote as Misskey.entities.Note & { updatedAtHistory?: string[] }).updatedAtHistory ?? [];
+
+	return history.map((text, index) => ({
+		id: `${appearNote.id}:${index}`,
+		text,
+		previousText: history[index - 1] ?? '',
+		updatedAt: updatedAtHistory[index] ?? appearNote.updatedAt ?? null,
+	})).reverse();
+});
+
+useGlobalEvent('noteUpdated', (updatedNote) => {
+	if (updatedNote.id === note.id) {
+		Object.assign(note, deepClone(updatedNote));
+	}
+
+	if (updatedNote.id === appearNote.id && appearNote !== note) {
+		Object.assign(appearNote, deepClone(updatedNote));
+	}
+});
 
 useGlobalEvent('noteDeleted', (noteId) => {
 	if (noteId === note.id || noteId === appearNote.id) {
@@ -893,6 +945,37 @@ function loadConversation() {
 
 .tab_reactions {
 	padding: 16px;
+}
+
+.tab_history {
+	padding: 16px;
+}
+
+.historyEntry {
+	padding: 16px;
+	border: 1px solid var(--MI_THEME-divider);
+	border-radius: 12px;
+
+	&:not(:first-child) {
+		margin-top: 12px;
+	}
+}
+
+.historyMeta {
+	margin-bottom: 8px;
+	opacity: 0.7;
+	font-size: 0.9em;
+}
+
+.historyBody {
+	display: grid;
+	gap: 12px;
+	overflow: hidden;
+	word-break: break-word;
+}
+
+.historyEmpty {
+	opacity: 0.6;
 }
 
 .reactionTabs {

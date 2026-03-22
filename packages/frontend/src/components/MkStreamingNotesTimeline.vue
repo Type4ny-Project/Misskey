@@ -277,6 +277,10 @@ useGlobalEvent('noteDeleted', (noteId) => {
 	paginator.removeItem(noteId);
 });
 
+useGlobalEvent('noteUpdated', (note) => {
+	paginator.updateItem(note.id, () => note as typeof paginator.items.value[number]);
+});
+
 function releaseQueue() {
 	paginator.releaseQueue();
 	scrollToTop(rootEl.value!);

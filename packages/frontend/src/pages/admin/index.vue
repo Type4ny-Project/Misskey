@@ -205,6 +205,11 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		to: '/admin/email-settings',
 		active: currentPage.value?.route.name === 'email-settings',
 	}, {
+		icon: 'ti ti-mail-shield',
+		text: i18n.ts.inboxRule,
+		to: '/admin/inbox-moderation',
+		active: currentPage.value?.route.name === 'inboxModeration',
+	}, {
 		icon: 'ti ti-cloud',
 		text: i18n.ts.objectStorage,
 		to: '/admin/object-storage',

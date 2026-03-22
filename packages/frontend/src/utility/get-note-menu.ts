@@ -208,6 +208,10 @@ export function getNoteMenu(props: {
 		});
 	}
 
+	function edit(): void {
+		os.post({ initialNote: appearNote, renote: appearNote.renote, reply: appearNote.reply, channel: appearNote.channel, updateMode: true });
+	}
+
 	function delEdit(): void {
 		os.confirm({
 			type: 'warning',
@@ -498,6 +502,10 @@ export function getNoteMenu(props: {
 			if (appearNote.userId === $i.id) {
 				menuItems.push({
 					icon: 'ti ti-edit',
+					text: i18n.ts.edit,
+					action: edit,
+				}, {
+					icon: 'ti ti-eraser',
 					text: i18n.ts.deleteAndEdit,
 					action: delEdit,
 				});

@@ -25,7 +25,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				[$style.t_pollEnded]: notification.type === 'pollEnded',
 				[$style.t_scheduledNotePosted]: notification.type === 'scheduledNotePosted',
 				[$style.t_scheduledNotePostFailed]: notification.type === 'scheduledNotePostFailed',
-				[$style.t_achievementEarned]: notification.type === 'achievementEarned' || notification.type === 'loginBonus',
+				[$style.t_achievementEarned]: notification.type === 'achievementEarned',
+				[$style.t_loginBonus]: notification.type === 'loginBonus',
 				[$style.t_exportCompleted]: notification.type === 'exportCompleted',
 				[$style.t_login]: notification.type === 'login',
 				[$style.t_createToken]: notification.type === 'createToken',
@@ -44,7 +45,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<i v-else-if="notification.type === 'scheduledNotePosted'" class="ti ti-send"></i>
 			<i v-else-if="notification.type === 'scheduledNotePostFailed'" class="ti ti-alert-triangle"></i>
 			<i v-else-if="notification.type === 'achievementEarned'" class="ti ti-medal"></i>
-			<i v-else-if="notification.type === 'loginBonus'" class="ti ti-medal"></i>
+			<i v-else-if="notification.type === 'loginBonus'" class="ti ti-gift"></i>
 			<i v-else-if="notification.type === 'exportCompleted'" class="ti ti-archive"></i>
 			<i v-else-if="notification.type === 'login'" class="ti ti-login-2"></i>
 			<i v-else-if="notification.type === 'createToken'" class="ti ti-key"></i>
@@ -71,7 +72,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span v-else-if="notification.type === 'roleAssigned'">{{ i18n.ts._notification.roleAssigned }}</span>
 			<span v-else-if="notification.type === 'chatRoomInvitationReceived'">{{ i18n.ts._notification.chatRoomInvitationReceived }}</span>
 			<span v-else-if="notification.type === 'achievementEarned'">{{ i18n.ts._notification.achievementEarned }}</span>
-			<span v-else-if="notification.type === 'loginBonus'">{{ i18n.ts._notification.login }}</span>
+			<span v-else-if="notification.type === 'loginBonus'">{{ i18n.ts._notification.loginBonus }}</span>
 			<span v-else-if="notification.type === 'login'">{{ i18n.ts._notification.login }}</span>
 			<span v-else-if="notification.type === 'createToken'">{{ i18n.ts._notification.createToken }}</span>
 			<span v-else-if="notification.type === 'test'">{{ i18n.ts._notification.testNotification }}</span>
@@ -262,6 +263,7 @@ function getActualReactedUsersCount(notification: Misskey.entities.Notification)
 	--eventReaction: #e99a0b;
 	--eventAchievement: #cb9a11;
 	--eventLogin: #007aff;
+	--eventLoginBonus: #10b981;
 	--eventOther: #88a6b7;
 }
 
@@ -387,6 +389,11 @@ function getActualReactedUsersCount(notification: Misskey.entities.Notification)
 
 .t_login {
 	background: var(--eventLogin);
+	pointer-events: none;
+}
+
+.t_loginBonus {
+	background: var(--eventLoginBonus);
 	pointer-events: none;
 }
 

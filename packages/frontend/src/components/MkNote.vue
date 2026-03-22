@@ -203,7 +203,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, onMounted, ref, useTemplateRef, provide } from 'vue';
+import { computed, inject, onMounted, provide, reactive, ref, useTemplateRef } from 'vue';
 import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
 import { isLink } from '@@/js/is-link.js';
@@ -250,7 +250,7 @@ import { getAppearNote } from '@/utility/get-appear-note.js';
 import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
 import { DI } from '@/di.js';
-import { globalEvents } from '@/events.js';
+import { globalEvents, useGlobalEvent } from '@/events.js';
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note;
@@ -273,7 +273,7 @@ const tl_withSensitive = inject<Ref<boolean>>('tl_withSensitive', ref(true));
 const inChannel = inject('inChannel', null);
 const currentClip = inject<Ref<Misskey.entities.Clip> | null>('currentClip', null);
 
-let note = deepClone(props.note);
+const note = reactive(deepClone(props.note)) as Misskey.entities.Note;
 
 // plugin
 const noteViewInterruptors = getPluginHandlers('note_view_interruptor');
@@ -290,7 +290,7 @@ if (noteViewInterruptors.length > 0) {
 	if (result == null) {
 		hideByPlugin.value = true;
 	} else {
-		note = result as Misskey.entities.Note;
+		Object.assign(note, result);
 	}
 }
 
@@ -333,6 +333,16 @@ const pleaseLoginContext = computed<OpenOnRemoteOptions>(() => ({
 	type: 'lookup',
 	url: `https://${host}/notes/${appearNote.id}`,
 }));
+
+useGlobalEvent('noteUpdated', (updatedNote) => {
+	if (updatedNote.id === note.id) {
+		Object.assign(note, deepClone(updatedNote));
+	}
+
+	if (updatedNote.id === appearNote.id && appearNote !== note) {
+		Object.assign(appearNote, deepClone(updatedNote));
+	}
+});
 
 /* eslint-disable no-redeclare */
 /** checkOnlyでは純粋なワードミュート結果をbooleanで返却する */

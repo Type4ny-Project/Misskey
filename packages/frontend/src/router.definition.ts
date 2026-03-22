@@ -487,6 +487,10 @@ export const ROUTE_DEF = [{
 		name: 'email-settings',
 		component: page(() => import('@/pages/admin/email-settings.vue')),
 	}, {
+		path: '/inbox-moderation',
+		name: 'inboxModeration',
+		component: page(() => import('@/pages/admin/inboxModeration.vue')),
+	}, {
 		path: '/object-storage',
 		name: 'object-storage',
 		component: page(() => import('@/pages/admin/object-storage.vue')),

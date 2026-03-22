@@ -63,6 +63,10 @@ useGlobalEvent('noteDeleted', (noteId) => {
 	props.paginator.removeItem(noteId);
 });
 
+useGlobalEvent('noteUpdated', (note) => {
+	props.paginator.updateItem(note.id, () => note as typeof props.paginator.items.value[number]);
+});
+
 function reload() {
 	return props.paginator.reload();
 }

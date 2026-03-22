@@ -4552,6 +4552,7 @@ export type components = {
             createdAt: string;
             /** Format: date-time */
             updatedAt?: string | null;
+            updatedAtHistory?: string[];
             noteEditHistory?: string[];
             /** Format: date-time */
             deletedAt?: string | null;
@@ -38162,4 +38163,3 @@ export interface operations {
         };
     };
 }
-

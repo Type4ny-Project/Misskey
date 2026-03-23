@@ -189,12 +189,15 @@ export class NotificationEntityService implements OnModuleInit {
 				exportedEntity: notification.exportedEntity,
 				fileId: notification.fileId,
 			} : {}),
-			...(notification.type === 'app' ? {
-				body: notification.customBody,
-				header: notification.customHeader,
-				icon: notification.customIcon,
-			} : {}),
-		});
+		...(notification.type === 'app' ? {
+			body: notification.customBody,
+			header: notification.customHeader,
+			icon: notification.customIcon,
+		} : {}),
+		...(notification.type === 'loginBonus' ? {
+			points: notification.points,
+		} : {}),
+	});
 	}
 
 	async #packManyInternal <T extends MiNotification | MiGroupedNotification>	(

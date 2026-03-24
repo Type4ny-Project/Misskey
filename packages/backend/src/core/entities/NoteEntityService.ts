@@ -272,6 +272,20 @@ export class NoteEntityService implements OnModuleInit {
 	}
 
 	@bindThis
+	public async populateMyReactions(note: { id: MiNote['id'] }, meId: MiUser['id']) {
+		const reactions = await this.noteReactionsRepository.findBy({
+			userId: meId,
+			noteId: note.id,
+		});
+
+		if (reactions.length > 0) {
+			return reactions.map(reaction => this.reactionService.convertLegacyReaction(reaction.reaction));
+		}
+
+		return undefined;
+	}
+
+	@bindThis
 	public async isVisibleForMe(note: MiNote, meId: MiUser['id'] | null): Promise<boolean> {
 		// This code must always be synchronized with the checks in QueryService.generateVisibilityQuery.
 		// visibility が specified かつ自分が指定されていなかったら非表示
@@ -460,6 +474,7 @@ export class NoteEntityService implements OnModuleInit {
 						reactions: reactions,
 						reactionAndUserPairCache: reactionAndUserPairCache,
 					}, meId, options?._hint_),
+					myReactions: this.populateMyReactions(note, meId),
 				} : {}),
 			} : {}),
 		});

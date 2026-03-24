@@ -445,6 +445,53 @@ export function getNoteMenu(props: {
 			}
 		}
 
+		// 自分のリアクションを削除するメニュー
+		const myReactions = (appearNote as any).myReactions ?? (appearNote.myReaction ? [appearNote.myReaction] : []);
+		if (myReactions.length > 0) {
+			if (myReactions.length === 1) {
+				// リアクションが1つの場合は直接削除
+				menuItems.push({
+					icon: 'ti ti-mood-off',
+					text: i18n.ts.cancelReaction,
+					danger: true,
+					action: () => {
+						os.confirm({
+							type: 'warning',
+							text: i18n.ts.cancelReactionConfirm,
+						}).then(({ canceled }) => {
+							if (canceled) return;
+							misskeyApi('notes/reactions/delete', {
+								noteId: appearNote.id,
+								reaction: myReactions[0],
+							});
+						});
+					},
+				});
+			} else {
+				// リアクションが複数ある場合は子メニューで選択
+				menuItems.push({
+					type: 'parent',
+					icon: 'ti ti-mood-off',
+					text: i18n.ts.cancelReaction,
+					children: myReactions.map((reaction: string) => ({
+						text: reaction,
+						action: () => {
+							os.confirm({
+								type: 'warning',
+								text: i18n.ts.cancelReactionConfirm,
+							}).then(({ canceled }) => {
+								if (canceled) return;
+								misskeyApi('notes/reactions/delete', {
+									noteId: appearNote.id,
+									reaction,
+								});
+							});
+						},
+					})),
+				});
+			}
+		}
+
 		menuItems.push({
 			type: 'parent',
 			icon: 'ti ti-user',

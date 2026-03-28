@@ -46,15 +46,23 @@ export function migrateOldSettings() {
 		});
 
 		// reactionsとpinnedEmojisをパレットに変換
-		const palettes = [{
+		const palettes: { id: string; name: string; emojis: string[] }[] = [];
+
+		palettes.push({
 			id: 'reactions',
-			name: '',
+			name: 'リアクション',
 			emojis: store.s.reactions,
-		}, {
-			id: 'pinnedEmojis',
-			name: '',
-			emojis: store.s.pinnedEmojis,
-		}];
+		});
+
+		// pinnedEmojisが空の場合はパレットとして追加しない
+		const hasPinnedEmojis = store.s.pinnedEmojis && store.s.pinnedEmojis.length > 0;
+		if (hasPinnedEmojis) {
+			palettes.push({
+				id: 'pinnedEmojis',
+				name: 'ピン留め絵文字',
+				emojis: store.s.pinnedEmojis,
+			});
+		}
 
 		// Type4nyの複数プロフィール（pickerProfileName1-5 + reactions1-5）をパレットに変換
 		// 型アサーションで安全にアクセス（store.tsに定義がない場合もあるため）
@@ -92,8 +100,9 @@ export function migrateOldSettings() {
 			}
 		}
 
-		prefer.commit('emojiPaletteForMain', 'pinnedEmojis');
+		prefer.commit('emojiPalettes', palettes);
 		prefer.commit('emojiPaletteForReaction', 'reactions');
+		prefer.commit('emojiPaletteForMain', hasPinnedEmojis ? 'pinnedEmojis' : null);
 		prefer.commit('overridedDeviceKind', store.s.overridedDeviceKind);
 		prefer.commit('widgets', store.s.widgets);
 		prefer.commit('keepCw', store.s.keepCw);

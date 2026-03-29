@@ -14,7 +14,7 @@
 	--MI-margin: var(--MI-marginFull);
 	--MI-realtimeSkyBackground: var(--MI_THEME-bg);
 	--MI-realtimeSkyNavBg: var(--MI_THEME-navBg);
-	--MI-realtimeSkySidebarBg: color(from var(--MI_THEME-navBg) srgb r g b / 0.55);
+	--MI-realtimeSkySidebarBg: var(--MI_THEME-navBg);
 	--MI-realtimeSkyPanelBg: var(--MI_THEME-panel);
 
 	// switch dynamically

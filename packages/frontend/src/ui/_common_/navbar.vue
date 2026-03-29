@@ -202,7 +202,7 @@ function menuEdit() {
 .root {
 	--nav-width: 250px;
 	--nav-icon-only-width: 80px;
-	--nav-bg-transparent: color(from var(--MI-realtimeSkySidebarBg, var(--MI_THEME-navBg)) srgb r g b / 0.8);
+	--nav-bg-transparent: color(from var(--MI_THEME-navBg) srgb r g b / 0.8);
 
 	--subButtonWidth: 20px;
 

@@ -265,7 +265,7 @@ definePage(() => INFO.value);
 				width: 34%;
 				padding-right: 32px;
 				box-sizing: border-box;
-				background: var(--MI-realtimeSkySidebarBg, color(from var(--MI_THEME-navBg) srgb r g b / 0.55));
+				background: var(--MI-realtimeSkySidebarBg, var(--MI_THEME-navBg));
 				-webkit-backdrop-filter: var(--MI-blur, blur(14px));
 				backdrop-filter: var(--MI-blur, blur(14px));
 				border-radius: 12px 0 0 12px;
@@ -275,7 +275,7 @@ definePage(() => INFO.value);
 			> .main {
 				flex: 1;
 				min-width: 0;
-				background: var(--MI-realtimeSkySidebarBg, color(from var(--MI_THEME-panel) srgb r g b / 0.55));
+				background: var(--MI-realtimeSkyPanelBg, var(--MI_THEME-panel));
 				-webkit-backdrop-filter: var(--MI-blur, blur(14px));
 				backdrop-filter: var(--MI-blur, blur(14px));
 				border-radius: 0 12px 12px 0;

@@ -161,79 +161,84 @@ export class TypeAnyDbMigration1769303671649 {
         `);
 
         await queryRunner.query(`
-            DO $$
-            BEGIN
-                IF to_regclass('public.note_schedule') IS NOT NULL
-                   AND to_regclass('public.note_draft') IS NOT NULL THEN
-                    INSERT INTO "note_draft" (
-                        "id",
-                        "replyId",
-                        "renoteId",
-                        "text",
-                        "cw",
-                        "userId",
-                        "localOnly",
-                        "reactionAcceptance",
-                        "visibility",
-                        "fileIds",
-                        "visibleUserIds",
-                        "hashtag",
-                        "channelId",
-                        "hasPoll",
-                        "pollChoices",
-                        "pollMultiple",
-                        "pollExpiresAt",
-                        "pollExpiredAfter",
-                        "scheduledAt",
-                        "isActuallyScheduled"
-                    )
-                    SELECT
-                        "id",
-                        NULLIF(COALESCE("note"->>'replyId', "note"->'reply'->>'id'), ''),
-                        NULLIF(COALESCE("note"->>'renoteId', "note"->'renote'->>'id'), ''),
-                        "note"->>'text',
-                        "note"->>'cw',
-                        "userId",
-                        COALESCE(("note"->>'localOnly')::boolean, false),
-                        "note"->>'reactionAcceptance',
-                        COALESCE("note"->>'visibility', 'public')::note_draft_visibility_enum,
-                        COALESCE((
-                            SELECT array_remove(array_agg(
-                                CASE
-                                    WHEN jsonb_typeof(elem) = 'object' THEN elem->>'id'
-                                    WHEN jsonb_typeof(elem) = 'string' THEN trim(both '"' from elem::text)
-                                    ELSE NULL
-                                END
-                            ), NULL)
-                            FROM jsonb_array_elements(COALESCE("note"->'files', '[]'::jsonb)) elem
-                        ), '{}')::varchar[],
-                        COALESCE((
-                            SELECT array_remove(array_agg(
-                                CASE
-                                    WHEN jsonb_typeof(elem) = 'object' THEN elem->>'id'
-                                    WHEN jsonb_typeof(elem) = 'string' THEN trim(both '"' from elem::text)
-                                    ELSE NULL
-                                END
-                            ), NULL)
-                            FROM jsonb_array_elements(COALESCE("note"->'visibleUsers', '[]'::jsonb)) elem
-                        ), '{}')::varchar[],
-                        NULL,
-                        NULLIF(COALESCE("note"->>'channelId', "note"->'channel'->>'id'), ''),
-                        CASE WHEN "note"->'poll' IS NULL THEN false ELSE true END,
-                        COALESCE((
-                            SELECT array_agg(value)
-                            FROM jsonb_array_elements_text(COALESCE("note"->'poll'->'choices', '[]'::jsonb)) value
-                        ), '{}')::varchar[],
-                        COALESCE(("note"->'poll'->>'multiple')::boolean, false),
-                        NULLIF("note"->'poll'->>'expiresAt', '')::timestamp with time zone,
-                        NULL,
-                        "scheduledAt",
-                        true
-                    FROM "note_schedule"
-                    ON CONFLICT ("id") DO NOTHING;
-                END IF;
-            END $$;
-        `);
+    DO $$
+    BEGIN
+        IF to_regclass('public.note_schedule') IS NOT NULL
+           AND to_regclass('public.note_draft') IS NOT NULL THEN
+            INSERT INTO "note_draft" (
+                "id",
+                "replyId",
+                "renoteId",
+                "text",
+                "cw",
+                "userId",
+                "localOnly",
+                "reactionAcceptance",
+                "visibility",
+                "fileIds",
+                "visibleUserIds",
+                "hashtag",
+                "channelId",
+                "hasPoll",
+                "pollChoices",
+                "pollMultiple",
+                "pollExpiresAt",
+                "pollExpiredAfter",
+                "scheduledAt",
+                "isActuallyScheduled"
+            )
+            SELECT
+                ns."id",
+                NULLIF(COALESCE(ns."note"->>'replyId', ns."note"->'reply'->>'id'), ''),
+                NULLIF(COALESCE(ns."note"->>'renoteId', ns."note"->'renote'->>'id'), ''),
+                ns."note"->>'text',
+                ns."note"->>'cw',
+                ns."userId",
+                COALESCE((ns."note"->>'localOnly')::boolean, false),
+                ns."note"->>'reactionAcceptance',
+                COALESCE(ns."note"->>'visibility', 'public')::note_draft_visibility_enum,
+                COALESCE((
+                    SELECT array_remove(array_agg(
+                        CASE
+                            WHEN jsonb_typeof(elem) = 'object' THEN elem->>'id'
+                            WHEN jsonb_typeof(elem) = 'string' THEN trim(both '"' from elem::text)
+                            ELSE NULL
+                        END
+                    ), NULL)
+                    FROM jsonb_array_elements(COALESCE(ns."note"->'files', '[]'::jsonb)) elem
+                ), '{}')::varchar[],
+                COALESCE((
+                    SELECT array_remove(array_agg(
+                        CASE
+                            WHEN jsonb_typeof(elem) = 'object' THEN elem->>'id'
+                            WHEN jsonb_typeof(elem) = 'string' THEN trim(both '"' from elem::text)
+                            ELSE NULL
+                        END
+                    ), NULL)
+                    FROM jsonb_array_elements(COALESCE(ns."note"->'visibleUsers', '[]'::jsonb)) elem
+                ), '{}')::varchar[],
+                NULL,
+                NULLIF(COALESCE(ns."note"->>'channelId', ns."note"->'channel'->>'id'), ''),
+                CASE WHEN ns."note"->'poll' IS NULL THEN false ELSE true END,
+                COALESCE((
+                    SELECT array_agg(value)
+                    FROM jsonb_array_elements_text(COALESCE(ns."note"->'poll'->'choices', '[]'::jsonb)) value
+                ), '{}')::varchar[],
+                COALESCE((ns."note"->'poll'->>'multiple')::boolean, false),
+                NULLIF(ns."note"->'poll'->>'expiresAt', '')::timestamp with time zone,
+                NULL,
+                ns."scheduledAt",
+                true
+            FROM "note_schedule" ns
+            WHERE EXISTS (
+                SELECT 1
+                FROM "user" u
+                WHERE u."id" = ns."userId"
+            )
+            ON CONFLICT ("id") DO NOTHING;
+        END IF;
+    END $$;
+`);
 
         // Handle legacy emoji_request table (old Type4ny schema without userId)
         await queryRunner.query(`

@@ -91,6 +91,20 @@ describe('ReactionService', () => {
 		});
 	});
 
+	describe('toDbReaction', () => {
+		test('ローカルカスタム絵文字の @. を DB 形式に戻す', () => {
+			assert.strictEqual(reactionService.toDbReaction(':custom_emoji@.:'), ':custom_emoji:');
+		});
+
+		test('リモートカスタム絵文字はそのまま保持する', () => {
+			assert.strictEqual(reactionService.toDbReaction(':custom_emoji@example.com:'), ':custom_emoji@example.com:');
+		});
+
+		test('Unicode 絵文字はそのまま保持する', () => {
+			assert.strictEqual(reactionService.toDbReaction('👍'), '👍');
+		});
+	});
+
 	describe('convertLegacyReactions', () => {
 		test('空の入力に対しては何もしない', () => {
 			const input = {};

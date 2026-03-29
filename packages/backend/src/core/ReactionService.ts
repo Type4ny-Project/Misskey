@@ -299,7 +299,7 @@ export class ReactionService {
 			exist = await this.noteReactionsRepository.findOneBy({
 				noteId: note.id,
 				userId: user.id,
-				reaction: reaction.replace(/@\.$/, ''),
+				reaction: this.toDbReaction(reaction),
 			});
 		}
 
@@ -387,6 +387,16 @@ export class ReactionService {
 
 				return acc;
 			}, {});
+	}
+
+	@bindThis
+	public toDbReaction(reaction: string): string {
+		const custom = reaction.match(decodeCustomEmojiRegexp);
+		if (custom?.[2] === '.') {
+			return `:${custom[1]}:`;
+		}
+
+		return reaction;
 	}
 
 	@bindThis

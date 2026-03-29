@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div class="poamfof">
 		<Transition :name="prefer.s.animation ? 'fade' : ''" mode="out-in">
 			<div v-if="player.url && (player.url.startsWith('http://') || player.url.startsWith('https://'))" class="player">
-				<iframe v-if="!fetching" :src="transformPlayerUrl(player.url)" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+				<iframe v-if="!fetching" :src="transformPlayerUrl(player.url)" frameborder="0" allow="encrypted-media" allowfullscreen></iframe>
 			</div>
 			<span v-else>invalid url</span>
 		</Transition>

@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkTip v-if="isBasicTimeline(src)" :k="`tl.${src}`" style="margin-bottom: var(--MI-margin);">
 			{{ i18n.ts._timelineDescription[src] }}
 		</MkTip>
-		<MkPostForm v-if="prefer.r.showFixedPostForm.value" :class="$style.postForm" class="_panel" fixed style="margin-bottom: var(--MI-margin);"/>
+		<MkPostForm v-if="prefer.r.showFixedPostForm.value" :class="$style.postForm" class="_panel" fixed style="margin-bottom: var(--MI-margin);" :channel="src.startsWith('channel:') ? currentChannel : undefined"/>
 		<MkStreamingNotesTimeline
 			ref="tlComponent"
 			:key="src + withRenotes + withReplies + onlyFiles + withSensitive"
@@ -29,7 +29,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, provide, useTemplateRef, ref, onMounted, onActivated } from 'vue';
+import { computed, watch, provide, useTemplateRef, ref, shallowRef, onMounted, onActivated } from 'vue';
+import * as Misskey from 'misskey-js';
 import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import type { MenuItem } from '@/types/menu.js';
 import type { BasicTimelineType } from '@/timelines.js';
@@ -42,6 +43,7 @@ import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 import { definePage } from '@/page.js';
 import { antennasCache, userListsCache, favoritedChannelsCache } from '@/cache.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 import { deviceKind } from '@/utility/device-kind.js';
 import { deepMerge } from '@/utility/merge.js';
 import { miLocalStorage } from '@/local-storage.js';
@@ -60,6 +62,18 @@ const src = computed<TimelinePageSrc>({
 	set: (x) => saveSrc(x),
 });
 const srcId = computed<string | undefined>(() => src.value.includes(':') ? src.value.split(':')[1] : undefined);
+
+const currentChannel = shallowRef<Misskey.entities.Channel | undefined>(undefined);
+
+watch(src, async (newSrc) => {
+	if (newSrc.startsWith('channel:')) {
+		const channelId = newSrc.split(':')[1];
+		currentChannel.value = await misskeyApi('channels/show', { channelId });
+	} else {
+		currentChannel.value = undefined;
+	}
+}, { immediate: true });
+
 const withRenotes = computed<boolean>({
 	get: () => store.r.tl.value.filter.withRenotes,
 	set: (x) => saveTlFilter('withRenotes', x),

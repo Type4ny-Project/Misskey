@@ -14,8 +14,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			ref="tlComponent"
 			:key="src + withRenotes + withReplies + onlyFiles + withSensitive"
 			:class="$style.tl"
-			:src="(src.split(':')[0] as (BasicTimelineType | 'list'))"
-			:list="src.split(':')[1]"
+			:src="(src.split(':')[0] as (BasicTimelineType | 'list' | 'channel' | 'antenna'))"
+			:list="src.startsWith('list:') ? srcId : undefined"
+			:channel="src.startsWith('channel:') ? srcId : undefined"
+			:antenna="src.startsWith('antenna:') ? srcId : undefined"
 			:withRenotes="withRenotes"
 			:withReplies="withReplies"
 			:withSensitive="withSensitive"
@@ -50,13 +52,14 @@ import { isLocalTimelineAvailable, isGlobalTimelineAvailable } from '@/scripts/g
 
 const tlComponent = useTemplateRef('tlComponent');
 
-type TimelinePageSrc = BasicTimelineType | `list:${string}`;
+type TimelinePageSrc = BasicTimelineType | `list:${string}` | `channel:${string}` | `antenna:${string}`;
 
 const srcWhenNotSignin = ref<'local' | 'global'>(isAvailableBasicTimeline('local') ? 'local' : 'global');
 const src = computed<TimelinePageSrc>({
 	get: () => ($i ? store.r.tl.value.src : srcWhenNotSignin.value),
 	set: (x) => saveSrc(x),
 });
+const srcId = computed<string | undefined>(() => src.value.includes(':') ? src.value.split(':')[1] : undefined);
 const withRenotes = computed<boolean>({
 	get: () => store.r.tl.value.filter.withRenotes,
 	set: (x) => saveTlFilter('withRenotes', x),

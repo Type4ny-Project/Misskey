@@ -109,10 +109,6 @@ export const packedChannelSchema = {
 		isLocalOnly: {
 			type: 'boolean',
 			optional: false, nullable: false,
-			items: {
-				type: 'string',
-				format: 'id',
-			},
 		},
 	},
 } as const;

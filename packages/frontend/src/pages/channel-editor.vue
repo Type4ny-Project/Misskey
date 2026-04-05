@@ -162,8 +162,12 @@ async function fetchChannel() {
 	allowRenoteToExternal.value = result.allowRenoteToExternal;
 	isLocalOnly.value = result.isLocalOnly;
 	if (result.collaboratorIds && result.collaboratorIds.length > 0) {
-		const users = await misskeyApi('users/show', { userIds: result.collaboratorIds });
-		collaboratorUsers.value = Array.isArray(users) ? users : [users];
+		try {
+			const users = await misskeyApi('users/show', { userIds: result.collaboratorIds });
+			collaboratorUsers.value = Array.isArray(users) ? users : [users];
+		} catch {
+			collaboratorUsers.value = [];
+		}
 	} else {
 		collaboratorUsers.value = [];
 	}

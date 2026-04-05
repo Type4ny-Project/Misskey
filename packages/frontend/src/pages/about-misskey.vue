@@ -43,10 +43,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 							{{ i18n.ts._aboutMisskey.translation }}
 							<template #suffix>Crowdin</template>
 						</FormLink>
-						<FormLink to="https://github.com/sponsors/Type4ny-Project" external>
+						<FormLink to="https://mattyatea.fanbox.cc" external>
 							<template #icon><i class="ti ti-pig-money"></i></template>
 							{{ i18n.ts._aboutMisskey.donate }} (Type4ny)
-							<template #suffix>GitHub Sponsors</template>
+							<template #suffix>FANBOX</template>
 						</FormLink>
 						<FormLink to="https://www.patreon.com/syuilo" external>
 							<template #icon><i class="ti ti-pig-money"></i></template>

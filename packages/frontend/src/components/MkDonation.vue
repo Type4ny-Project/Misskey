@@ -23,7 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</template>
 			</I18n>
 			<div style="margin-top: 0.2em;">
-				<MkLink target="_blank" url="https://github.com/sponsors/Type4ny-Project">Type4ny {{ i18n.ts._aboutMisskey.donate }}</MkLink>
+				<MkLink target="_blank" url="https://mattyatea.fanbox.cc">Type4ny {{ i18n.ts._aboutMisskey.donate }}</MkLink>
 				<span style="margin: 0 0.4em;">|</span>
 				<MkLink target="_blank" url="https://misskey-hub.net/docs/for-users/resources/donate/">Misskey {{ i18n.ts.learnMore }}</MkLink>
 			</div>

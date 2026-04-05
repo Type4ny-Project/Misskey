@@ -81,7 +81,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkFolder v-if="isRoot">
 				<template #label>{{ i18n.ts._channel.dangerSettings }}</template>
 
-				<MkButton style="margin: 16px" danger @click="transferAdmin()">
+				<MkButton v-if="isOwner" style="margin: 16px" danger @click="transferAdmin()">
 					{{ i18n.ts._channel.transferAdminConfirmTitle }}
 				</MkButton>
 				<MkButton v-if="channelId" style="margin: 16px" danger @click="archive()"><i class="ti ti-trash"></i> {{ i18n.ts.archive }}</MkButton>
@@ -133,6 +133,7 @@ const allowRenoteToExternal = ref(true);
 const isLocalOnly = ref(false);
 const pinnedNoteIds = ref<Misskey.entities.Note['id'][]>([]);
 const isRoot = ref(false);
+const isOwner = ref(false);
 const collaboratorUsers = ref<Misskey.entities.User[]>([]);
 
 watch(() => bannerId.value, async () => {
@@ -172,6 +173,7 @@ async function fetchChannel() {
 		collaboratorUsers.value = [];
 	}
 	isRoot.value = ($i && $i.id === result.userId) || iAmModerator;
+	isOwner.value = $i !== null && $i.id === result.userId;
 
 	channel.value = result;
 }
@@ -244,26 +246,29 @@ function collaboratorUserDelete(i: number) {
 }
 
 function save() {
-	const params = {
-		name: name.value,
-		description: description.value,
-		bannerId: bannerId.value,
-		color: color.value,
-		isSensitive: isSensitive.value,
-		allowRenoteToExternal: allowRenoteToExternal.value,
-		isLocalOnly: isLocalOnly.value,
-		collaboratorIds: collaboratorUsers.value.map(x => x.id),
-	} satisfies Misskey.entities.ChannelsCreateRequest;
-
 	if (props.channelId != null) {
 		os.apiWithDialog('channels/update', {
-			...params,
 			channelId: props.channelId,
+			name: name.value,
+			description: description.value,
+			bannerId: bannerId.value,
+			color: color.value,
+			isSensitive: isSensitive.value,
+			allowRenoteToExternal: allowRenoteToExternal.value,
+			isLocalOnly: isLocalOnly.value,
 			pinnedNoteIds: pinnedNoteIds.value,
-			collaboratorIds: collaboratorUsers.value.map(x => x.id),
+			...(isRoot.value ? { collaboratorIds: collaboratorUsers.value.map(x => x.id) } : {}),
 		});
 	} else {
-		os.apiWithDialog('channels/create', params).then(created => {
+		os.apiWithDialog('channels/create', {
+			name: name.value,
+			description: description.value,
+			bannerId: bannerId.value,
+			color: color.value,
+			isSensitive: isSensitive.value,
+			allowRenoteToExternal: allowRenoteToExternal.value,
+			isLocalOnly: isLocalOnly.value,
+		}).then(created => {
 			router.push('/channels/:channelId', {
 				params: {
 					channelId: created.id,
@@ -341,5 +346,29 @@ definePage(() => ({
 	height: 32px;
 	margin: 0 8px;
 	opacity: 0.5;
+}
+
+.userItem {
+	padding: 4px 0;
+}
+
+.userItemMain {
+	display: flex;
+}
+
+.userItemMainBody {
+	flex: 1;
+	min-width: 0;
+	margin-right: 8px;
+
+	&:hover {
+		text-decoration: none;
+	}
+}
+
+.unassign {
+	width: 32px;
+	height: 32px;
+	align-self: center;
 }
 </style>

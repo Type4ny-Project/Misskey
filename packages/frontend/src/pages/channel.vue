@@ -309,7 +309,7 @@ const headerActions = computed(() => {
 			});
 		}
 
-		if (($i && $i.id === channel.value.userId) || iAmModerator) {
+		if (($i && $i.id === channel.value.userId) || iAmModerator || ($i && channel.value.collaboratorIds?.includes($i.id))) {
 			headerItems.push({
 				icon: 'ti ti-settings',
 				text: i18n.ts.edit,

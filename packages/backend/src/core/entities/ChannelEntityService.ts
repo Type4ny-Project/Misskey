@@ -120,6 +120,7 @@ export class ChannelEntityService {
 			isSensitive: channel.isSensitive,
 			allowRenoteToExternal: channel.allowRenoteToExternal,
 			isLocalOnly: channel.isLocalOnly,
+			collaboratorIds: channel.collaboratorIds,
 
 			...(me ? {
 				isFollowing,

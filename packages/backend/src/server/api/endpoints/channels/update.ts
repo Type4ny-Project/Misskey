@@ -120,21 +120,24 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				banner = null;
 			}
 
+			let validatedCollaboratorIds: string[] | undefined = undefined;
 			if (ps.collaboratorIds !== undefined) {
 				if (channel.userId !== me.id && !iAmModerator) {
 					throw new ApiError(meta.errors.accessDenied);
 				}
-				const users = await this.usersRepository.findBy({
-					id: In(ps.collaboratorIds),
-				});
-				if (users.length !== ps.collaboratorIds.length) {
-					throw new ApiError({
-						message: 'One or more collaborator user IDs are invalid.',
-						code: 'INVALID_COLLABORATOR_USER_IDS',
-						id: '3e7c9a2b-4f8c-4d1e-9b7a-3f6e8c7d9a1b',
+				if (ps.collaboratorIds.length > 0) {
+					const users = await this.usersRepository.findBy({
+						id: In(ps.collaboratorIds),
 					});
+					if (users.length !== ps.collaboratorIds.length) {
+						throw new ApiError({
+							message: 'One or more collaborator user IDs are invalid.',
+							code: 'INVALID_COLLABORATOR_USER_IDS',
+							id: '3e7c9a2b-4f8c-4d1e-9b7a-3f6e8c7d9a1b',
+						});
+					}
 				}
-				await this.channelService.setCollaborators(channel, ps.collaboratorIds);
+				validatedCollaboratorIds = ps.collaboratorIds;
 			}
 
 			if (ps.isLocalOnly !== undefined) channel.isLocalOnly = ps.isLocalOnly;
@@ -153,6 +156,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...(typeof ps.allowRenoteToExternal === 'boolean' ? { allowRenoteToExternal: ps.allowRenoteToExternal } : {}),
 				...(ps.isLocalOnly !== undefined ? { isLocalOnly: ps.isLocalOnly } : {}),
 				...(ps.transferAdminUserId !== undefined && channel.userId === ps.transferAdminUserId ? { userId: ps.transferAdminUserId } : {}),
+				...(validatedCollaboratorIds !== undefined ? { collaboratorIds: validatedCollaboratorIds } : {}),
 			});
 
 			return await this.channelEntityService.pack(channel.id, me);

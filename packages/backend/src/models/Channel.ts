@@ -105,9 +105,8 @@ export class MiChannel {
 	})
 	public isLocalOnly: boolean;
 
-	@Column({
-		...id(),
-		array: true, default: '{}',
+	@Column('varchar', {
+		array: true, length: 64, default: '{}',
 		comment: 'Collaborator user IDs.',
 	})
 	public collaboratorIds: MiUser['id'][];

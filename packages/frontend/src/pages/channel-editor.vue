@@ -161,7 +161,12 @@ async function fetchChannel() {
 	color.value = result.color;
 	allowRenoteToExternal.value = result.allowRenoteToExternal;
 	isLocalOnly.value = result.isLocalOnly;
-	collaboratorUsers.value = result.collaboratorUsers || [];
+	if (result.collaboratorIds && result.collaboratorIds.length > 0) {
+		const users = await misskeyApi('users/show', { userIds: result.collaboratorIds });
+		collaboratorUsers.value = Array.isArray(users) ? users : [users];
+	} else {
+		collaboratorUsers.value = [];
+	}
 	isRoot.value = ($i && $i.id === result.userId) || iAmModerator;
 
 	channel.value = result;

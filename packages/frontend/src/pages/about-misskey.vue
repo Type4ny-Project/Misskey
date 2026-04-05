@@ -28,6 +28,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<FormSection>
 					<div class="_gaps_s">
+						<FormLink to="https://github.com/Type4ny-Project/Misskey" external>
+							<template #icon><i class="ti ti-code"></i></template>
+							{{ i18n.ts._aboutMisskey.source }} (Type4ny)
+							<template #suffix>GitHub</template>
+						</FormLink>
 						<FormLink to="https://github.com/misskey-dev/misskey" external>
 							<template #icon><i class="ti ti-code"></i></template>
 							{{ i18n.ts._aboutMisskey.source }} ({{ i18n.ts._aboutMisskey.original }})
@@ -38,14 +43,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 							{{ i18n.ts._aboutMisskey.translation }}
 							<template #suffix>Crowdin</template>
 						</FormLink>
+						<FormLink to="https://github.com/sponsors/Type4ny-Project" external>
+							<template #icon><i class="ti ti-pig-money"></i></template>
+							{{ i18n.ts._aboutMisskey.donate }} (Type4ny)
+							<template #suffix>GitHub Sponsors</template>
+						</FormLink>
 						<FormLink to="https://www.patreon.com/syuilo" external>
 							<template #icon><i class="ti ti-pig-money"></i></template>
-							{{ i18n.ts._aboutMisskey.donate }}
+							{{ i18n.ts._aboutMisskey.donate }} ({{ i18n.ts._aboutMisskey.original }})
 							<template #suffix>Patreon</template>
 						</FormLink>
 					</div>
 				</FormSection>
-				<FormSection v-if="instance.repositoryUrl !== 'https://github.com/misskey-dev/misskey'">
+				<FormSection v-if="instance.repositoryUrl !== 'https://github.com/misskey-dev/misskey' && instance.repositoryUrl !== 'https://github.com/Type4ny-Project/Misskey'">
 					<div class="_gaps_s">
 						<MkInfo>
 							{{ i18n.tsx._aboutMisskey.thisIsModifiedVersion({ name: instance.name ?? host }) }}

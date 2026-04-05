@@ -5141,6 +5141,7 @@ export type components = {
             notesCount: number;
             isSensitive: boolean;
             allowRenoteToExternal: boolean;
+            isLocalOnly: boolean;
             isFollowing?: boolean;
             isFavorited?: boolean;
             isMuting?: boolean;

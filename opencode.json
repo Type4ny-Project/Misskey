@@ -1,0 +1,71 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "planner": {
+      "description": "汎用設計書オーケストレーター。「○○の設計書を作って」で分析からドキュメント生成まで自律実行する。",
+      "mode": "primary",
+      "model": "github-copilot/claude-opus-4.6",
+      "temperature": 0.2,
+      "color": "#6366f1",
+      "permission": {
+        "task": {
+          "*": "deny",
+          "db-analyzer": "allow",
+          "api-analyzer": "allow",
+          "impact-analyzer": "allow",
+          "reviewer": "allow",
+          "explore": "allow",
+          "general": "allow"
+        }
+      }
+    },
+    "db-analyzer": {
+      "description": "Misskey の DB 構造を分析するサブエージェント（TypeORM エンティティ、マイグレーション、クエリ）",
+      "mode": "subagent",
+      "model": "github-copilot/claude-opus-4.6",
+      "temperature": 0.1,
+      "hidden": true,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "api-analyzer": {
+      "description": "Misskey の API エンドポイント、認証、ストリーミング、ActivityPub を分析するサブエージェント",
+      "mode": "subagent",
+      "model": "github-copilot/claude-opus-4.6",
+      "temperature": 0.1,
+      "hidden": true,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "impact-analyzer": {
+      "description": "Misskey コードベース全体の影響範囲を横断調査するサブエージェント",
+      "mode": "subagent",
+      "model": "github-copilot/claude-opus-4.6",
+      "temperature": 0.1,
+      "hidden": true,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "reviewer": {
+      "description": "Misskey のコードをレビューするサブエージェント（セキュリティ、パフォーマンス、規約）",
+      "mode": "subagent",
+      "model": "github-copilot/claude-opus-4.6",
+      "temperature": 0.1,
+      "hidden": true,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    }
+  }
+}

@@ -92,7 +92,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private channelFollowingService: ChannelFollowingService,
 		private fanoutTimelineEndpointService: FanoutTimelineEndpointService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
+			const tenantHost = tenantContext!.tenantHost;
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate!) : null);
 			const sinceId = ps.sinceId ?? (ps.sinceDate ? this.idService.gen(ps.sinceDate!) : null);
 
@@ -113,6 +114,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					includeLocalRenotes: ps.includeLocalRenotes,
 					withFiles: ps.withFiles,
 					withReplies: ps.withReplies,
+					tenantHost,
 				}, me);
 
 				process.nextTick(() => {
@@ -159,6 +161,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				useDbFallback: this.serverSettings.enableFanoutTimelineDbFallback,
 				alwaysIncludeMyNotes: true,
 				excludePureRenotes: !ps.withRenotes,
+				tenantHost,
 				noteFilter: note => {
 					if (note.reply && note.reply.visibility === 'followers') {
 						if (!Object.hasOwn(followings, note.reply.userId) && note.reply.userId !== me.id) return false;
@@ -175,6 +178,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					includeLocalRenotes: ps.includeLocalRenotes,
 					withFiles: ps.withFiles,
 					withReplies: ps.withReplies,
+					tenantHost,
 				}, me),
 			});
 
@@ -195,6 +199,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		includeLocalRenotes: boolean,
 		withFiles: boolean,
 		withReplies: boolean,
+		tenantHost: string,
 	}, me: MiLocalUser) {
 		const followees = await this.userFollowingService.getFollowees(me.id);
 
@@ -210,10 +215,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (followees.length > 0) {
 					const meOrFolloweeIds = [me.id, ...followees.map(f => f.followeeId)];
 					qb.where('note.userId IN (:...meOrFolloweeIds)', { meOrFolloweeIds: meOrFolloweeIds });
-					qb.orWhere('(note.visibility = \'public\') AND (note.userHost IS NULL)');
+					qb.orWhere('(note.visibility = \'public\') AND (note.userHost = :tenantHost)', { tenantHost: ps.tenantHost });
 				} else {
 					qb.where('note.userId = :meId', { meId: me.id });
-					qb.orWhere('(note.visibility = \'public\') AND (note.userHost IS NULL)');
+					qb.orWhere('(note.visibility = \'public\') AND (note.userHost = :tenantHost)', { tenantHost: ps.tenantHost });
 				}
 			}))
 			.innerJoinAndSelect('note.user', 'user')

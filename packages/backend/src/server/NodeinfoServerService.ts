@@ -15,6 +15,7 @@ import UsersChart from '@/core/chart/charts/users.js';
 import { DEFAULT_POLICIES } from '@/core/RoleService.js';
 import { SystemAccountService } from '@/core/SystemAccountService.js';
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
+import type { TenantContext } from '@/core/TenantService.js';
 
 const nodeinfo2_1path = '/nodeinfo/2.1';
 const nodeinfo2_0path = '/nodeinfo/2.0';
@@ -35,13 +36,14 @@ export class NodeinfoServerService {
 	}
 
 	@bindThis
-	public getLinks() {
+	public getLinks(tenantContext?: TenantContext) {
+		const baseUrl = tenantContext?.tenantUrl ?? this.config.url;
 		return [{
 			rel: 'http://nodeinfo.diaspora.software/ns/schema/2.1',
-			href: this.config.url + nodeinfo2_1path,
+			href: baseUrl + nodeinfo2_1path,
 		}, {
 			rel: 'http://nodeinfo.diaspora.software/ns/schema/2.0',
-			href: this.config.url + nodeinfo2_0path,
+			href: baseUrl + nodeinfo2_0path,
 		}];
 	}
 

@@ -50,7 +50,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private noteEntityService: NoteEntityService,
 		private queryService: QueryService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const query = this.queryService.makePaginationQuery(this.notesRepository.createQueryBuilder('note'), ps.sinceId, ps.untilId, ps.sinceDate, ps.untilDate)
 				.andWhere('note.visibility = \'public\'')
 				.andWhere('note.localOnly = FALSE')
@@ -61,7 +61,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				.leftJoinAndSelect('renote.user', 'renoteUser');
 
 			if (ps.local) {
-				query.andWhere('note.userHost IS NULL');
+				query.andWhere('note.userHost = :tenantHost', { tenantHost: tenantContext!.tenantHost });
 			}
 
 			if (ps.reply !== undefined) {

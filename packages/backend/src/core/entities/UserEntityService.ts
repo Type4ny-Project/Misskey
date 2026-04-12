@@ -48,26 +48,14 @@ import type { AnnouncementService } from '@/core/AnnouncementService.js';
 import type { CustomEmojiService } from '@/core/CustomEmojiService.js';
 import { AvatarDecorationService } from '@/core/AvatarDecorationService.js';
 import { ChatService } from '@/core/ChatService.js';
+import { TenantService } from '@/core/TenantService.js';
+import { RequestTenantContextService } from '@/core/RequestTenantContextService.js';
 import type { OnModuleInit } from '@nestjs/common';
 import type { NoteEntityService } from './NoteEntityService.js';
 import type { PageEntityService } from './PageEntityService.js';
 
 const Ajv = _Ajv.default;
 const ajv = new Ajv();
-
-function isLocalUser(user: MiUser): user is MiLocalUser;
-function isLocalUser<T extends { host: MiUser['host'] }>(user: T): user is (T & { host: null; });
-
-function isLocalUser(user: MiUser | { host: MiUser['host'] }): boolean {
-	return user.host == null;
-}
-
-function isRemoteUser(user: MiUser): user is MiRemoteUser;
-function isRemoteUser<T extends { host: MiUser['host'] }>(user: T): user is (T & { host: string; });
-
-function isRemoteUser(user: MiUser | { host: MiUser['host'] }): boolean {
-	return !isLocalUser(user);
-}
 
 export type UserRelation = {
 	id: MiUser['id']
@@ -136,6 +124,9 @@ export class UserEntityService implements OnModuleInit {
 
 		@Inject(DI.userMemosRepository)
 		private userMemosRepository: UserMemoRepository,
+
+		private tenantService: TenantService,
+		private requestTenantContextService: RequestTenantContextService,
 	) {
 	}
 
@@ -161,8 +152,22 @@ export class UserEntityService implements OnModuleInit {
 	public validateBirthday = ajv.compile(birthdaySchema);
 	//#endregion
 
-	public isLocalUser = isLocalUser;
-	public isRemoteUser = isRemoteUser;
+	public isLocalUser(user: MiUser): user is MiLocalUser;
+	public isLocalUser<T extends { host: MiUser['host']; uri?: MiUser['uri'] | null }>(user: T): user is (T & { uri: null; });
+	public isLocalUser(user: MiUser | { host: MiUser['host']; uri?: MiUser['uri'] | null }): boolean {
+		const tenantHost = this.requestTenantContextService.getTenantHost();
+		if ((user.uri ?? null) != null) return false;
+		if (tenantHost) {
+			return this.tenantService.isLocalToTenant(user.host, tenantHost);
+		}
+		return user.host == null || this.tenantService.isManagedHost(user.host);
+	}
+
+	public isRemoteUser(user: MiUser): user is MiRemoteUser;
+	public isRemoteUser<T extends { host: MiUser['host']; uri?: MiUser['uri'] | null }>(user: T): user is (T & { host: string; uri: string; });
+	public isRemoteUser(user: MiUser | { host: MiUser['host']; uri?: MiUser['uri'] | null }): boolean {
+		return !this.isLocalUser(user);
+	}
 
 	@bindThis
 	public async getRelation(me: MiUser['id'], target: MiUser['id']): Promise<UserRelation> {
@@ -383,22 +388,23 @@ export class UserEntityService implements OnModuleInit {
 
 	@bindThis
 	public getIdenticonUrl(user: MiUser): string {
-		if ((user.host == null || user.host === this.config.host) && user.username.includes('.') && this.meta.iconUrl) { // ローカルのシステムアカウントの場合
+		if ((user.host == null || this.tenantService.isManagedHost(user.host)) && user.username.includes('.') && this.meta.iconUrl) { // ローカルのシステムアカウントの場合
 			return this.meta.iconUrl;
 		} else {
-			return `${this.config.url}/identicon/${user.username.toLowerCase()}@${user.host ?? this.config.host}`;
+			const tenantHost = this.tenantService.tenantHostFor(user.host);
+			return `${this.tenantService.tenantUrlFor(user.host)}/identicon/${user.username.toLowerCase()}@${tenantHost}`;
 		}
 	}
 
 	@bindThis
 	public getUserUri(user: MiLocalUser | MiPartialLocalUser | MiRemoteUser | MiPartialRemoteUser): string {
 		return this.isRemoteUser(user)
-			? user.uri : this.genLocalUserUri(user.id);
+			? user.uri : this.genLocalUserUri(user.id, user.host);
 	}
 
 	@bindThis
-	public genLocalUserUri(userId: string): string {
-		return `${this.config.url}/users/${userId}`;
+	public genLocalUserUri(userId: string, host?: string | null): string {
+		return `${this.tenantService.tenantUrlFor(host)}/users/${userId}`;
 	}
 
 	public async pack<S extends 'MeDetailed' | 'UserDetailedNotMe' | 'UserDetailed' | 'UserLite' = 'UserLite'>(
@@ -407,6 +413,7 @@ export class UserEntityService implements OnModuleInit {
 		options?: {
 			schema?: S,
 			includeSecrets?: boolean,
+			tenantHost?: string,
 			userProfile?: MiUserProfile,
 			userRelations?: Map<MiUser['id'], UserRelation>,
 			userMemos?: Map<MiUser['id'], string | null>,
@@ -417,6 +424,7 @@ export class UserEntityService implements OnModuleInit {
 			schema: 'UserLite',
 			includeSecrets: false,
 		}, options);
+		const currentTenantHost = opts.tenantHost ?? this.requestTenantContextService.getTenantHost();
 
 		const user = typeof src === 'object' ? src : await this.usersRepository.findOneByOrFail({ id: src });
 
@@ -492,6 +500,8 @@ export class UserEntityService implements OnModuleInit {
 			name: user.name,
 			username: user.username,
 			host: user.host,
+			isLocal: currentTenantHost ? this.tenantService.isLocalToTenant(user.host, currentTenantHost) : this.isLocalUser(user),
+			isManaged: this.tenantService.isManagedHost(user.host),
 			avatarUrl: (user.avatarId == null ? null : user.avatarUrl) ?? this.getIdenticonUrl(user),
 			avatarBlurhash: (user.avatarId == null ? null : user.avatarBlurhash),
 			avatarDecorations: user.avatarDecorations.length > 0 ? this.avatarDecorationService.getAll().then(decorations => user.avatarDecorations.filter(ud => decorations.some(d => d.id === ud.id)).map(ud => ({
@@ -508,7 +518,7 @@ export class UserEntityService implements OnModuleInit {
 			// FIXME https://github.com/Type4ny-Project/Misskey/issues/1
 			makeNotesFollowersOnlyBefore: user.makeNotesFollowersOnlyBefore ?? undefined,
 			makeNotesHiddenBefore: user.makeNotesHiddenBefore ?? undefined,
-			instance: user.host ? this.federatedInstanceService.federatedInstanceCache.fetch(user.host).then(instance => instance ? {
+			instance: this.isRemoteUser(user) ? this.federatedInstanceService.federatedInstanceCache.fetch(user.host).then(instance => instance ? {
 				name: instance.name,
 				softwareName: instance.softwareName,
 				softwareVersion: instance.softwareVersion,
@@ -516,10 +526,10 @@ export class UserEntityService implements OnModuleInit {
 				faviconUrl: instance.faviconUrl,
 				themeColor: instance.themeColor,
 			} : undefined) : undefined,
-			emojis: this.customEmojiService.populateEmojis(user.emojis, user.host),
+			emojis: this.customEmojiService.populateEmojis(user.emojis, this.isRemoteUser(user) ? user.host : null),
 			onlineStatus: this.getOnlineStatus(user),
 			// パフォーマンス上の理由で、明示的に設定しない場合はローカルユーザーのみ取得
-			badgeRoles: (this.meta.showRoleBadgesOfRemoteUsers || user.host == null) ? this.roleService.getUserBadgeRoles(user.id).then((rs) => rs
+			badgeRoles: (this.meta.showRoleBadgesOfRemoteUsers || this.isLocalUser(user)) ? this.roleService.getUserBadgeRoles(user.id).then((rs) => rs
 				.filter((r) => r.isPublic || iAmModerator)
 				.sort((a, b) => b.displayOrder - a.displayOrder)
 				.map((r) => ({
@@ -669,6 +679,7 @@ export class UserEntityService implements OnModuleInit {
 		options?: {
 			schema?: S,
 			includeSecrets?: boolean,
+			tenantHost?: string,
 		},
 	): Promise<Packed<S>[]> {
 		// -- IDのみの要素を補完して完全なエンティティ一覧を作る

@@ -11,9 +11,10 @@ import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { IdService } from '@/core/IdService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { UtilityService } from '@/core/UtilityService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { bindThis } from '@/decorators.js';
 import { DI } from '@/di-symbols.js';
-import { MemoryKVCache, RedisSingleCache } from '@/misc/cache.js';
+import { MemoryKVCache, RedisKVCache } from '@/misc/cache.js';
 import { sqlLikeEscape } from '@/misc/sql-like-escape.js';
 import type { EmojisRepository, MiRole, MiUser } from '@/models/_.js';
 import type { MiEmoji } from '@/models/Emoji.js';
@@ -60,7 +61,7 @@ export type FetchEmojisSortKeys = typeof fetchEmojisSortKeys[number];
 @Injectable()
 export class CustomEmojiService implements OnApplicationShutdown {
 	private emojisCache: MemoryKVCache<MiEmoji | null>;
-	public localEmojisCache: RedisSingleCache<Map<string, MiEmoji>>;
+	private localEmojisCache: RedisKVCache<Map<string, MiEmoji>>;
 
 	constructor(
 		@Inject(DI.redis)
@@ -68,6 +69,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 		@Inject(DI.emojisRepository)
 		private emojisRepository: EmojisRepository,
 		private utilityService: UtilityService,
+		private tenantService: TenantService,
 		private idService: IdService,
 		private emojiEntityService: EmojiEntityService,
 		private moderationLogService: ModerationLogService,
@@ -75,10 +77,10 @@ export class CustomEmojiService implements OnApplicationShutdown {
 	) {
 		this.emojisCache = new MemoryKVCache<MiEmoji | null>(1000 * 60 * 60 * 12); // 12h
 
-		this.localEmojisCache = new RedisSingleCache<Map<string, MiEmoji>>(this.redisClient, 'localEmojis', {
+		this.localEmojisCache = new RedisKVCache<Map<string, MiEmoji>>(this.redisClient, 'localEmojis', {
 			lifetime: 1000 * 60 * 30, // 30m
 			memoryCacheLifetime: 1000 * 60 * 3, // 3m
-			fetcher: () => this.emojisRepository.find({ where: { host: IsNull() } }).then(emojis => new Map(emojis.map(emoji => [emoji.name, emoji]))),
+			fetcher: (host) => this.emojisRepository.find({ where: { host } }).then(emojis => new Map(emojis.map(emoji => [emoji.name, emoji]))),
 			toRedisConverter: (value) => JSON.stringify(Array.from(value.values())),
 			fromRedisConverter: (value) => {
 				return new Map(JSON.parse(value).map((x: Serialized<MiEmoji>) => [x.name, {
@@ -87,6 +89,22 @@ export class CustomEmojiService implements OnApplicationShutdown {
 				}]));
 			},
 		});
+	}
+
+	@bindThis
+	public async fetchLocalEmojis(host?: string | null): Promise<Map<string, MiEmoji>> {
+		return await this.localEmojisCache.fetch(this.tenantService.tenantHostFor(host));
+	}
+
+	@bindThis
+	public async refreshLocalEmojis(host?: string | null): Promise<void> {
+		await this.localEmojisCache.refresh(this.tenantService.tenantHostFor(host));
+	}
+
+	@bindThis
+	public async refreshLocalEmojiHosts(hosts: Array<string | null | undefined>): Promise<void> {
+		const managedHosts = new Set(hosts.map(host => this.tenantService.tenantHostFor(host)).filter(host => this.tenantService.isManagedHost(host)));
+		await Promise.all(Array.from(managedHosts, host => this.refreshLocalEmojis(host)));
 	}
 
 	@bindThis
@@ -119,8 +137,8 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			roleIdsThatCanBeUsedThisEmojiAsReaction: data.roleIdsThatCanBeUsedThisEmojiAsReaction,
 		});
 
-		if (data.host == null) {
-			this.localEmojisCache.refresh();
+		if (data.host == null || this.tenantService.isManagedHost(data.host)) {
+			await this.refreshLocalEmojis(data.host);
 
 			this.globalEventService.publishBroadcastStream('emojiAdded', {
 				emoji: await this.emojiEntityService.packDetailed(emoji.id),
@@ -164,7 +182,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 		// IDと絵文字名が両方指定されている場合は絵文字名の変更を行うため重複チェックが必要
 		const doNameUpdate = data.id && data.name && (data.name !== emoji.name);
 		if (doNameUpdate) {
-			const isDuplicate = await this.checkDuplicate(data.name!);
+			const isDuplicate = await this.checkDuplicate(data.name!, emoji.host);
 			if (isDuplicate) return 'SAME_NAME_EMOJI_EXISTS';
 		}
 
@@ -182,7 +200,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			roleIdsThatCanBeUsedThisEmojiAsReaction: data.roleIdsThatCanBeUsedThisEmojiAsReaction ?? undefined,
 		});
 
-		this.localEmojisCache.refresh();
+		await this.refreshLocalEmojis(emoji.host);
 
 		const packed = await this.emojiEntityService.packDetailed(emoji.id);
 
@@ -224,7 +242,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			});
 		}
 
-		this.localEmojisCache.refresh();
+		await this.refreshLocalEmojiHosts(emojis.map(emoji => emoji.host));
 
 		this.globalEventService.publishBroadcastStream('emojiUpdated', {
 			emojis: await this.emojiEntityService.packDetailedMany(ids),
@@ -240,7 +258,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			aliases: aliases,
 		});
 
-		this.localEmojisCache.refresh();
+		await this.refreshLocalEmojiHosts((await this.emojisRepository.findBy({ id: In(ids) })).map(emoji => emoji.host));
 
 		this.globalEventService.publishBroadcastStream('emojiUpdated', {
 			emojis: await this.emojiEntityService.packDetailedMany(ids),
@@ -260,7 +278,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			});
 		}
 
-		this.localEmojisCache.refresh();
+		await this.refreshLocalEmojiHosts(emojis.map(emoji => emoji.host));
 
 		this.globalEventService.publishBroadcastStream('emojiUpdated', {
 			emojis: await this.emojiEntityService.packDetailedMany(ids),
@@ -276,7 +294,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			category: category,
 		});
 
-		this.localEmojisCache.refresh();
+		await this.refreshLocalEmojiHosts((await this.emojisRepository.findBy({ id: In(ids) })).map(emoji => emoji.host));
 
 		this.globalEventService.publishBroadcastStream('emojiUpdated', {
 			emojis: await this.emojiEntityService.packDetailedMany(ids),
@@ -292,7 +310,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			license: license,
 		});
 
-		this.localEmojisCache.refresh();
+		await this.refreshLocalEmojiHosts((await this.emojisRepository.findBy({ id: In(ids) })).map(emoji => emoji.host));
 
 		this.globalEventService.publishBroadcastStream('emojiUpdated', {
 			emojis: await this.emojiEntityService.packDetailedMany(ids),
@@ -305,7 +323,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 
 		await this.emojisRepository.delete(emoji.id);
 
-		this.localEmojisCache.refresh();
+		await this.refreshLocalEmojis(emoji.host);
 
 		this.globalEventService.publishBroadcastStream('emojiDeleted', {
 			emojis: [await this.emojiEntityService.packDetailed(emoji)],
@@ -336,7 +354,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			}
 		}
 
-		this.localEmojisCache.refresh();
+		await this.refreshLocalEmojiHosts(emojis.map(emoji => emoji.host));
 
 		this.globalEventService.publishBroadcastStream('emojiDeleted', {
 			emojis: await this.emojiEntityService.packDetailedMany(emojis),
@@ -437,8 +455,8 @@ export class CustomEmojiService implements OnApplicationShutdown {
 	 * @param name 絵文字名
 	 */
 	@bindThis
-	public checkDuplicate(name: string): Promise<boolean> {
-		return this.emojisRepository.exists({ where: { name, host: IsNull() } });
+	public checkDuplicate(name: string, host?: string | null): Promise<boolean> {
+		return this.emojisRepository.exists({ where: { name, host: this.tenantService.tenantHostFor(host) } });
 	}
 
 	@bindThis
@@ -447,8 +465,8 @@ export class CustomEmojiService implements OnApplicationShutdown {
 	}
 
 	@bindThis
-	public getEmojiByName(name: string): Promise<MiEmoji | null> {
-		return this.emojisRepository.findOneBy({ name, host: IsNull() });
+	public getEmojiByName(name: string, host?: string | null): Promise<MiEmoji | null> {
+		return this.emojisRepository.findOneBy({ name, host: this.tenantService.tenantHostFor(host) });
 	}
 
 	@bindThis
@@ -500,7 +518,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 
 			switch (true) {
 				case q.hostType === 'local': {
-					builder.andWhere('emoji.host IS NULL');
+					builder.andWhere('EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = emoji.host)');
 					break;
 				}
 				case q.hostType === 'remote': {
@@ -508,7 +526,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 						// noIndexScan
 						builder.andWhere('emoji.host ~~ ANY(ARRAY[:...host])', { host: multipleWordsToQuery(q.host) });
 					} else {
-						builder.andWhere('emoji.host IS NOT NULL');
+						builder.andWhere('NOT EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = emoji.host)');
 					}
 					break;
 				}

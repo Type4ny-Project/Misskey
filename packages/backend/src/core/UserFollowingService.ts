@@ -280,7 +280,7 @@ export class UserFollowingService implements OnModuleInit {
 		if (alreadyFollowed) return;
 
 		// 通知を作成
-		if (follower.host === null) {
+		if (this.userEntityService.isLocalUser(follower)) {
 			const profile = await this.cacheService.userProfileCache.fetch(followee.id);
 
 			this.notificationService.createNotification(follower.id, 'followRequestAccepted', {
@@ -536,7 +536,7 @@ export class UserFollowingService implements OnModuleInit {
 		}
 
 		if (this.userEntityService.isLocalUser(follower) && this.userEntityService.isRemoteUser(followee)) {
-			const content = this.apRendererService.addContext(this.apRendererService.renderFollow(follower as MiPartialLocalUser, followee as MiPartialRemoteUser, requestId ?? `${this.config.url}/follows/${followRequest.id}`));
+			const content = this.apRendererService.addContext(this.apRendererService.renderFollow(follower as MiPartialLocalUser, followee as MiPartialRemoteUser, requestId ?? `${this.userEntityService.genLocalUserUri(follower.id, follower.host)}/follows/${followRequest.id}`.replace(`/users/${follower.id}/follows/`, `/follows/`)));
 			this.queueService.deliver(follower, content, followee.inbox, false);
 		}
 	}

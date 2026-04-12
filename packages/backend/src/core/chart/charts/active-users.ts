@@ -47,7 +47,7 @@ export default class ActiveUsersChart extends Chart<typeof schema> { // eslint-d
 	}
 
 	@bindThis
-	public async read(user: { id: MiUser['id'], host: null }): Promise<void> {
+	public async read(user: { id: MiUser['id'], host: MiUser['host'] }): Promise<void> {
 		const createdAt = this.idService.parse(user.id).date;
 		await this.commit({
 			'read': [user.id],
@@ -61,7 +61,7 @@ export default class ActiveUsersChart extends Chart<typeof schema> { // eslint-d
 	}
 
 	@bindThis
-	public async write(user: { id: MiUser['id'], host: null }): Promise<void> {
+	public async write(user: { id: MiUser['id'], host: MiUser['host'] }): Promise<void> {
 		await this.commit({
 			'write': [user.id],
 		});

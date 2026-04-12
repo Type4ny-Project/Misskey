@@ -14,6 +14,7 @@ import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import { bindThis } from '@/decorators.js';
 import { IdService } from '@/core/IdService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { MfmService } from "@/core/MfmService.js";
 import { parse as mfmParse } from 'mfm-js';
 
@@ -35,14 +36,17 @@ export class FeedService {
 		private userEntityService: UserEntityService,
 		private driveFileEntityService: DriveFileEntityService,
 		private idService: IdService,
+		private tenantService: TenantService,
 		private mfmService: MfmService,
 	) {
 	}
 
 	@bindThis
 	public async packFeed(user: MiUser) {
+		const tenantUrl = this.tenantService.tenantUrlFor(user.host);
+		const tenantHost = this.tenantService.tenantHostFor(user.host);
 		const author = {
-			link: `${this.config.url}/@${user.username}`,
+			link: `${tenantUrl}/@${user.username}`,
 			name: user.name ?? user.username,
 		};
 
@@ -60,7 +64,7 @@ export class FeedService {
 
 		const feed = new Feed({
 			id: author.link,
-			title: `${author.name} (@${user.username}@${this.config.host})`,
+			title: `${author.name} (@${user.username}@${tenantHost})`,
 			updated: notes.length !== 0 ? this.idService.parse(notes[0].id).date : undefined,
 			generator: 'Misskey',
 			description: `${user.notesCount} Notes, ${profile.followingVisibility === 'public' ? user.followingCount : '?'} Following, ${profile.followersVisibility === 'public' ? user.followersCount : '?'} Followers${profile.description ? ` · ${profile.description}` : ''}`,
@@ -83,10 +87,10 @@ export class FeedService {
 
 			feed.addItem({
 				title: `New note by ${author.name}`,
-				link: `${this.config.url}/notes/${note.id}`,
+				link: `${tenantUrl}/notes/${note.id}`,
 				date: this.idService.parse(note.id).date,
 				description: note.cw ?? undefined,
-				content: text ? this.mfmService.toHtml(mfmParse(text), JSON.parse(note.mentionedRemoteUsers)) ?? undefined : undefined,
+				content: text ? this.mfmService.toHtml(mfmParse(text), JSON.parse(note.mentionedRemoteUsers), null, note.userHost) ?? undefined : undefined,
 				image: file ? this.driveFileEntityService.getPublicUrl(file) : undefined,
 			});
 		}

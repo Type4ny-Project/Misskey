@@ -4,12 +4,13 @@
  */
 
 import { Injectable, Inject } from '@nestjs/common';
-import { Not, IsNull, DataSource } from 'typeorm';
+import { DataSource } from 'typeorm';
 import * as Redis from 'ioredis';
 import type { NotesRepository } from '@/models/_.js';
 import type { MiNote } from '@/models/Note.js';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
+import { TenantService } from '@/core/TenantService.js';
 import { acquireChartInsertLock } from '@/misc/distributed-lock.js';
 import Chart from '../core.js';
 import { ChartLoggerService } from '../ChartLoggerService.js';
@@ -31,16 +32,19 @@ export default class NotesChart extends Chart<typeof schema> { // eslint-disable
 		@Inject(DI.notesRepository)
 		private notesRepository: NotesRepository,
 
+		private tenantService: TenantService,
 		private chartLoggerService: ChartLoggerService,
 	) {
 		super(db, (k) => acquireChartInsertLock(redisClient, k), chartLoggerService.logger, name, schema);
 	}
 
 	protected async tickMajor(): Promise<Partial<KVs<typeof schema>>> {
-		const [localCount, remoteCount] = await Promise.all([
-			this.notesRepository.countBy({ userHost: IsNull() }),
-			this.notesRepository.countBy({ userHost: Not(IsNull()) }),
+		const [localCountRow, remoteCountRow] = await Promise.all([
+			this.db.query(`SELECT COUNT(*)::int AS count FROM note n WHERE EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = n."userHost")`),
+			this.db.query(`SELECT COUNT(*)::int AS count FROM note n WHERE NOT EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = n."userHost")`),
 		]);
+		const localCount = localCountRow[0]?.count ?? 0;
+		const remoteCount = remoteCountRow[0]?.count ?? 0;
 
 		return {
 			'local.total': localCount,
@@ -54,7 +58,7 @@ export default class NotesChart extends Chart<typeof schema> { // eslint-disable
 
 	@bindThis
 	public async update(note: MiNote, isAdditional: boolean): Promise<void> {
-		const prefix = note.userHost === null ? 'local' : 'remote';
+		const prefix = this.tenantService.isManagedHost(note.userHost) ? 'local' : 'remote';
 
 		await this.commit({
 			[`${prefix}.total`]: isAdditional ? 1 : -1,

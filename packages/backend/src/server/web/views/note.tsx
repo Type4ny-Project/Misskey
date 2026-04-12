@@ -59,9 +59,10 @@ export function NotePage(props: CommonProps<{
 	}
 
 	function metaBlock() {
+		const isLocalUser = props.note.user.isLocal ?? props.note.user.isManaged ?? props.note.user.host == null;
 		return (
 			<>
-				{props.note.user.host != null || isRenote || props.profile.noCrawle ? <meta name="robots" content="noindex" /> : null}
+				{!isLocalUser || isRenote || props.profile.noCrawle ? <meta name="robots" content="noindex" /> : null}
 				{props.profile.preventAiLearning ? (
 					<>
 						<meta name="robots" content="noimageai" />
@@ -74,7 +75,7 @@ export function NotePage(props: CommonProps<{
 
 				{props.federationEnabled ? (
 					<>
-						{props.note.user.host == null ? <link rel="alternate" type="application/activity+json" href={`${props.config.url}/notes/${props.note.id}`} /> : null}
+						{isLocalUser ? <link rel="alternate" type="application/activity+json" href={`${props.instanceUrl}/notes/${props.note.id}`} /> : null}
 						{props.note.uri != null ? <link rel="alternate" type="application/activity+json" href={props.note.uri} /> : null}
 					</>
 				) : null}

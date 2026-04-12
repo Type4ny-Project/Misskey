@@ -4,7 +4,6 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { IsNull } from 'typeorm';
 import vary from 'vary';
 import fastifyAccepts from '@fastify/accepts';
 import { DI } from '@/di-symbols.js';
@@ -78,7 +77,7 @@ export class WellKnownServerService {
 			return XRD({ element: 'Link', attributes: {
 				rel: 'lrdd',
 				type: xrd,
-				template: `${this.config.url}${webFingerPath}?resource={uri}`,
+				template: `${request.tenantContext.tenantUrl}${webFingerPath}?resource={uri}`,
 			} });
 		});
 
@@ -93,7 +92,7 @@ export class WellKnownServerService {
 				links: [{
 					rel: 'lrdd',
 					type: jrd,
-					template: `${this.config.url}${webFingerPath}?resource={uri}`,
+					template: `${request.tenantContext.tenantUrl}${webFingerPath}?resource={uri}`,
 				}],
 			};
 		});
@@ -104,11 +103,11 @@ export class WellKnownServerService {
 				return;
 			}
 
-			return { links: this.nodeinfoServerService.getLinks() };
+			return { links: this.nodeinfoServerService.getLinks(request.tenantContext) };
 		});
 
-		fastify.get('/.well-known/oauth-authorization-server', async () => {
-			return this.oauth2ProviderService.generateRFC8414();
+		fastify.get('/.well-known/oauth-authorization-server', async (request) => {
+			return this.oauth2ProviderService.generateRFC8414(request.tenantContext);
 		});
 
 		/* TODO
@@ -124,22 +123,22 @@ fastify.get('/.well-known/change-password', async (request, reply) => {
 
 			const fromId = (id: MiUser['id']): FindOptionsWhere<MiUser> => ({
 				id,
-				host: IsNull(),
+				host: request.tenantContext.tenantHost,
 				isSuspended: false,
 			});
 
 			const generateQuery = (resource: string): FindOptionsWhere<MiUser> | number =>
-				resource.startsWith(`${this.config.url.toLowerCase()}/users/`) ?
+				resource.startsWith(`${request.tenantContext.tenantUrl.toLowerCase()}/users/`) ?
 					fromId(resource.split('/').pop()!) :
 					fromAcct(Acct.parse(
-						resource.startsWith(`${this.config.url.toLowerCase()}/@`) ? resource.split('/').pop()! :
+						resource.startsWith(`${request.tenantContext.tenantUrl.toLowerCase()}/@`) ? resource.split('/').pop()! :
 						resource.startsWith('acct:') ? resource.slice('acct:'.length) :
 						resource));
 
 			const fromAcct = (acct: Acct.Acct): FindOptionsWhere<MiUser> | number =>
-				!acct.host || acct.host === this.config.host.toLowerCase() ? {
+				!acct.host || acct.host === request.tenantContext.tenantHost.toLowerCase() ? {
 					usernameLower: acct.username.toLowerCase(),
-					host: IsNull(),
+					host: request.tenantContext.tenantHost,
 					isSuspended: false,
 				} : 422;
 
@@ -162,20 +161,20 @@ fastify.get('/.well-known/change-password', async (request, reply) => {
 				return;
 			}
 
-			const subject = `acct:${user.username}@${this.config.host}`;
+			const subject = `acct:${user.username}@${request.tenantContext.tenantHost}`;
 			const self = {
 				rel: 'self',
 				type: 'application/activity+json',
-				href: this.userEntityService.genLocalUserUri(user.id),
+				href: this.userEntityService.genLocalUserUri(user.id, user.host),
 			};
 			const profilePage = {
 				rel: 'http://webfinger.net/rel/profile-page',
 				type: 'text/html',
-				href: `${this.config.url}/@${user.username}`,
+				href: `${request.tenantContext.tenantUrl}/@${user.username}`,
 			};
 			const subscribe = {
 				rel: 'http://ostatus.org/schema/1.0/subscribe',
-				template: `${this.config.url}/authorize-follow?acct={uri}`,
+				template: `${request.tenantContext.tenantUrl}/authorize-follow?acct={uri}`,
 			};
 
 			vary(reply.raw, 'Accept');

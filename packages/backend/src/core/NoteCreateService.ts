@@ -49,6 +49,7 @@ import { RoleService } from '@/core/RoleService.js';
 import { SearchService } from '@/core/SearchService.js';
 import { FeaturedService } from '@/core/FeaturedService.js';
 import { FanoutTimelineService } from '@/core/FanoutTimelineService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { UserBlockingService } from '@/core/UserBlockingService.js';
 import { isReply } from '@/misc/is-reply.js';
@@ -221,6 +222,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 		private perUserNotesChart: PerUserNotesChart,
 		private activeUsersChart: ActiveUsersChart,
 		private instanceChart: InstanceChart,
+		private tenantService: TenantService,
 		private utilityService: UtilityService,
 		private userBlockingService: UserBlockingService,
 		private cacheService: CacheService,
@@ -441,7 +443,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 
 		const inSilencedInstance = this.utilityService.isSilencedHost(this.meta.silencedHosts, user.host);
 
-		if (data.visibility === 'public' && inSilencedInstance && user.host !== null) {
+		if (data.visibility === 'public' && inSilencedInstance && this.userEntityService.isRemoteUser({ host: user.host, uri: user.host ? 'remote' : null })) {
 			data.visibility = 'home';
 		}
 
@@ -473,7 +475,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 
 		// Check blocking
 		if (this.isRenote(data) && !this.isQuote(data)) {
-			if (data.renote.userHost === null) {
+			if (this.utilityService.isSelfHost(data.renote.userHost)) {
 				if (data.renote.userId !== user.id) {
 					const blocked = await this.userBlockingService.checkBlocked(data.renote.userId, user.id);
 					if (blocked) {
@@ -679,7 +681,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 		isBot: MiUser['isBot'];
 	}, data: Option, silent: boolean, tags: string[], mentionedUsers: MinimumUser[]) {
 		this.notesChart.update(note, true);
-		if (note.visibility !== 'specified' && (this.meta.enableChartsForRemoteUser || (user.host == null))) {
+		if (note.visibility !== 'specified' && (this.meta.enableChartsForRemoteUser || this.userEntityService.isLocalUser({ host: user.host, uri: null }))) {
 			this.perUserNotesChart.update(user, note, true);
 		}
 
@@ -779,7 +781,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 			// If has in reply to note
 			if (data.reply) {
 				// 通知
-				if (data.reply.userHost === null) {
+				if (this.userEntityService.isLocalUser({ host: data.reply.userHost, uri: null })) {
 					const isThreadMuted = await this.noteThreadMutingsRepository.exists({
 						where: {
 							userId: data.reply.userId,
@@ -800,12 +802,12 @@ export class NoteCreateService implements OnApplicationShutdown {
 				const type = this.isQuote(data) ? 'quote' : 'renote';
 
 				// Notify
-				if (data.renote.userHost === null) {
+				if (this.userEntityService.isLocalUser({ host: data.renote.userHost, uri: null })) {
 					nm.push(data.renote.userId, type);
 				}
 
 				// Publish event
-				if ((user.id !== data.renote.userId) && data.renote.userHost === null) {
+				if ((user.id !== data.renote.userId) && this.userEntityService.isLocalUser({ host: data.renote.userHost, uri: null })) {
 					this.globalEventService.publishMainStream(data.renote.userId, 'renote', noteObj);
 					this.webhookService.enqueueUserWebhook(data.renote.userId, 'renote', { note: noteObj });
 				}
@@ -825,13 +827,13 @@ export class NoteCreateService implements OnApplicationShutdown {
 					}
 
 					// 投稿がリプライかつ投稿者がローカルユーザーかつリプライ先の投稿の投稿者がリモートユーザーなら配送
-					if (data.reply && data.reply.userHost !== null) {
+					if (data.reply && data.reply.userHost != null && !this.utilityService.isSelfHost(data.reply.userHost)) {
 						const u = await this.usersRepository.findOneBy({ id: data.reply.userId });
 						if (u && this.userEntityService.isRemoteUser(u)) dm.addDirectRecipe(u);
 					}
 
 					// 投稿がRenoteかつ投稿者がローカルユーザーかつRenote元の投稿の投稿者がリモートユーザーなら配送
-					if (data.renote && data.renote.userHost !== null) {
+					if (data.renote && data.renote.userHost != null && !this.utilityService.isSelfHost(data.renote.userHost)) {
 						const u = await this.usersRepository.findOneBy({ id: data.renote.userId });
 						if (u && this.userEntityService.isRemoteUser(u)) dm.addDirectRecipe(u);
 					}
@@ -906,7 +908,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 					this.featuredService.updateInChannelNotesRanking(renote.channelId, renote.id, 5);
 				}
 			} else {
-				if (renote.visibility === 'public' && renote.userHost == null && renote.replyId == null) {
+				if (renote.visibility === 'public' && this.utilityService.isSelfHost(renote.userHost) && renote.replyId == null) {
 					this.featuredService.updateGlobalNotesRanking(renote.id, 5);
 					this.featuredService.updatePerUserNotesRanking(renote.userId, renote.id, 5);
 				}
@@ -950,7 +952,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 		if (data.localOnly) return null;
 
 		const content = this.isRenote(data) && !this.isQuote(data)
-			? this.apRendererService.renderAnnounce(data.renote.uri ? data.renote.uri : `${this.config.url}/notes/${data.renote.id}`, note)
+			? this.apRendererService.renderAnnounce(data.renote.uri ? data.renote.uri : `${this.tenantService.tenantUrlFor(data.renote.userHost)}/notes/${data.renote.id}`, note)
 			: this.apRendererService.renderCreate(await this.apRendererService.renderNote(note, false), note);
 
 		return this.apRendererService.addContext(content);
@@ -998,9 +1000,9 @@ export class NoteCreateService implements OnApplicationShutdown {
 		const r = this.redisForTimelines.pipeline();
 
 		if (note.channelId) {
-			this.fanoutTimelineService.push(`channelTimeline:${note.channelId}`, note.id, this.config.perChannelMaxNoteCacheCount, r);
+			this.fanoutTimelineService.push(`channelTimeline:${note.channelId}`, note.id, this.config.perChannelMaxNoteCacheCount, r, note.userHost);
 
-			this.fanoutTimelineService.push(`userTimelineWithChannel:${user.id}`, note.id, note.userHost == null ? this.meta.perLocalUserUserTimelineCacheMax : this.meta.perRemoteUserUserTimelineCacheMax, r);
+			this.fanoutTimelineService.push(`userTimelineWithChannel:${user.id}`, note.id, this.utilityService.isSelfHost(note.userHost) ? this.meta.perLocalUserUserTimelineCacheMax : this.meta.perRemoteUserUserTimelineCacheMax, r, note.userHost);
 
 			const channelFollowings = await this.channelFollowingsRepository.find({
 				where: {
@@ -1010,9 +1012,9 @@ export class NoteCreateService implements OnApplicationShutdown {
 			});
 
 			for (const channelFollowing of channelFollowings) {
-				this.fanoutTimelineService.push(`homeTimeline:${channelFollowing.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax, r);
+				this.fanoutTimelineService.push(`homeTimeline:${channelFollowing.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax, r, note.userHost);
 				if (note.fileIds.length > 0) {
-					this.fanoutTimelineService.push(`homeTimelineWithFiles:${channelFollowing.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax / 2, r);
+					this.fanoutTimelineService.push(`homeTimelineWithFiles:${channelFollowing.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax / 2, r, note.userHost);
 				}
 			}
 		} else {
@@ -1022,7 +1024,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 				this.followingsRepository.find({
 					where: {
 						followeeId: user.id,
-						followerHost: IsNull(),
+						followerHost: user.host ?? this.config.host,
 						isFollowerHibernated: false,
 					},
 					select: ['followerId', 'withReplies'],
@@ -1050,9 +1052,9 @@ export class NoteCreateService implements OnApplicationShutdown {
 					if (!following.withReplies) continue;
 				}
 
-				this.fanoutTimelineService.push(`homeTimeline:${following.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax, r);
+				this.fanoutTimelineService.push(`homeTimeline:${following.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax, r, note.userHost);
 				if (note.fileIds.length > 0) {
-					this.fanoutTimelineService.push(`homeTimelineWithFiles:${following.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax / 2, r);
+					this.fanoutTimelineService.push(`homeTimelineWithFiles:${following.followerId}`, note.id, this.meta.perUserHomeTimelineCacheMax / 2, r, note.userHost);
 				}
 			}
 
@@ -1069,42 +1071,42 @@ export class NoteCreateService implements OnApplicationShutdown {
 					if (!userListMembership.withReplies) continue;
 				}
 
-				this.fanoutTimelineService.push(`userListTimeline:${userListMembership.userListId}`, note.id, this.meta.perUserListTimelineCacheMax, r);
+				this.fanoutTimelineService.push(`userListTimeline:${userListMembership.userListId}`, note.id, this.meta.perUserListTimelineCacheMax, r, note.userHost);
 				if (note.fileIds.length > 0) {
-					this.fanoutTimelineService.push(`userListTimelineWithFiles:${userListMembership.userListId}`, note.id, this.meta.perUserListTimelineCacheMax / 2, r);
+					this.fanoutTimelineService.push(`userListTimelineWithFiles:${userListMembership.userListId}`, note.id, this.meta.perUserListTimelineCacheMax / 2, r, note.userHost);
 				}
 			}
 
 			// 自分自身のHTL
-			if (note.userHost == null) {
+			if (this.utilityService.isSelfHost(note.userHost)) {
 				if (note.visibility !== 'specified' || !note.visibleUserIds.some(v => v === user.id)) {
-					this.fanoutTimelineService.push(`homeTimeline:${user.id}`, note.id, this.meta.perUserHomeTimelineCacheMax, r);
+					this.fanoutTimelineService.push(`homeTimeline:${user.id}`, note.id, this.meta.perUserHomeTimelineCacheMax, r, note.userHost);
 					if (note.fileIds.length > 0) {
-						this.fanoutTimelineService.push(`homeTimelineWithFiles:${user.id}`, note.id, this.meta.perUserHomeTimelineCacheMax / 2, r);
+						this.fanoutTimelineService.push(`homeTimelineWithFiles:${user.id}`, note.id, this.meta.perUserHomeTimelineCacheMax / 2, r, note.userHost);
 					}
 				}
 			}
 
 			// 自分自身以外への返信
 			if (isReply(note)) {
-				this.fanoutTimelineService.push(`userTimelineWithReplies:${user.id}`, note.id, note.userHost == null ? this.meta.perLocalUserUserTimelineCacheMax : this.meta.perRemoteUserUserTimelineCacheMax, r);
+				this.fanoutTimelineService.push(`userTimelineWithReplies:${user.id}`, note.id, this.utilityService.isSelfHost(note.userHost) ? this.meta.perLocalUserUserTimelineCacheMax : this.meta.perRemoteUserUserTimelineCacheMax, r, note.userHost);
 
-				if (note.visibility === 'public' && note.userHost == null) {
-					this.fanoutTimelineService.push('localTimelineWithReplies', note.id, 300, r);
-					if (note.replyUserHost == null) {
-						this.fanoutTimelineService.push(`localTimelineWithReplyTo:${note.replyUserId}`, note.id, 300 / 10, r);
+				if (note.visibility === 'public' && this.utilityService.isSelfHost(note.userHost)) {
+					this.fanoutTimelineService.push('localTimelineWithReplies', note.id, 300, r, note.userHost);
+					if (this.utilityService.isSelfHost(note.replyUserHost)) {
+						this.fanoutTimelineService.push(`localTimelineWithReplyTo:${note.replyUserId}`, note.id, 300 / 10, r, note.userHost);
 					}
 				}
 			} else {
-				this.fanoutTimelineService.push(`userTimeline:${user.id}`, note.id, note.userHost == null ? this.meta.perLocalUserUserTimelineCacheMax : this.meta.perRemoteUserUserTimelineCacheMax, r);
+				this.fanoutTimelineService.push(`userTimeline:${user.id}`, note.id, this.utilityService.isSelfHost(note.userHost) ? this.meta.perLocalUserUserTimelineCacheMax : this.meta.perRemoteUserUserTimelineCacheMax, r, note.userHost);
 				if (note.fileIds.length > 0) {
-					this.fanoutTimelineService.push(`userTimelineWithFiles:${user.id}`, note.id, note.userHost == null ? this.meta.perLocalUserUserTimelineCacheMax / 2 : this.meta.perRemoteUserUserTimelineCacheMax / 2, r);
+					this.fanoutTimelineService.push(`userTimelineWithFiles:${user.id}`, note.id, this.utilityService.isSelfHost(note.userHost) ? this.meta.perLocalUserUserTimelineCacheMax / 2 : this.meta.perRemoteUserUserTimelineCacheMax / 2, r, note.userHost);
 				}
 
-				if (note.visibility === 'public' && note.userHost == null) {
-					this.fanoutTimelineService.push('localTimeline', note.id, 1000, r);
+				if (note.visibility === 'public' && this.utilityService.isSelfHost(note.userHost)) {
+					this.fanoutTimelineService.push('localTimeline', note.id, 1000, r, note.userHost);
 					if (note.fileIds.length > 0) {
-						this.fanoutTimelineService.push('localTimelineWithFiles', note.id, 500, r);
+						this.fanoutTimelineService.push('localTimelineWithFiles', note.id, 500, r, note.userHost);
 					}
 				}
 			}

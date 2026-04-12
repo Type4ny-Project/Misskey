@@ -23,6 +23,7 @@ import { handleRequestRedirectToOmitSearch } from '@/misc/fastify-hook-handlers.
 import { FileServerDriveHandler } from './file/FileServerDriveHandler.js';
 import { FileServerFileResolver } from './file/FileServerFileResolver.js';
 import { FileServerProxyHandler } from './file/FileServerProxyHandler.js';
+import { TenantService } from '@/core/TenantService.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginOptions } from 'fastify';
 
 const _filename = fileURLToPath(import.meta.url);
@@ -50,6 +51,7 @@ export class FileServerService {
 		private videoProcessingService: VideoProcessingService,
 		private internalStorageService: InternalStorageService,
 		private loggerService: LoggerService,
+		private tenantService: TenantService,
 	) {
 		this.logger = this.loggerService.getLogger('server', 'gray');
 		this.fileResolver = new FileServerFileResolver(
@@ -69,6 +71,7 @@ export class FileServerService {
 			this.fileResolver,
 			assets,
 			this.imageProcessingService,
+			this.tenantService,
 		);
 
 		//this.createServer = this.createServer.bind(this);
@@ -98,7 +101,7 @@ export class FileServerService {
 					.catch(err => this.errorHandler(request, reply, err));
 			});
 			fastify.get<{ Params: { key: string; } }>('/files/:key/*', async (request, reply) => {
-				return await reply.redirect(`${this.config.url}/files/${request.params.key}`, 301);
+				return await reply.redirect(`/files/${request.params.key}`, 301);
 			});
 			done();
 		});

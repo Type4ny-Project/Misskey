@@ -163,8 +163,9 @@ export class HtmlTemplateService {
 	}
 
 	@bindThis
-	public async getCommonData(): Promise<CommonData> {
+	public async getCommonData(instanceUrl?: string): Promise<CommonData> {
 		await this.prepareFrontendAssets();
+		const tenantHost = instanceUrl ? new URL(instanceUrl).host : undefined;
 
 		return {
 			version: this.config.version,
@@ -177,8 +178,8 @@ export class HtmlTemplateService {
 			serverErrorImageUrl: this.meta.serverErrorImageUrl ?? 'https://xn--931a.moe/assets/error.jpg',
 			infoImageUrl: this.meta.infoImageUrl ?? 'https://xn--931a.moe/assets/info.jpg',
 			notFoundImageUrl: this.meta.notFoundImageUrl ?? 'https://xn--931a.moe/assets/not-found.jpg',
-			instanceUrl: this.config.url,
-			metaJson: htmlSafeJsonStringify(await this.metaEntityService.packDetailed(this.meta)),
+			instanceUrl: instanceUrl ?? this.config.url,
+			metaJson: htmlSafeJsonStringify(await this.metaEntityService.packDetailed(this.meta, { tenantHost, tenantUrl: instanceUrl })),
 			now: Date.now(),
 			federationEnabled: this.meta.federation !== 'none',
 			frontendViteFiles: this.frontendViteFiles,

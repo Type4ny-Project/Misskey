@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { IsNull } from 'typeorm';
 import { Inject, Injectable } from '@nestjs/common';
 import type { MiMeta, UsedUsernamesRepository, UsersRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
@@ -47,9 +46,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.usedUsernamesRepository)
 		private usedUsernamesRepository: UsedUsernamesRepository,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const exist = await this.usersRepository.countBy({
-				host: IsNull(),
+				host: tenantContext!.tenantHost,
 				usernameLower: ps.username.toLowerCase(),
 			});
 

@@ -22,6 +22,7 @@ import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { bindThis } from '@/decorators.js';
 import { SearchService } from '@/core/SearchService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { isQuote, isRenote } from '@/misc/is-renote.js';
 
 @Injectable()
@@ -53,6 +54,7 @@ export class NoteDeleteService {
 		private notesChart: NotesChart,
 		private perUserNotesChart: PerUserNotesChart,
 		private instanceChart: InstanceChart,
+		private tenantService: TenantService,
 	) {}
 
 	/**
@@ -84,15 +86,15 @@ export class NoteDeleteService {
 				}
 
 				const content = this.apRendererService.addContext(renote
-					? this.apRendererService.renderUndo(this.apRendererService.renderAnnounce(renote.uri ?? `${this.config.url}/notes/${renote.id}`, note), user)
-					: this.apRendererService.renderDelete(this.apRendererService.renderTombstone(`${this.config.url}/notes/${note.id}`), user));
+					? this.apRendererService.renderUndo(this.apRendererService.renderAnnounce(renote.uri ?? `${this.tenantService.tenantUrlFor(renote.userHost)}/notes/${renote.id}`, note), user)
+					: this.apRendererService.renderDelete(this.apRendererService.renderTombstone(`${this.tenantService.tenantUrlFor(note.userHost)}/notes/${note.id}`), user));
 
 				this.deliverToConcerned(user, note, content);
 			}
 			//#endregion
 
 			this.notesChart.update(note, false);
-			if (this.meta.enableChartsForRemoteUser || (user.host == null)) {
+			if (this.meta.enableChartsForRemoteUser || this.userEntityService.isLocalUser(user)) {
 				this.perUserNotesChart.update(user, note, false);
 			}
 
@@ -160,15 +162,14 @@ export class NoteDeleteService {
 			.where(new Brackets(qb => {
 				qb.orWhere('note.renoteId = :renoteId', { renoteId: note.id });
 				qb.orWhere('note.replyId = :replyId', { replyId: note.id });
-			}))
-			.andWhere({ userHost: Not(IsNull()) });
+			}));
 		const notes = await query.getMany() as (MiNote & { user: MiRemoteUser })[];
-		const remoteUsers = notes.map(({ user }) => user);
+		const remoteUsers = notes.map(({ user }) => user).filter(user => this.userEntityService.isRemoteUser(user));
 		return remoteUsers;
 	}
 
 	@bindThis
-	private async deliverToConcerned(user: { id: MiLocalUser['id']; host: null; }, note: MiNote, content: any) {
+	private async deliverToConcerned(user: { id: MiLocalUser['id']; host: MiLocalUser['host']; }, note: MiNote, content: any) {
 		this.apDeliverManagerService.deliverToFollowers(user, content);
 		this.relayService.deliverToRelays(user, content);
 		this.apDeliverManagerService.deliverToUsers(user, content, [

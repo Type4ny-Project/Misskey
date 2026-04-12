@@ -10,6 +10,7 @@ import type { Config } from '@/config.js';
 import { MemoryKVCache } from '@/misc/cache.js';
 import type { MiUserPublickey } from '@/models/UserPublickey.js';
 import { CacheService } from '@/core/CacheService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import type { MiNote } from '@/models/Note.js';
 import { bindThis } from '@/decorators.js';
@@ -54,6 +55,7 @@ export class ApDbResolverService implements OnApplicationShutdown {
 
 		private cacheService: CacheService,
 		private apPersonService: ApPersonService,
+		private tenantService: TenantService,
 		private utilityService: UtilityService,
 	) {
 		this.publicKeyCache = new MemoryKVCache<MiUserPublickey | null>(1000 * 60 * 60 * 12); // 12h
@@ -65,7 +67,7 @@ export class ApDbResolverService implements OnApplicationShutdown {
 		const separator = '/';
 
 		const uri = new URL(getApId(value));
-		if (this.utilityService.toPuny(uri.host) !== this.utilityService.toPuny(this.config.host)) {
+		if (!this.tenantService.isManagedHost(uri.host)) {
 			return { local: false, uri: uri.href };
 		}
 

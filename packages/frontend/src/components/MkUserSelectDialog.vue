@@ -64,6 +64,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { onMounted, ref, computed, useTemplateRef } from 'vue';
 import * as Misskey from 'misskey-js';
 import { host as currentHost, hostname } from '@@/js/config.js';
+import { isUserLocalToCurrentTenant } from '@/utility/current-tenant.js';
 import MkInput from '@/components/MkInput.vue';
 import FormSplit from '@/components/form/split.vue';
 import MkModalWindow from '@/components/MkModalWindow.vue';
@@ -146,7 +147,7 @@ onMounted(() => {
 		let _users = foundUsers;
 		_users = _users.filter((u) => {
 			if (computedLocalOnly.value) {
-				return u.host == null;
+				return isUserLocalToCurrentTenant(u);
 			} else {
 				return true;
 			}

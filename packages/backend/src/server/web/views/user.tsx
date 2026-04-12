@@ -34,9 +34,10 @@ export function UserPage(props: CommonProps<{
 	}
 
 	function metaBlock() {
+		const isLocalUser = props.user.isLocal ?? props.user.isManaged ?? props.user.host == null;
 		return (
 			<>
-				{props.user.host != null || props.profile.noCrawle ? <meta name="robots" content="noindex" /> : null}
+				{!isLocalUser || props.profile.noCrawle ? <meta name="robots" content="noindex" /> : null}
 				{props.profile.preventAiLearning ? (
 					<>
 						<meta name="robots" content="noimageai" />
@@ -48,7 +49,7 @@ export function UserPage(props: CommonProps<{
 
 				{props.sub == null && props.federationEnabled ? (
 					<>
-						{props.user.host == null ? <link rel="alternate" type="application/activity+json" href={`${props.config.url}/users/${props.user.id}`} /> : null}
+						{isLocalUser ? <link rel="alternate" type="application/activity+json" href={`${props.instanceUrl}/users/${props.user.id}`} /> : null}
 						{props.user.uri != null ? <link rel="alternate" type="application/activity+json" href={props.user.uri} /> : null}
 						{props.profile.url != null ? <link rel="alternate" type="text/html" href={props.profile.url} /> : null}
 					</>

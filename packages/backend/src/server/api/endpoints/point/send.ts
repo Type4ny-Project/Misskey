@@ -9,6 +9,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { UsersRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
 import { PointService } from '@/core/PointService.js';
+import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { GetterService } from '@/server/api/GetterService.js';
 import { ApiError } from '../../error.js';
 
@@ -88,6 +89,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private usersRepository: UsersRepository,
 
 		private pointService: PointService,
+		private userEntityService: UserEntityService,
 		private getterService: GetterService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
@@ -108,7 +110,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			});
 
 			// Cannot send to remote users
-			if (recipient.host !== null) {
+			if (!this.userEntityService.isLocalUser(recipient)) {
 				throw new ApiError(meta.errors.recipientIsRemoteUser);
 			}
 

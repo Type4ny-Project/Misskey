@@ -10,6 +10,7 @@ import type { MiUser } from '@/models/User.js';
 import type { UserProfilesRepository, FollowingsRepository, ChannelFollowingsRepository, BlockingsRepository, NoteThreadMutingsRepository, MutingsRepository, RenoteMutingsRepository, MiMeta } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
 import { IdService } from '@/core/IdService.js';
+import { TenantService } from '@/core/TenantService.js';
 import type { SelectQueryBuilder } from 'typeorm';
 
 @Injectable()
@@ -40,6 +41,7 @@ export class QueryService {
 		private meta: MiMeta,
 
 		private idService: IdService,
+		private tenantService: TenantService,
 	) {
 	}
 
@@ -228,17 +230,17 @@ export class QueryService {
 			// mute instances
 			.andWhere(new Brackets(qb => {
 				qb
-					.andWhere(`${noteColumn}.userHost IS NULL`)
+					.andWhere(`${noteColumn}.userHost IS NULL OR EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = ${noteColumn}.userHost)`)
 					.orWhere(`NOT ((${ mutingInstanceQuery.getQuery() })::jsonb ? ${noteColumn}.userHost)`);
 			}))
 			.andWhere(new Brackets(qb => {
 				qb
-					.where(`${noteColumn}.replyUserHost IS NULL`)
+					.where(`${noteColumn}.replyUserHost IS NULL OR EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = ${noteColumn}.replyUserHost)`)
 					.orWhere(`NOT ((${ mutingInstanceQuery.getQuery() })::jsonb ? ${noteColumn}.replyUserHost)`);
 			}))
 			.andWhere(new Brackets(qb => {
 				qb
-					.where(`${noteColumn}.renoteUserHost IS NULL`)
+					.where(`${noteColumn}.renoteUserHost IS NULL OR EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = ${noteColumn}.renoteUserHost)`)
 					.orWhere(`NOT ((${ mutingInstanceQuery.getQuery() })::jsonb ? ${noteColumn}.renoteUserHost)`);
 			}));
 
@@ -336,7 +338,7 @@ export class QueryService {
 			const instanceSuspension = (user: string) => new Brackets(qb => qb
 				.where(`note.${user}Id IS NULL`) // no corresponding user
 				.orWhere(`note.userId = note.${user}Id`)
-				.orWhere(`note.${user}Host IS NULL`) // local
+				.orWhere(`note.${user}Host IS NULL OR EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = note.${user}Host)`) // local
 				.orWhere(nonBlockedHostQuery(`note.${user}Host`)));
 
 			q
@@ -345,7 +347,7 @@ export class QueryService {
 		} else {
 			const instanceSuspension = (user: string) => new Brackets(qb => qb
 				.where(`note.${user}Id IS NULL`) // no corresponding user
-				.orWhere(`note.${user}Host IS NULL`) // local
+				.orWhere(`note.${user}Host IS NULL OR EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = note.${user}Host)`) // local
 				.orWhere(nonBlockedHostQuery(`note.${user}Host`)));
 
 			q

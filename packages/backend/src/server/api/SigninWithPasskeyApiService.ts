@@ -5,7 +5,6 @@
 
 import { randomUUID } from 'crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { IsNull } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type {
 	SigninsRepository,
@@ -61,7 +60,7 @@ export class SigninWithPasskeyApiService {
 		}>,
 		reply: FastifyReply,
 	) {
-		reply.header('Access-Control-Allow-Origin', this.config.url);
+		reply.header('Access-Control-Allow-Origin', request.tenantContext.tenantUrl);
 		reply.header('Access-Control-Allow-Credentials', 'true');
 
 		const body = request.body;
@@ -147,7 +146,7 @@ export class SigninWithPasskeyApiService {
 		// Fetch user
 		const user = await this.usersRepository.findOneBy({
 			id: authorizedUserId,
-			host: IsNull(),
+			host: request.tenantContext.tenantHost,
 		}) as MiLocalUser | null;
 
 		if (user == null) {

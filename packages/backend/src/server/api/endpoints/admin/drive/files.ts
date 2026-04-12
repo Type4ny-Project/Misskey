@@ -58,16 +58,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private driveFileEntityService: DriveFileEntityService,
 		private queryService: QueryService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const query = this.queryService.makePaginationQuery(this.driveFilesRepository.createQueryBuilder('file'), ps.sinceId, ps.untilId, ps.sinceDate, ps.untilDate);
 
 			if (ps.userId) {
 				query.andWhere('file.userId = :userId', { userId: ps.userId });
 			} else {
 				if (ps.origin === 'local') {
-					query.andWhere('file.userHost IS NULL');
+					query.andWhere('file.userHost = :tenantHost', { tenantHost: tenantContext!.tenantHost });
 				} else if (ps.origin === 'remote') {
-					query.andWhere('file.userHost IS NOT NULL');
+					query.andWhere('file.userHost != :tenantHost', { tenantHost: tenantContext!.tenantHost });
 				}
 
 				if (ps.hostname) {

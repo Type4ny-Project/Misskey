@@ -4,7 +4,7 @@
  */
 
 import { Injectable, Inject } from '@nestjs/common';
-import { Not, IsNull, DataSource } from 'typeorm';
+import { DataSource } from 'typeorm';
 import * as Redis from 'ioredis';
 import type { MiUser } from '@/models/User.js';
 import { DI } from '@/di-symbols.js';
@@ -39,10 +39,12 @@ export default class UsersChart extends Chart<typeof schema> { // eslint-disable
 	}
 
 	protected async tickMajor(): Promise<Partial<KVs<typeof schema>>> {
-		const [localCount, remoteCount] = await Promise.all([
-			this.usersRepository.countBy({ host: IsNull() }),
-			this.usersRepository.countBy({ host: Not(IsNull()) }),
+		const [localCountRow, remoteCountRow] = await Promise.all([
+			this.db.query(`SELECT COUNT(*)::int AS count FROM "user" u WHERE EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = u.host)`),
+			this.db.query(`SELECT COUNT(*)::int AS count FROM "user" u WHERE NOT EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = u.host)`),
 		]);
+		const localCount = localCountRow[0]?.count ?? 0;
+		const remoteCount = remoteCountRow[0]?.count ?? 0;
 
 		return {
 			'local.total': localCount,

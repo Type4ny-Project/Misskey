@@ -65,6 +65,10 @@ export default abstract class Channel {
 		return this.connection.subscriber;
 	}
 
+	protected get tenantHost() {
+		return this.connection.tenantHost;
+	}
+
 	protected isNoteVisibleForMe(note: Packed<'Note'>): boolean {
 		// This code must always be synchronized with the checks in QueryService.generateVisibilityQuery.
 		const meId = this.connection.user?.id ?? null;

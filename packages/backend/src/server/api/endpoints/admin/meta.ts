@@ -642,7 +642,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private metaService: MetaService,
 		private systemAccountService: SystemAccountService,
 	) {
-		super(meta, paramDef, async (ps, me: MiUser) => {
+			super(meta, paramDef, async (ps, me: MiUser, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const instance = await this.metaService.fetch(true);
 
 			const proxy = await this.systemAccountService.fetch('proxy');
@@ -654,7 +654,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				name: instance.name,
 				shortName: instance.shortName,
 				pointName: instance.pointName,
-				uri: this.config.url,
+				uri: tenantContext!.tenantUrl,
 				description: instance.description,
 				langs: instance.langs,
 				tosUrl: instance.termsOfServiceUrl,
@@ -782,7 +782,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				showRoleBadgesOfRemoteUsers: instance.showRoleBadgesOfRemoteUsers,
 				isManaged: envOption.managed,
 				...(envOption.managed ? {
-					nowLocalUsers: await this.usersRepository.count({ where: { host: IsNull(), username: Not(In(['instance.actor', 'relay.actor', this.config.adminUserName ?? '', this.config.rootUserName ?? ''])) } }),
+					nowLocalUsers: await this.usersRepository.count({ where: { host: this.config.host, username: Not(In(['instance.actor', 'relay.actor', this.config.adminUserName ?? '', this.config.rootUserName ?? ''])) } }),
 					maxLocalUsers: this.config.maxLocalUsers,
 				} : {
 					nowLocalUsers: 0,

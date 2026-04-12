@@ -14,6 +14,7 @@ import { UserKeypairService } from '@/core/UserKeypairService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { LoggerService } from '@/core/LoggerService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { bindThis } from '@/decorators.js';
 import type Logger from '@/logger.js';
 import { validateContentTypeSetAsActivityPub } from '@/core/activitypub/misc/validator.js';
@@ -149,13 +150,14 @@ export class ApRequestService {
 		private httpRequestService: HttpRequestService,
 		private loggerService: LoggerService,
 		private utilityService: UtilityService,
+		private tenantService: TenantService,
 	) {
 		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 		this.logger = this.loggerService?.getLogger('ap-request'); // なぜか TypeError: Cannot read properties of undefined (reading 'getLogger') と言われる
 	}
 
 	@bindThis
-	public async signedPost(user: { id: MiUser['id'] }, url: string, object: unknown, digest?: string): Promise<void> {
+	public async signedPost(user: { id: MiUser['id']; host?: MiUser['host'] }, url: string, object: unknown, digest?: string): Promise<void> {
 		const body = typeof object === 'string' ? object : JSON.stringify(object);
 
 		const keypair = await this.userKeypairService.getUserKeypair(user.id);
@@ -163,7 +165,7 @@ export class ApRequestService {
 		const req = ApRequestCreator.createSignedPost({
 			key: {
 				privateKeyPem: keypair.privateKey,
-				keyId: `${this.config.url}/users/${user.id}#main-key`,
+				keyId: `${this.tenantService.tenantUrlFor(user.host)}/users/${user.id}#main-key`,
 			},
 			url,
 			body,
@@ -185,14 +187,14 @@ export class ApRequestService {
 	 * @param url URL to fetch
 	 */
 	@bindThis
-	public async signedGet(url: string, user: { id: MiUser['id'] }, allowSoftfail: FetchAllowSoftFailMask = FetchAllowSoftFailMask.Strict, followAlternate?: boolean): Promise<unknown> {
+	public async signedGet(url: string, user: { id: MiUser['id']; host?: MiUser['host'] }, allowSoftfail: FetchAllowSoftFailMask = FetchAllowSoftFailMask.Strict, followAlternate?: boolean): Promise<unknown> {
 		const _followAlternate = followAlternate ?? true;
 		const keypair = await this.userKeypairService.getUserKeypair(user.id);
 
 		const req = ApRequestCreator.createSignedGet({
 			key: {
 				privateKeyPem: keypair.privateKey,
-				keyId: `${this.config.url}/users/${user.id}#main-key`,
+				keyId: `${this.tenantService.tenantUrlFor(user.host)}/users/${user.id}#main-key`,
 			},
 			url,
 			additionalHeaders: {

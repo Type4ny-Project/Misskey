@@ -9,6 +9,7 @@ import type { PollVotesRepository, NotesRepository } from '@/models/_.js';
 import type Logger from '@/logger.js';
 import { CacheService } from '@/core/CacheService.js';
 import { NotificationService } from '@/core/NotificationService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { bindThis } from '@/decorators.js';
 import { QueueLoggerService } from '../QueueLoggerService.js';
 import type * as Bull from 'bullmq';
@@ -25,6 +26,7 @@ export class EndedPollNotificationProcessorService {
 		@Inject(DI.pollVotesRepository)
 		private pollVotesRepository: PollVotesRepository,
 
+		private tenantService: TenantService,
 		private cacheService: CacheService,
 		private notificationService: NotificationService,
 		private queueLoggerService: QueueLoggerService,
@@ -43,14 +45,14 @@ export class EndedPollNotificationProcessorService {
 			.select('vote.userId')
 			.where('vote.noteId = :noteId', { noteId: note.id })
 			.innerJoinAndSelect('vote.user', 'user')
-			.andWhere('user.host IS NULL')
+			.andWhere('EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = user.host)')
 			.getMany();
 
 		const userIds = [...new Set([note.userId, ...votes.map(v => v.userId)])];
 
 		for (const userId of userIds) {
 			const profile = await this.cacheService.userProfileCache.fetch(userId);
-			if (profile.userHost === null) {
+			if (this.tenantService.isManagedHost(profile.userHost)) {
 				this.notificationService.createNotification(userId, 'pollEnded', {
 					noteId: note.id,
 				});

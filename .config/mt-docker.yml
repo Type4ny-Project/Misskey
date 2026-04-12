@@ -1,0 +1,32 @@
+url: https://package-reproduction-coverage-side.trycloudflare.com/
+
+port: 3000
+
+trustProxy: true
+
+db:
+  host: localhost
+  port: 5432
+  db: mtfed
+  user: example-misskey-user
+  pass: example-misskey-pass
+
+dbReplications: false
+
+redis:
+  host: localhost
+  port: 6379
+
+fulltextSearch:
+  provider: sqlLike
+
+id: 'aidx'
+
+proxyBypassHosts:
+  - api.deepl.com
+  - api-free.deepl.com
+  - www.recaptcha.net
+  - hcaptcha.com
+  - challenges.cloudflare.com
+
+setupPassword: mt-fed-setup

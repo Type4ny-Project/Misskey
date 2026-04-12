@@ -14,8 +14,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 				<div class="profile _gaps">
 					<MkAccountMoved v-if="user.movedTo" :movedTo="user.movedTo"/>
-					<MkRemoteCaution v-if="user.host != null" :href="user.url ?? user.uri!"/>
-					<MkInfo v-if="user.host == null && user.username.includes('.')">{{ i18n.ts.isSystemAccount }}</MkInfo>
+                    <MkRemoteCaution v-if="!user.isLocal" :href="user.url ?? user.uri!"/>
+                    <MkInfo v-if="user.isLocal && user.username.includes('.')">{{ i18n.ts.isSystemAccount }}</MkInfo>
 
 					<div :key="user.id" class="main _panel">
 						<div ref="bannerEl" class="banner-container">
@@ -180,6 +180,7 @@ import number from '@/filters/number.js';
 import { userPage } from '@/filters/user.js';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
+import { isUserLocalToCurrentTenant } from '@/utility/current-tenant.js';
 import { $i, iAmModerator } from '@/i.js';
 import { dateString } from '@/filters/date.js';
 import { confetti } from '@/utility/confetti.js';

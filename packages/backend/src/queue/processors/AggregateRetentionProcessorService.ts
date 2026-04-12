@@ -4,7 +4,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { IsNull, MoreThan } from 'typeorm';
+import { MoreThan } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type Logger from '@/logger.js';
 import { bindThis } from '@/decorators.js';
@@ -45,10 +45,10 @@ export class AggregateRetentionProcessorService {
 		});
 
 		// 今日登録したユーザーを全て取得
-		const targetUsers = await this.usersRepository.findBy({
-			host: IsNull(),
-			id: MoreThan(this.idService.gen(Date.now() - (1000 * 60 * 60 * 24))),
-		});
+		const targetUsers = await this.usersRepository.createQueryBuilder('user')
+			.where('EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = user.host)')
+			.andWhere('user.id > :id', { id: this.idService.gen(Date.now() - (1000 * 60 * 60 * 24)) })
+			.getMany();
 		const targetUserIds = targetUsers.map(u => u.id);
 
 		try {
@@ -69,10 +69,10 @@ export class AggregateRetentionProcessorService {
 		}
 
 		// 今日活動したユーザーを全て取得
-		const activeUsers = await this.usersRepository.findBy({
-			host: IsNull(),
-			lastActiveDate: MoreThan(new Date(Date.now() - (1000 * 60 * 60 * 24))),
-		});
+		const activeUsers = await this.usersRepository.createQueryBuilder('user')
+			.where('EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = user.host)')
+			.andWhere('user.lastActiveDate > :date', { date: new Date(Date.now() - (1000 * 60 * 60 * 24)) })
+			.getMany();
 		const activeUsersIds = activeUsers.map(u => u.id);
 
 		for (const record of pastRecords) {

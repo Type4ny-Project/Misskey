@@ -85,7 +85,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private fanoutTimelineEndpointService: FanoutTimelineEndpointService,
 		private channelMutingService: ChannelMutingService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate!) : null);
 			const sinceId = ps.sinceId ?? (ps.sinceDate ? this.idService.gen(ps.sinceDate!) : null);
 			const isSelf = me && (me.id === ps.userId);
@@ -111,7 +111,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					withRenotes: ps.withRenotes,
 				}, me);
 
-				return await this.noteEntityService.packMany(timeline, me);
+				return await this.noteEntityService.packMany(timeline, me, { tenantHost: tenantContext!.tenantHost });
 			}
 
 			const redisTimelines: FanoutTimelineName[] = [ps.withFiles ? `userTimelineWithFiles:${ps.userId}` : `userTimeline:${ps.userId}`];
@@ -135,6 +135,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				excludeReplies: ps.withChannelNotes && !ps.withReplies, // userTimelineWithChannel may include replies
 				excludeNoFiles: ps.withChannelNotes && ps.withFiles, // userTimelineWithChannel may include notes without files
 				excludePureRenotes: !ps.withRenotes,
+				tenantHost: tenantContext!.tenantHost,
 				noteFilter: note => {
 					if (note.channel?.isSensitive && !isSelf) return false;
 					if (note.visibility === 'specified' && (!me || (me.id !== note.userId && !note.visibleUserIds.some(v => v === me.id)))) return false;

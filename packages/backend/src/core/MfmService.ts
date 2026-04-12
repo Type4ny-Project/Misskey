@@ -8,6 +8,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import * as htmlParser from 'node-html-parser';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
+import { TenantService } from '@/core/TenantService.js';
 import { intersperse } from '@/misc/prelude/array.js';
 import { normalizeForSearch } from '@/misc/normalize-for-search.js';
 import type { IMentionedRemoteUsers } from '@/models/Note.js';
@@ -23,6 +24,8 @@ export class MfmService {
 	constructor(
 		@Inject(DI.config)
 		private config: Config,
+
+		private tenantService: TenantService,
 	) {
 	}
 
@@ -270,7 +273,9 @@ export class MfmService {
 	}
 
 	@bindThis
-	public toHtml(nodes: mfm.MfmNode[] | null, mentionedRemoteUsers: IMentionedRemoteUsers = [], extraHtml: string | null = null) {
+	public toHtml(nodes: mfm.MfmNode[] | null, mentionedRemoteUsers: IMentionedRemoteUsers = [], extraHtml: string | null = null, tenantHost?: string | null) {
+		const tenantUrl = this.tenantService.tenantUrlFor(tenantHost);
+		const currentTenantHost = this.tenantService.tenantHostFor(tenantHost);
 		if (nodes == null) {
 			return null;
 		}
@@ -357,7 +362,7 @@ export class MfmService {
 			},
 
 			hashtag: (node) => {
-				return `<a href="${escapeHtml(`${this.config.url}/tags/${encodeURIComponent(node.props.hashtag)}`)}" rel="tag">#${escapeHtml(node.props.hashtag)}</a>`;
+				return `<a href="${escapeHtml(`${tenantUrl}/tags/${encodeURIComponent(node.props.hashtag)}`)}" rel="tag">#${escapeHtml(node.props.hashtag)}</a>`;
 			},
 
 			inlineCode: (node) => {
@@ -383,10 +388,16 @@ export class MfmService {
 
 			mention: (node) => {
 				const { username, host, acct } = node.props;
-				const remoteUserInfo = mentionedRemoteUsers.find(remoteUser => remoteUser.username.toLowerCase() === username.toLowerCase() && remoteUser.host?.toLowerCase() === host?.toLowerCase());
+				const fallbackHost = acct.match(/^@?[^@]+@(.+)$/)?.[1] ?? null;
+				const mentionHost = host ?? fallbackHost;
+				const remoteUserInfo = mentionedRemoteUsers.find(remoteUser => remoteUser.username.toLowerCase() === username.toLowerCase() && remoteUser.host?.toLowerCase() === mentionHost?.toLowerCase());
 				const href = remoteUserInfo
 					? (remoteUserInfo.url ? remoteUserInfo.url : remoteUserInfo.uri)
-					: `${this.config.url}/${acct.endsWith(`@${this.config.url}`) ? acct.substring(0, acct.length - this.config.url.length - 1) : acct}`;
+					: (mentionHost == null || this.tenantService.isSameTenant(mentionHost, currentTenantHost)
+						? `${tenantUrl}/@${username}`
+						: this.tenantService.isManagedHost(mentionHost)
+							? `${this.tenantService.tenantUrlFor(mentionHost)}/@${username}`
+							: `${tenantUrl}/@${username}@${mentionHost}`);
 				try {
 					const url = new URL(href);
 					return `<a href="${escapeHtml(url.href)}" class="u-url mention">${escapeHtml(acct)}</a>`;
@@ -408,7 +419,7 @@ export class MfmService {
 
 				const lines = node.props.text.split(/\r\n|\r|\n/).map(x => escapeHtml(x));
 
-				for (const x of intersperse<FIXME | 'br'>('br', lines)) {
+				for (const x of intersperse<string | 'br'>('br', lines)) {
 					html += x === 'br' ? '<br />' : x;
 				}
 

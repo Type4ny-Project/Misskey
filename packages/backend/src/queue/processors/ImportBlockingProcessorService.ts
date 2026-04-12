@@ -4,13 +4,13 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { IsNull } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { UsersRepository, DriveFilesRepository } from '@/models/_.js';
 import type Logger from '@/logger.js';
 import * as Acct from '@/misc/acct.js';
 import { RemoteUserResolveService } from '@/core/RemoteUserResolveService.js';
 import { DownloadService } from '@/core/DownloadService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { bindThis } from '@/decorators.js';
 import { QueueService } from '@/core/QueueService.js';
@@ -31,6 +31,7 @@ export class ImportBlockingProcessorService {
 
 		private queueService: QueueService,
 		private utilityService: UtilityService,
+		private tenantService: TenantService,
 		private remoteUserResolveService: RemoteUserResolveService,
 		private downloadService: DownloadService,
 		private queueLoggerService: QueueLoggerService,
@@ -73,7 +74,7 @@ export class ImportBlockingProcessorService {
 			if (!host) return;
 
 			let target = this.utilityService.isSelfHost(host) ? await this.usersRepository.findOneBy({
-				host: IsNull(),
+				host: this.tenantService.tenantHostFor(host),
 				usernameLower: username.toLowerCase(),
 			}) : await this.usersRepository.findOneBy({
 				host: this.utilityService.toPuny(host),

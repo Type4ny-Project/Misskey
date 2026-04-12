@@ -71,6 +71,8 @@ import { UserAuthService } from './UserAuthService.js';
 import { VideoProcessingService } from './VideoProcessingService.js';
 import { UserWebhookService } from './UserWebhookService.js';
 import { UtilityService } from './UtilityService.js';
+import { TenantService } from './TenantService.js';
+import { RequestTenantContextService } from './RequestTenantContextService.js';
 import { FileInfoService } from './FileInfoService.js';
 import { SearchService } from './SearchService.js';
 import { ClipService } from './ClipService.js';
@@ -382,6 +384,8 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		SystemWebhookService,
 		WebhookTestService,
 		UtilityService,
+		TenantService,
+		RequestTenantContextService,
 		FileInfoService,
 		FlashService,
 		SearchService,
@@ -692,6 +696,8 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		SystemWebhookService,
 		WebhookTestService,
 		UtilityService,
+		TenantService,
+		RequestTenantContextService,
 		FileInfoService,
 		FlashService,
 		SearchService,

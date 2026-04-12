@@ -73,7 +73,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private globalEventService: GlobalEventService,
 		private channelMutingService: ChannelMutingService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate!) : null);
 			const sinceId = ps.sinceId ?? (ps.sinceDate ? this.idService.gen(ps.sinceDate!) : null);
 
@@ -97,7 +97,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.globalEventService.publishInternalEvent('antennaUpdated', antenna);
 			}
 
-			let noteIds = await this.fanoutTimelineService.get(`antennaTimeline:${antenna.id}`, untilId, sinceId);
+			let noteIds = await this.fanoutTimelineService.get(`antennaTimeline:${antenna.id}`, untilId, sinceId, tenantContext!.tenantHost);
 			noteIds = noteIds.slice(0, ps.limit);
 			if (noteIds.length === 0) {
 				return [];
@@ -139,7 +139,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				notes.sort((a, b) => a.id > b.id ? -1 : 1);
 			}
 
-			return await this.noteEntityService.packMany(notes, me);
+			return await this.noteEntityService.packMany(notes, me, { tenantHost: tenantContext!.tenantHost });
 		});
 	}
 }

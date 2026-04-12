@@ -72,6 +72,8 @@ import { MiSignin } from '@/models/Signin.js';
 import { MiSwSubscription } from '@/models/SwSubscription.js';
 import { MiSystemAccount } from '@/models/SystemAccount.js';
 import { MiSystemWebhook } from '@/models/SystemWebhook.js';
+import { MiTenantHostMapping } from '@/models/TenantHostMapping.js';
+import { MiTenantMeta } from '@/models/TenantMeta.js';
 import { MiUsedUsername } from '@/models/UsedUsername.js';
 import { MiUser } from '@/models/User.js';
 import { MiUserIp } from '@/models/UserIp.js';
@@ -151,6 +153,8 @@ export {
 	MiSystemAccount,
 	MiUsedUsername,
 	MiUser,
+	MiTenantHostMapping,
+	MiTenantMeta,
 	MiUserIp,
 	MiUserKeypair,
 	MiUserList,
@@ -231,6 +235,8 @@ export type RelaysRepository = Repository<MiRelay> & MiRepository<MiRelay>;
 export type SigninsRepository = Repository<MiSignin> & MiRepository<MiSignin>;
 export type SwSubscriptionsRepository = Repository<MiSwSubscription> & MiRepository<MiSwSubscription>;
 export type SystemAccountsRepository = Repository<MiSystemAccount> & MiRepository<MiSystemAccount>;
+export type TenantHostMappingsRepository = Repository<MiTenantHostMapping> & MiRepository<MiTenantHostMapping>;
+export type TenantMetasRepository = Repository<MiTenantMeta> & MiRepository<MiTenantMeta>;
 export type UsedUsernamesRepository = Repository<MiUsedUsername> & MiRepository<MiUsedUsername>;
 export type UsersRepository = Repository<MiUser> & MiRepository<MiUser>;
 export type UserIpsRepository = Repository<MiUserIp> & MiRepository<MiUserIp>;

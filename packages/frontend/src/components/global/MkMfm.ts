@@ -412,7 +412,8 @@ export default function (props: MfmProps, { emit }: { emit: SetupContext<MfmEven
 			}
 
 			case 'emojiCode': {
-				if (props.author?.host == null) {
+				const isLocalAuthor = props.author ? Boolean(props.author.isLocal) : false;
+				if (isLocalAuthor) {
 					return [h(MkCustomEmoji, {
 						key: Math.random(),
 						name: token.props.name,
@@ -423,19 +424,20 @@ export default function (props: MfmProps, { emit }: { emit: SetupContext<MfmEven
 						menuReaction: props.enableEmojiMenuReaction,
 						fallbackToImage: false,
 					})];
-				} else {
-					// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-					if (props.emojiUrls && (props.emojiUrls[token.props.name] == null)) {
-						return [h('span', `:${token.props.name}:`)];
 					} else {
-						return [h(MkCustomEmoji, {
-							key: Math.random(),
-							name: token.props.name,
-							url: props.emojiUrls && props.emojiUrls[token.props.name],
-							normal: props.plain,
-							host: props.author.host,
-							useOriginalSize: scale >= 2.5,
-							menu: props.enableEmojiMenu,
+						const authorHost = props.author?.host ?? null;
+						// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+						if (props.emojiUrls && (props.emojiUrls[token.props.name] == null)) {
+							return [h('span', `:${token.props.name}:`)];
+						} else {
+							return [h(MkCustomEmoji, {
+								key: Math.random(),
+								name: token.props.name,
+								url: props.emojiUrls && props.emojiUrls[token.props.name],
+								normal: props.plain,
+								host: authorHost,
+								useOriginalSize: scale >= 2.5,
+								menu: props.enableEmojiMenu,
 							menuReaction: false,
 						})];
 					}

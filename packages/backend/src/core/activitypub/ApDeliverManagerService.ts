@@ -10,6 +10,7 @@ import type { FollowingsRepository } from '@/models/_.js';
 import type { MiLocalUser, MiRemoteUser, MiUser } from '@/models/User.js';
 import { QueueService } from '@/core/QueueService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { bindThis } from '@/decorators.js';
 import type { IActivity } from '@/core/activitypub/type.js';
 import { ThinUser } from '@/queue/types.js';
@@ -50,14 +51,11 @@ class DeliverManager {
 		private userEntityService: UserEntityService,
 		private followingsRepository: FollowingsRepository,
 		private queueService: QueueService,
+		private tenantService: TenantService,
 
-		actor: { id: MiUser['id']; host: null; },
+		actor: { id: MiUser['id']; host: MiUser['host']; },
 		activity: IActivity | null,
 	) {
-		// 型で弾いてはいるが一応ローカルユーザーかチェック
-		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-		if (actor.host != null) throw new Error('actor.host must be null');
-
 		// パフォーマンス向上のためキューに突っ込むのはidのみに絞る
 		this.actor = {
 			id: actor.id,
@@ -127,8 +125,9 @@ class DeliverManager {
 			});
 
 			for (const following of followers) {
+				if (this.tenantService.isManagedHost(following.followerHost)) continue;
 				const inbox = following.followerSharedInbox ?? following.followerInbox;
-				if (inbox === null) throw new Error('inbox is null');
+				if (inbox === null) continue;
 				inboxes.set(inbox, following.followerSharedInbox != null);
 			}
 		}
@@ -156,6 +155,7 @@ export class ApDeliverManagerService {
 
 		private userEntityService: UserEntityService,
 		private queueService: QueueService,
+		private tenantService: TenantService,
 	) {
 	}
 
@@ -165,11 +165,12 @@ export class ApDeliverManagerService {
 	 * @param activity Activity
 	 */
 	@bindThis
-	public async deliverToFollowers(actor: { id: MiLocalUser['id']; host: null; }, activity: IActivity): Promise<void> {
+	public async deliverToFollowers(actor: { id: MiLocalUser['id']; host: MiLocalUser['host']; }, activity: IActivity): Promise<void> {
 		const manager = new DeliverManager(
 			this.userEntityService,
 			this.followingsRepository,
 			this.queueService,
+			this.tenantService,
 			actor,
 			activity,
 		);
@@ -184,11 +185,12 @@ export class ApDeliverManagerService {
 	 * @param to Target user
 	 */
 	@bindThis
-	public async deliverToUser(actor: { id: MiLocalUser['id']; host: null; }, activity: IActivity, to: MiRemoteUser): Promise<void> {
+	public async deliverToUser(actor: { id: MiLocalUser['id']; host: MiLocalUser['host']; }, activity: IActivity, to: MiRemoteUser): Promise<void> {
 		const manager = new DeliverManager(
 			this.userEntityService,
 			this.followingsRepository,
 			this.queueService,
+			this.tenantService,
 			actor,
 			activity,
 		);
@@ -203,11 +205,12 @@ export class ApDeliverManagerService {
 	 * @param targets Target users
 	 */
 	@bindThis
-	public async deliverToUsers(actor: { id: MiLocalUser['id']; host: null; }, activity: IActivity, targets: MiRemoteUser[]): Promise<void> {
+	public async deliverToUsers(actor: { id: MiLocalUser['id']; host: MiLocalUser['host']; }, activity: IActivity, targets: MiRemoteUser[]): Promise<void> {
 		const manager = new DeliverManager(
 			this.userEntityService,
 			this.followingsRepository,
 			this.queueService,
+			this.tenantService,
 			actor,
 			activity,
 		);
@@ -216,11 +219,12 @@ export class ApDeliverManagerService {
 	}
 
 	@bindThis
-	public createDeliverManager(actor: { id: MiUser['id']; host: null; }, activity: IActivity | null): DeliverManager {
+	public createDeliverManager(actor: { id: MiUser['id']; host: MiUser['host']; }, activity: IActivity | null): DeliverManager {
 		return new DeliverManager(
 			this.userEntityService,
 			this.followingsRepository,
 			this.queueService,
+			this.tenantService,
 
 			actor,
 			activity,

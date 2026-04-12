@@ -574,7 +574,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const doc = htmlParser.parse(html);
 
-			const myLink = `${this.config.url}/@${user.username}`;
+			const myLink = `${this.userEntityService.getUserUri(user)}`.replace(`/users/${user.id}`, `/@${user.username}`);
 
 			const aEls = Array.from(doc.getElementsByTagName('a'));
 			const linkEls = Array.from(doc.getElementsByTagName('link'));

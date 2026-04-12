@@ -133,11 +133,11 @@ export class AccountMoveService {
 
 		// follow the new account
 		const proxy = await this.systemAccountService.fetch('proxy');
-		const followings = await this.followingsRepository.findBy({
-			followeeId: src.id,
-			followerHost: IsNull(), // follower is local
-			followerId: Not(proxy.id),
-		});
+		const followings = await this.followingsRepository.createQueryBuilder('following')
+			.where('following.followeeId = :followeeId', { followeeId: src.id })
+			.andWhere('following.followerId != :proxyId', { proxyId: proxy.id })
+			.andWhere('EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = following."followerHost")')
+			.getMany();
 		const followJobs = followings.map(following => ({
 			from: { id: following.followerId },
 			to: { id: dst.id },
@@ -316,8 +316,9 @@ export class AccountMoveService {
 		}
 
 		// FIXME: expensive?
-		for (const followerId of localFollowerIds) {
-			this.perUserFollowingChart.update({ id: followerId, host: null }, oldAccount, false);
+		const localFollowers = await this.usersRepository.findBy({ id: In(localFollowerIds) });
+		for (const follower of localFollowers) {
+			this.perUserFollowingChart.update({ id: follower.id, host: follower.host }, oldAccount, false);
 		}
 	}
 

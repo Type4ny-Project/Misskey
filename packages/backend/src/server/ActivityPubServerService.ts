@@ -99,7 +99,7 @@ export class ActivityPubServerService {
 	private async packActivity(note: MiNote): Promise<any> {
 		if (isRenote(note) && !isQuote(note)) {
 			const renote = await this.notesRepository.findOneByOrFail({ id: note.renoteId });
-			return this.apRendererService.renderAnnounce(renote.uri ? renote.uri : `${this.config.url}/notes/${renote.id}`, note);
+			return this.apRendererService.renderAnnounce(renote.uri ? renote.uri : `${new URL(`/notes/${renote.id}`, this.userEntityService.genLocalUserUri(renote.userId, renote.userHost)).toString()}`, note);
 		}
 
 		return this.apRendererService.renderCreate(await this.apRendererService.renderNote(note, false), note);
@@ -122,7 +122,7 @@ export class ActivityPubServerService {
 		}
 
 		if (signature.params.headers.indexOf('host') === -1
-			|| request.headers.host !== this.config.host) {
+			|| !this.utilityService.isSelfHost(request.headers.host ?? null)) {
 			// Host not specified or not match.
 			reply.code(401);
 			return;
@@ -201,7 +201,7 @@ export class ActivityPubServerService {
 
 		const user = await this.usersRepository.findOneBy({
 			id: userId,
-			host: IsNull(),
+			host: request.tenantContext.tenantHost,
 		});
 
 		if (user == null) {
@@ -224,7 +224,7 @@ export class ActivityPubServerService {
 		//#endregion
 
 		const limit = 10;
-		const partOf = `${this.config.url}/users/${userId}/followers`;
+		const partOf = `${request.tenantContext.tenantUrl}/users/${userId}/followers`;
 
 		if (page) {
 			const query = {
@@ -298,7 +298,7 @@ export class ActivityPubServerService {
 
 		const user = await this.usersRepository.findOneBy({
 			id: userId,
-			host: IsNull(),
+			host: request.tenantContext.tenantHost,
 		});
 
 		if (user == null) {
@@ -321,7 +321,7 @@ export class ActivityPubServerService {
 		//#endregion
 
 		const limit = 10;
-		const partOf = `${this.config.url}/users/${userId}/following`;
+		const partOf = `${request.tenantContext.tenantUrl}/users/${userId}/following`;
 
 		if (page) {
 			const query = {
@@ -384,7 +384,7 @@ export class ActivityPubServerService {
 
 		const user = await this.usersRepository.findOneBy({
 			id: userId,
-			host: IsNull(),
+			host: request.tenantContext.tenantHost,
 		});
 
 		if (user == null) {
@@ -404,7 +404,7 @@ export class ActivityPubServerService {
 		const renderedNotes = await Promise.all(pinnedNotes.map(note => this.apRendererService.renderNote(note)));
 
 		const rendered = this.apRendererService.renderOrderedCollection(
-			`${this.config.url}/users/${userId}/collections/featured`,
+			`${request.tenantContext.tenantUrl}/users/${userId}/collections/featured`,
 			renderedNotes.length,
 			undefined,
 			undefined,
@@ -452,7 +452,7 @@ export class ActivityPubServerService {
 
 		const user = await this.usersRepository.findOneBy({
 			id: userId,
-			host: IsNull(),
+			host: request.tenantContext.tenantHost,
 		});
 
 		if (user == null) {
@@ -461,7 +461,7 @@ export class ActivityPubServerService {
 		}
 
 		const limit = 20;
-		const partOf = `${this.config.url}/users/${userId}/outbox`;
+		const partOf = `${request.tenantContext.tenantUrl}/users/${userId}/outbox`;
 
 		if (page) {
 			const notes = this.meta.enableFanoutTimeline ? await this.fanoutTimelineEndpointService.getMiNotes({
@@ -565,7 +565,7 @@ export class ActivityPubServerService {
 		}
 
 		// リモートだったらリダイレクト
-		if (user.host != null) {
+		if (!this.userEntityService.isLocalUser(user)) {
 			if (user.uri == null || this.utilityService.isSelfHost(user.host)) {
 				reply.code(500);
 				return;
@@ -658,7 +658,7 @@ export class ActivityPubServerService {
 			}
 
 			// リモートだったらリダイレクト
-			if (note.userHost != null) {
+			if (!this.userEntityService.isLocalUser({ host: note.userHost, uri: null })) {
 				if (note.uri == null || this.utilityService.isSelfHost(note.userHost)) {
 					reply.code(500);
 					return;
@@ -683,7 +683,7 @@ export class ActivityPubServerService {
 
 			const note = await this.notesRepository.findOneBy({
 				id: request.params.note,
-				userHost: IsNull(),
+				userHost: request.tenantContext.tenantHost,
 				visibility: In(['public', 'home']),
 				localOnly: false,
 			});
@@ -730,7 +730,7 @@ export class ActivityPubServerService {
 
 			const user = await this.usersRepository.findOneBy({
 				id: userId,
-				host: IsNull(),
+				host: request.tenantContext.tenantHost,
 			});
 
 			if (user == null) {
@@ -780,7 +780,7 @@ export class ActivityPubServerService {
 
 			const user = await this.usersRepository.findOneBy({
 				usernameLower: acct.username.toLowerCase(),
-				host: acct.host ?? IsNull(),
+				host: acct.host ?? request.tenantContext.tenantHost,
 				isSuspended: false,
 			});
 
@@ -796,7 +796,7 @@ export class ActivityPubServerService {
 			}
 
 			const emoji = await this.emojisRepository.findOneBy({
-				host: IsNull(),
+				host: request.tenantContext.tenantHost,
 				name: request.params.emoji,
 			});
 
@@ -831,9 +831,11 @@ export class ActivityPubServerService {
 				return;
 			}
 
+			const reactor = await this.usersRepository.findOneBy({ id: reaction.userId });
+
 			reply.header('Cache-Control', 'public, max-age=180');
 			this.setResponseType(request, reply);
-			return (this.apRendererService.addContext(await this.apRendererService.renderLike(reaction, note)));
+			return (this.apRendererService.addContext(await this.apRendererService.renderLike(reaction, note, reactor?.host ?? null)));
 		});
 
 		// follow
@@ -849,7 +851,7 @@ export class ActivityPubServerService {
 			const [follower, followee] = await Promise.all([
 				this.usersRepository.findOneBy({
 					id: request.params.follower,
-					host: IsNull(),
+					host: request.tenantContext.tenantHost,
 				}),
 				this.usersRepository.findOneBy({
 					id: request.params.followee,
@@ -889,7 +891,7 @@ export class ActivityPubServerService {
 			const [follower, followee] = await Promise.all([
 				this.usersRepository.findOneBy({
 					id: followRequest.followerId,
-					host: IsNull(),
+					host: request.tenantContext.tenantHost,
 				}),
 				this.usersRepository.findOneBy({
 					id: followRequest.followeeId,

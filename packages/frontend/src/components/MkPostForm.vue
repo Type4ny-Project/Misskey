@@ -145,6 +145,7 @@ import { instance } from '@/instance.js';
 import { ensureSignin, notesCount, incNotesCount } from '@/i.js';
 import { getAccounts, getAccountMenu } from '@/accounts.js';
 import { deepClone } from '@/utility/clone.js';
+import { isHostCurrentTenant } from '@/utility/current-tenant.js';
 import MkRippleEffect from '@/components/MkRippleEffect.vue';
 import { miLocalStorage } from '@/local-storage.js';
 import { claimAchievement } from '@/utility/achievements.js';
@@ -361,12 +362,15 @@ watch(visibleUsers, () => {
 });
 
 if (props.mention) {
-	text.value = props.mention.host ? `@${props.mention.username}@${toASCII(props.mention.host)}` : `@${props.mention.username}`;
+	const isLocalMentionUser = Boolean(props.mention.isLocal);
+	text.value = isLocalMentionUser ? `@${props.mention.username}` : `@${props.mention.username}@${toASCII(props.mention.host!)}`;
 	text.value += ' ';
 }
 
-if (replyTargetNote.value && (replyTargetNote.value.user.username !== $i.username || (replyTargetNote.value.user.host != null && replyTargetNote.value.user.host !== host))) {
-	text.value = `@${replyTargetNote.value.user.username}${replyTargetNote.value.user.host != null ? '@' + toASCII(replyTargetNote.value.user.host) : ''} `;
+const isReplyTargetLocal = replyTargetNote.value ? Boolean(replyTargetNote.value.user.isLocal) : false;
+
+if (replyTargetNote.value && (replyTargetNote.value.user.username !== $i.username || (!isReplyTargetLocal && replyTargetNote.value.user.host !== host))) {
+	text.value = `@${replyTargetNote.value.user.username}${isReplyTargetLocal ? '' : '@' + toASCII(replyTargetNote.value.user.host!)}` + ' ';
 }
 
 if (replyTargetNote.value && replyTargetNote.value.text != null) {
@@ -374,6 +378,7 @@ if (replyTargetNote.value && replyTargetNote.value.text != null) {
 	const otherHost = replyTargetNote.value.user.host;
 
 	for (const x of extractMentions(ast)) {
+		const isLocalMention = isHostCurrentTenant(x.host ?? null);
 		const mention = x.host ?
 			`@${x.username}@${toASCII(x.host)}` :
 			(otherHost == null || otherHost === host) ?
@@ -381,7 +386,7 @@ if (replyTargetNote.value && replyTargetNote.value.text != null) {
 				`@${x.username}@${toASCII(otherHost)}`;
 
 		// 自分は除外
-		if ($i.username === x.username && (x.host == null || x.host === host)) continue;
+		if ($i.username === x.username && isLocalMention) continue;
 
 		// 重複は除外
 		if (text.value.includes(`${mention} `)) continue;

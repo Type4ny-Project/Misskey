@@ -841,7 +841,8 @@ export class ChatService {
 			reaction = normalizeEmojiString(reaction_);
 		} else {
 			const name = custom[1];
-			const emoji = (await this.customEmojiService.localEmojisCache.fetch()).get(name);
+			const user = await this.usersRepository.findOneByOrFail({ id: userId });
+			const emoji = (await this.customEmojiService.fetchLocalEmojis(user.host)).get(name);
 
 			if (emoji == null) {
 				throw new Error('no such emoji');

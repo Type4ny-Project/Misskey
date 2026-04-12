@@ -53,7 +53,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private userEntityService: UserEntityService,
 		private queryService: QueryService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const query = this.usersRepository.createQueryBuilder('user')
 				.where('user.isExplorable = TRUE')
 				.andWhere('user.isSuspended = FALSE');
@@ -63,8 +63,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			switch (ps.origin) {
-				case 'local': query.andWhere('user.host IS NULL'); break;
-				case 'remote': query.andWhere('user.host IS NOT NULL'); break;
+				case 'local': query.andWhere('user.host = :tenantHost', { tenantHost: tenantContext!.tenantHost }); break;
+				case 'remote': query.andWhere('user.host != :tenantHost', { tenantHost: tenantContext!.tenantHost }); break;
 			}
 
 			if (ps.hostname) {

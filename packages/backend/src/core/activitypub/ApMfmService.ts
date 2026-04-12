@@ -25,7 +25,7 @@ export class ApMfmService {
 	}
 
 	@bindThis
-	public getNoteHtml(note: Pick<MiNote, 'text' | 'mentionedRemoteUsers'>, extraHtml: string | null = null) {
+	public getNoteHtml(note: Pick<MiNote, 'text' | 'mentionedRemoteUsers' | 'userHost'>, extraHtml: string | null = null) {
 		let noMisskeyContent = false;
 		const srcMfm = (note.text ?? '');
 
@@ -35,7 +35,7 @@ export class ApMfmService {
 			noMisskeyContent = true;
 		}
 
-		const content = this.mfmService.toHtml(parsed, JSON.parse(note.mentionedRemoteUsers), extraHtml);
+		const content = this.mfmService.toHtml(parsed, JSON.parse(note.mentionedRemoteUsers), extraHtml, note.userHost);
 
 		return {
 			content,

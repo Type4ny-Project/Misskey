@@ -202,7 +202,7 @@ export class ApInboxService {
 			return 'skip: followee not found';
 		}
 
-		if (followee.host != null) {
+		if (!this.userEntityService.isLocalUser(followee)) {
 			return 'skip: フォローしようとしているユーザーはローカルユーザーではありません';
 		}
 
@@ -261,7 +261,7 @@ export class ApInboxService {
 			return 'skip: follower not found';
 		}
 
-		if (follower.host != null) {
+		if (!this.userEntityService.isLocalUser(follower)) {
 			return 'skip: follower is not a local user';
 		}
 
@@ -389,7 +389,7 @@ export class ApInboxService {
 			return 'skip: blockee not found';
 		}
 
-		if (blockee.host != null) {
+		if (!this.userEntityService.isLocalUser(blockee)) {
 			return 'skip: ブロックしようとしているユーザーはローカルユーザーではありません';
 		}
 
@@ -567,7 +567,7 @@ export class ApInboxService {
 		const uris = getApIds(activity.object);
 
 		const userIds = uris
-			.filter(uri => uri.startsWith(this.config.url + '/users/'))
+			.filter(uri => this.utilityService.isUriLocal(uri) && uri.includes('/users/'))
 			.map(uri => uri.split('/').at(-1))
 			.filter(x => x != null);
 		const users = await this.usersRepository.findBy({
@@ -722,7 +722,7 @@ export class ApInboxService {
 			return 'skip: blockee not found';
 		}
 
-		if (blockee.host != null) {
+		if (!this.userEntityService.isLocalUser(blockee)) {
 			return 'skip: ブロック解除しようとしているユーザーはローカルユーザーではありません';
 		}
 
@@ -737,7 +737,7 @@ export class ApInboxService {
 			return 'skip: followee not found';
 		}
 
-		if (followee.host != null) {
+		if (!this.userEntityService.isLocalUser(followee)) {
 			return 'skip: フォロー解除しようとしているユーザーはローカルユーザーではありません';
 		}
 

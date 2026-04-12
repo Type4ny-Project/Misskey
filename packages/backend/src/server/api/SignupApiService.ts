@@ -5,7 +5,6 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
-import { IsNull } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { RegistrationTicketsRepository, UsedUsernamesRepository, UserPendingsRepository, UserProfilesRepository, UsersRepository, MiRegistrationTicket, MiMeta } from '@/models/_.js';
 import type { Config } from '@/config.js';
@@ -110,7 +109,7 @@ export class SignupApiService {
 
 		const username = body['username'];
 		const password = body['password'];
-		const host: string | null = process.env.NODE_ENV === 'test' ? (body['host'] ?? null) : null;
+		const host: string | null = process.env.NODE_ENV === 'test' ? (body['host'] ?? request.tenantContext.tenantHost) : request.tenantContext.tenantHost;
 		const invitationCode = body['invitationCode'];
 		const emailAddress = body['emailAddress'];
 
@@ -170,7 +169,7 @@ export class SignupApiService {
 		}
 
 		if (this.meta.emailRequiredForSignup) {
-			if (await this.usersRepository.exists({ where: { usernameLower: username.toLowerCase(), host: IsNull() } })) {
+			if (await this.usersRepository.exists({ where: { usernameLower: username.toLowerCase(), host } })) {
 				throw new FastifyReplyError(400, 'DUPLICATED_USERNAME');
 			}
 
@@ -198,7 +197,7 @@ export class SignupApiService {
 				password: hash,
 			});
 
-			const link = `${this.config.url}/signup-complete/${code}`;
+			const link = `${request.tenantContext.tenantUrl}/signup-complete/${code}`;
 
 			this.emailService.sendEmail(emailAddress!, 'Signup',
 				`To complete signup, please click this link:<br><a href="${link}">${link}</a>`,
@@ -258,6 +257,7 @@ export class SignupApiService {
 			const { account } = await this.signupService.signup({
 				username: pendingUser.username,
 				passwordHash: pendingUser.password,
+				host: request.tenantContext.tenantHost,
 			});
 
 			this.userPendingsRepository.delete({

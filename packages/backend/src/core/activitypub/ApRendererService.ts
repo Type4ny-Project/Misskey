@@ -27,6 +27,7 @@ import type { UsersRepository, UserProfilesRepository, NotesRepository, DriveFil
 import { bindThis } from '@/decorators.js';
 import { CustomEmojiService } from '@/core/CustomEmojiService.js';
 import { IdService } from '@/core/IdService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { escapeHtml } from '@/misc/escape-html.js';
 import { JsonLdService } from './JsonLdService.js';
@@ -66,15 +67,26 @@ export class ApRendererService {
 		private apMfmService: ApMfmService,
 		private mfmService: MfmService,
 		private idService: IdService,
+		private tenantService: TenantService,
 		private utilityService: UtilityService,
 	) {
 	}
 
 	@bindThis
-	public renderAccept(object: string | IObject, user: { id: MiUser['id']; host: null }): IAccept {
+	private localOrigin(host?: string | null): string {
+		return this.tenantService.tenantUrlFor(host);
+	}
+
+	@bindThis
+	private localUrl(path: string, host?: string | null): string {
+		return new URL(path, this.localOrigin(host)).toString();
+	}
+
+	@bindThis
+	public renderAccept(object: string | IObject, user: { id: MiUser['id']; host: MiUser['host'] }): IAccept {
 		return {
 			type: 'Accept',
-			actor: this.userEntityService.genLocalUserUri(user.id),
+			actor: this.userEntityService.genLocalUserUri(user.id, user.host),
 			object,
 		};
 	}
@@ -83,7 +95,7 @@ export class ApRendererService {
 	public renderAdd(user: MiLocalUser, target: string | IObject | undefined, object: string | IObject): IAdd {
 		return {
 			type: 'Add',
-			actor: this.userEntityService.genLocalUserUri(user.id),
+			actor: this.userEntityService.genLocalUserUri(user.id, user.host),
 			target,
 			object,
 		};
@@ -91,7 +103,7 @@ export class ApRendererService {
 
 	@bindThis
 	public renderAnnounce(object: string | IObject, note: MiNote): IAnnounce {
-		const attributedTo = this.userEntityService.genLocalUserUri(note.userId);
+		const attributedTo = this.userEntityService.genLocalUserUri(note.userId, note.userHost);
 
 		let to: string[] = [];
 		let cc: string[] = [];
@@ -110,8 +122,8 @@ export class ApRendererService {
 		}
 
 		return {
-			id: `${this.config.url}/notes/${note.id}/activity`,
-			actor: this.userEntityService.genLocalUserUri(note.userId),
+			id: this.localUrl(`/notes/${note.id}/activity`, note.userHost),
+			actor: this.userEntityService.genLocalUserUri(note.userId, note.userHost),
 			type: 'Announce',
 			published: this.idService.parse(note.id).date.toISOString(),
 			to,
@@ -133,8 +145,8 @@ export class ApRendererService {
 
 		return {
 			type: 'Block',
-			id: `${this.config.url}/blocks/${block.id}`,
-			actor: this.userEntityService.genLocalUserUri(block.blockerId),
+			id: this.localUrl(`/blocks/${block.id}`, block.blocker?.host),
+			actor: this.userEntityService.genLocalUserUri(block.blockerId, block.blocker?.host),
 			object: block.blockee.uri,
 		};
 	}
@@ -142,8 +154,8 @@ export class ApRendererService {
 	@bindThis
 	public renderCreate(object: IObject, note: MiNote): ICreate {
 		const activity: ICreate = {
-			id: `${this.config.url}/notes/${note.id}/activity`,
-			actor: this.userEntityService.genLocalUserUri(note.userId),
+			id: this.localUrl(`/notes/${note.id}/activity`, note.userHost),
+			actor: this.userEntityService.genLocalUserUri(note.userId, note.userHost),
 			type: 'Create',
 			published: this.idService.parse(note.id).date.toISOString(),
 			object,
@@ -156,10 +168,10 @@ export class ApRendererService {
 	}
 
 	@bindThis
-	public renderDelete(object: IObject | string, user: { id: MiUser['id']; host: null }): IDelete {
+	public renderDelete(object: IObject | string, user: { id: MiUser['id']; host: MiUser['host'] }): IDelete {
 		return {
 			type: 'Delete',
-			actor: this.userEntityService.genLocalUserUri(user.id),
+			actor: this.userEntityService.genLocalUserUri(user.id, user.host),
 			object,
 			published: new Date().toISOString(),
 		};
@@ -179,7 +191,7 @@ export class ApRendererService {
 	@bindThis
 	public renderEmoji(emoji: MiEmoji): IApEmoji {
 		return {
-			id: `${this.config.url}/emojis/${emoji.name}`,
+			id: this.localUrl(`/emojis/${emoji.name}`, emoji.host),
 			type: 'Emoji',
 			name: `:${emoji.name}:`,
 			updated: emoji.updatedAt != null ? emoji.updatedAt.toISOString() : new Date().toISOString(),
@@ -200,7 +212,7 @@ export class ApRendererService {
 	public renderFlag(user: MiLocalUser, object: IObject | string, content: string): IFlag {
 		return {
 			type: 'Flag',
-			actor: this.userEntityService.genLocalUserUri(user.id),
+			actor: this.userEntityService.genLocalUserUri(user.id, user.host),
 			content,
 			object,
 		};
@@ -209,9 +221,9 @@ export class ApRendererService {
 	@bindThis
 	public renderFollowRelay(relay: MiRelay, relayActor: MiLocalUser): IFollow {
 		return {
-			id: `${this.config.url}/activities/follow-relay/${relay.id}`,
+			id: this.localUrl(`/activities/follow-relay/${relay.id}`, relayActor.host),
 			type: 'Follow',
-			actor: this.userEntityService.genLocalUserUri(relayActor.id),
+			actor: this.userEntityService.genLocalUserUri(relayActor.id, relayActor.host),
 			object: 'https://www.w3.org/ns/activitystreams#Public',
 		};
 	}
@@ -232,8 +244,9 @@ export class ApRendererService {
 		followee: MiPartialLocalUser | MiPartialRemoteUser,
 		requestId?: string,
 	): IFollow {
+		const localActor = this.userEntityService.isLocalUser(follower) ? follower : this.userEntityService.isLocalUser(followee) ? followee : null;
 		return {
-			id: requestId ?? `${this.config.url}/follows/${follower.id}/${followee.id}`,
+			id: requestId ?? this.localUrl(`/follows/${follower.id}/${followee.id}`, localActor?.host),
 			type: 'Follow',
 			actor: this.userEntityService.getUserUri(follower),
 			object: this.userEntityService.getUserUri(followee),
@@ -244,7 +257,7 @@ export class ApRendererService {
 	public renderHashtag(tag: string): IApHashtag {
 		return {
 			type: 'Hashtag',
-			href: `${this.config.url}/tags/${encodeURIComponent(tag)}`,
+			href: this.localUrl(`/tags/${encodeURIComponent(tag)}`),
 			name: `#${tag}`,
 		};
 	}
@@ -294,9 +307,9 @@ export class ApRendererService {
 	@bindThis
 	public renderKey(user: MiLocalUser, key: MiUserKeypair, postfix?: string): IKey {
 		return {
-			id: `${this.config.url}/users/${user.id}${postfix ?? '/publickey'}`,
+			id: this.localUrl(`/users/${user.id}${postfix ?? '/publickey'}`, user.host),
 			type: 'Key',
-			owner: this.userEntityService.genLocalUserUri(user.id),
+			owner: this.userEntityService.genLocalUserUri(user.id, user.host),
 			publicKeyPem: createPublicKey(key.publicKey).export({
 				type: 'spki',
 				format: 'pem',
@@ -305,21 +318,23 @@ export class ApRendererService {
 	}
 
 	@bindThis
-	public async renderLike(noteReaction: MiNoteReaction, note: { uri: string | null }): Promise<ILike> {
+	public async renderLike(noteReaction: MiNoteReaction, note: { uri: string | null }, actorHost?: string | null): Promise<ILike> {
 		const reaction = noteReaction.reaction;
+		const actor = this.userEntityService.genLocalUserUri(noteReaction.userId, actorHost);
+		const origin = new URL(actor).origin;
 
 		const object: ILike = {
 			type: 'Like',
-			id: `${this.config.url}/likes/${noteReaction.id}`,
-			actor: `${this.config.url}/users/${noteReaction.userId}`,
-			object: note.uri ? note.uri : `${this.config.url}/notes/${noteReaction.noteId}`,
+			id: `${origin}/likes/${noteReaction.id}`,
+			actor,
+			object: note.uri ? note.uri : `${origin}/notes/${noteReaction.noteId}`,
 			content: reaction,
 			_misskey_reaction: reaction,
 		};
 
 		if (reaction.startsWith(':')) {
 			const name = reaction.replaceAll(':', '');
-			const emoji = (await this.customEmojiService.localEmojisCache.fetch()).get(name);
+			const emoji = (await this.customEmojiService.fetchLocalEmojis(actorHost)).get(name);
 
 			if (emoji && !emoji.localOnly) object.tag = [this.renderEmoji(emoji)];
 		}
@@ -344,7 +359,7 @@ export class ApRendererService {
 		const actor = this.userEntityService.getUserUri(src);
 		const target = this.userEntityService.getUserUri(dst);
 		return {
-			id: `${this.config.url}/moves/${src.id}/${dst.id}`,
+			id: this.localUrl(`/moves/${src.id}/${dst.id}`, this.userEntityService.isLocalUser(src) ? src.host : undefined),
 			actor,
 			type: 'Move',
 			object: actor,
@@ -376,7 +391,7 @@ export class ApRendererService {
 						if (dive) {
 							inReplyTo = await this.renderNote(inReplyToNote, false);
 						} else {
-							inReplyTo = `${this.config.url}/notes/${inReplyToNote.id}`;
+							inReplyTo = this.localUrl(`/notes/${inReplyToNote.id}`, inReplyToNote.userHost);
 						}
 					}
 				}
@@ -391,16 +406,16 @@ export class ApRendererService {
 			const renote = await this.notesRepository.findOneBy({ id: note.renoteId });
 
 			if (renote) {
-				quote = renote.uri ? renote.uri : `${this.config.url}/notes/${renote.id}`;
+				quote = renote.uri ? renote.uri : this.localUrl(`/notes/${renote.id}`, renote.userHost);
 			}
 		}
 
-		const attributedTo = this.userEntityService.genLocalUserUri(note.userId);
+		const attributedTo = this.userEntityService.genLocalUserUri(note.userId, note.userHost);
 
 		const mentions = (JSON.parse(note.mentionedRemoteUsers) as IMentionedRemoteUsers).map(x => x.uri);
 
 		if (note.text && note.channelId && !note.channel?.isLocalOnly) {
-			note.text = note.text + '\n\nFrom https://' + this.config.host + '/channels/' + note.channelId;
+			note.text = note.text + `\n\nFrom ${this.localOrigin(note.userHost)}/channels/${note.channelId}`;
 		}
 
 		let to: string[] = [];
@@ -448,7 +463,7 @@ export class ApRendererService {
 
 		const { content, noMisskeyContent } = this.apMfmService.getNoteHtml(note, extraHtml);
 
-		const emojis = await this.getEmojis(note.emojis);
+		const emojis = await this.getEmojis(note.emojis, note.userHost);
 		const apemojis = emojis.filter(emoji => !emoji.localOnly).map(emoji => this.renderEmoji(emoji));
 
 		const tag = [
@@ -471,7 +486,7 @@ export class ApRendererService {
 		} as const : {};
 
 		return {
-			id: `${this.config.url}/notes/${note.id}`,
+			id: this.localUrl(`/notes/${note.id}`, note.userHost),
 			type: 'Note',
 			attributedTo,
 			summary: summary ?? undefined,
@@ -498,7 +513,7 @@ export class ApRendererService {
 
 	@bindThis
 	public async renderPerson(user: MiLocalUser) {
-		const id = this.userEntityService.genLocalUserUri(user.id);
+		const id = this.userEntityService.genLocalUserUri(user.id, user.host);
 		const isSystem = user.username.includes('.');
 
 		const [avatar, banner, profile] = await Promise.all([
@@ -532,7 +547,7 @@ export class ApRendererService {
 				: field.value,
 		}));
 
-		const emojis = await this.getEmojis(user.emojis);
+		const emojis = await this.getEmojis(user.emojis, user.host);
 		const apemojis = emojis.filter(emoji => !emoji.localOnly).map(emoji => this.renderEmoji(emoji));
 
 		const hashtagTags = user.tags.map(tag => this.renderHashtag(tag));
@@ -552,12 +567,12 @@ export class ApRendererService {
 			followers: `${id}/followers`,
 			following: `${id}/following`,
 			featured: `${id}/collections/featured`,
-			sharedInbox: `${this.config.url}/inbox`,
-			endpoints: { sharedInbox: `${this.config.url}/inbox` },
-			url: `${this.config.url}/@${user.username}`,
+			sharedInbox: this.localUrl('/inbox', user.host),
+			endpoints: { sharedInbox: this.localUrl('/inbox', user.host) },
+			url: this.localUrl(`/@${user.username}`, user.host),
 			preferredUsername: user.username,
 			name: user.name,
-			summary: profile.description ? this.mfmService.toHtml(mfm.parse(profile.description)) : null,
+			summary: profile.description ? this.mfmService.toHtml(mfm.parse(profile.description), [], null, user.host) : null,
 			_misskey_summary: profile.description,
 			_misskey_followedMessage: profile.followedMessage,
 			_misskey_requireSigninToViewContents: user.requireSigninToViewContents,
@@ -593,11 +608,11 @@ export class ApRendererService {
 	}
 
 	@bindThis
-	public renderQuestion(user: { id: MiUser['id'] }, note: MiNote, poll: MiPoll): IQuestion {
+	public renderQuestion(user: { id: MiUser['id']; host?: MiUser['host'] }, note: MiNote, poll: MiPoll): IQuestion {
 		return {
 			type: 'Question',
-			id: `${this.config.url}/questions/${note.id}`,
-			actor: this.userEntityService.genLocalUserUri(user.id),
+			id: this.localUrl(`/questions/${note.id}`, user.host ?? note.userHost),
+			actor: this.userEntityService.genLocalUserUri(user.id, user.host ?? note.userHost),
 			content: note.text ?? '',
 			[poll.multiple ? 'anyOf' : 'oneOf']: poll.choices.map((text, i) => ({
 				name: text,
@@ -611,19 +626,19 @@ export class ApRendererService {
 	}
 
 	@bindThis
-	public renderReject(object: string | IObject, user: { id: MiUser['id'] }): IReject {
+	public renderReject(object: string | IObject, user: { id: MiUser['id']; host?: MiUser['host'] }): IReject {
 		return {
 			type: 'Reject',
-			actor: this.userEntityService.genLocalUserUri(user.id),
+			actor: this.userEntityService.genLocalUserUri(user.id, user.host),
 			object,
 		};
 	}
 
 	@bindThis
-	public renderRemove(user: { id: MiUser['id'] }, target: string | IObject | undefined, object: string | IObject): IRemove {
+	public renderRemove(user: { id: MiUser['id']; host?: MiUser['host'] }, target: string | IObject | undefined, object: string | IObject): IRemove {
 		return {
 			type: 'Remove',
-			actor: this.userEntityService.genLocalUserUri(user.id),
+			actor: this.userEntityService.genLocalUserUri(user.id, user.host),
 			target,
 			object,
 		};
@@ -638,23 +653,23 @@ export class ApRendererService {
 	}
 
 	@bindThis
-	public renderUndo(object: string | IObject, user: { id: MiUser['id'] }): IUndo {
+	public renderUndo(object: string | IObject, user: { id: MiUser['id']; host?: MiUser['host'] }): IUndo {
 		const id = typeof object !== 'string' && typeof object.id === 'string' && this.utilityService.isUriLocal(object.id) ? `${object.id}/undo` : undefined;
 
 		return {
 			type: 'Undo',
 			...(id ? { id } : {}),
-			actor: this.userEntityService.genLocalUserUri(user.id),
+			actor: this.userEntityService.genLocalUserUri(user.id, user.host),
 			object,
 			published: new Date().toISOString(),
 		};
 	}
 
 	@bindThis
-	public renderUpdate(object: string | IObject, user: { id: MiUser['id'] }): IUpdate {
+	public renderUpdate(object: string | IObject, user: { id: MiUser['id']; host?: MiUser['host'] }): IUpdate {
 		return {
-			id: `${this.config.url}/users/${user.id}#updates/${new Date().getTime()}`,
-			actor: this.userEntityService.genLocalUserUri(user.id),
+			id: `${this.userEntityService.genLocalUserUri(user.id, user.host)}#updates/${new Date().getTime()}`,
+			actor: this.userEntityService.genLocalUserUri(user.id, user.host),
 			type: 'Update',
 			to: ['https://www.w3.org/ns/activitystreams#Public'],
 			object,
@@ -663,17 +678,17 @@ export class ApRendererService {
 	}
 
 	@bindThis
-	public renderVote(user: { id: MiUser['id'] }, vote: MiPollVote, note: MiNote, poll: MiPoll, pollOwner: MiRemoteUser): ICreate {
+	public renderVote(user: { id: MiUser['id']; host?: MiUser['host'] }, vote: MiPollVote, note: MiNote, poll: MiPoll, pollOwner: MiRemoteUser): ICreate {
 		return {
-			id: `${this.config.url}/users/${user.id}#votes/${vote.id}/activity`,
-			actor: this.userEntityService.genLocalUserUri(user.id),
+			id: `${this.userEntityService.genLocalUserUri(user.id, user.host ?? note.userHost)}#votes/${vote.id}/activity`,
+			actor: this.userEntityService.genLocalUserUri(user.id, user.host ?? note.userHost),
 			type: 'Create',
 			to: [pollOwner.uri],
 			published: new Date().toISOString(),
 			object: {
-				id: `${this.config.url}/users/${user.id}#votes/${vote.id}`,
+				id: `${this.userEntityService.genLocalUserUri(user.id, user.host ?? note.userHost)}#votes/${vote.id}`,
 				type: 'Note',
-				attributedTo: this.userEntityService.genLocalUserUri(user.id),
+				attributedTo: this.userEntityService.genLocalUserUri(user.id, user.host ?? note.userHost),
 				to: [pollOwner.uri],
 				inReplyTo: note.uri,
 				name: poll.choices[vote.choice],
@@ -684,19 +699,19 @@ export class ApRendererService {
 	@bindThis
 	public addContext<T extends IObject>(x: T): T & { '@context': any; id: string; } {
 		if (typeof x === 'object' && x.id == null) {
-			x.id = `${this.config.url}/${randomUUID()}`;
+			x.id = this.localUrl(`/${randomUUID()}`);
 		}
 
 		return Object.assign({ '@context': CONTEXT }, x as T & { id: string });
 	}
 
 	@bindThis
-	public async attachLdSignature(activity: any, user: { id: MiUser['id']; host: null; }): Promise<IActivity> {
+	public async attachLdSignature(activity: any, user: { id: MiUser['id']; host: MiUser['host']; }): Promise<IActivity> {
 		const keypair = await this.userKeypairService.getUserKeypair(user.id);
 
 		const jsonLd = this.jsonLdService.use();
 		jsonLd.debug = false;
-		activity = await jsonLd.signRsaSignature2017(activity, keypair.privateKey, `${this.config.url}/users/${user.id}#main-key`);
+		activity = await jsonLd.signRsaSignature2017(activity, keypair.privateKey, `${this.userEntityService.genLocalUserUri(user.id, user.host)}#main-key`);
 
 		return activity;
 	}
@@ -750,10 +765,10 @@ export class ApRendererService {
 	}
 
 	@bindThis
-	private async getEmojis(names: string[]): Promise<MiEmoji[]> {
+	private async getEmojis(names: string[], host?: string | null): Promise<MiEmoji[]> {
 		if (names.length === 0) return [];
 
-		const allEmojis = await this.customEmojiService.localEmojisCache.fetch();
+		const allEmojis = await this.customEmojiService.fetchLocalEmojis(host);
 		const emojis = names.map(name => allEmojis.get(name)).filter(x => x != null);
 
 		return emojis;

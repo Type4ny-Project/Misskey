@@ -16,6 +16,7 @@ import { AuthenticateService, AuthenticationError } from './AuthenticateService.
 import MainStreamConnection, { ConnectionRequest } from './stream/Connection.js';
 import type * as http from 'node:http';
 import { ContextIdFactory, ModuleRef } from '@nestjs/core';
+import { TenantService } from '@/core/TenantService.js';
 
 @Injectable()
 export class StreamingApiServerService {
@@ -30,6 +31,7 @@ export class StreamingApiServerService {
 		private moduleRef: ModuleRef,
 		private authenticateService: AuthenticateService,
 		private usersService: UserService,
+		private tenantService: TenantService,
 	) {
 	}
 
@@ -50,6 +52,7 @@ export class StreamingApiServerService {
 
 			let user: MiLocalUser | null = null;
 			let app: MiAccessToken | null = null;
+			const tenantContext = await this.tenantService.resolve(request.headers.host);
 
 			// https://datatracker.ietf.org/doc/html/rfc6750.html#section-2.1
 			// Note that the standard WHATWG WebSocket API does not support setting any headers,
@@ -59,7 +62,7 @@ export class StreamingApiServerService {
 				: q.get('i');
 
 			try {
-				[user, app] = await this.authenticateService.authenticate(token);
+				[user, app] = await this.authenticateService.authenticate(token, tenantContext.tenantHost);
 
 				if (app !== null && !app.permission.some(p => p === 'read:account')) {
 					throw new AuthenticationError('Your app does not have necessary permissions to use websocket API.');
@@ -87,6 +90,7 @@ export class StreamingApiServerService {
 			this.moduleRef.registerRequestByContextId<ConnectionRequest>({
 				user,
 				token: app,
+				tenantContext,
 			}, contextId);
 			const stream = await this.moduleRef.create(MainStreamConnection, contextId);
 

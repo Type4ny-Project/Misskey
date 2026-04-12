@@ -90,20 +90,20 @@ export class CleanRemoteNotesProcessorService {
 			'note."id" < :newestLimit',
 			'note."clippedCount" = 0',
 			'note."pageCount" = 0',
-			'note."userHost" IS NOT NULL',
+			'NOT EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = note."userHost")',
 			'NOT EXISTS (SELECT 1 FROM user_note_pining WHERE "noteId" = note."id")',
 			'NOT EXISTS (SELECT 1 FROM note_favorite WHERE "noteId" = note."id")',
-			'NOT EXISTS (SELECT 1 FROM note_reaction INNER JOIN "user" ON note_reaction."userId" = "user".id WHERE note_reaction."noteId" = note."id" AND "user"."host" IS NULL)',
+			'NOT EXISTS (SELECT 1 FROM note_reaction INNER JOIN "user" ON note_reaction."userId" = "user".id WHERE note_reaction."noteId" = note."id" AND EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = "user"."host"))',
 		].join(' AND ');
 
 		const minId = (await this.notesRepository.createQueryBuilder('note')
 			.select('MIN(note.id)', 'minId')
 			.where({
 				id: LessThan(initialConfig.newestLimit),
-				userHost: Not(IsNull()),
 				replyId: IsNull(),
 				renoteId: IsNull(),
 			})
+			.andWhere('NOT EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = note."userHost")')
 			.getRawOne<{ minId?: MiNote['id'] }>())?.minId;
 
 		if (!minId) {

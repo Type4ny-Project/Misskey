@@ -65,7 +65,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private roleService: RoleService,
 		private idService: IdService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate!) : undefined);
 			const sinceId = ps.sinceId ?? (ps.sinceDate ? this.idService.gen(ps.sinceDate!) : undefined);
 
@@ -78,6 +78,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				userId: ps.userId,
 				channelId: ps.channelId,
 				host: ps.host,
+				tenantHost: tenantContext!.tenantHost,
 			}, {
 				untilId: untilId,
 				sinceId: sinceId,

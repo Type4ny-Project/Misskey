@@ -167,7 +167,7 @@ export class DriveFileEntityService {
 	public async calcDriveUsageOfLocal(): Promise<number> {
 		const { sum } = await this.driveFilesRepository
 			.createQueryBuilder('file')
-			.where('file.userHost IS NULL')
+			.where('EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = file."userHost")')
 			.andWhere('file.isLink = FALSE')
 			.select('SUM(file.size)', 'sum')
 			.getRawOne();
@@ -179,7 +179,7 @@ export class DriveFileEntityService {
 	public async calcDriveUsageOfRemote(): Promise<number> {
 		const { sum } = await this.driveFilesRepository
 			.createQueryBuilder('file')
-			.where('file.userHost IS NOT NULL')
+			.where('NOT EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = file."userHost")')
 			.andWhere('file.isLink = FALSE')
 			.select('SUM(file.size)', 'sum')
 			.getRawOne();

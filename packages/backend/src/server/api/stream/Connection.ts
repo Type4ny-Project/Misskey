@@ -40,6 +40,7 @@ import type { ChannelRequest } from './channel.js';
 import type { ChannelConstructor } from './channel.js';
 import type Channel from './channel.js';
 import type { EventEmitter } from 'events';
+import type { TenantContext } from '@/core/TenantService.js';
 
 const MAX_CHANNELS_PER_CONNECTION = 32;
 
@@ -51,6 +52,7 @@ const MAX_CHANNELS_PER_CONNECTION = 32;
 export default class Connection {
 	public user?: MiUser;
 	public token?: MiAccessToken;
+	public tenantContext: TenantContext;
 	private wsConnection: WebSocket.WebSocket;
 	public subscriber: StreamEventEmitter;
 	private channels: Map<string, Channel> = new Map();
@@ -76,6 +78,11 @@ export default class Connection {
 	) {
 		if (request.user) this.user = request.user;
 		if (request.token) this.token = request.token;
+		this.tenantContext = request.tenantContext;
+	}
+
+	public get tenantHost() {
+		return this.tenantContext.tenantHost;
 	}
 
 	@bindThis
@@ -392,4 +399,5 @@ export default class Connection {
 export interface ConnectionRequest {
 	user: MiUser | null | undefined,
 	token: MiAccessToken | null | undefined,
+	tenantContext: TenantContext,
 }

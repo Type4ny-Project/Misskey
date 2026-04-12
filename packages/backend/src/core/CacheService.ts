@@ -10,6 +10,7 @@ import { MemoryKVCache, RedisKVCache } from '@/misc/cache.js';
 import type { MiLocalUser, MiUser } from '@/models/User.js';
 import { DI } from '@/di-symbols.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { bindThis } from '@/decorators.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
 import type { OnApplicationShutdown } from '@nestjs/common';
@@ -53,6 +54,7 @@ export class CacheService implements OnApplicationShutdown {
 		private followingsRepository: FollowingsRepository,
 
 		private userEntityService: UserEntityService,
+		private tenantService: TenantService,
 	) {
 		//this.onMessage = this.onMessage.bind(this);
 
@@ -148,16 +150,18 @@ export class CacheService implements OnApplicationShutdown {
 							}
 						}
 						if (this.userEntityService.isLocalUser(user)) {
-							this.localUserByNativeTokenCache.set(user.token!, user);
-							this.localUserByIdCache.set(user.id, user);
+							const tenantHost = this.tenantService.tenantHostFor(user.host);
+							this.localUserByNativeTokenCache.set(`${tenantHost}:${user.token!}`, user);
+							this.localUserByIdCache.set(`${tenantHost}:${user.id}`, user);
 						}
 					}
 					break;
 				}
 				case 'userTokenRegenerated': {
 					const user = await this.usersRepository.findOneByOrFail({ id: body.id }) as MiLocalUser;
-					this.localUserByNativeTokenCache.delete(body.oldToken);
-					this.localUserByNativeTokenCache.set(body.newToken, user);
+					const tenantHost = this.tenantService.tenantHostFor(user.host);
+					this.localUserByNativeTokenCache.delete(`${tenantHost}:${body.oldToken}`);
+					this.localUserByNativeTokenCache.set(`${tenantHost}:${body.newToken}`, user);
 					break;
 				}
 				case 'follow': {

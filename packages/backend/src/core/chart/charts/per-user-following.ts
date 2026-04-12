@@ -4,7 +4,7 @@
  */
 
 import { Injectable, Inject } from '@nestjs/common';
-import { Not, IsNull, DataSource } from 'typeorm';
+import { DataSource } from 'typeorm';
 import * as Redis from 'ioredis';
 import type { MiUser } from '@/models/User.js';
 import { DI } from '@/di-symbols.js';
@@ -40,16 +40,20 @@ export default class PerUserFollowingChart extends Chart<typeof schema> { // esl
 
 	protected async tickMajor(group: string): Promise<Partial<KVs<typeof schema>>> {
 		const [
-			localFollowingsCount,
-			localFollowersCount,
-			remoteFollowingsCount,
-			remoteFollowersCount,
+			localFollowingsCountRow,
+			localFollowersCountRow,
+			remoteFollowingsCountRow,
+			remoteFollowersCountRow,
 		] = await Promise.all([
-			this.followingsRepository.countBy({ followerId: group, followeeHost: IsNull() }),
-			this.followingsRepository.countBy({ followeeId: group, followerHost: IsNull() }),
-			this.followingsRepository.countBy({ followerId: group, followeeHost: Not(IsNull()) }),
-			this.followingsRepository.countBy({ followeeId: group, followerHost: Not(IsNull()) }),
+			this.db.query(`SELECT COUNT(*)::int AS count FROM following f WHERE f."followerId" = $1 AND EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = f."followeeHost")`, [group]),
+			this.db.query(`SELECT COUNT(*)::int AS count FROM following f WHERE f."followeeId" = $1 AND EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = f."followerHost")`, [group]),
+			this.db.query(`SELECT COUNT(*)::int AS count FROM following f WHERE f."followerId" = $1 AND NOT EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = f."followeeHost")`, [group]),
+			this.db.query(`SELECT COUNT(*)::int AS count FROM following f WHERE f."followeeId" = $1 AND NOT EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = f."followerHost")`, [group]),
 		]);
+		const localFollowingsCount = localFollowingsCountRow[0]?.count ?? 0;
+		const localFollowersCount = localFollowersCountRow[0]?.count ?? 0;
+		const remoteFollowingsCount = remoteFollowingsCountRow[0]?.count ?? 0;
+		const remoteFollowersCount = remoteFollowersCountRow[0]?.count ?? 0;
 
 		return {
 			'local.followings.total': localFollowingsCount,

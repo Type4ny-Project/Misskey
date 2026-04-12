@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { OnApplicationShutdown } from '@nestjs/common';
-import { DataSource, IsNull } from 'typeorm';
+import { DataSource } from 'typeorm';
 import * as Redis from 'ioredis';
 import bcrypt from 'bcryptjs';
 import { MiLocalUser, MiUser } from '@/models/User.js';
@@ -19,6 +19,8 @@ import { bindThis } from '@/decorators.js';
 import { generateNativeUserToken } from '@/misc/token.js';
 import { IdService } from '@/core/IdService.js';
 import { genRsaKeyPair } from '@/misc/gen-key-pair.js';
+import { TenantService } from '@/core/TenantService.js';
+import { isDuplicateKeyValueError } from '@/misc/is-duplicate-key-value-error.js';
 
 export const SYSTEM_ACCOUNT_TYPES = ['actor', 'relay', 'proxy'] as const;
 
@@ -46,6 +48,7 @@ export class SystemAccountService implements OnApplicationShutdown {
 		private userProfilesRepository: UserProfilesRepository,
 
 		private idService: IdService,
+		private tenantService: TenantService,
 	) {
 		this.cache = new MemoryKVCache<MiLocalUser>(1000 * 60 * 10); // 10m
 
@@ -86,9 +89,10 @@ export class SystemAccountService implements OnApplicationShutdown {
 	public async fetch(type: typeof SYSTEM_ACCOUNT_TYPES[number]): Promise<MiLocalUser> {
 		const cached = this.cache.get(type);
 		if (cached) return cached;
+		const tenantHost = this.tenantService.getPrimaryTenantContext().tenantHost;
 
 		const systemAccount = await this.systemAccountsRepository.findOne({
-			where: { type: type },
+			where: { type: type, host: tenantHost },
 			relations: ['user'],
 		});
 
@@ -110,6 +114,7 @@ export class SystemAccountService implements OnApplicationShutdown {
 		username: MiUser['username'];
 		name?: MiUser['name'];
 	}): Promise<MiLocalUser> {
+		const tenantHost = this.tenantService.getPrimaryTenantContext().tenantHost;
 		const password = randomUUID();
 
 		// Generate hash of password
@@ -123,53 +128,70 @@ export class SystemAccountService implements OnApplicationShutdown {
 
 		let account!: MiUser;
 
-		// Start transaction
-		await this.db.transaction(async transactionalEntityManager => {
-			const exist = await transactionalEntityManager.findOneBy(MiUser, {
-				usernameLower: extra.username.toLowerCase(),
-				host: IsNull(),
-			});
+		try {
+			await this.db.transaction(async transactionalEntityManager => {
+				const exist = await transactionalEntityManager.findOneBy(MiUser, {
+					usernameLower: extra.username.toLowerCase(),
+					host: tenantHost,
+				});
 
-			if (exist) {
-				account = exist;
-				return;
+				if (exist) {
+					account = exist;
+					return;
+				}
+
+				account = await transactionalEntityManager.insert(MiUser, {
+					id: this.idService.gen(),
+					username: extra.username,
+					usernameLower: extra.username.toLowerCase(),
+					host: tenantHost,
+					token: secret,
+					isLocked: true,
+					isExplorable: false,
+					isBot: true,
+					name: extra.name,
+				}).then(x => transactionalEntityManager.findOneByOrFail(MiUser, x.identifiers[0]));
+
+				await transactionalEntityManager.insert(MiUserKeypair, {
+					publicKey: keyPair.publicKey,
+					privateKey: keyPair.privateKey,
+					userId: account.id,
+				});
+
+				await transactionalEntityManager.insert(MiUserProfile, {
+					userId: account.id,
+					autoAcceptFollowed: false,
+					password: hash,
+				});
+
+				await transactionalEntityManager.insert(MiUsedUsername, {
+					createdAt: new Date(),
+					username: extra.username.toLowerCase(),
+				});
+
+				await transactionalEntityManager.insert(MiSystemAccount, {
+					id: this.idService.gen(),
+					userId: account.id,
+					type: type,
+					host: tenantHost,
+				});
+			});
+		} catch (err) {
+			if (!isDuplicateKeyValueError(err)) throw err;
+
+			const existingAccount = await this.systemAccountsRepository.findOne({
+				where: { type, host: tenantHost },
+				relations: ['user'],
+			});
+			if (existingAccount?.user) {
+				account = existingAccount.user;
+			} else {
+				account = await this.usersRepository.findOneByOrFail({
+					usernameLower: extra.username.toLowerCase(),
+					host: tenantHost,
+				});
 			}
-
-			account = await transactionalEntityManager.insert(MiUser, {
-				id: this.idService.gen(),
-				username: extra.username,
-				usernameLower: extra.username.toLowerCase(),
-				host: null,
-				token: secret,
-				isLocked: true,
-				isExplorable: false,
-				isBot: true,
-				name: extra.name,
-			}).then(x => transactionalEntityManager.findOneByOrFail(MiUser, x.identifiers[0]));
-
-			await transactionalEntityManager.insert(MiUserKeypair, {
-				publicKey: keyPair.publicKey,
-				privateKey: keyPair.privateKey,
-				userId: account.id,
-			});
-
-			await transactionalEntityManager.insert(MiUserProfile, {
-				userId: account.id,
-				autoAcceptFollowed: false,
-				password: hash,
-			});
-
-			await transactionalEntityManager.insert(MiUsedUsername, {
-				createdAt: new Date(),
-				username: extra.username.toLowerCase(),
-			});
-
-			await transactionalEntityManager.insert(MiSystemAccount, {
-				id: this.idService.gen(),
-				userId: account.id,
-				type: type,
-			});
-		});
+		}
 
 		return account as MiLocalUser;
 	}

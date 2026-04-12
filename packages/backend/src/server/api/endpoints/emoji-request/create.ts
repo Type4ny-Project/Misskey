@@ -112,7 +112,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> {
 		private customEmojiService: CustomEmojiService,
 		private metaService: MetaService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const namePattern = /^[a-z0-9_-]+$/;
 			if (!namePattern.test(ps.name)) {
 				throw new ApiError(meta.errors.invalidName);
@@ -122,7 +122,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> {
 			if (driveFile == null) throw new ApiError(meta.errors.noSuchFile);
 			if (!FILE_TYPE_IMAGE.includes(driveFile.type)) throw new ApiError(meta.errors.unsupportedFileType);
 
-			const isDuplicate = await this.customEmojiService.checkDuplicate(ps.name);
+			const isDuplicate = await this.customEmojiService.checkDuplicate(ps.name, tenantContext!.tenantHost);
 			if (isDuplicate) throw new ApiError(meta.errors.duplicateName);
 
 			const instance = await this.metaService.fetch(true);
@@ -136,7 +136,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> {
 					name: ps.name,
 					category: ps.category ?? null,
 					aliases: ps.aliases ?? [],
-					host: null,
+					host: tenantContext!.tenantHost,
 					license: ps.license ?? null,
 					isSensitive: false,
 					localOnly: false,

@@ -9,7 +9,7 @@ import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
 @Entity('system_account')
-@Index(['type'], { unique: true })
+@Index(['type', 'host'], { unique: true })
 export class MiSystemAccount {
 	@PrimaryColumn(id())
 	public id: string;
@@ -28,4 +28,11 @@ export class MiSystemAccount {
 		length: 256,
 	})
 	public type: string;
+
+	@Index()
+	@Column('varchar', {
+		length: 255,
+		nullable: true,
+	})
+	public host: string | null;
 }

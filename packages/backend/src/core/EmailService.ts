@@ -16,6 +16,7 @@ import type { MiMeta, UserProfilesRepository } from '@/models/_.js';
 import { LoggerService } from '@/core/LoggerService.js';
 import { bindThis } from '@/decorators.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
+import { TenantService } from '@/core/TenantService.js';
 
 @Injectable()
 export class EmailService {
@@ -32,6 +33,7 @@ export class EmailService {
 		private userProfilesRepository: UserProfilesRepository,
 
 		private loggerService: LoggerService,
+		private tenantService: TenantService,
 		private utilityService: UtilityService,
 		private httpRequestService: HttpRequestService,
 	) {
@@ -39,11 +41,14 @@ export class EmailService {
 	}
 
 	@bindThis
-	public async sendEmail(to: string, subject: string, html: string, text: string) {
+	public async sendEmail(to: string, subject: string, html: string, text: string, options?: { tenantHost?: string | null; tenantUrl?: string | null; }) {
 		if (!this.meta.enableEmail) return;
 
-		const iconUrl = `${this.config.url}/static-assets/mi-white.png`;
-		const emailSettingUrl = `${this.config.url}/settings/email`;
+		const tenantHost = options?.tenantHost ?? null;
+		const tenantUrl = options?.tenantUrl ?? this.tenantService.tenantUrlFor(tenantHost);
+		const linkHost = this.tenantService.tenantHostFor(tenantHost);
+		const iconUrl = `${tenantUrl}/static-assets/mi-white.png`;
+		const emailSettingUrl = `${tenantUrl}/settings/email`;
 
 		const enableAuth = this.meta.smtpUser != null && this.meta.smtpUser !== '';
 
@@ -135,7 +140,7 @@ export class EmailService {
 			</footer>
 		</main>
 		<nav>
-			<a href="${ this.config.url }">${ this.config.host }</a>
+			<a href="${ tenantUrl }">${ linkHost }</a>
 		</nav>
 	</body>
 </html>`;

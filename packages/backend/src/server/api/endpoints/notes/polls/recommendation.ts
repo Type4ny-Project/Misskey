@@ -54,9 +54,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private noteEntityService: NoteEntityService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const query = this.pollsRepository.createQueryBuilder('poll')
-				.where('poll.userHost IS NULL')
+				.where('poll.userHost = :tenantHost', { tenantHost: tenantContext!.tenantHost })
 				.andWhere('poll.userId != :meId', { meId: me.id })
 				.andWhere('poll.noteVisibility = \'public\'')
 				.andWhere(new Brackets(qb => {

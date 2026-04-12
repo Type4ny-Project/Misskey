@@ -13,6 +13,7 @@ import type { MiLocalUser, MiRemoteUser } from '@/models/User.js';
 import type { Config } from '@/config.js';
 import type Logger from '@/logger.js';
 import { UtilityService } from '@/core/UtilityService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { ILink, WebfingerService } from '@/core/WebfingerService.js';
 import { RemoteLoggerService } from '@/core/RemoteLoggerService.js';
 import { ApDbResolverService } from '@/core/activitypub/ApDbResolverService.js';
@@ -35,6 +36,7 @@ export class RemoteUserResolveService {
 		private remoteLoggerService: RemoteLoggerService,
 		private apDbResolverService: ApDbResolverService,
 		private apPersonService: ApPersonService,
+		private tenantService: TenantService,
 	) {
 		this.logger = this.remoteLoggerService.logger.createSubLogger('resolve-user');
 	}
@@ -45,7 +47,7 @@ export class RemoteUserResolveService {
 
 		if (host == null) {
 			this.logger.info(`return local user: ${usernameLower}`);
-			return await this.usersRepository.findOneBy({ usernameLower, host: IsNull() }).then(u => {
+			return await this.usersRepository.findOneBy({ usernameLower, host: this.tenantService.getPrimaryTenantContext().tenantHost }).then(u => {
 				if (u == null) {
 					throw new Error('user not found');
 				} else {
@@ -56,9 +58,9 @@ export class RemoteUserResolveService {
 
 		host = this.utilityService.toPuny(host);
 
-		if (host === this.utilityService.toPuny(this.config.host)) {
+		if (this.tenantService.isManagedHost(host)) {
 			this.logger.info(`return local user: ${usernameLower}`);
-			return await this.usersRepository.findOneBy({ usernameLower, host: IsNull() }).then(u => {
+			return await this.usersRepository.findOneBy({ usernameLower, host }).then(u => {
 				if (u == null) {
 					throw new Error('user not found');
 				} else {

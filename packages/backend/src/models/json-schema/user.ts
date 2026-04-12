@@ -62,6 +62,14 @@ export const packedUserLiteSchema = {
 			example: 'misskey.example.com',
 			description: 'The local host is represented with `null`.',
 		},
+		isLocal: {
+			type: 'boolean',
+			nullable: false, optional: false,
+		},
+		isManaged: {
+			type: 'boolean',
+			nullable: false, optional: false,
+		},
 		avatarUrl: {
 			type: 'string',
 			format: 'url',

@@ -192,7 +192,7 @@ export class NoteUpdateService implements OnApplicationShutdown {
 	}
 
 	@bindThis
-	private async deliverToConcerned(user: { id: MiLocalUser['id']; host: null; }, note: MiNote, content: any) {
+	private async deliverToConcerned(user: { id: MiLocalUser['id']; host: MiLocalUser['host']; }, note: MiNote, content: any) {
 		await this.apDeliverManagerService.deliverToFollowers(user, content);
 		await this.relayService.deliverToRelays(user, content);
 		const remoteUsers = await this.getMentionedRemoteUsers(note);

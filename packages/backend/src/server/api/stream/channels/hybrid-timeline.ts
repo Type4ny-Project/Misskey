@@ -65,7 +65,7 @@ export class HybridTimelineChannel extends Channel {
 			if (!(
 				isMe ||
 				Object.hasOwn(this.following, note.userId) ||
-				(note.user.host == null && note.visibility === 'public')
+				(note.user.host === this.tenantHost && note.visibility === 'public')
 			)) {
 				return;
 			}

@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { IsNull } from 'typeorm';
 import { Inject, Injectable } from '@nestjs/common';
 import type { UsersRepository, FollowingsRepository, UserProfilesRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
@@ -101,10 +100,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private queryService: QueryService,
 		private roleService: RoleService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const user = await this.usersRepository.findOneBy('userId' in ps
 				? { id: ps.userId }
-				: { usernameLower: ps.username.toLowerCase(), host: this.utilityService.toPunyNullable(ps.host) ?? IsNull() });
+				: { usernameLower: ps.username.toLowerCase(), host: this.utilityService.toPunyNullable(ps.host) ?? tenantContext!.tenantHost });
 
 			if (user == null) {
 				throw new ApiError(meta.errors.noSuchUser);

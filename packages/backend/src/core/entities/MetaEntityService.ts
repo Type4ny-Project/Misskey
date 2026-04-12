@@ -8,13 +8,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import JSON5 from 'json5';
 import type { Packed } from '@/misc/json-schema.js';
 import type { MiMeta } from '@/models/Meta.js';
-import type { AdsRepository } from '@/models/_.js';
+import type { AdsRepository, TenantMetasRepository } from '@/models/_.js';
 import { MAX_NOTE_TEXT_LENGTH } from '@/const.js';
 import { bindThis } from '@/decorators.js';
 import { SystemAccountService } from '@/core/SystemAccountService.js';
 import type { Config } from '@/config.js';
 import { DI } from '@/di-symbols.js';
 import { DEFAULT_POLICIES } from '@/core/RoleService.js';
+import { TenantService } from '@/core/TenantService.js';
 
 @Injectable()
 export class MetaEntityService {
@@ -28,11 +29,38 @@ export class MetaEntityService {
 		@Inject(DI.adsRepository)
 		private adsRepository: AdsRepository,
 
+		@Inject(DI.tenantMetasRepository)
+		private tenantMetasRepository: TenantMetasRepository,
+
 		private systemAccountService: SystemAccountService,
+		private tenantService: TenantService,
 	) { }
 
 	@bindThis
-	public async pack(meta?: MiMeta): Promise<Packed<'MetaLite'>> {
+	private async getTenantMeta(tenantHost?: string) {
+		if (!tenantHost) return null;
+		return await this.tenantMetasRepository.findOneBy({ host: tenantHost });
+	}
+
+	@bindThis
+	private applyTenantMeta<T extends Packed<'MetaLite'> | Packed<'MetaDetailed'>>(packed: T, tenantMeta: Awaited<ReturnType<typeof this.getTenantMeta>>, tenantUrl?: string): T {
+		return {
+			...packed,
+			uri: tenantUrl ?? packed.uri,
+			name: tenantMeta?.name ?? packed.name,
+			shortName: tenantMeta?.shortName ?? packed.shortName,
+			description: tenantMeta?.description ?? packed.description,
+			themeColor: tenantMeta?.themeColor ?? packed.themeColor,
+			disableRegistration: tenantMeta?.disableRegistration ?? packed.disableRegistration,
+			tosUrl: tenantMeta?.tosUrl ?? packed.tosUrl,
+			privacyPolicyUrl: tenantMeta?.privacyPolicyUrl ?? packed.privacyPolicyUrl,
+			iconUrl: tenantMeta?.iconUrl ?? packed.iconUrl,
+			bannerUrl: tenantMeta?.bannerUrl ?? packed.bannerUrl,
+		};
+	}
+
+	@bindThis
+	public async pack(meta?: MiMeta, options?: { tenantHost?: string; tenantUrl?: string; }): Promise<Packed<'MetaLite'>> {
 		let instance = meta;
 
 		if (!instance) {
@@ -139,18 +167,21 @@ export class MetaEntityService {
 			federation: this.meta.federation,
 		};
 
-		return packed;
+		const tenantHost = options?.tenantHost;
+		const tenantUrl = options?.tenantUrl ?? (tenantHost ? this.tenantService.tenantUrlFor(tenantHost) : undefined);
+		const tenantMeta = await this.getTenantMeta(tenantHost);
+		return this.applyTenantMeta(packed, tenantMeta, tenantUrl);
 	}
 
 	@bindThis
-	public async packDetailed(meta?: MiMeta): Promise<Packed<'MetaDetailed'>> {
+	public async packDetailed(meta?: MiMeta, options?: { tenantHost?: string; tenantUrl?: string; }): Promise<Packed<'MetaDetailed'>> {
 		let instance = meta;
 
 		if (!instance) {
 			instance = this.meta;
 		}
 
-		const packed = await this.pack(instance);
+		const packed = await this.pack(instance, options);
 
 		const proxyAccount = await this.systemAccountService.fetch('proxy');
 

@@ -17,6 +17,7 @@ import { CacheService } from '@/core/CacheService.js';
 import { QueryService } from '@/core/QueryService.js';
 import { IdService } from '@/core/IdService.js';
 import { LoggerService } from '@/core/LoggerService.js';
+import { UtilityService } from '@/core/UtilityService.js';
 import type { Index, MeiliSearch } from 'meilisearch';
 
 type K = string;
@@ -38,6 +39,7 @@ export type SearchOpts = {
 	userId?: MiNote['userId'] | null;
 	channelId?: MiNote['channelId'] | null;
 	host?: string | null;
+	tenantHost?: string;
 };
 
 export type SearchPagination = {
@@ -94,6 +96,7 @@ export class SearchService {
 		private queryService: QueryService,
 		private idService: IdService,
 		private loggerService: LoggerService,
+		private utilityService: UtilityService,
 	) {
 		if (meilisearch) {
 			this.meilisearchNoteIndex = meilisearch.index(`${config.meilisearch!.index}---notes`);
@@ -140,11 +143,12 @@ export class SearchService {
 				break;
 
 			case 'local':
-				if (note.userHost == null) break;
+				if (this.utilityService.isSelfHost(note.userHost)) break;
 				return;
 
 			default: {
-				if (note.userHost == null) break;
+				if (this.utilityService.isSelfHost(note.userHost)) break;
+				if (note.userHost == null) return;
 				if (this.meilisearchIndexScope.includes(note.userHost)) break;
 				return;
 			}
@@ -226,7 +230,7 @@ export class SearchService {
 
 		if (opts.host) {
 			if (opts.host === '.') {
-				query.andWhere('note.userHost IS NULL');
+				query.andWhere('note.userHost = :tenantHost', { tenantHost: opts.tenantHost ?? this.config.host });
 			} else {
 				query.andWhere('note.userHost = :host', { host: opts.host });
 			}
@@ -267,7 +271,7 @@ export class SearchService {
 		if (opts.channelId) filter.qs.push({ op: '=', k: 'channelId', v: opts.channelId });
 		if (opts.host) {
 			if (opts.host === '.') {
-				filter.qs.push({ op: 'is null', k: 'userHost' });
+				filter.qs.push({ op: '=', k: 'userHost', v: opts.tenantHost ?? this.config.host });
 			} else {
 				filter.qs.push({ op: '=', k: 'userHost', v: opts.host });
 			}

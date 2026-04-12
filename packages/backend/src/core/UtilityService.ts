@@ -12,6 +12,7 @@ import type { Config } from '@/config.js';
 import { bindThis } from '@/decorators.js';
 import { MiMeta, SoftwareSuspension } from '@/models/Meta.js';
 import { MiInstance } from '@/models/Instance.js';
+import { TenantService } from '@/core/TenantService.js';
 
 @Injectable()
 export class UtilityService {
@@ -21,23 +22,24 @@ export class UtilityService {
 
 		@Inject(DI.meta)
 		private meta: MiMeta,
+
+		private tenantService: TenantService,
 	) {
 	}
 
 	@bindThis
 	public getFullApAccount(username: string, host: string | null): string {
-		return host ? `${username}@${this.toPuny(host)}` : `${username}@${this.toPuny(this.config.host)}`;
+		return `${username}@${this.toPuny(this.tenantService.tenantHostFor(host))}`;
 	}
 
 	@bindThis
 	public isSelfHost(host: string | null): boolean {
-		if (host == null) return true;
-		return this.toPuny(this.config.host) === this.toPuny(host);
+		return host == null || this.tenantService.isManagedHost(host);
 	}
 
 	@bindThis
 	public isUriLocal(uri: string): boolean {
-		return this.punyHost(uri) === this.toPuny(this.config.host);
+		return this.tenantService.isManagedHost(this.punyHost(uri));
 	}
 
 	// メールアドレスのバリデーションを行う

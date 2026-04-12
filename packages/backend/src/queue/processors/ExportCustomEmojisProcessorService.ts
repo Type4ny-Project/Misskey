@@ -5,7 +5,6 @@
 
 import * as fs from 'node:fs';
 import { Inject, Injectable } from '@nestjs/common';
-import { IsNull } from 'typeorm';
 import { format as dateFormat } from 'date-fns';
 import mime from 'mime-types';
 import archiver from 'archiver';
@@ -79,7 +78,7 @@ export class ExportCustomEmojisProcessorService {
 
 		const customEmojis = await this.emojisRepository.find({
 			where: {
-				host: IsNull(),
+				host: user.host ?? this.config.host,
 			},
 			order: {
 				id: 'ASC',

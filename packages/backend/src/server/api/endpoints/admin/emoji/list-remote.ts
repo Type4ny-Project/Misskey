@@ -58,14 +58,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private queryService: QueryService,
 		private emojiEntityService: EmojiEntityService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
-			const q = this.queryService.makePaginationQuery(this.emojisRepository.createQueryBuilder('emoji'), ps.sinceId, ps.untilId, ps.sinceDate, ps.untilDate);
+			super(meta, paramDef, async (ps, me) => {
+				const q = this.queryService.makePaginationQuery(this.emojisRepository.createQueryBuilder('emoji'), ps.sinceId, ps.untilId, ps.sinceDate, ps.untilDate);
 
-			if (ps.host == null) {
-				q.andWhere('emoji.host IS NOT NULL');
-			} else {
-				q.andWhere('emoji.host = :host', { host: this.utilityService.toPuny(ps.host) });
-			}
+				if (ps.host == null) {
+					q.andWhere('NOT EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = emoji.host)');
+				} else {
+					q.andWhere('emoji.host = :host', { host: this.utilityService.toPuny(ps.host) });
+				}
 
 			if (ps.query) {
 				q.andWhere('emoji.name like :query', { query: '%' + sqlLikeEscape(ps.query) + '%' });

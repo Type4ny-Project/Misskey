@@ -82,10 +82,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private customEmojiService: CustomEmojiService,
 		private emojiEntityService: EmojiEntityService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const driveFile = await this.driveFilesRepository.findOneBy({ id: ps.fileId });
 			if (driveFile == null) throw new ApiError(meta.errors.noSuchFile);
-			const isDuplicate = await this.customEmojiService.checkDuplicate(ps.name);
+			const isDuplicate = await this.customEmojiService.checkDuplicate(ps.name, tenantContext!.tenantHost);
 			if (isDuplicate) throw new ApiError(meta.errors.duplicateName);
 			if (!FILE_TYPE_IMAGE.includes(driveFile.type)) throw new ApiError(meta.errors.unsupportedFileType);
 
@@ -96,7 +96,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				name: ps.name,
 				category: ps.category ?? null,
 				aliases: ps.aliases ?? [],
-				host: null,
+				host: tenantContext!.tenantHost,
 				license: ps.license ?? null,
 				isSensitive: ps.isSensitive ?? false,
 				localOnly: ps.localOnly ?? false,

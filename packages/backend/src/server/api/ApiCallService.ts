@@ -173,7 +173,7 @@ export class ApiCallService implements OnApplicationShutdown {
 			reply.code(400);
 			return;
 		}
-		this.authenticateService.authenticate(token).then(([user, app]) => {
+		this.authenticateService.authenticate(token, request.tenantContext.tenantHost).then(([user, app]) => {
 			this.call(endpoint, user, app, body, null, request).then((res) => {
 				if (request.method === 'GET' && endpoint.meta.cacheSec && !token && !user) {
 					reply.header('Cache-Control', `public, max-age=${endpoint.meta.cacheSec}`);
@@ -231,7 +231,7 @@ export class ApiCallService implements OnApplicationShutdown {
 			reply.code(400);
 			return;
 		}
-		this.authenticateService.authenticate(token).then(([user, app]) => {
+		this.authenticateService.authenticate(token, request.tenantContext.tenantHost).then(([user, app]) => {
 			this.call(endpoint, user, app, fields, {
 				name: multipartData.filename,
 				path: path,
@@ -444,10 +444,10 @@ export class ApiCallService implements OnApplicationShutdown {
 		if (this.Sentry != null) {
 			return await this.Sentry.startSpan({
 				name: 'API: ' + ep.name,
-			}, () => ep.exec(data, user, token, file, request.ip, request.headers)
+			}, () => ep.exec(data, user, token, file, request.ip, request.headers as Record<string, string>, request.tenantContext)
 				.catch((err: Error) => this.#onExecError(ep, data, err, user?.id)));
 		} else {
-			return await ep.exec(data, user, token, file, request.ip, request.headers)
+			return await ep.exec(data, user, token, file, request.ip, request.headers as Record<string, string>, request.tenantContext)
 				.catch((err: Error) => this.#onExecError(ep, data, err, user?.id));
 		}
 	}

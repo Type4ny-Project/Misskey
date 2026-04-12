@@ -225,7 +225,9 @@ export class CheckModeratorsActivityProcessorService {
 		for (const moderator of moderators) {
 			const profile = moderatorProfiles.get(moderator.id);
 			if (profile && profile.email && profile.emailVerified) {
-				this.emailService.sendEmail(profile.email, mail.subject, mail.html, mail.text);
+				this.emailService.sendEmail(profile.email, mail.subject, mail.html, mail.text, {
+					tenantHost: profile.userHost,
+				});
 			}
 		}
 
@@ -258,7 +260,9 @@ export class CheckModeratorsActivityProcessorService {
 
 			const profile = moderatorProfiles.get(moderator.id);
 			if (profile && profile.email && profile.emailVerified) {
-				this.emailService.sendEmail(profile.email, mail.subject, mail.html, mail.text);
+				this.emailService.sendEmail(profile.email, mail.subject, mail.html, mail.text, {
+					tenantHost: profile.userHost,
+				});
 			}
 		}
 

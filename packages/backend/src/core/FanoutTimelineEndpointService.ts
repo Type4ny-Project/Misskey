@@ -42,6 +42,7 @@ type TimelineOptions = {
 	excludeReplies?: boolean;
 	excludePureRenotes: boolean;
 	ignoreAuthorFromUserSuspension?: boolean;
+	tenantHost?: string;
 	dbFallback: (untilId: string | null, sinceId: string | null, limit: number) => Promise<MiNote[]>,
 };
 
@@ -64,7 +65,7 @@ export class FanoutTimelineEndpointService {
 
 	@bindThis
 	async timeline(ps: TimelineOptions): Promise<Packed<'Note'>[]> {
-		return await this.noteEntityService.packMany(await this.getMiNotes(ps), ps.me);
+		return await this.noteEntityService.packMany(await this.getMiNotes(ps), ps.me, { tenantHost: ps.tenantHost });
 	}
 
 	@bindThis
@@ -75,7 +76,7 @@ export class FanoutTimelineEndpointService {
 		const ascending = ps.sinceId && !ps.untilId;
 		const idCompare: (a: string, b: string) => number = ascending ? (a, b) => a < b ? -1 : 1 : (a, b) => a > b ? -1 : 1;
 
-		const redisResult = await this.fanoutTimelineService.getMulti(ps.redisTimelines, ps.untilId, ps.sinceId);
+		const redisResult = await this.fanoutTimelineService.getMulti(ps.redisTimelines, ps.untilId, ps.sinceId, ps.tenantHost);
 
 		// TODO: いい感じにgetMulti内でソート済だからuniqするときにredisResultが全てソート済なのを利用して再ソートを避けたい
 		const redisResultIds = Array.from(new Set(redisResult.flat(1))).sort(idCompare);

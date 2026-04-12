@@ -45,7 +45,7 @@ export class DeleteAccountService {
 
 		const _user = await this.usersRepository.findOneByOrFail({ id: user.id });
 
-		if (user.host === null && _user.username.includes('.')) {
+		if (this.userEntityService.isLocalUser(_user) && _user.username.includes('.')) {
 			throw new Error('cannot delete a system account');
 		}
 
@@ -60,7 +60,7 @@ export class DeleteAccountService {
 		// 物理削除する前にDelete activityを送信する
 		if (this.userEntityService.isLocalUser(user)) {
 			// 知り得る全SharedInboxにDelete配信
-			const content = this.apRendererService.addContext(this.apRendererService.renderDelete(this.userEntityService.genLocalUserUri(user.id), user));
+			const content = this.apRendererService.addContext(this.apRendererService.renderDelete(this.userEntityService.genLocalUserUri(user.id, user.host), user));
 
 			const queue: string[] = [];
 

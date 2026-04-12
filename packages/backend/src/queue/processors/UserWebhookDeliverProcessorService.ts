@@ -6,10 +6,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import * as Bull from 'bullmq';
 import { DI } from '@/di-symbols.js';
-import type { WebhooksRepository } from '@/models/_.js';
+import type { UsersRepository, WebhooksRepository } from '@/models/_.js';
 import type { Config } from '@/config.js';
 import type Logger from '@/logger.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { StatusError } from '@/misc/status-error.js';
 import { bindThis } from '@/decorators.js';
 import { QueueLoggerService } from '../QueueLoggerService.js';
@@ -26,6 +27,10 @@ export class UserWebhookDeliverProcessorService {
 		@Inject(DI.webhooksRepository)
 		private webhooksRepository: WebhooksRepository,
 
+		@Inject(DI.usersRepository)
+		private usersRepository: UsersRepository,
+
+		private tenantService: TenantService,
 		private httpRequestService: HttpRequestService,
 		private queueLoggerService: QueueLoggerService,
 	) {
@@ -36,18 +41,21 @@ export class UserWebhookDeliverProcessorService {
 	public async process(job: Bull.Job<UserWebhookDeliverJobData>): Promise<string> {
 		try {
 			this.logger.debug(`delivering ${job.data.webhookId}`);
+			const user = await this.usersRepository.findOneBy({ id: job.data.userId });
+			const tenantHost = this.tenantService.tenantHostFor(user?.host ?? null);
+			const tenantUrl = this.tenantService.tenantUrlFor(tenantHost);
 
 			const res = await this.httpRequestService.send(job.data.to, {
 				method: 'POST',
 				headers: {
 					'User-Agent': 'Misskey-Hooks',
-					'X-Misskey-Host': this.config.host,
+					'X-Misskey-Host': tenantHost,
 					'X-Misskey-Hook-Id': job.data.webhookId,
 					'X-Misskey-Hook-Secret': job.data.secret,
 					'Content-Type': 'application/json',
 				},
 				body: JSON.stringify({
-					server: this.config.url,
+					server: tenantUrl,
 					hookId: job.data.webhookId,
 					userId: job.data.userId,
 					eventId: job.data.eventId,

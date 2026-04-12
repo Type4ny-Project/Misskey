@@ -51,9 +51,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private emojiEntityService: EmojiEntityService,
 		private queryService: QueryService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const q = this.queryService.makePaginationQuery(this.emojisRepository.createQueryBuilder('emoji'), ps.sinceId, ps.untilId, ps.sinceDate, ps.untilDate)
-				.andWhere('emoji.host IS NULL');
+				.andWhere('emoji.host = :tenantHost', { tenantHost: tenantContext!.tenantHost });
 
 			let emojis: MiEmoji[];
 

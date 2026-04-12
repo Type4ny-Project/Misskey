@@ -24,6 +24,7 @@ import { SystemAccountService } from '@/core/SystemAccountService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { envOption } from '@/env.js';
 import type { Config } from '@/config.js';
+import { TenantService } from '@/core/TenantService.js';
 
 @Injectable()
 export class SignupService {
@@ -50,6 +51,7 @@ export class SignupService {
 		private systemAccountService: SystemAccountService,
 		private metaService: MetaService,
 		private usersChart: UsersChart,
+		private tenantService: TenantService,
 	) {
 	}
 
@@ -62,6 +64,7 @@ export class SignupService {
 		ignorePreservedUsernames?: boolean;
 	}) {
 		const { username, password, passwordHash, host } = opts;
+		const tenantHost = this.tenantService.tenantHostFor(host);
 		let hash = passwordHash;
 
 		// Validate username
@@ -73,7 +76,7 @@ export class SignupService {
 		if (
 			envOption.managed &&
 			this.config.maxLocalUsers !== -1 &&
-			(await this.usersRepository.count({ where: { host: IsNull(), username: Not(In(['instance.actor', 'relay.actor', this.config.adminUserName ?? '', this.config.rootUserName ?? ''])) } })) >=
+			(await this.usersRepository.count({ where: { host: tenantHost, username: Not(In(['instance.actor', 'relay.actor', this.config.adminUserName ?? '', this.config.rootUserName ?? ''])) } })) >=
 				this.config.maxLocalUsers
 		) {
 			throw new Error('MAX_LOCAL_USERS');
@@ -94,7 +97,7 @@ export class SignupService {
 		const secret = generateNativeUserToken();
 
 		// Check username duplication
-		if (await this.usersRepository.exists({ where: { usernameLower: username.toLowerCase(), host: IsNull() } })) {
+		if (await this.usersRepository.exists({ where: { usernameLower: username.toLowerCase(), host: tenantHost } })) {
 			throw new Error('DUPLICATED_USERNAME');
 		}
 
@@ -138,7 +141,7 @@ export class SignupService {
 		await this.db.transaction(async transactionalEntityManager => {
 			const exist = await transactionalEntityManager.findOneBy(MiUser, {
 				usernameLower: username.toLowerCase(),
-				host: IsNull(),
+				host: tenantHost,
 			});
 
 			if (exist) throw new Error(' the username is already used');
@@ -147,7 +150,7 @@ export class SignupService {
 				id: this.idService.gen(),
 				username: username,
 				usernameLower: username.toLowerCase(),
-				host: this.utilityService.toPunyNullable(host),
+				host: tenantHost,
 				token: secret,
 			}));
 
@@ -179,4 +182,3 @@ export class SignupService {
 		return { account, secret };
 	}
 }
-

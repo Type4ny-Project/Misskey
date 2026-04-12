@@ -103,7 +103,7 @@ export class AntennaService implements OnApplicationShutdown {
 		const redisPipeline = this.redisForTimelines.pipeline();
 
 		for (const antenna of matchedAntennas) {
-			this.fanoutTimelineService.push(`antennaTimeline:${antenna.id}`, note.id, 200, redisPipeline);
+			this.fanoutTimelineService.push(`antennaTimeline:${antenna.id}`, note.id, 200, redisPipeline, note.userHost);
 			this.globalEventService.publishAntennaStream(antenna.id, 'note', note);
 		}
 
@@ -118,7 +118,7 @@ export class AntennaService implements OnApplicationShutdown {
 
 		if (antenna.excludeBots && noteUser.isBot) return false;
 
-		if (antenna.localOnly && noteUser.host != null) return false;
+		if (antenna.localOnly && !this.utilityService.isSelfHost(noteUser.host)) return false;
 
 		if (!antenna.withReplies && note.replyId != null) return false;
 

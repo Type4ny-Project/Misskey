@@ -4,11 +4,11 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { IsNull, MoreThan, Not } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { MiDriveFile, DriveFilesRepository } from '@/models/_.js';
 import type Logger from '@/logger.js';
 import { DriveService } from '@/core/DriveService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { bindThis } from '@/decorators.js';
 import { QueueLoggerService } from '../QueueLoggerService.js';
 import type * as Bull from 'bullmq';
@@ -22,6 +22,7 @@ export class CleanRemoteFilesProcessorService {
 		private driveFilesRepository: DriveFilesRepository,
 
 		private driveService: DriveService,
+		private tenantService: TenantService,
 		private queueLoggerService: QueueLoggerService,
 	) {
 		this.logger = this.queueLoggerService.logger.createSubLogger('clean-remote-files');
@@ -34,23 +35,25 @@ export class CleanRemoteFilesProcessorService {
 		let deletedCount = 0;
 		let cursor: MiDriveFile['id'] | null = null;
 
-		const total = await this.driveFilesRepository.countBy({
-			userHost: Not(IsNull()),
-			isLink: false,
-		});
+		const total = await this.driveFilesRepository.createQueryBuilder('file')
+			.where('file.isLink = FALSE')
+			.andWhere('file.userHost IS NOT NULL')
+			.andWhere('NOT EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = file."userHost")')
+			.getCount();
 
 		while (true) {
-			const files = await this.driveFilesRepository.find({
-				where: {
-					userHost: Not(IsNull()),
-					isLink: false,
-					...(cursor ? { id: MoreThan(cursor) } : {}),
-				},
-				take: 8,
-				order: {
-					id: 1,
-				},
-			});
+			const query = this.driveFilesRepository.createQueryBuilder('file')
+				.where('file.isLink = FALSE')
+				.andWhere('file.userHost IS NOT NULL')
+				.andWhere('NOT EXISTS (SELECT 1 FROM tenant_host_mapping thm WHERE thm.host = file."userHost")')
+				.orderBy('file.id', 'ASC')
+				.take(8);
+
+			if (cursor) {
+				query.andWhere('file.id > :cursor', { cursor });
+			}
+
+			const files: MiDriveFile[] = await query.getMany();
 
 			if (files.length === 0) {
 				job.updateProgress(100);
@@ -61,9 +64,9 @@ export class CleanRemoteFilesProcessorService {
 
 			await Promise.all(files.map(file => this.driveService.deleteFileSync(file, true)));
 
-			deletedCount += 8;
+			deletedCount += files.length;
 
-			job.updateProgress(deletedCount * total / 100);
+			job.updateProgress(total === 0 ? 100 : deletedCount * 100 / total);
 		}
 
 		this.logger.succ('All cached remote files has been deleted.');

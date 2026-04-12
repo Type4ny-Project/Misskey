@@ -65,7 +65,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private customEmojiService: CustomEmojiService,
 		private driveService: DriveService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const emoji = await this.emojisRepository.findOneBy({ id: ps.emojiId });
 			if (emoji == null) {
 				throw new ApiError(meta.errors.noSuchEmoji);
@@ -82,7 +82,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			// Duplication Check
-			const isDuplicate = await this.customEmojiService.checkDuplicate(emoji.name);
+			const isDuplicate = await this.customEmojiService.checkDuplicate(emoji.name, tenantContext!.tenantHost);
 			if (isDuplicate) throw new ApiError(meta.errors.duplicateName);
 
 			const addedEmoji = await this.customEmojiService.add({
@@ -92,7 +92,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				name: emoji.name,
 				category: emoji.category,
 				aliases: emoji.aliases,
-				host: null,
+				host: tenantContext!.tenantHost,
 				license: emoji.license,
 				isSensitive: emoji.isSensitive,
 				localOnly: emoji.localOnly,

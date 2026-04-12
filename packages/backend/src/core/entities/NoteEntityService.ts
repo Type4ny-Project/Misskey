@@ -332,7 +332,7 @@ export class NoteEntityService implements OnModuleInit {
 				in which case we can never know the following. Instead we have
 				to assume that the users are following each other.
 				*/
-				return following > 0 || (note.userHost != null && user.host != null);
+				return following > 0 || ((note.userHost != null && user.host != null) && !this.userEntityService.isLocalUser({ host: note.userHost, uri: null }) && !this.userEntityService.isLocalUser(user));
 			}
 		}
 
@@ -495,6 +495,7 @@ export class NoteEntityService implements OnModuleInit {
 		options?: {
 			detail?: boolean;
 			skipHide?: boolean;
+			tenantHost?: string;
 		},
 	) {
 		if (notes.length === 0) return [];
@@ -566,7 +567,7 @@ export class NoteEntityService implements OnModuleInit {
 			...notes.map(({ replyUserId }) => replyUserId).filter(x => x != null),
 			...notes.map(({ renoteUserId }) => renoteUserId).filter(x => x != null),
 		];
-		const packedUsers = await this.userEntityService.packMany(users, me)
+		const packedUsers = await this.userEntityService.packMany(users, me, { tenantHost: options?.tenantHost })
 			.then(users => new Map(users.map(u => [u.id, u])));
 
 		return await Promise.all(notes.map(n => this.pack(n, me, {

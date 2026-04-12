@@ -5,7 +5,6 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
-import { IsNull } from 'typeorm';
 import * as Misskey from 'misskey-js';
 import { DI } from '@/di-symbols.js';
 import type {
@@ -82,7 +81,7 @@ export class SigninApiService {
 		}>,
 		reply: FastifyReply,
 	) {
-		reply.header('Access-Control-Allow-Origin', this.config.url);
+		reply.header('Access-Control-Allow-Origin', request.tenantContext.tenantUrl);
 		reply.header('Access-Control-Allow-Credentials', 'true');
 
 		const body = request.body;
@@ -126,7 +125,7 @@ export class SigninApiService {
 		// Fetch user
 		const user = await this.usersRepository.findOneBy({
 			usernameLower: username.toLowerCase(),
-			host: IsNull(),
+			host: request.tenantContext.tenantHost,
 		}) as MiLocalUser;
 
 		if (user == null) {

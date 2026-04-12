@@ -82,6 +82,8 @@ export const DI = {
 	retentionAggregationsRepository: Symbol('retentionAggregationsRepository'),
 	rolesRepository: Symbol('rolesRepository'),
 	roleAssignmentsRepository: Symbol('roleAssignmentsRepository'),
+	tenantHostMappingsRepository: Symbol('tenantHostMappingsRepository'),
+	tenantMetasRepository: Symbol('tenantMetasRepository'),
 	flashsRepository: Symbol('flashsRepository'),
 	flashLikesRepository: Symbol('flashLikesRepository'),
 	userMemosRepository: Symbol('userMemosRepository'),

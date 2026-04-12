@@ -1,0 +1,25 @@
+url: http://package-reproduction-coverage-side.lvh.me:3000/
+
+port: 3000
+
+trustProxy: true
+
+db:
+  host: localhost
+  port: 5432
+  db: restored_mt
+  user: example-misskey-user
+  pass: example-misskey-pass
+
+dbReplications: false
+
+redis:
+  host: localhost
+  port: 6379
+
+fulltextSearch:
+  provider: sqlLike
+
+id: 'aidx'
+
+setupPassword: mt-fed-setup

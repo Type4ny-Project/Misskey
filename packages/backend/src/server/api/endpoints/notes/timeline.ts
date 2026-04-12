@@ -73,9 +73,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private channelFollowingService: ChannelFollowingService,
 		private queryService: QueryService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate!) : null);
 			const sinceId = ps.sinceId ?? (ps.sinceDate ? this.idService.gen(ps.sinceDate!) : null);
+			const tenantHost = tenantContext!.tenantHost;
 
 			if (!this.serverSettings.enableFanoutTimeline) {
 				const timeline = await this.getFromDb({
@@ -93,7 +94,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					this.activeUsersChart.read(me);
 				});
 
-				return await this.noteEntityService.packMany(timeline, me);
+				return await this.noteEntityService.packMany(timeline, me, { tenantHost });
 			}
 
 			const [
@@ -112,6 +113,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				redisTimelines: ps.withFiles ? [`homeTimelineWithFiles:${me.id}`] : [`homeTimeline:${me.id}`],
 				alwaysIncludeMyNotes: true,
 				excludePureRenotes: !ps.withRenotes,
+				tenantHost,
 				noteFilter: note => {
 					if (note.reply && note.reply.visibility === 'followers') {
 						if (!Object.hasOwn(followings, note.reply.userId) && note.reply.userId !== me.id) return false;

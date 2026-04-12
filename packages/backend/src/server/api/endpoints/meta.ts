@@ -34,8 +34,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	constructor(
 		private metaEntityService: MetaEntityService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
-			return ps.detail ? await this.metaEntityService.packDetailed() : await this.metaEntityService.pack();
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
+			return ps.detail
+				? await this.metaEntityService.packDetailed(undefined, tenantContext)
+				: await this.metaEntityService.pack(undefined, tenantContext);
 		});
 	}
 }

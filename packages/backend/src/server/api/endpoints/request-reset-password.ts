@@ -4,7 +4,6 @@
  */
 
 import ms from 'ms';
-import { IsNull } from 'typeorm';
 import { Inject, Injectable } from '@nestjs/common';
 import type { PasswordResetRequestsRepository, UserProfilesRepository, UsersRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
@@ -58,10 +57,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private idService: IdService,
 		private emailService: EmailService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const user = await this.usersRepository.findOneBy({
 				usernameLower: ps.username.toLowerCase(),
-				host: IsNull(),
+				host: tenantContext!.tenantHost,
 			});
 
 			// 合致するユーザーが登録されていなかったら無視
@@ -89,7 +88,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				token,
 			});
 
-			const link = `${this.config.url}/reset-password/${token}`;
+			const link = `${tenantContext!.tenantUrl}/reset-password/${token}`;
 
 			this.emailService.sendEmail(ps.email, 'Password reset requested',
 				`To reset password, please click this link:<br><a href="${link}">${link}</a>`,

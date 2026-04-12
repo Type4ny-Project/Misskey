@@ -3,4 +3,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import 'fastify';
+import type { TenantContext } from '@/core/TenantService.js';
+
+declare module 'fastify' {
+	interface FastifyRequest {
+		tenantContext: TenantContext;
+	}
+}
+
 type FIXME = any;

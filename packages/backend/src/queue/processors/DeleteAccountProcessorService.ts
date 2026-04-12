@@ -144,7 +144,9 @@ export class DeleteAccountProcessorService {
 			if (profile.email && profile.emailVerified) {
 				this.emailService.sendEmail(profile.email, 'Account deleted',
 					'Your account has been deleted.',
-					'Your account has been deleted.');
+					'Your account has been deleted.', {
+						tenantHost: profile.userHost,
+					});
 			}
 		}
 

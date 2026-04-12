@@ -79,9 +79,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private queryService: QueryService,
 		private channelMutingService: ChannelMutingService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate!) : null);
 			const sinceId = ps.sinceId ?? (ps.sinceDate ? this.idService.gen(ps.sinceDate!) : null);
+			const tenantHost = tenantContext!.tenantHost;
 
 			const policies = await this.roleService.getUserPolicies(me ? me.id : null);
 			if (!policies.ltlAvailable) {
@@ -97,6 +98,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					limit: ps.limit,
 					withFiles: ps.withFiles,
 					withReplies: ps.withReplies,
+					tenantHost,
 				}, me);
 
 				process.nextTick(() => {
@@ -122,14 +124,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					: ['localTimeline'],
 				alwaysIncludeMyNotes: true,
 				excludePureRenotes: !ps.withRenotes,
-				dbFallback: async (untilId, sinceId, limit) => await this.getFromDb({
-					untilId,
-					sinceId,
-					limit,
-					withFiles: ps.withFiles,
-					withReplies: ps.withReplies,
-				}, me),
-			});
+				tenantHost,
+					dbFallback: async (untilId, sinceId, limit) => await this.getFromDb({
+						untilId,
+						sinceId,
+						limit,
+						withFiles: ps.withFiles,
+						withReplies: ps.withReplies,
+						tenantHost,
+					}, me),
+				});
 
 			process.nextTick(() => {
 				if (me) {
@@ -147,10 +151,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		limit: number,
 		withFiles: boolean,
 		withReplies: boolean,
+		tenantHost: string,
 	}, me: MiLocalUser | null) {
 		const query = this.queryService.makePaginationQuery(this.notesRepository.createQueryBuilder('note'),
 			ps.sinceId, ps.untilId)
-			.andWhere('(note.visibility = \'public\') AND (note.userHost IS NULL) AND (note.channelId IS NULL)')
+			.andWhere('(note.visibility = \'public\') AND (note.userHost = :tenantHost) AND (note.channelId IS NULL)', { tenantHost: ps.tenantHost })
 			.innerJoinAndSelect('note.user', 'user')
 			.leftJoinAndSelect('note.reply', 'reply')
 			.leftJoinAndSelect('note.renote', 'renote')

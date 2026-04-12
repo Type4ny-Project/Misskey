@@ -588,7 +588,7 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 
 		const user = await this.usersRepository.findOneByOrFail({ id: userId });
 
-		if (role.isPublic && user.host === null) {
+		if (role.isPublic && this.userEntityService.isLocalUser(user)) {
 			this.notificationService.createNotification(userId, 'roleAssigned', {
 				roleId: roleId,
 			});
@@ -651,7 +651,7 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 		const redisPipeline = this.redisForTimelines.pipeline();
 
 		for (const role of roles) {
-			this.fanoutTimelineService.push(`roleTimeline:${role.id}`, note.id, 1000, redisPipeline);
+			this.fanoutTimelineService.push(`roleTimeline:${role.id}`, note.id, 1000, redisPipeline, note.user.host);
 			this.globalEventService.publishRoleTimelineStream(role.id, 'note', note);
 		}
 

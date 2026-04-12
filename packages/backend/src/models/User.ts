@@ -301,13 +301,13 @@ export class MiUser {
 }
 
 export type MiLocalUser = MiUser & {
-	host: null;
+	host: string | null;
 	uri: null;
 };
 
 export type MiPartialLocalUser = Partial<MiUser> & {
 	id: MiUser['id'];
-	host: null;
+	host: string | null;
 	uri: null;
 };
 

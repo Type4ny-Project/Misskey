@@ -33,6 +33,7 @@ import { definePage } from '@/page.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 import { serverContext, assertServerContext } from '@/server-context.js';
+import { isUserLocalToCurrentTenant } from '@/utility/current-tenant.js';
 
 const XHome = defineAsyncComponent(() => import('./home.vue'));
 const XNotes = defineAsyncComponent(() => import('./notes.vue'));
@@ -88,6 +89,7 @@ watch(() => props.acct, fetchUser, {
 });
 
 const headerActions = computed(() => []);
+const isLocalUser = computed(() => user.value ? isUserLocalToCurrentTenant(user.value) : false);
 
 const headerTabs = computed(() => user.value ? [{
 	key: 'home',
@@ -105,7 +107,7 @@ const headerTabs = computed(() => user.value ? [{
 	key: 'activity',
 	title: i18n.ts.activity,
 	icon: 'ti ti-chart-line',
-}, ...(user.value.host == null ? [{
+}, ...(isLocalUser.value ? [{
 	key: 'achievements',
 	title: i18n.ts.achievements,
 	icon: 'ti ti-medal',

@@ -123,16 +123,17 @@ export class ReactionService {
 
 		let reaction = _reaction ?? FALLBACK;
 
-		if (note.reactionAcceptance === 'likeOnly' || ((note.reactionAcceptance === 'likeOnlyForRemote' || note.reactionAcceptance === 'nonSensitiveOnlyForLocalLikeOnlyForRemote') && (user.host != null))) {
+		if (note.reactionAcceptance === 'likeOnly' || ((note.reactionAcceptance === 'likeOnlyForRemote' || note.reactionAcceptance === 'nonSensitiveOnlyForLocalLikeOnlyForRemote') && this.userEntityService.isRemoteUser({ host: user.host, uri: user.host ? 'remote' : null }))) {
 			reaction = '\u2764';
 		} else if (_reaction != null) {
 			const custom = reaction.match(isCustomEmojiRegexp);
 			if (custom) {
-				const reacterHost = this.utilityService.toPunyNullable(user.host);
+				const isLocalReacter = this.utilityService.isSelfHost(user.host);
+				const reacterHost = isLocalReacter ? null : this.utilityService.toPunyNullable(user.host);
 
 				const name = custom[1];
 				const emoji = reacterHost == null
-					? (await this.customEmojiService.localEmojisCache.fetch()).get(name)
+					? (await this.customEmojiService.fetchLocalEmojis(user.host)).get(name)
 					: await this.emojisRepository.findOneBy({
 						host: reacterHost,
 						name,
@@ -221,14 +222,14 @@ export class ReactionService {
 					this.featuredService.updateInChannelNotesRanking(note.channelId, note.id, 1);
 				}
 			} else {
-				if (note.visibility === 'public' && note.userHost == null && note.replyId == null) {
+				if (note.visibility === 'public' && this.userEntityService.isLocalUser({ host: note.userHost, uri: null }) && note.replyId == null) {
 					this.featuredService.updateGlobalNotesRanking(note.id, 1);
 					this.featuredService.updatePerUserNotesRanking(note.userId, note.id, 1);
 				}
 			}
 		}
 
-		if (this.meta.enableChartsForRemoteUser || (user.host == null)) {
+		if (this.meta.enableChartsForRemoteUser || this.userEntityService.isLocalUser({ host: user.host, uri: null })) {
 			this.perUserReactionsChart.update(user, note);
 		}
 
@@ -236,7 +237,7 @@ export class ReactionService {
 		const decodedReaction = this.decodeReaction(reaction);
 
 		const customEmoji = decodedReaction.name == null ? null : decodedReaction.host == null
-			? (await this.customEmojiService.localEmojisCache.fetch()).get(decodedReaction.name)
+			? (await this.customEmojiService.fetchLocalEmojis(user.host)).get(decodedReaction.name)
 			: await this.emojisRepository.findOne(
 				{
 					where: {
@@ -256,7 +257,7 @@ export class ReactionService {
 		});
 
 		// リアクションされたユーザーがローカルユーザーなら通知を作成
-		if (note.userHost === null) {
+		if (this.userEntityService.isLocalUser({ host: note.userHost, uri: null })) {
 			this.notificationService.createNotification(note.userId, 'reaction', {
 				noteId: note.id,
 				reaction: reaction,
@@ -265,9 +266,9 @@ export class ReactionService {
 
 		//#region 配信
 		if (this.userEntityService.isLocalUser(user) && !note.localOnly) {
-			const content = this.apRendererService.addContext(await this.apRendererService.renderLike(record, note));
+			const content = this.apRendererService.addContext(await this.apRendererService.renderLike(record, note, user.host));
 			const dm = this.apDeliverManagerService.createDeliverManager(user, content);
-			if (note.userHost !== null) {
+			if (note.userHost != null && !this.utilityService.isSelfHost(note.userHost)) {
 				const reactee = await this.usersRepository.findOneBy({ id: note.userId });
 				dm.addDirectRecipe(reactee as MiRemoteUser);
 			}
@@ -335,9 +336,9 @@ export class ReactionService {
 
 		//#region 配信
 		if (this.userEntityService.isLocalUser(user) && !note.localOnly) {
-			const content = this.apRendererService.addContext(this.apRendererService.renderUndo(await this.apRendererService.renderLike(exist, note), user));
+			const content = this.apRendererService.addContext(this.apRendererService.renderUndo(await this.apRendererService.renderLike(exist, note, user.host), user));
 			const dm = this.apDeliverManagerService.createDeliverManager(user, content);
-			if (note.userHost !== null) {
+			if (note.userHost != null && !this.utilityService.isSelfHost(note.userHost)) {
 				const reactee = await this.usersRepository.findOneBy({ id: note.userId });
 				dm.addDirectRecipe(reactee as MiRemoteUser);
 			}

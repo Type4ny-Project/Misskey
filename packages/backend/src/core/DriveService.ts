@@ -674,7 +674,7 @@ export class DriveService {
 		}
 
 		this.driveChart.update(file, true);
-		if (file.userHost == null) {
+		if (this.utilityService.isSelfHost(file.userHost)) {
 			// ローカルユーザーのみ
 			this.perUserDriveChart.update(file, true);
 		} else {
@@ -818,7 +818,7 @@ export class DriveService {
 	@bindThis
 	private async deletePostProcess(file: MiDriveFile, isExpired = false, deleter?: MiUser) {
 		// リモートファイル期限切れ削除後は直リンクにする
-		if (isExpired && file.userHost !== null && file.uri != null) {
+		if (isExpired && file.userHost != null && file.uri != null && !this.utilityService.isSelfHost(file.userHost)) {
 			await this.driveFilesRepository.update(file.id, {
 				isLink: true,
 				url: file.uri,
@@ -835,7 +835,7 @@ export class DriveService {
 		}
 
 		this.driveChart.update(file, false);
-		if (file.userHost == null) {
+		if (this.utilityService.isSelfHost(file.userHost)) {
 			// ローカルユーザーのみ
 			this.perUserDriveChart.update(file, false);
 		} else {

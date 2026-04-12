@@ -6,7 +6,6 @@
 import * as fs from 'node:fs';
 import { Inject, Injectable } from '@nestjs/common';
 import { ZipReader } from 'slacc';
-import { IsNull } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { EmojisRepository, DriveFilesRepository } from '@/models/_.js';
 import type Logger from '@/logger.js';
@@ -85,9 +84,11 @@ export class ImportCustomEmojisProcessorService {
 					continue;
 				}
 				const emojiPath = outputPath + '/' + record.fileName;
-				await this.emojisRepository.delete({
+				await this.emojisRepository.delete(file.userHost == null ? {
 					name: emojiInfo.name,
-					host: IsNull(),
+				} : {
+					name: emojiInfo.name,
+					host: file.userHost,
 				});
 
 				try {
@@ -103,7 +104,7 @@ export class ImportCustomEmojisProcessorService {
 						fileType: driveFile.webpublicType ?? driveFile.type,
 						name: emojiInfo.name,
 						category: emojiInfo.category,
-						host: null,
+						host: file.userHost ?? null,
 						aliases: emojiInfo.aliases,
 						license: emojiInfo.license,
 						isSensitive: emojiInfo.isSensitive,

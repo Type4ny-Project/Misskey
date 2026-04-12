@@ -21,6 +21,7 @@ import { HttpRequestService } from '@/core/HttpRequestService.js';
 import type { Config } from '@/config.js';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
+import type { TenantContext } from '@/core/TenantService.js';
 import type { AccessTokensRepository, UsersRepository } from '@/models/_.js';
 import { IdService } from '@/core/IdService.js';
 import { CacheService } from '@/core/CacheService.js';
@@ -429,11 +430,12 @@ export class OAuth2ProviderService {
 
 	// https://datatracker.ietf.org/doc/html/rfc8414.html
 	// https://indieauth.spec.indieweb.org/#indieauth-server-metadata
-	public generateRFC8414() {
+	public generateRFC8414(tenantContext?: TenantContext) {
+		const issuer = tenantContext?.tenantUrl ?? this.config.url;
 		return {
-			issuer: this.config.url,
-			authorization_endpoint: new URL('/oauth/authorize', this.config.url),
-			token_endpoint: new URL('/oauth/token', this.config.url),
+			issuer,
+			authorization_endpoint: new URL('/oauth/authorize', issuer),
+			token_endpoint: new URL('/oauth/token', issuer),
 			scopes_supported: kinds,
 			response_types_supported: ['code'],
 			grant_types_supported: ['authorization_code'],

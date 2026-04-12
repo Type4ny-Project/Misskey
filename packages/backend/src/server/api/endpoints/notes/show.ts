@@ -60,7 +60,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private noteEntityService: NoteEntityService,
 		private getterService: GetterService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const note = await this.getterService.getNoteWithRelations(ps.noteId).catch(err => {
 				if (err.id === '9725d0ce-ba28-4dde-95a7-2cbb2c15de24') throw new ApiError(meta.errors.noSuchNote);
 				throw err;
@@ -74,7 +74,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.contentRestrictedByServer);
 			}
 
-			if (this.serverSettings.ugcVisibilityForVisitor === 'local' && note.userHost != null && me == null) {
+			if (this.serverSettings.ugcVisibilityForVisitor === 'local' && note.userHost !== tenantContext!.tenantHost && me == null) {
 				throw new ApiError(meta.errors.contentRestrictedByServer);
 			}
 

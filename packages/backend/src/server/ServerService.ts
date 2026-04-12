@@ -37,6 +37,8 @@ import { HealthServerService } from './HealthServerService.js';
 import { ClientServerService } from './web/ClientServerService.js';
 import { OpenApiServerService } from './api/openapi/OpenApiServerService.js';
 import { OAuth2ProviderService } from './oauth/OAuth2ProviderService.js';
+import { TenantService } from '@/core/TenantService.js';
+import { RequestTenantContextService } from '@/core/RequestTenantContextService.js';
 
 const _dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -77,6 +79,8 @@ export class ServerService implements OnApplicationShutdown {
 		private idService: IdService,
 		private roleService: RoleService,
 		private signupService: SignupService,
+		private tenantService: TenantService,
+		private requestTenantContextService: RequestTenantContextService,
 	) {
 		this.logger = this.loggerService.getLogger('server', 'gray');
 	}
@@ -88,6 +92,13 @@ export class ServerService implements OnApplicationShutdown {
 			logger: false,
 		});
 		this.#fastify = fastify;
+
+		fastify.addHook('onRequest', (request, _reply, done) => {
+			this.tenantService.resolve(request.headers.host).then((tenantContext) => {
+				request.tenantContext = tenantContext;
+				this.requestTenantContextService.run(tenantContext, done);
+			}).catch(done);
+		});
 
 		// HSTS
 		// 6months (15552000sec)
@@ -132,7 +143,7 @@ export class ServerService implements OnApplicationShutdown {
 				}
 
 				const effectiveLocation = process.env.NODE_ENV === 'production' ? location : location.replace(/^http:\/\//, 'https://');
-				if (effectiveLocation.startsWith(`https://${this.config.host}/`)) {
+				if (effectiveLocation.startsWith(`${request.tenantContext.tenantUrl}/`)) {
 					done();
 					return;
 				}
@@ -182,7 +193,7 @@ export class ServerService implements OnApplicationShutdown {
 
 			const emoji = await this.emojisRepository.findOneBy({
 				// `@.` is the spec of ReactionService.decodeReaction
-				host: (host === undefined || host === '.') ? IsNull() : host,
+				host: (host === undefined || host === '.') ? request.tenantContext.tenantHost : host,
 				name: name,
 			});
 
@@ -219,10 +230,11 @@ export class ServerService implements OnApplicationShutdown {
 
 		fastify.get<{ Params: { acct: string } }>('/avatar/@:acct', async (request, reply) => {
 			const { username, host } = Acct.parse(request.params.acct);
+			const tenantHost = host == null || this.tenantService.isManagedHost(host) ? request.tenantContext.tenantHost : host;
 			const user = await this.usersRepository.findOne({
 				where: {
 					usernameLower: username.toLowerCase(),
-					host: (host == null) || (host === this.config.host) ? IsNull() : host,
+					host: tenantHost,
 					isSuspended: false,
 				},
 			});

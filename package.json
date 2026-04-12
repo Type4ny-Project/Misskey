@@ -36,6 +36,8 @@
 		"init": "pnpm migrate",
 		"migrate": "cd packages/backend && pnpm migrate",
 		"revert": "cd packages/backend && pnpm revert",
+		"mt:to-multi": "cd packages/backend && pnpm mt:to-multi",
+		"mt:to-single": "cd packages/backend && pnpm mt:to-single",
 		"check:connect": "cd packages/backend && pnpm check:connect",
 		"migrateandstart": "pnpm migrate && pnpm start",
 		"watch": "pnpm dev",

@@ -119,6 +119,7 @@ export class AbuseReportNotificationService implements OnApplicationShutdown {
 						'New Abuse Report',
 						sanitizeHtml(it.comment),
 						sanitizeHtml(it.comment),
+						{ tenantHost: it.targetUserHost },
 					);
 				}),
 			);

@@ -48,7 +48,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private userEntityService: UserEntityService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			if (!safeForSql(normalizeForSearch(ps.tag))) throw new Error('Injection');
 			const query = this.usersRepository.createQueryBuilder('user')
 				.where(':tag <@ user.tags', { tag: [normalizeForSearch(ps.tag)] })
@@ -61,9 +61,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			if (ps.origin === 'local') {
-				query.andWhere('user.host IS NULL');
+				query.andWhere('user.host = :tenantHost', { tenantHost: tenantContext!.tenantHost });
 			} else if (ps.origin === 'remote') {
-				query.andWhere('user.host IS NOT NULL');
+				query.andWhere('user.host != :tenantHost', { tenantHost: tenantContext!.tenantHost });
 			}
 
 			switch (ps.sort) {

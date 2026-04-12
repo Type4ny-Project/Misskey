@@ -114,6 +114,7 @@ import { host as localHost } from '@@/js/config.js';
 import type * as Misskey from 'misskey-js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
+import { isUserLocalToCurrentTenant } from '@/utility/current-tenant.js';
 import { instance } from '@/instance.js';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -170,7 +171,8 @@ if (props.username && fetchedUser == null) {
 }
 
 if (fetchedUser != null) {
-	if (!(noteSearchableScope === 'local' && fetchedUser.host != null)) {
+	const isLocalUser = isUserLocalToCurrentTenant(fetchedUser);
+	if (!(noteSearchableScope === 'local' && !isLocalUser)) {
 		user.value = fetchedUser;
 	}
 }

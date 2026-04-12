@@ -80,7 +80,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</MkKeyValue>
 						</div>
 
-						<MkButton v-if="user.host != null" @click="updateRemoteUser"><i class="ti ti-refresh"></i> {{ i18n.ts.updateRemoteUser }}</MkButton>
+						<MkButton v-if="!isLocalUser" @click="updateRemoteUser"><i class="ti ti-refresh"></i> {{ i18n.ts.updateRemoteUser }}</MkButton>
 
 						<MkFolder>
 							<template #label>Raw</template>
@@ -97,7 +97,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkSwitch v-model="suspended" @update:modelValue="toggleSuspend">{{ i18n.ts.suspend }}</MkSwitch>
 
 					<div>
-						<MkButton v-if="user.host == null" inline style="margin-right: 8px;" @click="resetPassword"><i class="ti ti-key"></i> {{ i18n.ts.resetPassword }}</MkButton>
+						<MkButton v-if="isLocalUser" inline style="margin-right: 8px;" @click="resetPassword"><i class="ti ti-key"></i> {{ i18n.ts.resetPassword }}</MkButton>
 					</div>
 
 					<MkFolder>
@@ -133,7 +133,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 
 		<div v-else-if="tab === 'roles'" class="_gaps">
-			<MkButton v-if="user.host == null" primary rounded @click="assignRole"><i class="ti ti-plus"></i> {{ i18n.ts.assign }}</MkButton>
+			<MkButton v-if="isLocalUser" primary rounded @click="assignRole"><i class="ti ti-plus"></i> {{ i18n.ts.assign }}</MkButton>
 
 			<div v-for="role in info.roles" :key="role.id">
 				<div :class="$style.roleItemMain">
@@ -224,6 +224,7 @@ import MkFileListForAdmin from '@/components/MkFileListForAdmin.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { isUserLocalToCurrentTenant } from '@/utility/current-tenant.js';
 import { acct } from '@/filters/user.js';
 import { definePage } from '@/page.js';
 import { i18n } from '@/i18n.js';
@@ -261,7 +262,8 @@ const ap = ref<Misskey.entities.ApGetResponse | null>(null);
 const moderator = ref(info.value.isModerator);
 const silenced = ref(info.value.isSilenced);
 const suspended = ref(info.value.isSuspended);
-const isSystem = ref(user.value.host == null && user.value.username.includes('.'));
+const isLocalUser = computed(() => isUserLocalToCurrentTenant(user.value));
+const isSystem = ref(isLocalUser.value && user.value.username.includes('.'));
 const moderationNote = ref(info.value.moderationNote);
 const filesPaginator = markRaw(new Paginator('admin/drive/files', {
 	limit: 10,
@@ -317,7 +319,7 @@ async function refreshUser() {
 	moderator.value = info.value.isModerator;
 	silenced.value = info.value.isSilenced;
 	suspended.value = info.value.isSuspended;
-	isSystem.value = user.value.host == null && user.value.username.includes('.');
+	isSystem.value = isLocalUser.value && user.value.username.includes('.');
 	moderationNote.value = info.value.moderationNote;
 }
 

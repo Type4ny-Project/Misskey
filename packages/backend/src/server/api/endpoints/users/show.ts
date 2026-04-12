@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { In, IsNull } from 'typeorm';
+import { In } from 'typeorm';
 import { Inject, Injectable } from '@nestjs/common';
 import type { MiMeta, UsersRepository } from '@/models/_.js';
 import type { MiUser } from '@/models/User.js';
@@ -13,6 +13,8 @@ import { RemoteUserResolveService } from '@/core/RemoteUserResolveService.js';
 import { DI } from '@/di-symbols.js';
 import PerUserPvChart from '@/core/chart/charts/per-user-pv.js';
 import { RoleService } from '@/core/RoleService.js';
+import { TenantService } from '@/core/TenantService.js';
+import { UtilityService } from '@/core/UtilityService.js';
 import { ApiError } from '../../error.js';
 import { ApiLoggerService } from '../../ApiLoggerService.js';
 import type { FindOptionsWhere } from 'typeorm';
@@ -114,8 +116,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private roleService: RoleService,
 		private perUserPvChart: PerUserPvChart,
 		private apiLoggerService: ApiLoggerService,
+		private tenantService: TenantService,
+		private utilityService: UtilityService,
 	) {
-		super(meta, paramDef, async (ps, me, _1, _2, _3, ip) => {
+		super(meta, paramDef, async (ps, me, _1, _2, _3, ip, _headers, tenantContext) => {
 			// ログイン時にusers/showできなくなってしまう
 			//if (this.serverSettings.ugcVisibilityForVisitor === 'none' && me == null) {
 			//	throw new ApiError(meta.errors.noSuchUser);
@@ -154,18 +158,22 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			} else {
 				// Lookup user
 				if (typeof ps.host === 'string' && 'username' in ps) {
-					if (this.serverSettings.ugcVisibilityForVisitor === 'local' && me == null) {
-						throw new ApiError(meta.errors.noSuchUser);
-					}
+					const normalizedHost = this.utilityService.toPuny(ps.host);
+					user = await this.usersRepository.findOneBy({
+						usernameLower: ps.username.toLowerCase(),
+						host: normalizedHost,
+					});
 
-					user = await this.remoteUserResolveService.resolveUser(ps.username, ps.host).catch(err => {
+					if (user == null) {
+						user = await this.remoteUserResolveService.resolveUser(ps.username, normalizedHost).catch(err => {
 						this.apiLoggerService.logger.warn(`failed to resolve remote user: ${err}`);
 						throw new ApiError(meta.errors.failedToResolveRemoteUser);
-					});
+						});
+					}
 				} else {
 					const q: FindOptionsWhere<MiUser> = 'userId' in ps
 						? { id: ps.userId }
-						: { usernameLower: ps.username!.toLowerCase(), host: IsNull() };
+						: { usernameLower: ps.username!.toLowerCase(), host: tenantContext!.tenantHost };
 
 					user = await this.usersRepository.findOneBy(q);
 				}
@@ -174,11 +182,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					throw new ApiError(meta.errors.noSuchUser);
 				}
 
-				if (this.serverSettings.ugcVisibilityForVisitor === 'local' && user.host != null && me == null) {
+				if (this.serverSettings.ugcVisibilityForVisitor === 'local' && !this.userEntityService.isLocalUser(user) && !this.tenantService.isManagedHost(user.host) && me == null) {
 					throw new ApiError(meta.errors.noSuchUser);
 				}
 
-				if (user.host == null) {
+				if (this.userEntityService.isLocalUser(user)) {
 					if (me == null && ip != null) {
 						this.perUserPvChart.commitByVisitor(user, ip);
 					} else if (me && me.id !== user.id) {
@@ -188,6 +196,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 				return await this.userEntityService.pack(user, me, {
 					schema: 'UserDetailed',
+					tenantHost: tenantContext!.tenantHost,
 				});
 			}
 		});

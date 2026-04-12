@@ -16,6 +16,7 @@ import { instanceName as localInstanceName } from '@@/js/config.js';
 import type { CSSProperties } from 'vue';
 import { instance as localInstance } from '@/instance.js';
 import { getProxiedImageUrlNullable } from '@/utility/media-proxy.js';
+import { isHostCurrentTenant } from '@/utility/current-tenant.js';
 
 const props = defineProps<{
 	host: string | null;
@@ -27,11 +28,11 @@ const props = defineProps<{
 }>();
 
 // if no instance data is given, this is for the local instance
-const instanceName = computed(() => props.host == null ? localInstanceName : props.instance?.name ?? props.host);
+const instanceName = computed(() => isHostCurrentTenant(props.host) ? localInstanceName : props.instance?.name ?? props.host);
 
 const faviconUrl = computed(() => {
 	let imageSrc: string | null = null;
-	if (props.host == null) {
+	if (isHostCurrentTenant(props.host)) {
 		if (localInstance.iconUrl == null) {
 			return '/favicon.ico';
 		} else {
@@ -44,7 +45,7 @@ const faviconUrl = computed(() => {
 });
 
 const themeColorStyle = computed<CSSProperties>(() => {
-	const themeColor = (props.host == null ? localInstance.themeColor : props.instance?.themeColor) ?? '#777777';
+	const themeColor = (isHostCurrentTenant(props.host) ? localInstance.themeColor : props.instance?.themeColor) ?? '#777777';
 	return {
 		background: `linear-gradient(90deg, ${themeColor}, ${themeColor}00)`,
 	};

@@ -233,7 +233,7 @@ export class ApPersonService implements OnModuleInit {
 		if (cached) return cached;
 
 		// URIがこのサーバーを指しているならデータベースからフェッチ
-		if (uri.startsWith(`${this.config.url}/`)) {
+		if (this.utilityService.isUriLocal(uri)) {
 			const id = uri.split('/').pop();
 			const u = await this.usersRepository.findOneBy({ id }) as MiLocalUser | null;
 			if (u) this.cacheService.uriPersonCache.set(uri, u);
@@ -305,7 +305,7 @@ export class ApPersonService implements OnModuleInit {
 		if (typeof uri !== 'string') throw new Error('uri is not string');
 
 		const host = this.utilityService.punyHost(uri);
-		if (host === this.utilityService.toPuny(this.config.host)) {
+		if (this.utilityService.isSelfHost(host)) {
 			throw new StatusError('cannot resolve local user', 400, 'cannot resolve local user');
 		}
 

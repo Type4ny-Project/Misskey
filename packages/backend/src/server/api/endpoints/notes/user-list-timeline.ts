@@ -87,7 +87,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private queryService: QueryService,
 		private channelMutingService: ChannelMutingService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate!) : null);
 			const sinceId = ps.sinceId ?? (ps.sinceDate ? this.idService.gen(ps.sinceDate!) : null);
 
@@ -114,7 +114,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 				this.activeUsersChart.read(me);
 
-				return await this.noteEntityService.packMany(timeline, me);
+				return await this.noteEntityService.packMany(timeline, me, { tenantHost: tenantContext!.tenantHost });
 			}
 
 			const timeline = await this.fanoutTimelineEndpointService.timeline({
@@ -127,6 +127,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				redisTimelines: ps.withFiles ? [`userListTimelineWithFiles:${list.id}`] : [`userListTimeline:${list.id}`],
 				alwaysIncludeMyNotes: true,
 				excludePureRenotes: !ps.withRenotes,
+				tenantHost: tenantContext!.tenantHost,
 				dbFallback: async (untilId, sinceId, limit) => await this.getFromDb(list, {
 					untilId,
 					sinceId,

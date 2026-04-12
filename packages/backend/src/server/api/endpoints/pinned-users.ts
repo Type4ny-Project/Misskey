@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { IsNull } from 'typeorm';
 import { Inject, Injectable } from '@nestjs/common';
 import type { MiMeta, UsersRepository } from '@/models/_.js';
 import * as Acct from '@/misc/acct.js';
@@ -45,10 +44,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private userEntityService: UserEntityService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const users = await Promise.all(this.serverSettings.pinnedUsers.map(acct => Acct.parse(acct)).map(acct => this.usersRepository.findOneBy({
 				usernameLower: acct.username.toLowerCase(),
-				host: acct.host ?? IsNull(),
+				host: acct.host ?? tenantContext!.tenantHost,
 			})));
 
 			return await this.userEntityService.packMany(users.filter(x => x != null), me, { schema: 'UserDetailed' });

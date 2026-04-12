@@ -66,6 +66,8 @@ import {
 	MiSwSubscription,
 	MiSystemAccount,
 	MiSystemWebhook,
+	MiTenantHostMapping,
+	MiTenantMeta,
 	MiUsedUsername,
 	MiUser,
 	MiUserIp,
@@ -310,6 +312,18 @@ const $swSubscriptionsRepository: Provider = {
 const $systemAccountsRepository: Provider = {
 	provide: DI.systemAccountsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiSystemAccount).extend(miRepository as MiRepository<MiSystemAccount>),
+	inject: [DI.db],
+};
+
+const $tenantHostMappingsRepository: Provider = {
+	provide: DI.tenantHostMappingsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiTenantHostMapping).extend(miRepository as MiRepository<MiTenantHostMapping>),
+	inject: [DI.db],
+};
+
+const $tenantMetasRepository: Provider = {
+	provide: DI.tenantMetasRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiTenantMeta).extend(miRepository as MiRepository<MiTenantMeta>),
 	inject: [DI.db],
 };
 
@@ -599,6 +613,8 @@ const $reversiGamesRepository: Provider = {
 		$blockingsRepository,
 		$swSubscriptionsRepository,
 		$systemAccountsRepository,
+		$tenantHostMappingsRepository,
+		$tenantMetasRepository,
 		$hashtagsRepository,
 		$abuseUserReportsRepository,
 		$abuseReportNotificationRecipientRepository,
@@ -679,6 +695,8 @@ const $reversiGamesRepository: Provider = {
 		$blockingsRepository,
 		$swSubscriptionsRepository,
 		$systemAccountsRepository,
+		$tenantHostMappingsRepository,
+		$tenantMetasRepository,
 		$hashtagsRepository,
 		$abuseUserReportsRepository,
 		$abuseReportNotificationRecipientRepository,

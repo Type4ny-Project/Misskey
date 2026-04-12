@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { IsNull } from 'typeorm';
 import { Inject, Injectable } from '@nestjs/common';
 import type { UsersRepository, PagesRepository } from '@/models/_.js';
 import type { MiPage } from '@/models/Page.js';
@@ -63,14 +62,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private pageEntityService: PageEntityService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			let page: MiPage | null = null;
 
 			if ('pageId' in ps) {
 				page = await this.pagesRepository.findOneBy({ id: ps.pageId });
 			} else {
 				const author = await this.usersRepository.findOneBy({
-					host: IsNull(),
+					host: tenantContext!.tenantHost,
 					usernameLower: ps.username.toLowerCase(),
 				});
 				if (author) {

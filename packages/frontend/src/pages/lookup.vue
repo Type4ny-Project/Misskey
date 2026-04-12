@@ -26,6 +26,7 @@ import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { mainRouter } from '@/router.js';
 import MkButton from '@/components/MkButton.vue';
+import { isUserLocalToCurrentTenant } from '@/utility/current-tenant.js';
 
 const state = ref<'fetching' | 'done'>('fetching');
 
@@ -46,9 +47,10 @@ function _fetch_() {
 			uri,
 		}).then(res => {
 			if (res.type === 'User') {
+				const isLocalUser = isUserLocalToCurrentTenant(res.object);
 				mainRouter.replace('/@:acct/:page?', {
 					params: {
-						acct: res.object.host != null ? `${res.object.username}@${res.object.host}` : res.object.username,
+						acct: isLocalUser ? res.object.username : `${res.object.username}@${res.object.host}`,
 					},
 				});
 			} else if (res.type === 'Note') {
@@ -69,9 +71,10 @@ function _fetch_() {
 			uri = uri.slice(5);
 		}
 		promise = misskeyApi('users/show', Misskey.acct.parse(uri)).then(user => {
+			const isLocalUser = isUserLocalToCurrentTenant(user);
 			mainRouter.replace('/@:acct/:page?', {
 				params: {
-					acct: user.host != null ? `${user.username}@${user.host}` : user.username,
+					acct: isLocalUser ? user.username : `${user.username}@${user.host}`,
 				},
 			});
 		});

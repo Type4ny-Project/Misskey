@@ -12,19 +12,16 @@ import type { MiNote } from '@/models/Note.js';
 import { IdService } from '@/core/IdService.js';
 import type { MiUserNotePining } from '@/models/UserNotePining.js';
 import { RelayService } from '@/core/RelayService.js';
-import type { Config } from '@/config.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { ApDeliverManagerService } from '@/core/activitypub/ApDeliverManagerService.js';
 import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { bindThis } from '@/decorators.js';
 import { RoleService } from '@/core/RoleService.js';
 
 @Injectable()
 export class NotePiningService {
 	constructor(
-		@Inject(DI.config)
-		private config: Config,
-
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
 
@@ -38,6 +35,7 @@ export class NotePiningService {
 		private idService: IdService,
 		private roleService: RoleService,
 		private relayService: RelayService,
+		private tenantService: TenantService,
 		private apDeliverManagerService: ApDeliverManagerService,
 		private apRendererService: ApRendererService,
 	) {
@@ -117,8 +115,8 @@ export class NotePiningService {
 
 		if (!this.userEntityService.isLocalUser(user)) return;
 
-		const target = `${this.config.url}/users/${user.id}/collections/featured`;
-		const item = `${this.config.url}/notes/${noteId}`;
+		const target = `${this.userEntityService.genLocalUserUri(user.id, user.host)}/collections/featured`;
+		const item = `${this.tenantService.tenantUrlFor(user.host)}/notes/${noteId}`;
 		const content = this.apRendererService.addContext(isAddition ? this.apRendererService.renderAdd(user, target, item) : this.apRendererService.renderRemove(user, target, item));
 
 		this.apDeliverManagerService.deliverToFollowers(user, content);

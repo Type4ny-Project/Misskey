@@ -117,7 +117,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			moveTo = await this.apPersonService.resolvePerson(newUri);
 
 			// make sure that the user has indicated the old account as an alias
-			const fromUrl = this.userEntityService.genLocalUserUri(me.id);
+			const fromUrl = this.userEntityService.genLocalUserUri(me.id, me.host);
 			let allowed = false;
 			if (moveTo.alsoKnownAs) {
 				for (const knownAs of moveTo.alsoKnownAs) {

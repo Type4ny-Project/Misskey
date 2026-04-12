@@ -50,7 +50,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</TransitionGroup>
 			</div>
 
-			<div v-if="user && (!user.canChat || user.host !== null)">
+			<div v-if="user && (!user.canChat || !isUserLocalToCurrentTenant(user))">
 				<MkInfo warn>{{ i18n.ts._chat.chatNotAvailableInOtherAccount }}</MkInfo>
 			</div>
 
@@ -111,6 +111,7 @@ import { useRouter } from '@/router.js';
 import { useMutationObserver } from '@/composables/use-mutation-observer.js';
 import MkInfo from '@/components/MkInfo.vue';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
+import { isUserLocalToCurrentTenant } from '@/utility/current-tenant.js';
 
 const $i = ensureSignin();
 const router = useRouter();

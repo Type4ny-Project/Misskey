@@ -65,7 +65,7 @@ import { CliPage } from './views/cli.js';
 import { FlushPage } from './views/flush.js';
 import { ErrorPage } from './views/error.js';
 
-import type { FastifyError, FastifyInstance, FastifyPluginOptions, FastifyReply } from 'fastify';
+import type { FastifyError, FastifyInstance, FastifyPluginOptions, FastifyReply, FastifyRequest } from 'fastify';
 
 const _filename = fileURLToPath(import.meta.url);
 const _dirname = dirname(_filename);
@@ -152,14 +152,15 @@ export class ClientServerService {
 	}
 
 	@bindThis
-	private async manifestHandler(reply: FastifyReply) {
+	private async manifestHandler(request: FastifyRequest, reply: FastifyReply) {
+		const tenantHost = request.tenantContext.tenantHost;
 		let manifest = {
 			// 空文字列の場合右辺を使いたいため
 			// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-			'short_name': this.meta.shortName || this.meta.name || this.config.host,
+			'short_name': this.meta.shortName || this.meta.name || tenantHost,
 			// 空文字列の場合右辺を使いたいため
 			// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-			'name': this.meta.name || this.config.host,
+			'name': this.meta.name || tenantHost,
 			'start_url': '/',
 			'display': 'standalone',
 			'background_color': '#313a42',
@@ -386,7 +387,7 @@ export class ClientServerService {
 		});
 
 		// Manifest
-		fastify.get('/manifest.json', async (request, reply) => await this.manifestHandler(reply));
+		fastify.get('/manifest.json', async (request, reply) => await this.manifestHandler(request, reply));
 
 		// Embed Javascript
 		fastify.get('/embed.js', async (request, reply) => {
@@ -401,14 +402,15 @@ export class ClientServerService {
 
 		// OpenSearch XML
 		fastify.get('/opensearch.xml', async (request, reply) => {
+			const tenantUrl = request.tenantContext.tenantUrl;
 			const name = this.meta.name ?? 'Misskey';
 			let content = '';
 			content += '<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/" xmlns:moz="http://www.mozilla.org/2006/browser/search/">';
 			content += `<ShortName>${name}</ShortName>`;
 			content += `<Description>${name} Search</Description>`;
 			content += '<InputEncoding>UTF-8</InputEncoding>';
-			content += `<Image width="16" height="16" type="image/x-icon">${this.config.url}/favicon.ico</Image>`;
-			content += `<Url type="text/html" template="${this.config.url}/search?q={searchTerms}"/>`;
+			content += `<Image width="16" height="16" type="image/x-icon">${tenantUrl}/favicon.ico</Image>`;
+			content += `<Url type="text/html" template="${tenantUrl}/search?q={searchTerms}"/>`;
 			content += '</OpenSearchDescription>';
 
 			reply.header('Content-Type', 'application/opensearchdescription+xml');
@@ -417,13 +419,13 @@ export class ClientServerService {
 
 		//#endregion
 
-		const renderBase = async (reply: FastifyReply, data: Partial<Parameters<typeof BasePage>[0]> = {}) => {
+		const renderBase = async (request: FastifyRequest, reply: FastifyReply, data: Partial<Parameters<typeof BasePage>[0]> = {}) => {
 			reply.header('Cache-Control', 'public, max-age=30');
 			return await HtmlTemplateService.replyHtml(reply, BasePage({
 				img: this.meta.bannerUrl ?? undefined,
 				title: this.meta.name ?? 'Misskey',
 				desc: this.meta.description ?? undefined,
-				...await this.htmlTemplateService.getCommonData(),
+				...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 				...data,
 			}));
 		};
@@ -431,11 +433,11 @@ export class ClientServerService {
 		// URL preview endpoint
 		fastify.get<{ Querystring: { url: string; lang: string; } }>('/url', (request, reply) => this.urlPreviewService.handle(request, reply));
 
-		const getFeed = async (acct: string) => {
+		const getFeed = async (acct: string, tenantHost: string) => {
 			const { username, host } = Acct.parse(acct);
 			const user = await this.usersRepository.findOneBy({
 				usernameLower: username.toLowerCase(),
-				host: host ?? IsNull(),
+				host: host ?? tenantHost,
 				isSuspended: false,
 				requireSigninToViewContents: false,
 			});
@@ -445,9 +447,9 @@ export class ClientServerService {
 
 		// Atom
 		fastify.get<{ Params: { user?: string; } }>('/@:user.atom', async (request, reply) => {
-			if (request.params.user == null) return await renderBase(reply);
+			if (request.params.user == null) return await renderBase(request, reply);
 
-			const feed = await getFeed(request.params.user);
+			const feed = await getFeed(request.params.user, request.tenantContext.tenantHost);
 
 			if (feed) {
 				reply.header('Content-Type', 'application/atom+xml; charset=utf-8');
@@ -460,9 +462,9 @@ export class ClientServerService {
 
 		// RSS
 		fastify.get<{ Params: { user?: string; } }>('/@:user.rss', async (request, reply) => {
-			if (request.params.user == null) return await renderBase(reply);
+			if (request.params.user == null) return await renderBase(request, reply);
 
-			const feed = await getFeed(request.params.user);
+			const feed = await getFeed(request.params.user, request.tenantContext.tenantHost);
 
 			if (feed) {
 				reply.header('Content-Type', 'application/rss+xml; charset=utf-8');
@@ -475,9 +477,9 @@ export class ClientServerService {
 
 		// JSON
 		fastify.get<{ Params: { user?: string; } }>('/@:user.json', async (request, reply) => {
-			if (request.params.user == null) return await renderBase(reply);
+			if (request.params.user == null) return await renderBase(request, reply);
 
-			const feed = await getFeed(request.params.user);
+			const feed = await getFeed(request.params.user, request.tenantContext.tenantHost);
 
 			if (feed) {
 				reply.header('Content-Type', 'application/json; charset=utf-8');
@@ -494,7 +496,7 @@ export class ClientServerService {
 			const { username, host } = Acct.parse(request.params.user);
 			const user = await this.usersRepository.findOneBy({
 				usernameLower: username.toLowerCase(),
-				host: host ?? IsNull(),
+				host: host ?? request.tenantContext.tenantHost,
 				isSuspended: false,
 			});
 
@@ -503,7 +505,7 @@ export class ClientServerService {
 			if (
 				user != null && (
 					this.meta.ugcVisibilityForVisitor === 'all' ||
-						(this.meta.ugcVisibilityForVisitor === 'local' && user.host == null)
+						(this.meta.ugcVisibilityForVisitor === 'local' && this.userEntityService.isLocalUser(user))
 				)
 			) {
 				const profile = await this.userProfilesRepository.findOneByOrFail({ userId: user.id });
@@ -523,7 +525,7 @@ export class ClientServerService {
 					user: _user,
 					profile,
 					sub: request.params.sub,
-					...await this.htmlTemplateService.getCommonData(),
+					...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 					clientCtxJson: htmlSafeJsonStringify({
 						user: _user,
 					}),
@@ -531,14 +533,13 @@ export class ClientServerService {
 			} else {
 				// リモートユーザーなので
 				// モデレータがAPI経由で参照可能にするために404にはしない
-				return await renderBase(reply);
+				return await renderBase(request, reply);
 			}
 		});
 
 		fastify.get<{ Params: { user: string; } }>('/users/:user', async (request, reply) => {
 			const user = await this.usersRepository.findOneBy({
 				id: request.params.user,
-				host: IsNull(),
 				isSuspended: false,
 			});
 
@@ -549,7 +550,7 @@ export class ClientServerService {
 
 			vary(reply.raw, 'Accept');
 
-			reply.redirect(`/@${user.username}${ user.host == null ? '' : '@' + user.host}`);
+			reply.redirect(`/@${user.username}${ this.userEntityService.isLocalUser(user) ? '' : '@' + user.host}`);
 		});
 
 		// Note
@@ -568,7 +569,7 @@ export class ClientServerService {
 				note &&
 				!note.user!.requireSigninToViewContents &&
 				(this.meta.ugcVisibilityForVisitor === 'all' ||
-					(this.meta.ugcVisibilityForVisitor === 'local' && note.userHost == null)
+					(this.meta.ugcVisibilityForVisitor === 'local' && this.userEntityService.isLocalUser({ host: note.userHost, uri: null }))
 				)
 			) {
 				const _note = await this.noteEntityService.pack(note);
@@ -581,13 +582,13 @@ export class ClientServerService {
 				return await HtmlTemplateService.replyHtml(reply, NotePage({
 					note: _note,
 					profile,
-					...await this.htmlTemplateService.getCommonData(),
+					...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 					clientCtxJson: htmlSafeJsonStringify({
 						note: _note,
 					}),
 				}));
 			} else {
-				return await renderBase(reply);
+				return await renderBase(request, reply);
 			}
 		});
 
@@ -596,7 +597,7 @@ export class ClientServerService {
 			const { username, host } = Acct.parse(request.params.user);
 			const user = await this.usersRepository.findOneBy({
 				usernameLower: username.toLowerCase(),
-				host: host ?? IsNull(),
+				host: host ?? request.tenantContext.tenantHost,
 			});
 
 			if (user == null) return;
@@ -621,10 +622,10 @@ export class ClientServerService {
 				return await HtmlTemplateService.replyHtml(reply, PagePage({
 					page: _page,
 					profile,
-					...await this.htmlTemplateService.getCommonData(),
+					...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 				}));
 			} else {
-				return await renderBase(reply);
+				return await renderBase(request, reply);
 			}
 		});
 
@@ -645,10 +646,10 @@ export class ClientServerService {
 				return await HtmlTemplateService.replyHtml(reply, FlashPage({
 					flash: _flash,
 					profile,
-					...await this.htmlTemplateService.getCommonData(),
+					...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 				}));
 			} else {
-				return await renderBase(reply);
+				return await renderBase(request, reply);
 			}
 		});
 
@@ -669,13 +670,13 @@ export class ClientServerService {
 				return await HtmlTemplateService.replyHtml(reply, ClipPage({
 					clip: _clip,
 					profile,
-					...await this.htmlTemplateService.getCommonData(),
+					...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 					clientCtxJson: htmlSafeJsonStringify({
 						clip: _clip,
 					}),
 				}));
 			} else {
-				return await renderBase(reply);
+				return await renderBase(request, reply);
 			}
 		});
 
@@ -694,10 +695,10 @@ export class ClientServerService {
 				return await HtmlTemplateService.replyHtml(reply, GalleryPostPage({
 					galleryPost: _post,
 					profile,
-					...await this.htmlTemplateService.getCommonData(),
+					...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 				}));
 			} else {
-				return await renderBase(reply);
+				return await renderBase(request, reply);
 			}
 		});
 
@@ -712,10 +713,10 @@ export class ClientServerService {
 				reply.header('Cache-Control', 'public, max-age=15');
 				return await HtmlTemplateService.replyHtml(reply, ChannelPage({
 					channel: _channel,
-					...await this.htmlTemplateService.getCommonData(),
+					...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 				}));
 			} else {
-				return await renderBase(reply);
+				return await renderBase(request, reply);
 			}
 		});
 
@@ -730,10 +731,10 @@ export class ClientServerService {
 				reply.header('Cache-Control', 'public, max-age=3600');
 				return await HtmlTemplateService.replyHtml(reply, ReversiGamePage({
 					reversiGame: _game,
-					...await this.htmlTemplateService.getCommonData(),
+					...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 				}));
 			} else {
-				return await renderBase(reply);
+				return await renderBase(request, reply);
 			}
 		});
 
@@ -749,10 +750,10 @@ export class ClientServerService {
 				reply.header('Cache-Control', 'public, max-age=3600');
 				return await HtmlTemplateService.replyHtml(reply, AnnouncementPage({
 					announcement: _announcement,
-					...await this.htmlTemplateService.getCommonData(),
+					...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 				}));
 			} else {
-				return await renderBase(reply);
+				return await renderBase(request, reply);
 			}
 		});
 		//#endregion
@@ -760,12 +761,12 @@ export class ClientServerService {
 		//#region noindex pages
 		// Tags
 		fastify.get<{ Params: { clip: string; } }>('/tags/:tag', async (request, reply) => {
-			return await renderBase(reply, { noindex: true });
+			return await renderBase(request, reply, { noindex: true });
 		});
 
 		// User with Tags
 		fastify.get<{ Params: { clip: string; } }>('/user-tags/:tag', async (request, reply) => {
-			return await renderBase(reply, { noindex: true });
+			return await renderBase(request, reply, { noindex: true });
 		});
 		//#endregion
 
@@ -778,14 +779,14 @@ export class ClientServerService {
 			});
 
 			if (user == null) return;
-			if (user.host != null) return;
+			if (!this.userEntityService.isLocalUser(user)) return;
 
 			const _user = await this.userEntityService.pack(user);
 
 			reply.header('Cache-Control', 'public, max-age=3600');
 			return await HtmlTemplateService.replyHtml(reply, BaseEmbed({
 				title: this.meta.name ?? 'Misskey',
-				...await this.htmlTemplateService.getCommonData(),
+				...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 				embedCtxJson: htmlSafeJsonStringify({
 					user: _user,
 				}),
@@ -804,14 +805,14 @@ export class ClientServerService {
 
 			if (note == null) return;
 			if (['specified', 'followers'].includes(note.visibility)) return;
-			if (note.userHost != null) return;
+			if (!this.userEntityService.isLocalUser({ host: note.userHost, uri: null })) return;
 
 			const _note = await this.noteEntityService.pack(note, null, { detail: true });
 
 			reply.header('Cache-Control', 'public, max-age=3600');
 			return await HtmlTemplateService.replyHtml(reply, BaseEmbed({
 				title: this.meta.name ?? 'Misskey',
-				...await this.htmlTemplateService.getCommonData(),
+				...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 				embedCtxJson: htmlSafeJsonStringify({
 					note: _note,
 				}),
@@ -832,7 +833,7 @@ export class ClientServerService {
 			reply.header('Cache-Control', 'public, max-age=3600');
 			return await HtmlTemplateService.replyHtml(reply, BaseEmbed({
 				title: this.meta.name ?? 'Misskey',
-				...await this.htmlTemplateService.getCommonData(),
+				...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 				embedCtxJson: htmlSafeJsonStringify({
 					clip: _clip,
 				}),
@@ -845,7 +846,7 @@ export class ClientServerService {
 			reply.header('Cache-Control', 'public, max-age=3600');
 			return await HtmlTemplateService.replyHtml(reply, BaseEmbed({
 				title: this.meta.name ?? 'Misskey',
-				...await this.htmlTemplateService.getCommonData(),
+				...await this.htmlTemplateService.getCommonData(request.tenantContext.tenantUrl),
 			}));
 		});
 
@@ -900,7 +901,7 @@ export class ClientServerService {
 
 		// Render base html for all requests
 		fastify.get('*', async (request, reply) => {
-			return await renderBase(reply);
+			return await renderBase(request, reply);
 		});
 
 		fastify.setErrorHandler<FastifyError>(async (error, request, reply) => {

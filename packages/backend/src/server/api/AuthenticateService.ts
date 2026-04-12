@@ -41,14 +41,15 @@ export class AuthenticateService implements OnApplicationShutdown {
 	}
 
 	@bindThis
-	public async authenticate(token: string | null | undefined): Promise<[MiLocalUser | null, MiAccessToken | null]> {
+	public async authenticate(token: string | null | undefined, tenantHost: string): Promise<[MiLocalUser | null, MiAccessToken | null]> {
 		if (token == null) {
 			return [null, null];
 		}
 
 		if (isNativeUserToken(token)) {
-			const user = await this.cacheService.localUserByNativeTokenCache.fetch(token,
-				() => this.usersRepository.findOneBy({ token }) as Promise<MiLocalUser | null>);
+			const cacheKey = `${tenantHost}:${token}`;
+			const user = await this.cacheService.localUserByNativeTokenCache.fetch(cacheKey,
+				() => this.usersRepository.findOneBy({ token, host: tenantHost }) as Promise<MiLocalUser | null>);
 
 			if (user == null) {
 				throw new AuthenticationError('user not found');
@@ -72,9 +73,10 @@ export class AuthenticateService implements OnApplicationShutdown {
 				lastUsedAt: new Date(),
 			});
 
-			const user = await this.cacheService.localUserByIdCache.fetch(accessToken.userId,
+			const user = await this.cacheService.localUserByIdCache.fetch(`${tenantHost}:${accessToken.userId}`,
 				() => this.usersRepository.findOneBy({
 					id: accessToken.userId,
+					host: tenantHost,
 				}) as Promise<MiLocalUser>);
 
 			if (accessToken.appId) {

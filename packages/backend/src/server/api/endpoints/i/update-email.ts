@@ -80,7 +80,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private userAuthService: UserAuthService,
 		private globalEventService: GlobalEventService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const token = ps.token;
 			const profile = await this.userProfilesRepository.findOneByOrFail({ userId: me.id });
 
@@ -131,11 +131,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					emailVerifyCode: code,
 				});
 
-				const link = `${this.config.url}/verify-email/${code}`;
+				const link = `${tenantContext!.tenantUrl}/verify-email/${code}`;
 
 				this.emailService.sendEmail(ps.email, 'Email verification',
 					`To verify email, please click this link:<br><a href="${link}">${link}</a>`,
-					`To verify email, please click this link: ${link}`);
+					`To verify email, please click this link: ${link}`, {
+						tenantHost: tenantContext!.tenantHost,
+						tenantUrl: tenantContext!.tenantUrl,
+					});
 			}
 
 			return iObj;

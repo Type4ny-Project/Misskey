@@ -48,7 +48,7 @@ export class MediaTimelineChannel extends Channel {
 		// メディア添付が必須
 		if (note.fileIds == null || note.fileIds.length === 0) return;
 
-		if (note.user.host !== null) return;
+		if (note.user.host !== this.tenantHost) return;
 		if (note.visibility !== 'public') return;
 		if (note.channelId != null) return;
 		if (note.user.requireSigninToViewContents && this.user == null) return;

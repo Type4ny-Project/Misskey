@@ -22,6 +22,7 @@ import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
 import { instance } from '@/instance.js';
 import { refreshCurrentAccount } from '@/accounts.js';
+import { isUserLocalToCurrentTenant } from '@/utility/current-tenant.js';
 
 export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router = mainRouter) {
 	const meId = $i ? $i.id : null;
@@ -154,6 +155,7 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 	}
 
 	const menuItems: MenuItem[] = [];
+	const isLocalUser = isUserLocalToCurrentTenant(user);
 
 	if (iAmModerator) {
 		menuItems.push({
@@ -181,7 +183,7 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 		icon: 'ti ti-share',
 		text: i18n.ts.copyProfileUrl,
 		action: () => {
-			const canonical = user.host === null ? `@${user.username}` : `@${user.username}@${toUnicode(user.host)}`;
+			const canonical = isLocalUser ? `@${user.username}` : `@${user.username}@${toUnicode(user.host!)}`;
 			copyToClipboard(`${url}/${canonical}`);
 		},
 	});
@@ -194,7 +196,7 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 		},
 	});
 
-	if (user.host != null && user.url != null) {
+	if (!isLocalUser && user.url != null) {
 		menuItems.push({
 			icon: 'ti ti-external-link',
 			text: i18n.ts.showOnRemote,
@@ -227,7 +229,7 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 		});
 	}
 
-	if (notesSearchAvailable && (user.host == null || canSearchNonLocalNotes)) {
+	if (notesSearchAvailable && (isLocalUser || canSearchNonLocalNotes)) {
 		menuItems.push({
 			icon: 'ti ti-search',
 			text: i18n.ts.searchThisUsersNotes,
@@ -236,7 +238,7 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 						username: user.username,
 					} as { username: string, host?: string };
 
-				if (user.host !== null) {
+				if (!isLocalUser && user.host) {
 					query.host = user.host;
 				}
 
@@ -291,7 +293,7 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 			text: i18n.ts.addToAntenna,
 			children: async () => {
 				const antennas = await antennasCache.fetch();
-				const canonical = user.host === null ? `@${user.username}` : `@${user.username}@${toUnicode(user.host)}`;
+				const canonical = isLocalUser ? `@${user.username}` : `@${user.username}@${toUnicode(user.host!)}`;
 				return antennas.filter((a) => a.src === 'users').map(antenna => ({
 					text: antenna.name,
 					action: async () => {
@@ -419,12 +421,12 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 			icon: 'ti ti-pencil-heart',
 			text: i18n.ts.createUserSpecifiedNote,
 			action: () => {
-				const canonical = user.host === null ? `@${user.username}` : `@${user.username}@${user.host}`;
-				os.post({ specified: user, initialText: `${canonical} ` });
-			},
-		});
+			const canonical = isLocalUser ? `@${user.username}` : `@${user.username}@${user.host}`;
+			os.post({ specified: user, initialText: `${canonical} ` });
+		},
+	});
 
-		if ($i.policies.chatAvailability === 'available' && user.canChat && user.host == null) {
+		if ($i.policies.chatAvailability === 'available' && user.canChat && isLocalUser) {
 			menuItems.push({
 				type: 'link',
 				icon: 'ti ti-messages',
@@ -462,7 +464,7 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 		});
 	}
 
-	if (user.host !== null) {
+	if (!isLocalUser) {
 		menuItems.push({ type: 'divider' }, {
 			icon: 'ti ti-refresh',
 			text: i18n.ts.updateRemoteUser,

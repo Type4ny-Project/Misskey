@@ -74,7 +74,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private activeUsersChart: ActiveUsersChart,
 		private channelMutingService: ChannelMutingService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate!) : null);
 			const sinceId = ps.sinceId ?? (ps.sinceDate ? this.idService.gen(ps.sinceDate!) : null);
 
@@ -89,7 +89,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (me) this.activeUsersChart.read(me);
 
 			if (!this.serverSettings.enableFanoutTimeline) {
-				return await this.noteEntityService.packMany(await this.getFromDb({ untilId, sinceId, limit: ps.limit, channelId: channel.id }, me), me);
+				return await this.noteEntityService.packMany(await this.getFromDb({ untilId, sinceId, limit: ps.limit, channelId: channel.id }, me), me, { tenantHost: tenantContext!.tenantHost });
 			}
 
 			return await this.fanoutTimelineEndpointService.timeline({
@@ -101,6 +101,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				useDbFallback: true,
 				redisTimelines: [`channelTimeline:${channel.id}`],
 				excludePureRenotes: false,
+				tenantHost: tenantContext!.tenantHost,
 				ignoreAuthorChannelFromMute: true,
 				dbFallback: async (untilId, sinceId, limit) => {
 					return await this.getFromDb({ untilId, sinceId, limit, channelId: channel.id }, me);

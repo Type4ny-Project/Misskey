@@ -66,7 +66,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> {
 		private customEmojiService: CustomEmojiService,
 		private driveService: DriveService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const emojiRequest = await this.emojiRequestService.findById(ps.requestId);
 
 			if (emojiRequest == null) {
@@ -81,7 +81,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> {
 				});
 			}
 
-			const isDuplicate = await this.customEmojiService.checkDuplicate(emojiRequest.name);
+			const isDuplicate = await this.customEmojiService.checkDuplicate(emojiRequest.name, tenantContext!.tenantHost);
 			if (isDuplicate) {
 				throw new ApiError(meta.errors.duplicateName);
 			}
@@ -99,7 +99,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> {
 				name: emojiRequest.name,
 				category: emojiRequest.category,
 				aliases: emojiRequest.aliases,
-				host: null,
+				host: tenantContext!.tenantHost,
 				license: emojiRequest.license,
 				isSensitive: false,
 				localOnly: false,

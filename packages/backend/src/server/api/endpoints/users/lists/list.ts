@@ -7,6 +7,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { UserListsRepository, UsersRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { UserListEntityService } from '@/core/entities/UserListEntityService.js';
+import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { ApiError } from '@/server/api/error.js';
 import { DI } from '@/di-symbols.js';
 
@@ -64,14 +65,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> {
 		@Inject(DI.userListsRepository)
 		private userListsRepository: UserListsRepository,
 
+		private userEntityService: UserEntityService,
 		private userListEntityService: UserListEntityService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
-			if (typeof ps.userId !== 'undefined') {
-				const user = await this.usersRepository.findOneBy({ id: ps.userId });
-				if (user === null) throw new ApiError(meta.errors.noSuchUser);
-				if (user.host !== null) throw new ApiError(meta.errors.remoteUser);
-			} else if (me === null) {
+			super(meta, paramDef, async (ps, me) => {
+				if (typeof ps.userId !== 'undefined') {
+					const user = await this.usersRepository.findOneBy({ id: ps.userId });
+					if (user === null) throw new ApiError(meta.errors.noSuchUser);
+					if (!this.userEntityService.isLocalUser(user)) throw new ApiError(meta.errors.remoteUser);
+				} else if (me === null) {
 				throw new ApiError(meta.errors.invalidParam);
 			}
 

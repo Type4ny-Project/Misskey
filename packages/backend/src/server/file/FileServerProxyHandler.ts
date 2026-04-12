@@ -13,6 +13,7 @@ import { contentDisposition } from '@/misc/content-disposition.js';
 import { correctFilename } from '@/misc/correct-filename.js';
 import { isMimeImage } from '@/misc/is-mime-image.js';
 import { IImageStreamable, ImageProcessingService, webpDefault } from '@/core/ImageProcessingService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { createRangeStream, attachStreamCleanup, needsCleanup } from './FileServerUtils.js';
 import type { DownloadedFileResult, FileResolveResult, FileServerFileResolver } from './FileServerFileResolver.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -36,6 +37,7 @@ export class FileServerProxyHandler {
 		private fileResolver: FileServerFileResolver,
 		private assetsPath: string,
 		private imageProcessingService: ImageProcessingService,
+		private tenantService: TenantService,
 	) {}
 
 	public async handle(request: FastifyRequest<{ Params: { url: string }; Querystring: ProxyQuery }>, reply: FastifyReply) {
@@ -260,8 +262,9 @@ export class FileServerProxyHandler {
 	}
 
 	private async getStreamAndTypeFromUrl(url: string): Promise<ProxySource> {
-		if (url.startsWith(`${this.config.url}/files/`)) {
-			const key = url.replace(`${this.config.url}/files/`, '').split('/').shift();
+		const parsed = new URL(url);
+		if (this.tenantService.isManagedHost(parsed.host) && parsed.pathname.startsWith('/files/')) {
+			const key = parsed.pathname.replace('/files/', '').split('/').shift();
 			if (!key) throw new StatusError('Invalid File Key', 400, 'Invalid File Key');
 
 			return await this.fileResolver.resolveFileByAccessKey(key);

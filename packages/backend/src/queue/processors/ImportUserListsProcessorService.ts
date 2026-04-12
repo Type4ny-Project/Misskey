@@ -4,7 +4,6 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { IsNull } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { UsersRepository, DriveFilesRepository, UserListMembershipsRepository, UserListsRepository } from '@/models/_.js';
 import type Logger from '@/logger.js';
@@ -13,6 +12,7 @@ import { RemoteUserResolveService } from '@/core/RemoteUserResolveService.js';
 import { DownloadService } from '@/core/DownloadService.js';
 import { UserListService } from '@/core/UserListService.js';
 import { IdService } from '@/core/IdService.js';
+import { TenantService } from '@/core/TenantService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { bindThis } from '@/decorators.js';
 import { QueueLoggerService } from '../QueueLoggerService.js';
@@ -37,6 +37,7 @@ export class ImportUserListsProcessorService {
 		private userListMembershipsRepository: UserListMembershipsRepository,
 
 		private utilityService: UtilityService,
+		private tenantService: TenantService,
 		private idService: IdService,
 		private userListService: UserListService,
 		private remoteUserResolveService: RemoteUserResolveService,
@@ -98,7 +99,7 @@ export class ImportUserListsProcessorService {
 				}
 
 				let target = this.utilityService.isSelfHost(host!) ? await this.usersRepository.findOneBy({
-					host: IsNull(),
+					host: this.tenantService.tenantHostFor(host),
 					usernameLower: username.toLowerCase(),
 				}) : await this.usersRepository.findOneBy({
 					host: this.utilityService.toPuny(host!),

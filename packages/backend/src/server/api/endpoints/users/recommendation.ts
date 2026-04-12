@@ -52,11 +52,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private userEntityService: UserEntityService,
 		private queryService: QueryService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, me, _token, _file, _cleanup, _ip, _headers, tenantContext) => {
 			const query = this.usersRepository.createQueryBuilder('user')
 				.where('user.isLocked = FALSE')
 				.andWhere('user.isExplorable = TRUE')
-				.andWhere('user.host IS NULL')
+				.andWhere('user.host = :tenantHost', { tenantHost: tenantContext!.tenantHost })
 				.andWhere('user.updatedAt >= :date', { date: new Date(Date.now() - ms('7days')) })
 				.andWhere('user.id != :meId', { meId: me.id })
 				.orderBy('user.followersCount', 'DESC');

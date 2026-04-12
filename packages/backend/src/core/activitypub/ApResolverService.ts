@@ -173,8 +173,10 @@ export class Resolver {
 				])
 					.then(([note, poll]) => this.apRendererService.renderQuestion({ id: note.userId }, note, poll));
 			case 'likes':
-				return this.noteReactionsRepository.findOneByOrFail({ id: parsed.id }).then(async reaction =>
-					this.apRendererService.addContext(await this.apRendererService.renderLike(reaction, { uri: null })));
+				return this.noteReactionsRepository.findOneByOrFail({ id: parsed.id }).then(async reaction => {
+					const reactor = await this.usersRepository.findOneByOrFail({ id: reaction.userId });
+					return this.apRendererService.addContext(await this.apRendererService.renderLike(reaction, { uri: null }, reactor.host));
+				});
 			case 'follows':
 				return this.followRequestsRepository.findOneBy({ id: parsed.id })
 					.then(async followRequest => {
@@ -182,11 +184,11 @@ export class Resolver {
 						const [follower, followee] = await Promise.all([
 							this.usersRepository.findOneBy({
 								id: followRequest.followerId,
-								host: IsNull(),
+								host: followRequest.followerHost!,
 							}),
 							this.usersRepository.findOneBy({
 								id: followRequest.followeeId,
-								host: Not(IsNull()),
+								host: followRequest.followeeHost!,
 							}),
 						]);
 						if (follower == null || followee == null) {

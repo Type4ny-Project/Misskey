@@ -190,6 +190,7 @@ export class UserSearchService {
 	private generateUserQueryBuilder(params: {
 		username?: string | null,
 		host?: string | null,
+		tenantHost?: string,
 	}): SelectQueryBuilder<MiUser> {
 		const userQuery = this.usersRepository.createQueryBuilder('user');
 
@@ -199,7 +200,7 @@ export class UserSearchService {
 
 		if (params.host) {
 			if (params.host === this.config.hostname || params.host === '.') {
-				userQuery.andWhere('user.host IS NULL');
+				userQuery.andWhere('user.host = :tenantHost', { tenantHost: params.tenantHost ?? this.config.host });
 			} else {
 				userQuery.andWhere('user.host LIKE :host', {
 					host: sqlLikeEscape(params.host.toLowerCase()) + '%',
@@ -217,6 +218,7 @@ export class UserSearchService {
 		limit: number;
 		offset: number;
 		origin: 'local' | 'remote' | 'combined';
+		tenantHost: string;
 	}> = {}) {
 		const activeThreshold = new Date(Date.now() - (1000 * 60 * 60 * 24 * 30)); // 30日
 
@@ -251,9 +253,9 @@ export class UserSearchService {
 		}
 
 		if (options.origin === 'local') {
-			nameQuery.andWhere('user.host IS NULL');
+			nameQuery.andWhere('user.host = :tenantHost', { tenantHost: options.tenantHost ?? this.config.host });
 		} else if (options.origin === 'remote') {
-			nameQuery.andWhere('user.host IS NOT NULL');
+			nameQuery.andWhere('user.host != :tenantHost', { tenantHost: options.tenantHost ?? this.config.host });
 		}
 
 		users = await nameQuery
@@ -273,9 +275,9 @@ export class UserSearchService {
 			}
 
 			if (options.origin === 'local') {
-				profQuery.andWhere('prof.userHost IS NULL');
+				profQuery.andWhere('prof.userHost = :tenantHost', { tenantHost: options.tenantHost ?? this.config.host });
 			} else if (options.origin === 'remote') {
-				profQuery.andWhere('prof.userHost IS NOT NULL');
+				profQuery.andWhere('prof.userHost != :tenantHost', { tenantHost: options.tenantHost ?? this.config.host });
 			}
 
 			const userQuery = this.usersRepository.createQueryBuilder('user')

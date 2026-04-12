@@ -25,6 +25,8 @@ import type {
 	PublicKeyCredentialRequestOptionsJSON,
 	RegistrationResponseJSON,
 } from '@simplewebauthn/types';
+import type { TenantContext } from '@/core/TenantService.js';
+import { TenantService } from '@/core/TenantService.js';
 
 @Injectable()
 export class WebAuthnService {
@@ -40,15 +42,19 @@ export class WebAuthnService {
 
 		@Inject(DI.userSecurityKeysRepository)
 		private userSecurityKeysRepository: UserSecurityKeysRepository,
+
+		private tenantService: TenantService,
 	) {
 	}
 
 	@bindThis
-	public getRelyingParty(): { origin: string; rpId: string; rpName: string; rpIcon?: string; } {
+	public getRelyingParty(tenantContext?: TenantContext): { origin: string; rpId: string; rpName: string; rpIcon?: string; } {
+		const tenantHost = tenantContext?.tenantHost ?? this.tenantService.tenantHostFor(this.config.host);
+		const tenantUrl = tenantContext?.tenantUrl ?? this.tenantService.tenantUrlFor(tenantHost);
 		return {
-			origin: this.config.url,
-			rpId: this.config.hostname,
-			rpName: this.meta.name ?? this.config.host,
+			origin: tenantUrl,
+			rpId: tenantHost,
+			rpName: this.meta.name ?? tenantHost,
 			rpIcon: this.meta.iconUrl ?? undefined,
 		};
 	}

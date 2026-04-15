@@ -164,10 +164,12 @@ export class SystemAccountService implements OnApplicationShutdown {
 					password: hash,
 				});
 
-				await transactionalEntityManager.insert(MiUsedUsername, {
+				// used_username is still globally unique. For multi-tenant system accounts,
+				// reuse the reserved username across hosts instead of rolling back.
+				await transactionalEntityManager.upsert(MiUsedUsername, {
 					createdAt: new Date(),
 					username: extra.username.toLowerCase(),
-				});
+				}, ['username']);
 
 				await transactionalEntityManager.insert(MiSystemAccount, {
 					id: this.idService.gen(),

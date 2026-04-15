@@ -304,13 +304,13 @@ export class ServerService implements OnApplicationShutdown {
 			if (!hasUsers) {
 				this.logger.info('MANAGED mode: No users found. Creating root and admin users...');
 
-				const rootUser = await this.signupService.signup({
+				const { account: rootUser } = await this.signupService.signup({
 					username: this.config.rootUserName,
 					password: this.config.rootPassword,
 					ignorePreservedUsernames: true
 				});
 
-				const adminUser = await this.signupService.signup({
+				const { account: adminUser } = await this.signupService.signup({
 					username: this.config.adminUserName,
 					password: this.config.adminPassword,
 					ignorePreservedUsernames: true

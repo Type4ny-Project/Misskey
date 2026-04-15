@@ -40,6 +40,7 @@
 		"mt:to-single": "cd packages/backend && pnpm mt:to-single",
 		"check:connect": "cd packages/backend && pnpm check:connect",
 		"migrateandstart": "pnpm migrate && pnpm start",
+		"mt:cloudflared:start": "bash ./scripts/mt-cloudflared-start.sh",
 		"watch": "pnpm dev",
 		"dev": "node scripts/dev.mjs",
 		"lint": "pnpm --no-bail -r lint",

@@ -7,6 +7,17 @@ PGUSER="${PGUSER:-example-misskey-user}"
 PGPASSWORD="${PGPASSWORD:-example-misskey-pass}"
 export PGPASSWORD
 
+if [[ -n "${PG_BIN_DIR:-}" ]]; then
+  PSQL="${PG_BIN_DIR%/}/psql"
+elif command -v psql >/dev/null 2>&1; then
+  PSQL="$(command -v psql)"
+elif [[ -x "/opt/homebrew/opt/postgresql@15/bin/psql" ]]; then
+  PSQL="/opt/homebrew/opt/postgresql@15/bin/psql"
+else
+  echo "psql not found. Set PG_BIN_DIR or ensure psql is on PATH." >&2
+  exit 1
+fi
+
 TARGET_DB="${TARGET_DB:?TARGET_DB is required}"
 SOURCE_DB="${SOURCE_DB:?SOURCE_DB is required}"
 TENANT_HOST="${TENANT_HOST:?TENANT_HOST is required}"
@@ -14,11 +25,11 @@ TENANT_ID="${TENANT_ID:?TENANT_ID is required}"
 TENANT_NAME="${TENANT_NAME:-$TENANT_HOST}"
 
 psql_src() {
-	"/opt/homebrew/opt/postgresql@15/bin/psql" -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$SOURCE_DB" "$@"
+	"$PSQL" -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$SOURCE_DB" "$@"
 }
 
 psql_tgt() {
-	"/opt/homebrew/opt/postgresql@15/bin/psql" -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$TARGET_DB" "$@"
+	"$PSQL" -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$TARGET_DB" "$@"
 }
 
 copy_query() {

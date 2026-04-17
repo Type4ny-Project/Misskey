@@ -3,36 +3,68 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Global, Inject, Module } from '@nestjs/common';
-import * as Redis from 'ioredis';
-import { DataSource } from 'typeorm';
+import { Global, Module } from '@nestjs/common';
 import { MeiliSearch } from 'meilisearch';
-import { MiMeta } from '@/models/Meta.js';
 import { DI } from './di-symbols.js';
-import { Config, loadConfig } from './config.js';
-import { createPostgresDataSource } from './postgres.js';
+import { type Config, loadConfigInput } from './config.js';
 import { RepositoryModule } from './models/RepositoryModule.js';
+import { TenantRuntimeService } from './core/TenantRuntimeService.js';
+import { TenantRedisSubMultiplexer } from './core/TenantRedisSubMultiplexer.js';
 import { allSettled } from './misc/promise-tracker.js';
-import { GlobalEvents } from './core/GlobalEventService.js';
 import type { Provider, OnApplicationShutdown } from '@nestjs/common';
+import type { DataSource } from 'typeorm';
+import * as Redis from 'ioredis';
+import { MiMeta } from '@/models/Meta.js';
+
+function createLiveProxy<T extends object>(getValue: () => T): T {
+	return new Proxy({} as T, {
+		get(_target, property, receiver) {
+			const value = Reflect.get(getValue(), property, receiver);
+			return typeof value === 'function' ? value.bind(getValue()) : value;
+		},
+		set(_target, property, value, receiver) {
+			return Reflect.set(getValue(), property, value, receiver);
+		},
+		ownKeys() {
+			return Reflect.ownKeys(getValue());
+		},
+		getOwnPropertyDescriptor(_target, property) {
+			return Reflect.getOwnPropertyDescriptor(getValue(), property);
+		},
+	});
+}
+
+const $configInput: Provider = {
+	provide: DI.configInput,
+	useValue: loadConfigInput(),
+};
+
+const $tenantRuntime: Provider = {
+	provide: TenantRuntimeService,
+	useFactory: async (configInput) => {
+		const runtime = new TenantRuntimeService(configInput);
+		await runtime.initialize();
+		return runtime;
+	},
+	inject: [DI.configInput],
+};
 
 const $config: Provider = {
 	provide: DI.config,
-	useValue: loadConfig(),
+	useFactory: (runtime: TenantRuntimeService) => createLiveProxy<Config>(() => runtime.getCurrentConfig()),
+	inject: [TenantRuntimeService],
 };
 
 const $db: Provider = {
 	provide: DI.db,
-	useFactory: async (config) => {
-		try {
-			const db = createPostgresDataSource(config);
-			return await db.initialize();
-		} catch (e) {
-			console.log(e);
-			throw e;
-		}
-	},
-	inject: [DI.config],
+	useFactory: (runtime: TenantRuntimeService) => createLiveProxy<DataSource>(() => runtime.getCurrentDb()),
+	inject: [TenantRuntimeService],
+};
+
+const $meta: Provider = {
+	provide: DI.meta,
+	useFactory: (runtime: TenantRuntimeService) => createLiveProxy<MiMeta>(() => runtime.getCurrentMeta()),
+	inject: [TenantRuntimeService],
 };
 
 const $meilisearch: Provider = {
@@ -47,144 +79,60 @@ const $meilisearch: Provider = {
 				host: `${config.meilisearch.ssl ? 'https' : 'http'}://${config.meilisearch.host}:${config.meilisearch.port}`,
 				apiKey: config.meilisearch.apiKey,
 			});
-		} else {
-			return null;
 		}
+
+		return null;
 	},
 	inject: [DI.config],
 };
 
 const $redis: Provider = {
 	provide: DI.redis,
-	useFactory: (config: Config) => {
-		return new Redis.Redis(config.redis);
-	},
-	inject: [DI.config],
+	useFactory: (runtime: TenantRuntimeService) => createLiveProxy<Redis.Redis>(() => runtime.getCurrentRedis()),
+	inject: [TenantRuntimeService],
 };
 
 const $redisForPub: Provider = {
 	provide: DI.redisForPub,
-	useFactory: (config: Config) => {
-		const redis = new Redis.Redis(config.redisForPubsub);
-		return redis;
-	},
-	inject: [DI.config],
+	useFactory: (runtime: TenantRuntimeService) => createLiveProxy<Redis.Redis>(() => runtime.getCurrentRedisForPub()),
+	inject: [TenantRuntimeService],
 };
 
 const $redisForSub: Provider = {
 	provide: DI.redisForSub,
-	useFactory: (config: Config) => {
-		const redis = new Redis.Redis(config.redisForPubsub);
-		redis.subscribe(config.host);
-		return redis;
-	},
-	inject: [DI.config],
+	useFactory: (runtime: TenantRuntimeService) => runtime.getRedisSubMultiplexer() as unknown as Redis.Redis,
+	inject: [TenantRuntimeService],
 };
 
 const $redisForTimelines: Provider = {
 	provide: DI.redisForTimelines,
-	useFactory: (config: Config) => {
-		return new Redis.Redis(config.redisForTimelines);
-	},
-	inject: [DI.config],
+	useFactory: (runtime: TenantRuntimeService) => createLiveProxy<Redis.Redis>(() => runtime.getCurrentRedisForTimelines()),
+	inject: [TenantRuntimeService],
 };
 
 const $redisForReactions: Provider = {
 	provide: DI.redisForReactions,
-	useFactory: (config: Config) => {
-		return new Redis.Redis(config.redisForReactions);
-	},
-	inject: [DI.config],
-};
-
-const $meta: Provider = {
-	provide: DI.meta,
-	useFactory: async (db: DataSource, redisForSub: Redis.Redis) => {
-		const meta = await db.transaction(async transactionalEntityManager => {
-			// 過去のバグでレコードが複数出来てしまっている可能性があるので新しいIDを優先する
-			const metas = await transactionalEntityManager.find(MiMeta, {
-				order: {
-					id: 'DESC',
-				},
-			});
-
-			const meta = metas[0];
-
-			if (meta) {
-				return meta;
-			} else {
-				// metaが空のときfetchMetaが同時に呼ばれるとここが同時に呼ばれてしまうことがあるのでフェイルセーフなupsertを使う
-				const saved = await transactionalEntityManager
-					.upsert(
-						MiMeta,
-						{
-							id: 'x',
-						},
-						['id'],
-					)
-					.then((x) => transactionalEntityManager.findOneByOrFail(MiMeta, x.identifiers[0]));
-
-				return saved;
-			}
-		});
-
-		async function onMessage(_: string, data: string): Promise<void> {
-			const obj = JSON.parse(data);
-
-			if (obj.channel === 'internal') {
-				const { type, body } = obj.message as GlobalEvents['internal']['payload'];
-				switch (type) {
-					case 'metaUpdated': {
-						for (const key in body.after) {
-							(meta as any)[key] = (body.after as any)[key];
-						}
-						meta.rootUser = null; // joinなカラムは通常取ってこないので
-						break;
-					}
-					default:
-						break;
-				}
-			}
-		}
-
-		redisForSub.on('message', onMessage);
-
-		return meta;
-	},
-	inject: [DI.db, DI.redisForSub],
+	useFactory: (runtime: TenantRuntimeService) => createLiveProxy<Redis.Redis>(() => runtime.getCurrentRedisForReactions()),
+	inject: [TenantRuntimeService],
 };
 
 @Global()
 @Module({
 	imports: [RepositoryModule],
-	providers: [$config, $db, $meta, $meilisearch, $redis, $redisForPub, $redisForSub, $redisForTimelines, $redisForReactions],
-	exports: [$config, $db, $meta, $meilisearch, $redis, $redisForPub, $redisForSub, $redisForTimelines, $redisForReactions, RepositoryModule],
+	providers: [$configInput, $tenantRuntime, $config, $db, $meta, $meilisearch, $redis, $redisForPub, $redisForSub, $redisForTimelines, $redisForReactions],
+	exports: [$configInput, TenantRuntimeService, $config, $db, $meta, $meilisearch, $redis, $redisForPub, $redisForSub, $redisForTimelines, $redisForReactions, RepositoryModule],
 })
 export class GlobalModule implements OnApplicationShutdown {
 	constructor(
-		@Inject(DI.db) private db: DataSource,
-		@Inject(DI.redis) private redisClient: Redis.Redis,
-		@Inject(DI.redisForPub) private redisForPub: Redis.Redis,
-		@Inject(DI.redisForSub) private redisForSub: Redis.Redis,
-		@Inject(DI.redisForTimelines) private redisForTimelines: Redis.Redis,
-		@Inject(DI.redisForReactions) private redisForReactions: Redis.Redis,
+		private readonly tenantRuntimeService: TenantRuntimeService,
 	) { }
 
 	public async dispose(): Promise<void> {
-		// Wait for all potential DB queries
 		await allSettled();
-		// And then disconnect from DB
-		await Promise.all([
-			this.db.destroy(),
-			this.redisClient.disconnect(),
-			this.redisForPub.disconnect(),
-			this.redisForSub.disconnect(),
-			this.redisForTimelines.disconnect(),
-			this.redisForReactions.disconnect(),
-		]);
+		await this.tenantRuntimeService.dispose();
 	}
 
-	async onApplicationShutdown(signal: string): Promise<void> {
+	async onApplicationShutdown(_signal: string): Promise<void> {
 		await this.dispose();
 	}
 }

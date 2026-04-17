@@ -313,6 +313,7 @@ export class NoteDraftService {
 		const delay = draft.scheduledAt.getTime() - Date.now();
 		this.queueService.postScheduledNoteQueue.add(draft.id, {
 			noteDraftId: draft.id,
+			tenantHost: this.queueService.getCurrentTenantHost(),
 		}, {
 			delay,
 			removeOnComplete: {

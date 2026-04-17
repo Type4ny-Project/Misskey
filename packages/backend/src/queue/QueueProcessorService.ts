@@ -46,6 +46,7 @@ import { AggregateRetentionProcessorService } from './processors/AggregateRetent
 import { CleanRemoteNotesProcessorService } from './processors/CleanRemoteNotesProcessorService.js';
 import { QueueLoggerService } from './QueueLoggerService.js';
 import { QUEUE, baseWorkerOptions } from './const.js';
+import { TenantRuntimeService } from '@/core/TenantRuntimeService.js';
 
 // ref. https://github.com/misskey-dev/misskey/pull/7635#issue-971097019
 function httpRelatedBackoff(attemptsMade: number) {
@@ -127,8 +128,19 @@ export class QueueProcessorService implements OnApplicationShutdown {
 		private checkModeratorsActivityProcessorService: CheckModeratorsActivityProcessorService,
 		private cleanProcessorService: CleanProcessorService,
 		private cleanRemoteNotesProcessorService: CleanRemoteNotesProcessorService,
+		private tenantRuntimeService: TenantRuntimeService,
 	) {
 		this.logger = this.queueLoggerService.logger;
+
+		const runInTenant = <T>(job: Bull.Job, fn: () => T): T => {
+			const tenantHost = typeof job.data === 'object' && job.data !== null && 'tenantHost' in job.data && typeof job.data.tenantHost === 'string'
+				? job.data.tenantHost
+				: this.tenantRuntimeService.getDefaultTenant().host;
+
+			return this.tenantRuntimeService.runWithHost(tenantHost, () => {
+				return fn();
+			});
+		};
 
 		function renderError(e?: Error) {
 			// 何故かeがundefinedで来ることがある
@@ -180,13 +192,13 @@ export class QueueProcessorService implements OnApplicationShutdown {
 				}
 			};
 
-			this.systemQueueWorker = new Bull.Worker(QUEUE.SYSTEM, (job) => {
+			this.systemQueueWorker = new Bull.Worker(QUEUE.SYSTEM, (job) => runInTenant(job, () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: System: ' + job.name }, () => processer(job));
 				} else {
 					return processer(job);
 				}
-			}, {
+			}), {
 				...baseWorkerOptions(this.config, QUEUE.SYSTEM),
 				autorun: false,
 			});
@@ -237,13 +249,13 @@ export class QueueProcessorService implements OnApplicationShutdown {
 				}
 			};
 
-			this.dbQueueWorker = new Bull.Worker(QUEUE.DB, (job) => {
+			this.dbQueueWorker = new Bull.Worker(QUEUE.DB, (job) => runInTenant(job, () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: DB: ' + job.name }, () => processer(job));
 				} else {
 					return processer(job);
 				}
-			}, {
+			}), {
 				...baseWorkerOptions(this.config, QUEUE.DB),
 				autorun: false,
 			});
@@ -269,13 +281,13 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 		//#region deliver
 		{
-			this.deliverQueueWorker = new Bull.Worker(QUEUE.DELIVER, (job) => {
+			this.deliverQueueWorker = new Bull.Worker(QUEUE.DELIVER, (job) => runInTenant(job, () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: Deliver' }, () => this.deliverProcessorService.process(job));
 				} else {
 					return this.deliverProcessorService.process(job);
 				}
-			}, {
+			}), {
 				...baseWorkerOptions(this.config, QUEUE.DELIVER),
 				autorun: false,
 				concurrency: this.config.deliverJobConcurrency ?? 128,
@@ -309,13 +321,13 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 		//#region inbox
 		{
-			this.inboxQueueWorker = new Bull.Worker(QUEUE.INBOX, (job) => {
+			this.inboxQueueWorker = new Bull.Worker(QUEUE.INBOX, (job) => runInTenant(job, () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: Inbox' }, () => this.inboxProcessorService.process(job));
 				} else {
 					return this.inboxProcessorService.process(job);
 				}
-			}, {
+			}), {
 				...baseWorkerOptions(this.config, QUEUE.INBOX),
 				autorun: false,
 				concurrency: this.config.inboxJobConcurrency ?? 16,
@@ -349,13 +361,13 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 		//#region user-webhook deliver
 		{
-			this.userWebhookDeliverQueueWorker = new Bull.Worker(QUEUE.USER_WEBHOOK_DELIVER, (job) => {
+			this.userWebhookDeliverQueueWorker = new Bull.Worker(QUEUE.USER_WEBHOOK_DELIVER, (job) => runInTenant(job, () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: UserWebhookDeliver' }, () => this.userWebhookDeliverProcessorService.process(job));
 				} else {
 					return this.userWebhookDeliverProcessorService.process(job);
 				}
-			}, {
+			}), {
 				...baseWorkerOptions(this.config, QUEUE.USER_WEBHOOK_DELIVER),
 				autorun: false,
 				concurrency: 64,
@@ -389,13 +401,13 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 		//#region system-webhook deliver
 		{
-			this.systemWebhookDeliverQueueWorker = new Bull.Worker(QUEUE.SYSTEM_WEBHOOK_DELIVER, (job) => {
+			this.systemWebhookDeliverQueueWorker = new Bull.Worker(QUEUE.SYSTEM_WEBHOOK_DELIVER, (job) => runInTenant(job, () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: SystemWebhookDeliver' }, () => this.systemWebhookDeliverProcessorService.process(job));
 				} else {
 					return this.systemWebhookDeliverProcessorService.process(job);
 				}
-			}, {
+			}), {
 				...baseWorkerOptions(this.config, QUEUE.SYSTEM_WEBHOOK_DELIVER),
 				autorun: false,
 				concurrency: 16,
@@ -439,13 +451,13 @@ export class QueueProcessorService implements OnApplicationShutdown {
 				}
 			};
 
-			this.relationshipQueueWorker = new Bull.Worker(QUEUE.RELATIONSHIP, (job) => {
+			this.relationshipQueueWorker = new Bull.Worker(QUEUE.RELATIONSHIP, (job) => runInTenant(job, () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: Relationship: ' + job.name }, () => processer(job));
 				} else {
 					return processer(job);
 				}
-			}, {
+			}), {
 				...baseWorkerOptions(this.config, QUEUE.RELATIONSHIP),
 				autorun: false,
 				concurrency: this.config.relationshipJobConcurrency ?? 16,
@@ -484,13 +496,13 @@ export class QueueProcessorService implements OnApplicationShutdown {
 				}
 			};
 
-			this.objectStorageQueueWorker = new Bull.Worker(QUEUE.OBJECT_STORAGE, (job) => {
+			this.objectStorageQueueWorker = new Bull.Worker(QUEUE.OBJECT_STORAGE, (job) => runInTenant(job, () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: ObjectStorage: ' + job.name }, () => processer(job));
 				} else {
 					return processer(job);
 				}
-			}, {
+			}), {
 				...baseWorkerOptions(this.config, QUEUE.OBJECT_STORAGE),
 				autorun: false,
 				concurrency: 16,
@@ -517,13 +529,13 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 		//#region ended poll notification
 		{
-			this.endedPollNotificationQueueWorker = new Bull.Worker(QUEUE.ENDED_POLL_NOTIFICATION, (job) => {
+			this.endedPollNotificationQueueWorker = new Bull.Worker(QUEUE.ENDED_POLL_NOTIFICATION, (job) => runInTenant(job, () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: EndedPollNotification' }, () => this.endedPollNotificationProcessorService.process(job));
 				} else {
 					return this.endedPollNotificationProcessorService.process(job);
 				}
-			}, {
+			}), {
 				...baseWorkerOptions(this.config, QUEUE.ENDED_POLL_NOTIFICATION),
 				autorun: false,
 			});
@@ -532,13 +544,13 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 		//#region post scheduled note
 		{
-			this.postScheduledNoteQueueWorker = new Bull.Worker(QUEUE.POST_SCHEDULED_NOTE, async (job) => {
+			this.postScheduledNoteQueueWorker = new Bull.Worker(QUEUE.POST_SCHEDULED_NOTE, async (job) => runInTenant(job, () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: PostScheduledNote' }, () => this.postScheduledNoteProcessorService.process(job));
 				} else {
 					return this.postScheduledNoteProcessorService.process(job);
 				}
-			}, {
+			}), {
 				...baseWorkerOptions(this.config, QUEUE.POST_SCHEDULED_NOTE),
 				autorun: false,
 			});

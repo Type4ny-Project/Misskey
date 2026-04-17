@@ -37,6 +37,7 @@ import { HealthServerService } from './HealthServerService.js';
 import { ClientServerService } from './web/ClientServerService.js';
 import { OpenApiServerService } from './api/openapi/OpenApiServerService.js';
 import { OAuth2ProviderService } from './oauth/OAuth2ProviderService.js';
+import { TenantRuntimeService } from '@/core/TenantRuntimeService.js';
 
 const _dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -77,6 +78,7 @@ export class ServerService implements OnApplicationShutdown {
 		private idService: IdService,
 		private roleService: RoleService,
 		private signupService: SignupService,
+		private tenantRuntimeService: TenantRuntimeService,
 	) {
 		this.logger = this.loggerService.getLogger('server', 'gray');
 	}
@@ -88,6 +90,13 @@ export class ServerService implements OnApplicationShutdown {
 			logger: false,
 		});
 		this.#fastify = fastify;
+
+		fastify.addHook('onRequest', (request, _reply, done) => {
+			const host = this.tenantRuntimeService.resolveHost(request.headers.host);
+			this.tenantRuntimeService.runWithHost(host, () => {
+				done();
+			});
+		});
 
 		// HSTS
 		// 6months (15552000sec)

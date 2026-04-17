@@ -559,9 +559,10 @@ export class NoteCreateService implements OnApplicationShutdown {
 		}
 
 		const note = await this.insertNote(user, data, tags, emojis, mentionedUsers);
+		const tenantHost = this.queueService.getCurrentTenantHost();
 
 		setImmediate('post created', { signal: this.#shutdownController.signal }).then(
-			() => this.postNoteCreated(note, user, data, silent, tags!, mentionedUsers!),
+			() => this.queueService.runWithTenantHost(tenantHost, () => this.postNoteCreated(note, user, data, silent, tags!, mentionedUsers!)),
 			() => { /* aborted, ignore this */ },
 		);
 
@@ -747,6 +748,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 			const delay = data.poll.expiresAt.getTime() - Date.now();
 			this.queueService.endedPollNotificationQueue.add(note.id, {
 				noteId: note.id,
+				tenantHost: this.queueService.getCurrentTenantHost(),
 			}, {
 				delay,
 				removeOnComplete: {
@@ -761,7 +763,10 @@ export class NoteCreateService implements OnApplicationShutdown {
 		}
 
 		if (!silent) {
-			if (this.userEntityService.isLocalUser(user)) this.activeUsersChart.write(user);
+			const localUser = user.host === null
+				? user as typeof user & { host: null; uri: null }
+				: null;
+			if (localUser) this.activeUsersChart.write(localUser);
 
 			// Pack the note
 			const noteObj = await this.noteEntityService.pack(note, null, { skipHide: true, withReactionAndUserPairCache: true });
@@ -814,10 +819,10 @@ export class NoteCreateService implements OnApplicationShutdown {
 			nm.notify();
 
 			//#region AP deliver
-			if (!data.localOnly && this.userEntityService.isLocalUser(user)) {
+			if (!data.localOnly && localUser) {
 				(async () => {
 					const noteActivity = await this.renderNoteOrRenoteActivity(data, note);
-					const dm = this.apDeliverManagerService.createDeliverManager(user, noteActivity);
+					const dm = this.apDeliverManagerService.createDeliverManager(localUser, noteActivity);
 
 					// メンションされたリモートユーザーに配送
 					for (const u of mentionedUsers.filter(u => this.userEntityService.isRemoteUser(u))) {
@@ -842,7 +847,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 					}
 
 					if (['public'].includes(note.visibility)) {
-						this.relayService.deliverToRelays(user, noteActivity);
+						this.relayService.deliverToRelays(localUser, noteActivity);
 					}
 
 					trackPromise(dm.execute());

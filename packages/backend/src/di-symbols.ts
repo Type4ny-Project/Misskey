@@ -4,6 +4,7 @@
  */
 
 export const DI = {
+	configInput: Symbol('configInput'),
 	config: Symbol('config'),
 	db: Symbol('db'),
 	meta: Symbol('meta'),

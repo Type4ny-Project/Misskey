@@ -13,11 +13,16 @@ import { bindThis } from '@/decorators.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
 import { FeaturedService } from '@/core/FeaturedService.js';
 import type { OnApplicationShutdown } from '@nestjs/common';
+import { getTenantHost } from '@/core/tenant-context.js';
 
 @Injectable()
 export class MetaService implements OnApplicationShutdown {
-	private cache: MiMeta | undefined;
+	private cache = new Map<string, MiMeta>();
 	private intervalId: NodeJS.Timeout;
+
+	private getCacheKey(): string {
+		return getTenantHost() ?? '__default__';
+	}
 
 	constructor(
 		@Inject(DI.redisForSub)
@@ -34,8 +39,7 @@ export class MetaService implements OnApplicationShutdown {
 		if (process.env.NODE_ENV !== 'test') {
 			this.intervalId = setInterval(() => {
 				this.fetch(true).then(meta => {
-					// fetch内でもセットしてるけど仕様変更の可能性もあるため一応
-					this.cache = meta;
+					this.cache.set(this.getCacheKey(), meta);
 				});
 			}, 1000 * 60 * 5);
 		}
@@ -51,10 +55,10 @@ export class MetaService implements OnApplicationShutdown {
 			const { type, body } = obj.message as GlobalEvents['internal']['payload'];
 			switch (type) {
 				case 'metaUpdated': {
-					this.cache = { // TODO: このあたりのデシリアライズ処理は各modelファイル内に関数としてexportしたい
+					this.cache.set(this.getCacheKey(), { // TODO: このあたりのデシリアライズ処理は各modelファイル内に関数としてexportしたい
 						...(body.after),
 						rootUser: null, // joinなカラムは通常取ってこないので
-					};
+					});
 					break;
 				}
 				default:
@@ -65,7 +69,9 @@ export class MetaService implements OnApplicationShutdown {
 
 	@bindThis
 	public async fetch(noCache = false): Promise<MiMeta> {
-		if (!noCache && this.cache) return this.cache;
+		const cacheKey = this.getCacheKey();
+		const cached = this.cache.get(cacheKey);
+		if (!noCache && cached) return cached;
 
 		return await this.db.transaction(async transactionalEntityManager => {
 			// 過去のバグでレコードが複数出来てしまっている可能性があるので新しいIDを優先する
@@ -78,7 +84,7 @@ export class MetaService implements OnApplicationShutdown {
 			const meta = metas[0];
 
 			if (meta) {
-				this.cache = meta;
+				this.cache.set(cacheKey, meta);
 				return meta;
 			} else {
 				// metaが空のときfetchMetaが同時に呼ばれるとここが同時に呼ばれてしまうことがあるのでフェイルセーフなupsertを使う
@@ -92,7 +98,7 @@ export class MetaService implements OnApplicationShutdown {
 					)
 					.then((x) => transactionalEntityManager.findOneByOrFail(MiMeta, x.identifiers[0]));
 
-				this.cache = saved;
+				this.cache.set(cacheKey, saved);
 				return saved;
 			}
 		});

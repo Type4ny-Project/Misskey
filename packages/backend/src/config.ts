@@ -11,7 +11,7 @@ import type * as Sentry from '@sentry/node';
 import type * as SentryVue from '@sentry/vue';
 import type { RedisOptions } from 'ioredis';
 
-type RedisOptionsSource = Partial<RedisOptions> & {
+export type RedisOptionsSource = Partial<RedisOptions> & {
 	host: string;
 	port: number;
 	family?: number;
@@ -20,10 +20,67 @@ type RedisOptionsSource = Partial<RedisOptions> & {
 	prefix?: string;
 };
 
+export type DbSource = {
+	host: string;
+	port: number;
+	db?: string;
+	user?: string;
+	pass?: string;
+	disableCache?: boolean;
+	extra?: { [x: string]: string };
+};
+
+export type DbSlaveSource = {
+	host: string;
+	port: number;
+	db: string;
+	user: string;
+	pass: string;
+};
+
+export type MeilisearchSource = {
+	host: string;
+	port: string;
+	apiKey: string;
+	ssl?: boolean;
+	index: string;
+	scope?: 'local' | 'global' | string[];
+};
+
+export type ObjectStorageSource = {
+	useObjectStorage: boolean;
+	objectStorageBaseUrl: string;
+	objectStorageBucket: string;
+	objectStoragePrefix: string;
+	objectStorageEndpoint: string;
+	objectStorageRegion: string;
+	objectStoragePort?: number;
+	objectStorageAccessKey: string;
+	objectStorageSecretKey: string;
+	objectStorageUseSSL?: boolean;
+	objectStorageUseProxy?: boolean;
+	objectStorageSetPublicRead?: boolean;
+	objectStorageS3ForcePathStyle?: boolean;
+};
+
+export type TenantSource = {
+	url?: string;
+	db: DbSource;
+	dbReplications?: boolean;
+	dbSlaves?: DbSlaveSource[];
+	redis?: RedisOptionsSource;
+	redisForPubsub?: RedisOptionsSource;
+	redisForJobQueue?: RedisOptionsSource;
+	redisForTimelines?: RedisOptionsSource;
+	redisForReactions?: RedisOptionsSource;
+	meilisearch?: MeilisearchSource;
+	objectStorage?: ObjectStorageSource;
+};
+
 /**
  * 設定ファイルの型
  */
-type Source = {
+export type Source = {
 	url?: string;
 	port?: number;
 	socket?: string;
@@ -31,23 +88,9 @@ type Source = {
 	chmodSocket?: string;
 	enableIpRateLimit?: boolean;
 	disableHsts?: boolean;
-	db: {
-		host: string;
-		port: number;
-		db?: string;
-		user?: string;
-		pass?: string;
-		disableCache?: boolean;
-		extra?: { [x: string]: string };
-	};
+	db: DbSource;
 	dbReplications?: boolean;
-	dbSlaves?: {
-		host: string;
-		port: number;
-		db: string;
-		user: string;
-		pass: string;
-	}[];
+	dbSlaves?: DbSlaveSource[];
 	redis: RedisOptionsSource;
 	redisForPubsub?: RedisOptionsSource;
 	redisForJobQueue?: RedisOptionsSource;
@@ -56,14 +99,7 @@ type Source = {
 	fulltextSearch?: {
 		provider?: FulltextSearchProvider;
 	};
-	meilisearch?: {
-		host: string;
-		port: string;
-		apiKey: string;
-		ssl?: boolean;
-		index: string;
-		scope?: 'local' | 'global' | string[];
-	};
+	meilisearch?: MeilisearchSource;
 	sentryForBackend?: { options: Partial<Sentry.NodeOptions>; enableNodeProfiling: boolean; };
 	sentryForFrontend?: {
 		options: Partial<SentryVue.BrowserOptions> & { dsn: string };
@@ -77,20 +113,10 @@ type Source = {
 	rootUserName?: string;
 	rootPassword?: string;
 
-	objectStorage?: {
-		useObjectStorage: boolean;
-		objectStorageBaseUrl: string;
-		objectStorageBucket: string;
-		objectStoragePrefix: string;
-		objectStorageEndpoint: string;
-		objectStorageRegion: string;
-		objectStoragePort?: number;
-		objectStorageAccessKey: string;
-		objectStorageSecretKey: string;
-		objectStorageUseSSL?: boolean;
-		objectStorageUseProxy?: boolean;
-		objectStorageSetPublicRead?: boolean;
-		objectStorageS3ForcePathStyle?: boolean;
+	objectStorage?: ObjectStorageSource;
+	tenants?: {
+		default?: string;
+		hosts: Record<string, TenantSource>;
 	};
 
 	publishTarballInsteadOfProvideRepositoryUrl?: boolean;
@@ -253,6 +279,17 @@ export type Config = {
 	pidFile: string;
 };
 
+export type ConfigBuildInfo = {
+	version: string;
+	frontendManifestExists: boolean;
+	frontendEmbedManifestExists: boolean;
+};
+
+export type ConfigInput = {
+	source: Source;
+	buildInfo: ConfigBuildInfo;
+};
+
 export type FulltextSearchProvider = 'sqlLike' | 'sqlPgroonga' | 'meilisearch';
 
 const _filename = fileURLToPath(import.meta.url);
@@ -280,7 +317,7 @@ export const compiledConfigFilePath = fs.existsSync(compiledConfigFilePathForTes
 	? compiledConfigFilePathForTest
 	: resolve(projectBuiltDir, '.config.json');
 
-export function loadConfig(): Config {
+export function loadConfigInput(): ConfigInput {
 	if (!fs.existsSync(compiledConfigFilePath)) {
 		throw new Error('Compiled configuration file not found. Try running \'pnpm compile-config\'.');
 	}
@@ -292,16 +329,30 @@ export function loadConfig(): Config {
 
 	const config = JSON.parse(fs.readFileSync(compiledConfigFilePath, 'utf-8')) as Source;
 
+	return {
+		source: config,
+		buildInfo: {
+			version: meta.version,
+			frontendManifestExists,
+			frontendEmbedManifestExists,
+		},
+	};
+}
+
+export function buildConfig(config: Source, buildInfo: ConfigBuildInfo): Config {
+
 	const url = tryCreateUrl(config.url ?? process.env.MISSKEY_URL ?? '');
-	const version = meta.version;
+	const version = buildInfo.version;
 	const host = url.host;
 	const hostname = url.hostname;
 	const scheme = url.protocol.replace(/:$/, '');
 	const wsScheme = scheme.replace('http', 'ws');
 
-	const dbDb = config.db.db ?? process.env.DATABASE_DB ?? '';
-	const dbUser = config.db.user ?? process.env.DATABASE_USER ?? '';
-	const dbPass = config.db.pass ?? process.env.DATABASE_PASSWORD ?? '';
+	const dbDb = process.env.DATABASE_DB ?? config.db.db ?? '';
+	const dbHost = process.env.DATABASE_HOST ?? config.db.host;
+	const dbPort = process.env.DATABASE_PORT ? parseInt(process.env.DATABASE_PORT, 10) : config.db.port;
+	const dbUser = process.env.DATABASE_USER ?? config.db.user ?? '';
+	const dbPass = process.env.DATABASE_PASSWORD ?? config.db.pass ?? '';
 
 	const externalMediaProxy = config.mediaProxy ?
 		config.mediaProxy.endsWith('/') ? config.mediaProxy.substring(0, config.mediaProxy.length - 1) : config.mediaProxy
@@ -335,7 +386,7 @@ export function loadConfig(): Config {
 		apiUrl: `${scheme}://${host}/api`,
 		authUrl: `${scheme}://${host}/auth`,
 		driveUrl: `${scheme}://${host}/files`,
-		db: { ...config.db, db: dbDb, user: dbUser, pass: dbPass },
+		db: { ...config.db, host: dbHost, port: dbPort, db: dbDb, user: dbUser, pass: dbPass },
 		dbReplications: config.dbReplications,
 		dbSlaves: config.dbSlaves,
 		fulltextSearch: config.fulltextSearch,
@@ -370,8 +421,8 @@ export function loadConfig(): Config {
 			config.videoThumbnailGenerator.endsWith('/') ? config.videoThumbnailGenerator.substring(0, config.videoThumbnailGenerator.length - 1) : config.videoThumbnailGenerator
 			: null,
 		userAgent: `Misskey/${version} (${config.url})`,
-		frontendManifestExists: frontendManifestExists,
-		frontendEmbedManifestExists: frontendEmbedManifestExists,
+		frontendManifestExists: buildInfo.frontendManifestExists,
+		frontendEmbedManifestExists: buildInfo.frontendEmbedManifestExists,
 		perChannelMaxNoteCacheCount: config.perChannelMaxNoteCacheCount ?? 1000,
 		perUserNotificationsMaxCount: config.perUserNotificationsMaxCount ?? 500,
 		deactivateAntennaThreshold: config.deactivateAntennaThreshold ?? (1000 * 60 * 60 * 24 * 7),
@@ -384,6 +435,11 @@ export function loadConfig(): Config {
 		pidFile: config.pidFile,
 		logging: config.logging,
 	};
+}
+
+export function loadConfig(): Config {
+	const input = loadConfigInput();
+	return buildConfig(input.source, input.buildInfo);
 }
 
 function tryCreateUrl(url: string) {

@@ -5,6 +5,11 @@
 
 import * as Redis from 'ioredis';
 import { bindThis } from '@/decorators.js';
+import { getTenantHost } from '@/core/tenant-context.js';
+
+function getTenantNamespace(): string {
+	return getTenantHost() ?? '__default__';
+}
 
 export class RedisKVCache<T> {
 	private readonly lifetime: number;
@@ -36,12 +41,12 @@ export class RedisKVCache<T> {
 		this.memoryCache.set(key, value);
 		if (this.lifetime === Infinity) {
 			await this.redisClient.set(
-				`kvcache:${this.name}:${key}`,
+				`kvcache:${getTenantNamespace()}:${this.name}:${key}`,
 				this.toRedisConverter(value),
 			);
 		} else {
 			await this.redisClient.set(
-				`kvcache:${this.name}:${key}`,
+				`kvcache:${getTenantNamespace()}:${this.name}:${key}`,
 				this.toRedisConverter(value),
 				'EX', Math.round(this.lifetime / 1000),
 			);
@@ -53,7 +58,7 @@ export class RedisKVCache<T> {
 		const memoryCached = this.memoryCache.get(key);
 		if (memoryCached !== undefined) return memoryCached;
 
-		const cached = await this.redisClient.get(`kvcache:${this.name}:${key}`);
+		const cached = await this.redisClient.get(`kvcache:${getTenantNamespace()}:${this.name}:${key}`);
 		if (cached == null) return undefined;
 
 		const value = this.fromRedisConverter(cached);
@@ -67,7 +72,7 @@ export class RedisKVCache<T> {
 	@bindThis
 	public async delete(key: string): Promise<void> {
 		this.memoryCache.delete(key);
-		await this.redisClient.del(`kvcache:${this.name}:${key}`);
+		await this.redisClient.del(`kvcache:${getTenantNamespace()}:${this.name}:${key}`);
 	}
 
 	/**
@@ -140,12 +145,12 @@ export class RedisSingleCache<T> {
 		this.memoryCache.set(value);
 		if (this.lifetime === Infinity) {
 			await this.redisClient.set(
-				`singlecache:${this.name}`,
+				`singlecache:${getTenantNamespace()}:${this.name}`,
 				this.toRedisConverter(value),
 			);
 		} else {
 			await this.redisClient.set(
-				`singlecache:${this.name}`,
+				`singlecache:${getTenantNamespace()}:${this.name}`,
 				this.toRedisConverter(value),
 				'EX', Math.round(this.lifetime / 1000),
 			);
@@ -157,7 +162,7 @@ export class RedisSingleCache<T> {
 		const memoryCached = this.memoryCache.get();
 		if (memoryCached !== undefined) return memoryCached;
 
-		const cached = await this.redisClient.get(`singlecache:${this.name}`);
+		const cached = await this.redisClient.get(`singlecache:${getTenantNamespace()}:${this.name}`);
 		if (cached == null) return undefined;
 
 		const value = this.fromRedisConverter(cached);
@@ -171,7 +176,7 @@ export class RedisSingleCache<T> {
 	@bindThis
 	public async delete(): Promise<void> {
 		this.memoryCache.delete();
-		await this.redisClient.del(`singlecache:${this.name}`);
+		await this.redisClient.del(`singlecache:${getTenantNamespace()}:${this.name}`);
 	}
 
 	/**
@@ -220,7 +225,7 @@ export class MemoryKVCache<T> {
 	 * @deprecated これを直接呼び出すべきではない。InternalEventなどで変更を全てのプロセス/マシンに通知するべき
 	 */
 	public set(key: string, value: T): void {
-		this.cache.set(key, {
+		this.cache.set(`${getTenantNamespace()}:${key}`, {
 			date: Date.now(),
 			value,
 		});
@@ -228,10 +233,10 @@ export class MemoryKVCache<T> {
 
 	@bindThis
 	public get(key: string): T | undefined {
-		const cached = this.cache.get(key);
+		const cached = this.cache.get(`${getTenantNamespace()}:${key}`);
 		if (cached == null) return undefined;
 		if ((Date.now() - cached.date) > this.lifetime) {
-			this.cache.delete(key);
+			this.cache.delete(`${getTenantNamespace()}:${key}`);
 			return undefined;
 		}
 		return cached.value;
@@ -239,7 +244,7 @@ export class MemoryKVCache<T> {
 
 	@bindThis
 	public delete(key: string): void {
-		this.cache.delete(key);
+		this.cache.delete(`${getTenantNamespace()}:${key}`);
 	}
 
 	/**
@@ -321,6 +326,7 @@ export class MemoryKVCache<T> {
 export class MemorySingleCache<T> {
 	private cachedAt: number | null = null;
 	private value: T | undefined;
+	private namespace: string | null = null;
 
 	constructor(
 		private lifetime: number,
@@ -328,16 +334,19 @@ export class MemorySingleCache<T> {
 
 	@bindThis
 	public set(value: T): void {
+		this.namespace = getTenantNamespace();
 		this.cachedAt = Date.now();
 		this.value = value;
 	}
 
 	@bindThis
 	public get(): T | undefined {
+		if (this.namespace !== getTenantNamespace()) return undefined;
 		if (this.cachedAt == null) return undefined;
 		if ((Date.now() - this.cachedAt) > this.lifetime) {
 			this.value = undefined;
 			this.cachedAt = null;
+			this.namespace = null;
 			return undefined;
 		}
 		return this.value;
@@ -347,6 +356,7 @@ export class MemorySingleCache<T> {
 	public delete() {
 		this.value = undefined;
 		this.cachedAt = null;
+		this.namespace = null;
 	}
 
 	/**

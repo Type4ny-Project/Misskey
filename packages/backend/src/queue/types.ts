@@ -14,6 +14,10 @@ import type { SystemWebhookPayload } from '@/core/SystemWebhookService.js';
 import type { UserWebhookPayload } from '@/core/UserWebhookService.js';
 import type httpSignature from '@peertube/http-signature';
 
+export type TenantScopedJobData = {
+	tenantHost?: string;
+};
+
 export type DeliverJobData = {
 	/** Actor */
 	user: ThinUser;
@@ -25,12 +29,12 @@ export type DeliverJobData = {
 	to: string;
 	/** whether it is sharedInbox */
 	isSharedInbox: boolean;
-};
+} & TenantScopedJobData;
 
 export type InboxJobData = {
 	activity: IActivity;
 	signature: httpSignature.IParsedSignature;
-};
+} & TenantScopedJobData;
 
 export type RelationshipJobData = {
 	from: ThinUser;
@@ -38,7 +42,7 @@ export type RelationshipJobData = {
 	silent?: boolean;
 	requestId?: string;
 	withReplies?: boolean;
-};
+} & TenantScopedJobData;
 
 export type DbJobData<T extends keyof DbJobMap> = DbJobMap[T];
 
@@ -65,53 +69,53 @@ export type DbJobMap = {
 
 export type DbJobDataWithUser = {
 	user: ThinUser;
-};
+} & TenantScopedJobData;
 
 export type DbExportFollowingData = {
 	user: ThinUser;
 	excludeMuting: boolean;
 	excludeInactive: boolean;
-};
+} & TenantScopedJobData;
 
 export type DBExportAntennasData = {
 	user: ThinUser
-};
+} & TenantScopedJobData;
 
 export type DbUserDeleteJobData = {
 	user: ThinUser;
 	soft?: boolean;
-};
+} & TenantScopedJobData;
 
 export type DbUserImportJobData = {
 	user: ThinUser;
 	fileId: MiDriveFile['id'];
 	withReplies?: boolean;
-};
+} & TenantScopedJobData;
 
 export type DBAntennaImportJobData = {
 	user: ThinUser,
 	antenna: Antenna
-};
+} & TenantScopedJobData;
 
 export type DbUserImportToDbJobData = {
 	user: ThinUser;
 	target: string;
 	withReplies?: boolean;
-};
+} & TenantScopedJobData;
 
 export type ObjectStorageJobData = ObjectStorageFileJobData | Record<string, unknown>;
 
 export type ObjectStorageFileJobData = {
 	key: string;
-};
+} & TenantScopedJobData;
 
 export type EndedPollNotificationJobData = {
 	noteId: MiNote['id'];
-};
+} & TenantScopedJobData;
 
 export type PostScheduledNoteJobData = {
 	noteDraftId: string;
-};
+} & TenantScopedJobData;
 
 export type SystemWebhookDeliverJobData<T extends SystemWebhookEventType = SystemWebhookEventType> = {
 	type: T;
@@ -121,7 +125,7 @@ export type SystemWebhookDeliverJobData<T extends SystemWebhookEventType = Syste
 	secret: string;
 	createdAt: number;
 	eventId: string;
-};
+} & TenantScopedJobData;
 
 export type UserWebhookDeliverJobData<T extends WebhookEventTypes = WebhookEventTypes> = {
 	type: T;
@@ -132,7 +136,7 @@ export type UserWebhookDeliverJobData<T extends WebhookEventTypes = WebhookEvent
 	secret: string;
 	createdAt: number;
 	eventId: string;
-};
+} & TenantScopedJobData;
 
 export type ThinUser = {
 	id: MiUser['id'];

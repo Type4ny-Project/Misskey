@@ -13,6 +13,7 @@ import type { MiSystemWebhook, SystemWebhookEventType } from '@/models/SystemWeb
 import type { Config } from '@/config.js';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
+import { TenantRuntimeService } from '@/core/TenantRuntimeService.js';
 import type { Antenna } from '@/server/api/endpoints/i/import-antennas.js';
 import { ApRequestCreator } from '@/core/activitypub/ApRequestService.js';
 import { type SystemWebhookPayload } from '@/core/SystemWebhookService.js';
@@ -21,6 +22,7 @@ import { type UserWebhookPayload } from './UserWebhookService.js';
 import type {
 	DbJobData,
 	DeliverJobData,
+	InboxJobData,
 	RelationshipJobData,
 	SystemWebhookDeliverJobData,
 	ThinUser,
@@ -114,6 +116,7 @@ export class QueueService {
 		@Inject('queue:objectStorage') public objectStorageQueue: ObjectStorageQueue,
 		@Inject('queue:userWebhookDeliver') public userWebhookDeliverQueue: UserWebhookDeliverQueue,
 		@Inject('queue:systemWebhookDeliver') public systemWebhookDeliverQueue: SystemWebhookDeliverQueue,
+		private tenantRuntimeService: TenantRuntimeService,
 	) {
 		for (const def of REPEATABLE_SYSTEM_JOB_DEF) {
 			this.systemQueue.upsertJobScheduler(def.name, {
@@ -144,6 +147,24 @@ export class QueueService {
 	}
 
 	@bindThis
+	private withTenant<T extends Record<string, unknown>>(data: T): T {
+		return {
+			...data,
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
+		};
+	}
+
+	@bindThis
+	public getCurrentTenantHost(): string {
+		return this.tenantRuntimeService.getCurrentHost();
+	}
+
+	@bindThis
+	public runWithTenantHost<T>(host: string, fn: () => T): T {
+		return this.tenantRuntimeService.runWithHost(host, fn);
+	}
+
+	@bindThis
 	public deliver(user: ThinUser, content: IActivity | null, to: string | null, isSharedInbox: boolean) {
 		if (content == null) return null;
 		if (to == null) return null;
@@ -151,7 +172,7 @@ export class QueueService {
 		const contentBody = JSON.stringify(content);
 		const digest = ApRequestCreator.createDigest(contentBody);
 
-		const data: DeliverJobData = {
+		const data: DeliverJobData = this.withTenant({
 			user: {
 				id: user.id,
 			},
@@ -159,7 +180,7 @@ export class QueueService {
 			digest,
 			to,
 			isSharedInbox,
-		};
+		});
 
 		const label = to.replace('https://', '').replace('/inbox', '');
 
@@ -209,13 +230,13 @@ export class QueueService {
 
 		await this.deliverQueue.addBulk(Array.from(inboxes.entries(), d => ({
 			name: d[0].replace('https://', '').replace('/inbox', ''),
-			data: {
+			data: this.withTenant({
 				user,
 				content: contentBody,
 				digest,
 				to: d[0],
 				isSharedInbox: d[1],
-			} as DeliverJobData,
+			}) as DeliverJobData,
 			opts,
 		})));
 
@@ -224,10 +245,10 @@ export class QueueService {
 
 	@bindThis
 	public inbox(activity: IActivity, signature: httpSignature.IParsedSignature) {
-		const data = {
+		const data: InboxJobData = this.withTenant({
 			activity: activity,
 			signature,
-		};
+		});
 
 		const label = (activity.id ?? '').replace('https://', '').replace('/activity', '');
 
@@ -251,6 +272,7 @@ export class QueueService {
 	public createDeleteDriveFilesJob(user: ThinUser) {
 		return this.dbQueue.add('deleteDriveFiles', {
 			user: { id: user.id },
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -267,6 +289,7 @@ export class QueueService {
 	public createExportCustomEmojisJob(user: ThinUser) {
 		return this.dbQueue.add('exportCustomEmojis', {
 			user: { id: user.id },
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -283,6 +306,7 @@ export class QueueService {
 	public createExportNotesJob(user: ThinUser) {
 		return this.dbQueue.add('exportNotes', {
 			user: { id: user.id },
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -299,6 +323,7 @@ export class QueueService {
 	public createExportClipsJob(user: ThinUser) {
 		return this.dbQueue.add('exportClips', {
 			user: { id: user.id },
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -315,6 +340,7 @@ export class QueueService {
 	public createExportFavoritesJob(user: ThinUser) {
 		return this.dbQueue.add('exportFavorites', {
 			user: { id: user.id },
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -333,6 +359,7 @@ export class QueueService {
 			user: { id: user.id },
 			excludeMuting,
 			excludeInactive,
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -349,6 +376,7 @@ export class QueueService {
 	public createExportMuteJob(user: ThinUser) {
 		return this.dbQueue.add('exportMuting', {
 			user: { id: user.id },
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -365,6 +393,7 @@ export class QueueService {
 	public createExportBlockingJob(user: ThinUser) {
 		return this.dbQueue.add('exportBlocking', {
 			user: { id: user.id },
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -381,6 +410,7 @@ export class QueueService {
 	public createExportUserListsJob(user: ThinUser) {
 		return this.dbQueue.add('exportUserLists', {
 			user: { id: user.id },
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -397,6 +427,7 @@ export class QueueService {
 	public createExportAntennasJob(user: ThinUser) {
 		return this.dbQueue.add('exportAntennas', {
 			user: { id: user.id },
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -415,6 +446,7 @@ export class QueueService {
 			user: { id: user.id },
 			fileId: fileId,
 			withReplies,
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -429,7 +461,7 @@ export class QueueService {
 
 	@bindThis
 	public createImportFollowingToDbJob(user: ThinUser, targets: string[], withReplies?: boolean) {
-		const jobs = targets.map(rel => this.generateToDbJobData('importFollowingToDb', { user, target: rel, withReplies }));
+		const jobs = targets.map(rel => this.generateToDbJobData('importFollowingToDb', this.withTenant({ user, target: rel, withReplies })));
 		return this.dbQueue.addBulk(jobs);
 	}
 
@@ -438,6 +470,7 @@ export class QueueService {
 		return this.dbQueue.add('importMuting', {
 			user: { id: user.id },
 			fileId: fileId,
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -455,6 +488,7 @@ export class QueueService {
 		return this.dbQueue.add('importBlocking', {
 			user: { id: user.id },
 			fileId: fileId,
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -469,7 +503,7 @@ export class QueueService {
 
 	@bindThis
 	public createImportBlockingToDbJob(user: ThinUser, targets: string[]) {
-		const jobs = targets.map(rel => this.generateToDbJobData('importBlockingToDb', { user, target: rel }));
+		const jobs = targets.map(rel => this.generateToDbJobData('importBlockingToDb', this.withTenant({ user, target: rel })));
 		return this.dbQueue.addBulk(jobs);
 	}
 
@@ -500,6 +534,7 @@ export class QueueService {
 		return this.dbQueue.add('importUserLists', {
 			user: { id: user.id },
 			fileId: fileId,
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -517,6 +552,7 @@ export class QueueService {
 		return this.dbQueue.add('importCustomEmojis', {
 			user: { id: user.id },
 			fileId: fileId,
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -534,6 +570,7 @@ export class QueueService {
 		return this.dbQueue.add('importAntennas', {
 			user: { id: user.id },
 			antenna,
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -551,6 +588,7 @@ export class QueueService {
 		return this.dbQueue.add('deleteAccount', {
 			user: { id: user.id },
 			soft: opts.soft,
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -565,31 +603,31 @@ export class QueueService {
 
 	@bindThis
 	public createFollowJob(followings: { from: ThinUser, to: ThinUser, requestId?: string, silent?: boolean, withReplies?: boolean }[]) {
-		const jobs = followings.map(rel => this.generateRelationshipJobData('follow', rel));
+		const jobs = followings.map(rel => this.generateRelationshipJobData('follow', this.withTenant(rel)));
 		return this.relationshipQueue.addBulk(jobs);
 	}
 
 	@bindThis
 	public createUnfollowJob(followings: { from: ThinUser, to: ThinUser, requestId?: string }[]) {
-		const jobs = followings.map(rel => this.generateRelationshipJobData('unfollow', rel));
+		const jobs = followings.map(rel => this.generateRelationshipJobData('unfollow', this.withTenant(rel)));
 		return this.relationshipQueue.addBulk(jobs);
 	}
 
 	@bindThis
 	public createDelayedUnfollowJob(followings: { from: ThinUser, to: ThinUser, requestId?: string }[], delay: number) {
-		const jobs = followings.map(rel => this.generateRelationshipJobData('unfollow', rel, { delay }));
+		const jobs = followings.map(rel => this.generateRelationshipJobData('unfollow', this.withTenant(rel), { delay }));
 		return this.relationshipQueue.addBulk(jobs);
 	}
 
 	@bindThis
 	public createBlockJob(blockings: { from: ThinUser, to: ThinUser, silent?: boolean }[]) {
-		const jobs = blockings.map(rel => this.generateRelationshipJobData('block', rel));
+		const jobs = blockings.map(rel => this.generateRelationshipJobData('block', this.withTenant(rel)));
 		return this.relationshipQueue.addBulk(jobs);
 	}
 
 	@bindThis
 	public createUnblockJob(blockings: { from: ThinUser, to: ThinUser, silent?: boolean }[]) {
-		const jobs = blockings.map(rel => this.generateRelationshipJobData('unblock', rel));
+		const jobs = blockings.map(rel => this.generateRelationshipJobData('unblock', this.withTenant(rel)));
 		return this.relationshipQueue.addBulk(jobs);
 	}
 
@@ -626,6 +664,7 @@ export class QueueService {
 	public createDeleteObjectStorageFileJob(key: string) {
 		return this.objectStorageQueue.add('deleteFile', {
 			key: key,
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		}, {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
@@ -640,7 +679,7 @@ export class QueueService {
 
 	@bindThis
 	public createCleanRemoteFilesJob() {
-		return this.objectStorageQueue.add('cleanRemoteFiles', {}, {
+		return this.objectStorageQueue.add('cleanRemoteFiles', this.withTenant({}), {
 			removeOnComplete: {
 				age: 3600 * 24 * 7, // keep up to 7 days
 				count: 30,
@@ -672,6 +711,7 @@ export class QueueService {
 			secret: webhook.secret,
 			createdAt: Date.now(),
 			eventId: randomUUID(),
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		};
 
 		return this.userWebhookDeliverQueue.add(webhook.id, data, {
@@ -709,6 +749,7 @@ export class QueueService {
 			secret: webhook.secret,
 			createdAt: Date.now(),
 			eventId: randomUUID(),
+			tenantHost: this.tenantRuntimeService.getCurrentHost(),
 		};
 
 		return this.systemWebhookDeliverQueue.add(webhook.id, data, {

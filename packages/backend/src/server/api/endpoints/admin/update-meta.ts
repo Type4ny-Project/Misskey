@@ -6,9 +6,11 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import type { MiMeta } from '@/models/Meta.js';
+import type { Config } from '@/config.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { MetaService } from '@/core/MetaService.js';
+import { envOption } from '@/env.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -236,6 +238,9 @@ export const paramDef = {
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
+		@Inject(DI.config)
+		private config: Config,
+
 		@Inject(DI.meta)
 		private serverSettings: MiMeta,
 
@@ -244,9 +249,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const set = {} as Partial<MiMeta>;
+			const isRootUser = !envOption.managed || this.config.rootUserName === me.username;
 
-			if (typeof ps.disableRegistration === 'boolean') {
-				set.disableRegistration = ps.disableRegistration;
+			if (isRootUser) {
+				if (typeof ps.disableRegistration === 'boolean') {
+					set.disableRegistration = ps.disableRegistration;
+				}
 			}
 
 			if (Array.isArray(ps.pinnedUsers)) {
@@ -365,12 +373,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				};
 			}
 
-			if (ps.cacheRemoteFiles !== undefined) {
-				set.cacheRemoteFiles = ps.cacheRemoteFiles;
-			}
+			if (isRootUser) {
+				if (ps.cacheRemoteFiles !== undefined) {
+					set.cacheRemoteFiles = ps.cacheRemoteFiles;
+				}
 
-			if (ps.cacheRemoteSensitiveFiles !== undefined) {
-				set.cacheRemoteSensitiveFiles = ps.cacheRemoteSensitiveFiles;
+				if (ps.cacheRemoteSensitiveFiles !== undefined) {
+					set.cacheRemoteSensitiveFiles = ps.cacheRemoteSensitiveFiles;
+				}
 			}
 
 			if (ps.emailRequiredForSignup !== undefined) {
@@ -531,68 +541,70 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.inquiryUrl = ps.inquiryUrl;
 			}
 
-			if (ps.useObjectStorage !== undefined) {
-				set.useObjectStorage = ps.useObjectStorage;
-			}
-
-			if (ps.objectStorageBaseUrl !== undefined) {
-				set.objectStorageBaseUrl = ps.objectStorageBaseUrl;
-			}
-
-			if (ps.objectStorageBucket !== undefined) {
-				set.objectStorageBucket = ps.objectStorageBucket;
-			}
-
-			if (ps.objectStoragePrefix !== undefined) {
-				set.objectStoragePrefix = ps.objectStoragePrefix;
-			}
-
-			if (ps.objectStorageEndpoint !== undefined) {
-				set.objectStorageEndpoint = ps.objectStorageEndpoint;
-			}
-
-			if (ps.objectStorageRegion !== undefined) {
-				set.objectStorageRegion = ps.objectStorageRegion;
-			}
-
-			if (ps.objectStoragePort !== undefined) {
-				set.objectStoragePort = ps.objectStoragePort;
-			}
-
-			if (ps.objectStorageAccessKey !== undefined) {
-				set.objectStorageAccessKey = ps.objectStorageAccessKey;
-			}
-
-			if (ps.objectStorageSecretKey !== undefined) {
-				set.objectStorageSecretKey = ps.objectStorageSecretKey;
-			}
-
-			if (ps.objectStorageUseSSL !== undefined) {
-				set.objectStorageUseSSL = ps.objectStorageUseSSL;
-			}
-
-			if (ps.objectStorageUseProxy !== undefined) {
-				set.objectStorageUseProxy = ps.objectStorageUseProxy;
-			}
-
-			if (ps.objectStorageSetPublicRead !== undefined) {
-				set.objectStorageSetPublicRead = ps.objectStorageSetPublicRead;
-			}
-
-			if (ps.objectStorageS3ForcePathStyle !== undefined) {
-				set.objectStorageS3ForcePathStyle = ps.objectStorageS3ForcePathStyle;
-			}
-
-			if (ps.deeplAuthKey !== undefined) {
-				if (ps.deeplAuthKey === '') {
-					set.deeplAuthKey = null;
-				} else {
-					set.deeplAuthKey = ps.deeplAuthKey;
+			if (isRootUser) {
+				if (ps.useObjectStorage !== undefined) {
+					set.useObjectStorage = ps.useObjectStorage;
 				}
-			}
 
-			if (ps.deeplIsPro !== undefined) {
-				set.deeplIsPro = ps.deeplIsPro;
+				if (ps.objectStorageBaseUrl !== undefined) {
+					set.objectStorageBaseUrl = ps.objectStorageBaseUrl;
+				}
+
+				if (ps.objectStorageBucket !== undefined) {
+					set.objectStorageBucket = ps.objectStorageBucket;
+				}
+
+				if (ps.objectStoragePrefix !== undefined) {
+					set.objectStoragePrefix = ps.objectStoragePrefix;
+				}
+
+				if (ps.objectStorageEndpoint !== undefined) {
+					set.objectStorageEndpoint = ps.objectStorageEndpoint;
+				}
+
+				if (ps.objectStorageRegion !== undefined) {
+					set.objectStorageRegion = ps.objectStorageRegion;
+				}
+
+				if (ps.objectStoragePort !== undefined) {
+					set.objectStoragePort = ps.objectStoragePort;
+				}
+
+				if (ps.objectStorageAccessKey !== undefined) {
+					set.objectStorageAccessKey = ps.objectStorageAccessKey;
+				}
+
+				if (ps.objectStorageSecretKey !== undefined) {
+					set.objectStorageSecretKey = ps.objectStorageSecretKey;
+				}
+
+				if (ps.objectStorageUseSSL !== undefined) {
+					set.objectStorageUseSSL = ps.objectStorageUseSSL;
+				}
+
+				if (ps.objectStorageUseProxy !== undefined) {
+					set.objectStorageUseProxy = ps.objectStorageUseProxy;
+				}
+
+				if (ps.objectStorageSetPublicRead !== undefined) {
+					set.objectStorageSetPublicRead = ps.objectStorageSetPublicRead;
+				}
+
+				if (ps.objectStorageS3ForcePathStyle !== undefined) {
+					set.objectStorageS3ForcePathStyle = ps.objectStorageS3ForcePathStyle;
+				}
+
+				if (ps.deeplAuthKey !== undefined) {
+					if (ps.deeplAuthKey === '') {
+						set.deeplAuthKey = null;
+					} else {
+						set.deeplAuthKey = ps.deeplAuthKey;
+					}
+				}
+
+				if (ps.deeplIsPro !== undefined) {
+					set.deeplIsPro = ps.deeplIsPro;
+				}
 			}
 
 			if (ps.enableIpLogging !== undefined) {
@@ -647,8 +659,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.enableStatsForFederatedInstances = ps.enableStatsForFederatedInstances;
 			}
 
-			if (ps.enableServerMachineStats !== undefined) {
-				set.enableServerMachineStats = ps.enableServerMachineStats;
+			if (isRootUser) {
+				if (ps.enableServerMachineStats !== undefined) {
+					set.enableServerMachineStats = ps.enableServerMachineStats;
+				}
 			}
 
 			if (ps.enableIdenticonGeneration !== undefined) {
@@ -667,28 +681,30 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.manifestJsonOverride = ps.manifestJsonOverride;
 			}
 
-			if (ps.enableFanoutTimeline !== undefined) {
-				set.enableFanoutTimeline = ps.enableFanoutTimeline;
-			}
+			if (isRootUser) {
+				if (ps.enableFanoutTimeline !== undefined) {
+					set.enableFanoutTimeline = ps.enableFanoutTimeline;
+				}
 
-			if (ps.enableFanoutTimelineDbFallback !== undefined) {
-				set.enableFanoutTimelineDbFallback = ps.enableFanoutTimelineDbFallback;
-			}
+				if (ps.enableFanoutTimelineDbFallback !== undefined) {
+					set.enableFanoutTimelineDbFallback = ps.enableFanoutTimelineDbFallback;
+				}
 
-			if (ps.perLocalUserUserTimelineCacheMax !== undefined) {
-				set.perLocalUserUserTimelineCacheMax = ps.perLocalUserUserTimelineCacheMax;
-			}
+				if (ps.perLocalUserUserTimelineCacheMax !== undefined) {
+					set.perLocalUserUserTimelineCacheMax = ps.perLocalUserUserTimelineCacheMax;
+				}
 
-			if (ps.perRemoteUserUserTimelineCacheMax !== undefined) {
-				set.perRemoteUserUserTimelineCacheMax = ps.perRemoteUserUserTimelineCacheMax;
-			}
+				if (ps.perRemoteUserUserTimelineCacheMax !== undefined) {
+					set.perRemoteUserUserTimelineCacheMax = ps.perRemoteUserUserTimelineCacheMax;
+				}
 
-			if (ps.perUserHomeTimelineCacheMax !== undefined) {
-				set.perUserHomeTimelineCacheMax = ps.perUserHomeTimelineCacheMax;
-			}
+				if (ps.perUserHomeTimelineCacheMax !== undefined) {
+					set.perUserHomeTimelineCacheMax = ps.perUserHomeTimelineCacheMax;
+				}
 
-			if (ps.perUserListTimelineCacheMax !== undefined) {
-				set.perUserListTimelineCacheMax = ps.perUserListTimelineCacheMax;
+				if (ps.perUserListTimelineCacheMax !== undefined) {
+					set.perUserListTimelineCacheMax = ps.perUserListTimelineCacheMax;
+				}
 			}
 
 			if (ps.enableReactionsBuffering !== undefined) {
@@ -703,34 +719,36 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.bannedEmailDomains = ps.bannedEmailDomains;
 			}
 
-			if (ps.urlPreviewEnabled !== undefined) {
-				set.urlPreviewEnabled = ps.urlPreviewEnabled;
-			}
+			if (isRootUser) {
+				if (ps.urlPreviewEnabled !== undefined) {
+					set.urlPreviewEnabled = ps.urlPreviewEnabled;
+				}
 
-			if (ps.urlPreviewAllowRedirect !== undefined) {
-				set.urlPreviewAllowRedirect = ps.urlPreviewAllowRedirect;
-			}
+				if (ps.urlPreviewAllowRedirect !== undefined) {
+					set.urlPreviewAllowRedirect = ps.urlPreviewAllowRedirect;
+				}
 
-			if (ps.urlPreviewTimeout !== undefined) {
-				set.urlPreviewTimeout = ps.urlPreviewTimeout;
-			}
+				if (ps.urlPreviewTimeout !== undefined) {
+					set.urlPreviewTimeout = ps.urlPreviewTimeout;
+				}
 
-			if (ps.urlPreviewMaximumContentLength !== undefined) {
-				set.urlPreviewMaximumContentLength = ps.urlPreviewMaximumContentLength;
-			}
+				if (ps.urlPreviewMaximumContentLength !== undefined) {
+					set.urlPreviewMaximumContentLength = ps.urlPreviewMaximumContentLength;
+				}
 
-			if (ps.urlPreviewRequireContentLength !== undefined) {
-				set.urlPreviewRequireContentLength = ps.urlPreviewRequireContentLength;
-			}
+				if (ps.urlPreviewRequireContentLength !== undefined) {
+					set.urlPreviewRequireContentLength = ps.urlPreviewRequireContentLength;
+				}
 
-			if (ps.urlPreviewUserAgent !== undefined) {
-				const value = (ps.urlPreviewUserAgent ?? '').trim();
-				set.urlPreviewUserAgent = value === '' ? null : ps.urlPreviewUserAgent;
-			}
+				if (ps.urlPreviewUserAgent !== undefined) {
+					const value = (ps.urlPreviewUserAgent ?? '').trim();
+					set.urlPreviewUserAgent = value === '' ? null : ps.urlPreviewUserAgent;
+				}
 
-			if (ps.summalyProxy !== undefined || ps.urlPreviewSummaryProxyUrl !== undefined) {
-				const value = ((ps.urlPreviewSummaryProxyUrl ?? ps.summalyProxy) ?? '').trim();
-				set.urlPreviewSummaryProxyUrl = value === '' ? null : value;
+				if (ps.summalyProxy !== undefined || ps.urlPreviewSummaryProxyUrl !== undefined) {
+					const value = ((ps.urlPreviewSummaryProxyUrl ?? ps.summalyProxy) ?? '').trim();
+					set.urlPreviewSummaryProxyUrl = value === '' ? null : value;
+				}
 			}
 
 			if (ps.federation !== undefined) {

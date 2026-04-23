@@ -139,6 +139,7 @@ export function getConfig(): UserConfig {
 				'/static-assets/': __dirname + '/../backend/assets/',
 				'/fluent-emojis/': __dirname + '/../../fluent-emojis/dist/',
 				'/fluent-emoji/': __dirname + '/../../fluent-emojis/dist/',
+				'horizon-sky': path.resolve(__dirname, './node_modules/horizon-sky/dist/index.js'),
 			},
 		},
 

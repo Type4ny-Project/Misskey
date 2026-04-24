@@ -224,6 +224,18 @@ const renoteTargetNote: ShallowRef<PostFormProps['renote'] | null> = shallowRef(
 const replyTargetNote: ShallowRef<PostFormProps['reply'] | null> = shallowRef(props.reply);
 const targetChannel = shallowRef(props.channel);
 
+function applyChannelPostDefaults() {
+	if (targetChannel.value) {
+		visibility.value = 'public';
+		localOnly.value = true; // TODO: チャンネルが連合するようになった折には消す
+	}
+}
+
+watch(() => props.channel, (channel) => {
+	targetChannel.value = channel;
+	applyChannelPostDefaults();
+});
+
 const serverDraftId = ref<string | null>(null);
 const postFormActions = getPluginHandlers('post_form_action');
 
@@ -394,10 +406,7 @@ if ($i.isSilenced && visibility.value === 'public') {
 	visibility.value = 'home';
 }
 
-if (targetChannel.value) {
-	visibility.value = 'public';
-	localOnly.value = true; // TODO: チャンネルが連合するようになった折には消す
-}
+applyChannelPostDefaults();
 
 // 公開以外へのリプライ時は元の公開範囲を引き継ぐ
 if (replyTargetNote.value && ['home', 'followers', 'specified'].includes(replyTargetNote.value.visibility)) {

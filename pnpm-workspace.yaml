@@ -4,6 +4,7 @@ packages:
   - packages/frontend
   - packages/frontend-builder
   - packages/frontend-embed
+  - packages/frontend-worker
   - packages/i18n
   - packages/icons-subsetter
   - packages/sw

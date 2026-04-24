@@ -1,0 +1,303 @@
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "misskey-typeany-frontend",
+	"account_id": "249ffe1ec04083daee0b2148ea5c8416",
+	"main": "./src/index.js",
+	"compatibility_date": "2026-04-24",
+	"compatibility_flags": ["nodejs_compat"],
+	"routes": [
+		{
+			"pattern": "prismisskey.space/",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/@*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/notes/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/play/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/clips/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/gallery/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/channels/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/reversi/g/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/announcements/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/tags/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/user-tags/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/embed/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/timeline*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/settings*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/notifications",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/my/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/list/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/chat*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/instance-info/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/reset-password*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/signup-complete/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/verify-email/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/about*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/contact",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/invite",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/ads",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/theme-editor",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/roles/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/explore",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/search",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/lookup",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/share",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/api-console",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/scratchpad",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/preview",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/pages*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/custom-emojis-manager",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/emoji-requests",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/avatar-decorations",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/registry*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/install-extensions",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/admin*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/clicker",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/games",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/bubble-game",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/reversi",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/qr",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/debug",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/vite/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/embed_vite/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/assets/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/client-assets/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/static-assets/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/fluent-emojis/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/fluent-emoji/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/sw.js",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/favicon.ico",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/apple-touch-icon.png",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/proxy/*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/image.webp*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/preview.webp*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/static.webp*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/svg.webp*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/emoji.webp*",
+			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "prismisskey.space/emoji.png*",
+			"zone_name": "prismisskey.space"
+		}
+	],
+	"assets": {
+		"directory": "../../built/cloudflare-worker/assets",
+		"binding": "ASSETS",
+		"not_found_handling": "none",
+		"run_worker_first": [
+			"/@*",
+			"/notes/*",
+			"/play/*",
+			"/clips/*",
+			"/gallery/*",
+			"/channels/*",
+			"/reversi/g/*",
+			"/announcements/*",
+			"/tags/*",
+			"/user-tags/*",
+			"/embed/*",
+			"/assets/*",
+			"/client-assets/*",
+			"/static-assets/*",
+			"/vite/*",
+			"/embed_vite/*",
+			"/sw.js",
+			"/favicon.ico",
+			"/apple-touch-icon.png",
+			"/proxy/*",
+			"/image.webp",
+			"/preview.webp",
+			"/static.webp",
+			"/svg.webp",
+			"/emoji.webp",
+			"/emoji.png"
+		]
+	}
+}

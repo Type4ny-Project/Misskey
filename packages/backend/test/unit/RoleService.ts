@@ -33,6 +33,7 @@ import { secureRndstr } from '@/misc/secure-rndstr.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import { RoleCondFormulaValue } from '@/models/Role.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import type { Config } from '@/config.js';
 
 describe('RoleService', () => {
 	let app: TestingModule;
@@ -41,6 +42,7 @@ describe('RoleService', () => {
 	let rolesRepository: RolesRepository;
 	let roleAssignmentsRepository: RoleAssignmentsRepository;
 	let meta: Mocked<MiMeta>;
+	let config: Mocked<Config>;
 	let notificationService: Mocked<NotificationService>;
 	let clock: lolex.Clock;
 
@@ -148,6 +150,9 @@ describe('RoleService', () => {
 		roleAssignmentsRepository = app.get<RoleAssignmentsRepository>(DI.roleAssignmentsRepository);
 
 		meta = app.get<MiMeta>(DI.meta) as Mocked<MiMeta>;
+		config = app.get<Config>(DI.config) as Mocked<Config>;
+		config.rootUserName = undefined;
+		config.adminUserName = undefined;
 		notificationService = app.get<NotificationService>(NotificationService) as Mocked<NotificationService>;
 
 		await roleService.onModuleInit();
@@ -168,6 +173,24 @@ describe('RoleService', () => {
 		]);
 
 		await app.close();
+	});
+
+	describe('configured admin users', () => {
+		test('treats the configured local admin username as administrator without a role assignment', async () => {
+			config.adminUserName = 'managed-admin';
+			const admin = await createUser({ username: 'managed-admin', usernameLower: 'managed-admin', host: null });
+
+			expect(await roleService.isAdministrator(admin)).toBe(true);
+			expect(await roleService.isModerator(admin)).toBe(true);
+		});
+
+		test('does not grant administrator permissions to a remote user with the configured admin username', async () => {
+			config.adminUserName = 'managed-admin';
+			const remoteAdmin = await createUser({ username: 'managed-admin', usernameLower: 'managed-admin', host: 'example.com' });
+
+			expect(await roleService.isAdministrator(remoteAdmin)).toBe(false);
+			expect(await roleService.isModerator(remoteAdmin)).toBe(false);
+		});
 	});
 
 	describe('getUserAssigns', () => {
@@ -655,6 +678,32 @@ describe('RoleService', () => {
 		});
 	});
 
+	describe('configured RootUser/AdminUser', () => {
+		test('configured local AdminUser is treated as administrator and moderator without a role assignment', async () => {
+			config.adminUserName = 'AdminUser';
+			const adminUser = await createUser({ username: 'adminuser', usernameLower: 'adminuser', host: null });
+
+			await expect(roleService.isAdministrator(adminUser)).resolves.toBe(true);
+			await expect(roleService.isModerator(adminUser)).resolves.toBe(true);
+		});
+
+		test('configured local RootUser is treated as administrator and moderator without a role assignment', async () => {
+			config.rootUserName = 'RootUser';
+			const rootUser = await createUser({ username: 'rootuser', usernameLower: 'rootuser', host: null });
+
+			await expect(roleService.isAdministrator({ id: rootUser.id })).resolves.toBe(true);
+			await expect(roleService.isModerator({ id: rootUser.id })).resolves.toBe(true);
+		});
+
+		test('configured names do not grant administrator rights to remote users', async () => {
+			config.adminUserName = 'AdminUser';
+			const remoteUser = await createUser({ username: 'AdminUser', usernameLower: 'adminuser', host: 'example.com' });
+
+			await expect(roleService.isAdministrator(remoteUser)).resolves.toBe(false);
+			await expect(roleService.isModerator(remoteUser)).resolves.toBe(false);
+		});
+	});
+
 	describe('getAdministratorIds', () => {
 		test('should return only user IDs with administrator roles', async () => {
 			const adminUser1 = await createUser();
@@ -696,14 +745,24 @@ describe('RoleService', () => {
 			expect(adminIds).toHaveLength(0);
 		});
 
-		// TODO: rootユーザーは現在実装に含まれていないため、テストもそれに倣う
-		test('should not include the root user', async () => {
+		test('should include the root user', async () => {
 			const rootUser = await createUser();
 			meta.rootUserId = rootUser.id;
 
 			const adminIds = await roleService.getAdministratorIds();
 
-			expect(adminIds).not.toContain(rootUser.id);
+			expect(adminIds).toContain(rootUser.id);
+		});
+
+		test('should include configured RootUser and AdminUser accounts', async () => {
+			config.rootUserName = 'RootUser';
+			config.adminUserName = 'AdminUser';
+			const rootUser = await createUser({ username: 'rootuser', usernameLower: 'rootuser', host: null });
+			const adminUser = await createUser({ username: 'adminuser', usernameLower: 'adminuser', host: null });
+
+			const adminIds = await roleService.getAdministratorIds();
+
+			expect(adminIds).toEqual([adminUser.id, rootUser.id].sort((x, y) => x.localeCompare(y)));
 		});
 	});
 

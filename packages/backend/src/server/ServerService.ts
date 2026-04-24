@@ -7,11 +7,8 @@ import cluster from 'node:cluster';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { envOption } from '@/env.js';
-import { createHash } from 'node:crypto';
 import { RoleService } from '@/core/RoleService.js';
 import { SignupService } from '@/core/SignupService.js';
-import { IdService } from '@/core/IdService.js';
-import { generateSecureRandomString } from '@/misc/math-secure-random.js';
 import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
@@ -74,7 +71,6 @@ export class ServerService implements OnApplicationShutdown {
 		private globalEventService: GlobalEventService,
 		private loggerService: LoggerService,
 		private oauth2ProviderService: OAuth2ProviderService,
-		private idService: IdService,
 		private roleService: RoleService,
 		private signupService: SignupService,
 	) {
@@ -310,7 +306,6 @@ export class ServerService implements OnApplicationShutdown {
 					color: '#ff0000',
 					iconUrl: null,
 					target: 'manual',
-					condFormula: {},
 					isPublic: false,
 					isExplorable: false,
 					isModerator: true,
@@ -326,7 +321,6 @@ export class ServerService implements OnApplicationShutdown {
 					color: '#ff0000',
 					iconUrl: null,
 					target: 'manual',
-					condFormula: {},
 					isPublic: false,
 					isExplorable: false,
 					isModerator: true,
@@ -336,8 +330,8 @@ export class ServerService implements OnApplicationShutdown {
 					displayOrder: 1,
 				});
 
-				await this.roleService.assign(rootUser.id, rootRole.id);
-				await this.roleService.assign(adminUser.id, adminRole.id);
+				await this.roleService.assign(rootUser.account.id, rootRole.id);
+				await this.roleService.assign(adminUser.account.id, adminRole.id);
 
 				this.logger.info('MANAGED mode: Users created successfully.');
 			}

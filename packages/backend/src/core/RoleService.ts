@@ -5,7 +5,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import * as Redis from 'ioredis';
-import { In } from 'typeorm';
+import { In, IsNull } from 'typeorm';
 import { ModuleRef } from '@nestjs/core';
 import type {
 	MiMeta,
@@ -29,6 +29,7 @@ import { ModerationLogService } from '@/core/ModerationLogService.js';
 import type { Packed } from '@/misc/json-schema.js';
 import { FanoutTimelineService } from '@/core/FanoutTimelineService.js';
 import { NotificationService } from '@/core/NotificationService.js';
+import type { Config } from '@/config.js';
 import type { OnApplicationShutdown, OnModuleInit } from '@nestjs/common';
 
 // misskey-js の rolePolicies と同期すべし
@@ -74,6 +75,8 @@ export type RolePolicies = {
 	loginBonusGrantEnabled: boolean;
 	reactionLimit: number;
 };
+
+type RoleUser = { id: MiUser['id']; username?: MiUser['username']; usernameLower?: MiUser['usernameLower']; host?: MiUser['host'] };
 
 export const DEFAULT_POLICIES: RolePolicies = {
 	gtlAvailable: true,
@@ -138,6 +141,9 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 
 		@Inject(DI.meta)
 		private meta: MiMeta,
+
+		@Inject(DI.config)
+		private config: Config,
 
 		@Inject(DI.redisForTimelines)
 		private redisForTimelines: Redis.Redis,
@@ -453,15 +459,49 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 	}
 
 	@bindThis
-	public async isModerator(user: { id: MiUser['id'] } | null): Promise<boolean> {
+	private async isConfiguredAdminUser(user: RoleUser | null): Promise<boolean> {
 		if (user == null) return false;
-		return (this.meta.rootUserId === user.id) || (await this.getUserRoles(user.id)).some(r => r.isModerator || r.isAdministrator);
+		if (this.config.rootUserName == null && this.config.adminUserName == null) return false;
+
+		const localUser = user.username != null && 'host' in user
+			? user
+			: await this.usersRepository.findOneBy({ id: user.id });
+
+		if (localUser == null || localUser.host != null) return false;
+
+		const usernameLower = localUser.usernameLower ?? localUser.username?.toLowerCase();
+		if (usernameLower == null) return false;
+
+		return [this.config.rootUserName, this.config.adminUserName]
+			.some(username => username != null && username.toLowerCase() === usernameLower);
 	}
 
 	@bindThis
-	public async isAdministrator(user: { id: MiUser['id'] } | null): Promise<boolean> {
+	private async getConfiguredAdminUserIds(): Promise<MiUser['id'][]> {
+		const usernames = [this.config.rootUserName, this.config.adminUserName]
+			.filter((username): username is string => username != null)
+			.map(username => username.toLowerCase());
+
+		if (usernames.length === 0) return [];
+
+		const users = await this.usersRepository.findBy({
+			usernameLower: In(usernames),
+			host: IsNull(),
+		});
+
+		return users.map(user => user.id);
+	}
+
+	@bindThis
+	public async isModerator(user: RoleUser | null): Promise<boolean> {
 		if (user == null) return false;
-		return (this.meta.rootUserId === user.id) || (await this.getUserRoles(user.id)).some(r => r.isAdministrator);
+		return (this.meta.rootUserId === user.id) || await this.isConfiguredAdminUser(user) || (await this.getUserRoles(user.id)).some(r => r.isModerator || r.isAdministrator);
+	}
+
+	@bindThis
+	public async isAdministrator(user: RoleUser | null): Promise<boolean> {
+		if (user == null) return false;
+		return (this.meta.rootUserId === user.id) || await this.isConfiguredAdminUser(user) || (await this.getUserRoles(user.id)).some(r => r.isAdministrator);
 	}
 
 	@bindThis
@@ -538,8 +578,17 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 		const assigns = administratorRoles.length > 0 ? await this.roleAssignmentsRepository.findBy({
 			roleId: In(administratorRoles.map(r => r.id)),
 		}) : [];
-		// TODO: isRootなアカウントも含める
-		return assigns.map(a => a.userId);
+
+		const resultSet = new Set(assigns.map(a => a.userId));
+		if (this.meta.rootUserId != null) {
+			resultSet.add(this.meta.rootUserId);
+		}
+
+		for (const id of await this.getConfiguredAdminUserIds()) {
+			resultSet.add(id);
+		}
+
+		return [...resultSet].sort((x, y) => x.localeCompare(y));
 	}
 
 	@bindThis

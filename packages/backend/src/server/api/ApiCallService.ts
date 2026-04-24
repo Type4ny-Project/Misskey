@@ -376,9 +376,8 @@ export class ApiCallService implements OnApplicationShutdown {
 			}
 		}
 
-		if ((ep.meta.requireModerator || ep.meta.requireAdmin) && (this.meta.rootUserId !== user!.id)) {
-			const myRoles = await this.roleService.getUserRoles(user!.id);
-			if (ep.meta.requireModerator && !myRoles.some(r => r.isModerator || r.isAdministrator)) {
+		if (ep.meta.requireModerator || ep.meta.requireAdmin) {
+			if (ep.meta.requireModerator && !await this.roleService.isModerator(user!)) {
 				throw new ApiError({
 					message: 'You are not assigned to a moderator role.',
 					code: 'ROLE_PERMISSION_DENIED',
@@ -386,7 +385,7 @@ export class ApiCallService implements OnApplicationShutdown {
 					id: 'd33d5333-db36-423d-a8f9-1a2b9549da41',
 				});
 			}
-			if (ep.meta.requireAdmin && !myRoles.some(r => r.isAdministrator)) {
+			if (ep.meta.requireAdmin && !await this.roleService.isAdministrator(user!)) {
 				throw new ApiError({
 					message: 'You are not assigned to an administrator role.',
 					code: 'ROLE_PERMISSION_DENIED',
@@ -396,10 +395,9 @@ export class ApiCallService implements OnApplicationShutdown {
 			}
 		}
 
-		if (ep.meta.requiredRolePolicy != null && (this.meta.rootUserId !== user!.id)) {
-			const myRoles = await this.roleService.getUserRoles(user!.id);
+		if (ep.meta.requiredRolePolicy != null && !await this.roleService.isAdministrator(user!)) {
 			const policies = await this.roleService.getUserPolicies(user!.id);
-			if (!policies[ep.meta.requiredRolePolicy] && !myRoles.some(r => r.isAdministrator)) {
+			if (!policies[ep.meta.requiredRolePolicy]) {
 				throw new ApiError({
 					message: 'You are not assigned to a required role.',
 					code: 'ROLE_PERMISSION_DENIED',

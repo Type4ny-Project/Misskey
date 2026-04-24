@@ -13,11 +13,21 @@
 		{
 			"pattern": "prismisskey.space/*",
 			"zone_name": "prismisskey.space"
+		},
+		{
+			"pattern": "mattyaski.co/*",
+			"zone_name": "mattyaski.co"
 		}
 	],
 	"assets": {
 		"directory": "../../built/cloudflare-worker/assets",
 		"binding": "ASSETS",
 		"not_found_handling": "none"
+	},
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true
+		}
 	}
 }

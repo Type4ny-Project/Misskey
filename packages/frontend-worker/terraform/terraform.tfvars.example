@@ -1,6 +1,14 @@
 cloudflare_api_token = "replace-me"
-zone_id              = "replace-me"
-hostname             = "prismisskey.space"
+targets = [
+  {
+    zone_id  = "replace-me-zone-id"
+    hostname = "prismisskey.space"
+  },
+  # {
+  #   zone_id  = "replace-me-other-zone-id"
+  #   hostname = "mattyaski.co"
+  # },
+]
 worker_script_name   = "misskey-typeany-frontend"
 
 # Usually the defaults are enough. Extend only if a backend-owned route must

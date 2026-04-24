@@ -4,14 +4,12 @@ variable "cloudflare_api_token" {
   sensitive   = true
 }
 
-variable "zone_id" {
-  description = "Cloudflare zone ID for the public hostname."
-  type        = string
-}
-
-variable "hostname" {
-  description = "Single-origin public hostname, e.g. prismisskey.space"
-  type        = string
+variable "targets" {
+  description = "Per-zone public targets handled by this Worker, e.g. [{ zone_id = \"...\", hostname = \"prismisskey.space\" }, { zone_id = \"...\", hostname = \"mattyaski.co\" }]"
+  type = list(object({
+    zone_id  = string
+    hostname = string
+  }))
 }
 
 variable "worker_script_name" {

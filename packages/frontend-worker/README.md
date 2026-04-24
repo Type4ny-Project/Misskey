@@ -32,21 +32,21 @@ pnpm --filter frontend-worker dev
 
 ## Deploy
 
-Deploy the Worker routes on the same hostname that is also assigned to the backend Tunnel origin:
+Deploy the Worker on the same hostname that is also assigned to the backend Tunnel origin:
 
 ```sh
 pnpm deploy:cloudflare-worker
 ```
 
-Replace the placeholder route patterns in `wrangler.jsonc` (`example.com/...`) with your actual zone hostname before deploying.
+Before deploying the broad `prismisskey.space/*` route, configure the backend no-worker overrides described in `./CLOUDFLARE_SINGLE_ORIGIN_ROUTES.md`.
 
 ## One hostname with Cloudflare Tunnel
 
-Workers do not have a Cloudflare Tunnel binding, and a Worker should not `fetch()` its own same-zone route as a backend proxy target. The supported one-hostname shape is route splitting:
+Workers do not have a Cloudflare Tunnel binding, and a Worker should not `fetch()` its own same-zone route as a backend proxy target. The clean single-origin shape is:
 
-- DNS/Tunnel sends the hostname to the Node backend by default.
-- Worker routes are attached only to frontend/static/SSR paths.
-- Backend-only paths have no Worker route, so they fall through to the Tunnel origin.
+- a broad Worker route on `prismisskey.space/*`
+- backend-only no-worker override routes for API/protocol paths
+- the hostname itself still points at the backend via Cloudflare Tunnel
 
 Example Tunnel config on the backend host:
 
@@ -67,19 +67,18 @@ cloudflared tunnel route dns <UUID> example.com
 
 Traffic then flows either:
 
-- Browser HTML/static/SSR path → Worker → static assets / edge SSR
-- Backend path with no Worker route → Tunnel → Node backend
+- frontend/static/SSR path → Worker → static assets / edge SSR
+- backend-only path with no Worker route → Tunnel → Node backend
 
 Worker-internal SSR data fetches call the same origin's `/api/*` endpoints. Keep `/api/*` excluded from Worker routes so those calls resolve to the Tunnel origin instead of re-entering the Worker.
 
-## Minimal backend allowlist
+## Single-origin routing summary
 
-The current Worker keeps Worker execution deliberately narrow:
+The repo now assumes a broad Worker route model. The practical split is:
 
-- page-level SSR/OG paths such as `/@*`, `/notes/*`, `/play/*`, `/clips/*`, `/gallery/*`, `/channels/*`, `/reversi/g/*`, `/announcements/*`, and `/embed/*`
-- static asset paths such as `/vite/*`, `/embed_vite/*`, `/assets/*`, `/client-assets/*`, `/static-assets/*`, `/fluent-emojis/*`, `/fluent-emoji/*`, `/sw.js`, `/favicon.ico`, and `/apple-touch-icon.png`
-- media proxy paths such as `/proxy/*`, `/image.webp`, `/preview.webp`, `/static.webp`, `/svg.webp`, `/emoji.webp`, and `/emoji.png`
+- Worker by default for frontend SPA, SSR/OG, static assets, and Worker media proxy routes
+- no Worker override for backend-only protocol/API/auth paths
 
-Backend paths such as `/api/*`, `/streaming*`, custom emoji lookup paths like `/emoji/<name>.webp`, `/oauth/*`, ActivityPub, and backend JSON/text endpoints should be excluded from Worker routes so they fall through to the Tunnel origin.
+See `./CLOUDFLARE_SINGLE_ORIGIN_ROUTES.md` for the exact backend override list.
 
-Wrangler can declaratively decide which paths hit the Worker first. There is no production `origin`/`proxy_pass` setting in `wrangler.jsonc`.
+Wrangler can declaratively attach the broad Worker route. The backend negative overrides are a Cloudflare route-management concern. There is no production `origin`/`proxy_pass` setting in `wrangler.jsonc`.

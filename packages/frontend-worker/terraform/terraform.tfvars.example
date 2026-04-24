@@ -1,0 +1,11 @@
+cloudflare_api_token = "replace-me"
+zone_id              = "replace-me"
+hostname             = "prismisskey.space"
+worker_script_name   = "misskey-typeany-frontend"
+
+# Usually the defaults are enough. Extend only if a backend-owned route must
+# bypass the Worker entirely.
+# backend_override_patterns = [
+#   "/api/*",
+#   "/streaming*",
+# ]

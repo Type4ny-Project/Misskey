@@ -29,6 +29,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:disabled="!canReact(emoji)"
 					:title="emoji.name"
 					tabindex="0"
+					@pointerenter="(ev) => { onLongHoverEnter(ev); computeButtonTitle(ev); }"
+					@pointerleave="onLongHoverLeave"
 					@click="chosen(emoji, $event)"
 				>
 					<MkCustomEmoji class="emoji" :name="emoji.name" :fallbackToImage="true"/>
@@ -41,6 +43,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					class="_button item"
 					:title="emoji.name"
 					tabindex="0"
+					@pointerenter="(ev) => { onLongHoverEnter(ev); computeButtonTitle(ev); }"
+					@pointerleave="onLongHoverLeave"
 					@click="chosen(emoji, $event)"
 				>
 					<MkEmoji class="emoji" :emoji="emoji.char"/>
@@ -58,7 +62,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 						class="_button item"
 						:disabled="!canReact(emoji)"
 						tabindex="0"
-						@pointerenter="computeButtonTitle"
+						@pointerenter="(ev) => { onLongHoverEnter(ev); computeButtonTitle(ev); }"
+						@pointerleave="onLongHoverLeave"
 						@click="chosen(emoji, $event)"
 					>
 						<MkCustomEmoji v-if="!emoji.hasOwnProperty('char')" class="emoji" :name="getKey(emoji)" :normal="true"/>
@@ -77,7 +82,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 						class="_button item"
 						:disabled="!canReact(emoji)"
 						:data-emoji="getKey(emoji)"
-						@pointerenter="computeButtonTitle"
+						@pointerenter="(ev) => { onLongHoverEnter(ev); computeButtonTitle(ev); }"
+						@pointerleave="onLongHoverLeave"
 						@click="chosen(emoji, $event)"
 					>
 						<MkCustomEmoji v-if="!emoji.hasOwnProperty('char')" class="emoji" :name="getKey(emoji)" :normal="true"/>
@@ -142,6 +148,7 @@ import { checkReactionPermissions } from '@/utility/check-reaction-permissions.j
 import { prefer } from '@/preferences.js';
 import { useRouter } from '@/router.js';
 import { haptic } from '@/utility/haptic.js';
+import { useLongHover } from '@/composables/use-long-hover.js';
 
 const router = useRouter();
 
@@ -161,6 +168,8 @@ const emit = defineEmits<{
 	(ev: 'chosen', v: string): void;
 	(ev: 'esc'): void;
 }>();
+
+const { onPointerEnter: onLongHoverEnter, onPointerLeave: onLongHoverLeave } = useLongHover();
 
 const searchEl = useTemplateRef('searchEl');
 const emojisEl = useTemplateRef('emojisEl');
@@ -608,6 +617,15 @@ defineExpose({
 						height: auto;
 						min-width: 0;
 
+						&.long-hover {
+							z-index: 10;
+
+							> .emoji {
+								transform: scale(2);
+								transition: transform 0.2s ease;
+							}
+						}
+
 						&:disabled {
 							cursor: not-allowed;
 							background: linear-gradient(-45deg, transparent 0% 48%, light-dark(rgba(0, 0, 0, 0.25), rgba(255, 255, 255, 0.15)) 48% 52%, transparent 52% 100%);
@@ -642,6 +660,15 @@ defineExpose({
 						height: auto;
 						min-width: 0;
 						padding: 0;
+
+						&.long-hover {
+							z-index: 10;
+
+							> .emoji {
+								transform: scale(2);
+								transition: transform 0.2s ease;
+							}
+						}
 
 						&:disabled {
 							cursor: not-allowed;
@@ -761,6 +788,15 @@ defineExpose({
 
 					&:hover {
 						background: rgba(0, 0, 0, 0.05);
+					}
+
+					&.long-hover {
+						z-index: 10;
+
+						> .emoji {
+							transform: scale(2);
+							transition: transform 0.2s ease;
+						}
 					}
 
 					&:active {

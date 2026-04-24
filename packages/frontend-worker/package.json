@@ -1,0 +1,11 @@
+{
+	"name": "frontend-worker",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"cf:build": "node ./scripts/assemble-assets.mjs",
+		"check": "node --check ./src/*.js && node --check ./scripts/assemble-assets.mjs",
+		"dev": "pnpm cf:build && pnpm dlx wrangler@latest dev",
+		"deploy": "pnpm dlx wrangler@latest deploy"
+	}
+}

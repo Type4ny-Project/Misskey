@@ -4877,6 +4877,10 @@ export interface Locale extends ILocale {
      */
     "rolesThatCanBeUsedThisEmojiAsReactionPublicRoleWarn": string;
     /**
+     * リアクションを取り消す
+     */
+    "cancelReaction": string;
+    /**
      * リアクションを取り消しますか？
      */
     "cancelReactionConfirm": string;
@@ -8441,6 +8445,10 @@ export interface Locale extends ILocale {
              * ウォーターマーク機能の使用可否
              */
             "watermarkAvailable": string;
+            /**
+             * リアクションの最大数
+             */
+            "reactionLimit": string;
         };
         "_condition": {
             /**

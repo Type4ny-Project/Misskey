@@ -32,6 +32,7 @@ variable "backend_override_patterns" {
     "/inbox*",
     "/users/*",
     "/objects/*",
+    "/files/*",
     "/manifest.json",
     "/robots.txt",
     "/api.json",

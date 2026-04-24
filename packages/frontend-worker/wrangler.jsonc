@@ -5,20 +5,6 @@
 	"main": "./src/index.js",
 	"compatibility_date": "2026-04-24",
 	"compatibility_flags": ["nodejs_compat"],
-	// Single-origin target model:
-	// - broad Worker route on prismisskey.space/*
-	// - backend-only no-worker override routes managed in Cloudflare dashboard/API
-	// See ./CLOUDFLARE_SINGLE_ORIGIN_ROUTES.md before deploying this config.
-	"routes": [
-		{
-			"pattern": "prismisskey.space/*",
-			"zone_name": "prismisskey.space"
-		},
-		{
-			"pattern": "mattyaski.co/*",
-			"zone_name": "mattyaski.co"
-		}
-	],
 	"assets": {
 		"directory": "../../built/cloudflare-worker/assets",
 		"binding": "ASSETS",

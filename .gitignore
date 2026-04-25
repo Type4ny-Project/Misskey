@@ -87,3 +87,5 @@ vite.config.local-dev.ts.timestamp-*
 /packages/frontend-worker/terraform/terraform.tfvars
 /packages/frontend-worker/terraform/terraform.tfstate.backup
 /packages/frontend-worker/terraform/terraform.tfstate
+
+packages/frontend-worker/terraform/te

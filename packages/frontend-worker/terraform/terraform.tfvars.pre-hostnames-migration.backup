@@ -1,4 +1,0 @@
-cloudflare_api_token = "cfat_B0IKVhuwXof6RE8zDAPN96wSfnBVL2gOFidpwEtV401a7bd2"
-zone_id              = "e89cc41914d7400515e134ea6ac06b05"
-hostname             = "prismisskey.space"
-worker_script_name   = "misskey-typeany-frontend"

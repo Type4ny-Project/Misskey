@@ -3,52 +3,34 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { ref, onUnmounted } from 'vue';
+import { ref } from 'vue';
 
 const LONG_HOVER_DELAY = 1000;
 
 export function useLongHover() {
-	const isLongHovering = ref(false);
+	const activeElement = ref<HTMLElement | null>(null);
 	let timeoutId: number | null = null;
-	let activeEl: HTMLElement | null = null;
-
-	const clear = () => {
-		if (timeoutId !== null) {
-			clearTimeout(timeoutId);
-			timeoutId = null;
-		}
-		if (activeEl) {
-			activeEl.classList.remove('long-hover');
-			activeEl = null;
-		}
-		isLongHovering.value = false;
-	};
 
 	const onPointerEnter = (ev: PointerEvent) => {
 		if (ev.pointerType === 'touch') return;
 
 		const el = ev.currentTarget as HTMLElement;
-		activeEl = el;
 
 		timeoutId = window.setTimeout(() => {
-			if (activeEl === el) {
-				el.classList.add('long-hover');
-				isLongHovering.value = true;
-			}
+			activeElement.value = el;
 		}, LONG_HOVER_DELAY);
 	};
 
 	const onPointerLeave = () => {
-		clear();
+		if (timeoutId !== null) {
+			clearTimeout(timeoutId);
+			timeoutId = null;
+		}
+		activeElement.value = null;
 	};
 
-	onUnmounted(() => {
-		clear();
-	});
-
 	return {
-		isLongHovering,
-		clear,
+		activeElement,
 		onPointerEnter,
 		onPointerLeave,
 	};

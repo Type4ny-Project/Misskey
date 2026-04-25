@@ -1,4 +1,4 @@
-import { getViteFiles, LANGS } from './assets.js';
+import { getViteFiles, getBuildVersion, LANGS } from './assets.js';
 import { escapeAttribute, escapeHtml, safeJson } from './html.js';
 import { fetchInstanceMeta } from './meta.js';
 
@@ -6,8 +6,9 @@ const DEFAULT_THEME_COLOR = '#86b300';
 
 export async function renderFrontendShell(request, env, overrides = {}) {
 	const url = new URL(request.url);
-	const [viteFiles, meta] = await Promise.all([
+	const [viteFiles, buildVersion, meta] = await Promise.all([
 		getViteFiles(env, '/vite/manifest.json'),
+		getBuildVersion(env),
 		fetchInstanceMeta(request).catch(() => null),
 	]);
 	const common = createCommonProps(url, env, meta);
@@ -23,14 +24,16 @@ export async function renderFrontendShell(request, env, overrides = {}) {
 		cssFiles: viteFiles.css,
 		modulePreloads: viteFiles.modulePreloads,
 		includeManifest: true,
+		commit: buildVersion.commit,
 		body: overrides.body ?? `<div id="misskey_app"></div>${renderSplash(overrides.icon ?? common.icon)}`,
 	});
 }
 
 export async function renderEmbedShell(request, env, overrides = {}) {
 	const url = new URL(request.url);
-	const [viteFiles, meta] = await Promise.all([
+	const [viteFiles, buildVersion, meta] = await Promise.all([
 		getViteFiles(env, '/embed_vite/manifest.json'),
+		getBuildVersion(env),
 		fetchInstanceMeta(request).catch(() => null),
 	]);
 	const common = createCommonProps(url, env, meta);
@@ -47,6 +50,7 @@ export async function renderEmbedShell(request, env, overrides = {}) {
 		modulePreloads: viteFiles.modulePreloads,
 		includeManifest: false,
 		robots: 'noindex',
+		commit: buildVersion.commit,
 		body: overrides.body ?? `<div id="misskey_app"></div>${renderSplash(overrides.icon ?? common.icon)}`,
 	});
 }
@@ -112,7 +116,7 @@ ${modulePreloads}
 ${cssLinks}
 <title>${escapeHtml(title)}</title>
 <link rel="stylesheet" href="${props.bootStylePath}">
-<script>const VERSION=${safeJson(props.version)};const CLIENT_ENTRY=${safeJson(props.clientEntry)};const LANGS=${safeJson(LANGS)};</script>
+<script>const VERSION=${safeJson(props.version)};const COMMIT=${safeJson(props.commit ?? null)};const CLIENT_ENTRY=${safeJson(props.clientEntry)};const LANGS=${safeJson(LANGS)};</script>
 ${metaJsonScript}
 ${clientCtxScript}
 ${embedCtxScript}

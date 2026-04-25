@@ -1,6 +1,7 @@
-import { cp, mkdir, rm, stat, copyFile } from 'node:fs/promises';
+import { cp, mkdir, rm, stat, copyFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { execSync } from 'node:child_process';
 
 const packageDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(packageDir, '../../..');
@@ -90,5 +91,23 @@ await copyFileIfExists({
 	from: resolve(rootDir, 'packages/backend/assets/apple-touch-icon.png'),
 	to: resolve(outputDir, 'apple-touch-icon.png'),
 });
+
+const metaJsonPath = resolve(rootDir, 'built/meta.json');
+const versionJsonPath = resolve(outputDir, 'version.json');
+let versionPayload = { version: 'unknown', commit: null };
+try {
+	const meta = await (await import('node:fs/promises')).readFile(metaJsonPath, 'utf-8');
+	const parsed = JSON.parse(meta);
+	versionPayload = { version: parsed.version ?? 'unknown', commit: parsed.commit ?? null };
+} catch {
+	// fall through to unknown
+}
+try {
+	const commit = execSync('git rev-parse --short HEAD', { cwd: rootDir, encoding: 'utf-8' }).trim();
+	if (commit) versionPayload.commit = commit;
+} catch {
+	// keep existing or unknown
+}
+await writeFile(versionJsonPath, JSON.stringify(versionPayload), 'utf-8');
 
 console.log(`Cloudflare Worker assets assembled at ${outputDir}`);

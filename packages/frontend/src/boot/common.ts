@@ -34,6 +34,9 @@ import { startRealtimeSkyBackground, stopRealtimeSkyBackground } from '@/utility
 
 export async function common(createVue: () => Promise<App<Element>>) {
 	console.info(`Misskey v${version}`);
+	if (typeof _COMMIT_ !== 'undefined' && _COMMIT_) {
+		console.info(`Commit ${_COMMIT_}`);
+	}
 
 	if (_DEV_) {
 		console.warn('Development mode!!!');
@@ -67,14 +70,22 @@ export async function common(createVue: () => Promise<App<Element>>) {
 
 	//#region クライアントが更新されたかチェック
 	const lastVersion = miLocalStorage.getItem('lastVersion');
-	if (lastVersion !== version) {
+	const lastCommit = miLocalStorage.getItem('lastCommit');
+	if (lastVersion !== version || (typeof _COMMIT_ !== 'undefined' && _COMMIT_ && _COMMIT_ !== lastCommit)) {
 		miLocalStorage.setItem('lastVersion', version);
+		if (typeof _COMMIT_ !== 'undefined' && _COMMIT_) {
+			miLocalStorage.setItem('lastCommit', _COMMIT_);
+		}
 
 		try { // 変なバージョン文字列来るとcompareVersionsでエラーになるため
 			if (lastVersion != null && compareVersions(version, lastVersion) === 1) {
 				isClientUpdated = true;
 			}
 		} catch (err) { /* empty */ }
+
+		if (!isClientUpdated && typeof _COMMIT_ !== 'undefined' && _COMMIT_ && lastCommit && _COMMIT_ !== lastCommit) {
+			isClientUpdated = true;
+		}
 	}
 	//#endregion
 
@@ -394,6 +405,7 @@ export async function common(createVue: () => Promise<App<Element>>) {
 	return {
 		isClientUpdated,
 		lastVersion,
+		lastCommit,
 		app,
 	};
 }

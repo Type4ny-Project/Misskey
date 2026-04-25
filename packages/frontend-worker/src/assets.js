@@ -64,3 +64,13 @@ function collectImportedAssets(manifest, imports, cssFiles, modulePreloads, seen
 		if (!recursive && importedChunk.file) modulePreloads.add(importedChunk.file);
 	}
 }
+
+export async function getBuildVersion(env) {
+	const response = await env.ASSETS.fetch(new Request('https://assets.local/version.json'));
+	if (!response.ok) return { version: null, commit: null };
+	try {
+		return await response.json();
+	} catch {
+		return { version: null, commit: null };
+	}
+}

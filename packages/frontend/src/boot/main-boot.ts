@@ -32,7 +32,7 @@ import { unisonReload } from '@/utility/unison-reload.js';
 import { isBirthday } from '@/utility/is-birthday.js';
 
 export async function mainBoot() {
-	const { isClientUpdated, lastVersion } = await common(async () => {
+	const { isClientUpdated, lastVersion, lastCommit } = await common(async () => {
 		let uiStyle = ui;
 		const searchParams = new URLSearchParams(window.location.search);
 

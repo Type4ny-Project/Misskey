@@ -6,6 +6,7 @@ import type { UserConfig } from 'vite';
 import { defineConfig } from 'vite';
 import * as yaml from 'js-yaml';
 import { promises as fsp } from 'fs';
+import { execSync } from 'node:child_process';
 
 import locales from 'i18n';
 import meta from '../../package.json';
@@ -158,6 +159,13 @@ export function getConfig(): UserConfig {
 
 		define: {
 			_VERSION_: JSON.stringify(meta.version),
+			_COMMIT_: JSON.stringify((() => {
+				try {
+					return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
+				} catch {
+					return null;
+				}
+			})()),
 			_LANGS_: JSON.stringify(Object.entries(locales).map(([k, v]) => [k, v._lang_])),
 			_ENV_: JSON.stringify(process.env.NODE_ENV),
 			_DEV_: process.env.NODE_ENV !== 'production',

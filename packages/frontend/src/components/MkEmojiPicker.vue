@@ -656,12 +656,7 @@ defineExpose({
 	pointer-events: none;
 	top: 0;
 	left: 0;
-	padding: 12px;
 	transform: translate(-50%, -110%);
-	background: var(--MI_THEME-panel);
-	border: 1px solid var(--MI_THEME-divider);
-	border-radius: 16px;
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 
 	.emoji-preview__img {
 		width: 128px;

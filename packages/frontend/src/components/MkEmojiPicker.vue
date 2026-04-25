@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div class="omfetrab" :class="['s' + size, 'w' + width, 'h' + height, { asDrawer, asWindow }]" :style="{ maxHeight: maxHeight ? maxHeight + 'px' : undefined }">
+<div class="omfetrab _popup" :class="['s' + size, 'w' + width, 'h' + height, { asDrawer, asWindow }]" :style="{ maxHeight: maxHeight ? maxHeight + 'px' : undefined }">
 	<input
 		ref="searchEl"
 		:value="q"
@@ -29,8 +29,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:disabled="!canReact(emoji)"
 					:title="emoji.name"
 					tabindex="0"
-					@pointerenter="(ev) => { onLongHoverEnter(ev); computeButtonTitle(ev); }"
-					@pointerleave="onLongHoverLeave"
+					@pointerenter="(ev) => startPreview(`:${emoji.name}:`, ev)"
+					@pointerleave="endPreview"
 					@click="chosen(emoji, $event)"
 				>
 					<MkCustomEmoji class="emoji" :name="emoji.name" :fallbackToImage="true"/>
@@ -43,8 +43,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					class="_button item"
 					:title="emoji.name"
 					tabindex="0"
-					@pointerenter="(ev) => { onLongHoverEnter(ev); computeButtonTitle(ev); }"
-					@pointerleave="onLongHoverLeave"
+					@pointerenter="(ev) => startPreview(emoji.char, ev)"
+					@pointerleave="endPreview"
 					@click="chosen(emoji, $event)"
 				>
 					<MkEmoji class="emoji" :emoji="emoji.char"/>
@@ -62,8 +62,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 						class="_button item"
 						:disabled="!canReact(emoji)"
 						tabindex="0"
-						@pointerenter="(ev) => { onLongHoverEnter(ev); computeButtonTitle(ev); }"
-						@pointerleave="onLongHoverLeave"
+						@pointerenter="(ev) => { startPreview(getKey(emoji), ev); computeButtonTitle(ev); }"
+						@pointerleave="endPreview"
 						@click="chosen(emoji, $event)"
 					>
 						<MkCustomEmoji v-if="!emoji.hasOwnProperty('char')" class="emoji" :name="getKey(emoji)" :normal="true"/>
@@ -82,8 +82,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 						class="_button item"
 						:disabled="!canReact(emoji)"
 						:data-emoji="getKey(emoji)"
-						@pointerenter="(ev) => { onLongHoverEnter(ev); computeButtonTitle(ev); }"
-						@pointerleave="onLongHoverLeave"
+						@pointerenter="(ev) => { startPreview(getKey(emoji), ev); computeButtonTitle(ev); }"
+						@pointerleave="endPreview"
 						@click="chosen(emoji, $event)"
 					>
 						<MkCustomEmoji v-if="!emoji.hasOwnProperty('char')" class="emoji" :name="getKey(emoji)" :normal="true"/>
@@ -103,13 +103,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:hasChildSection="child.children.length !== 0"
 				:customEmojiTree="child.children"
 				@chosen="chosen"
+				@previewEnter="(emoji: string, ev: PointerEvent) => startPreview(emoji, ev)"
+				@previewLeave="endPreview"
 			>
 				{{ child.value || i18n.ts.other }}
 			</XSection>
 		</div>
 		<div v-once class="group">
 			<header class="_acrylic">{{ i18n.ts.emoji }}</header>
-			<XSection v-for="category in categories" :key="category" :emojis="emojiCharByCategory.get(category) ?? []" :hasChildSection="false" @chosen="chosen">{{ category }}</XSection>
+			<XSection v-for="category in categories" :key="category" :emojis="emojiCharByCategory.get(category) ?? []" :hasChildSection="false" @chosen="chosen" @previewEnter="(emoji: string, ev: PointerEvent) => startPreview(emoji, ev)" @previewLeave="endPreview">{{ category }}</XSection>
 		</div>
 	</div>
 	<div class="tabs">
@@ -122,7 +124,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref, useTemplateRef, computed, watch, onMounted } from 'vue';
+import { ref, useTemplateRef, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import * as Misskey from 'misskey-js';
 import {
 	emojilist,
@@ -148,9 +150,9 @@ import { checkReactionPermissions } from '@/utility/check-reaction-permissions.j
 import { prefer } from '@/preferences.js';
 import { useRouter } from '@/router.js';
 import { haptic } from '@/utility/haptic.js';
-import { useLongHover } from '@/composables/use-long-hover.js';
 
 const router = useRouter();
+const PREVIEW_DELAY = 500;
 
 const props = withDefaults(defineProps<{
 	showPinned?: boolean;
@@ -169,7 +171,67 @@ const emit = defineEmits<{
 	(ev: 'esc'): void;
 }>();
 
-const { onPointerEnter: onLongHoverEnter, onPointerLeave: onLongHoverLeave } = useLongHover();
+let previewTimer: number | null = null;
+let previewPopupDispose: (() => void) | null = null;
+let closePreviewPopup: (() => void) | null = null;
+
+function clearPreviewTimer(): void {
+	if (previewTimer !== null) {
+		window.clearTimeout(previewTimer);
+		previewTimer = null;
+	}
+}
+
+function hidePreviewPopup(): void {
+	if (closePreviewPopup) {
+		closePreviewPopup();
+		closePreviewPopup = null;
+	}
+	previewPopupDispose = null;
+}
+
+function showPreviewPopup(emoji: string, anchorElement: HTMLElement): void {
+	hidePreviewPopup();
+
+	const showing = ref(true);
+	const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/MkEmojiPreviewPopup.vue')), {
+		showing,
+		emoji,
+		anchorElement,
+	}, {
+		closed: () => {
+			if (previewPopupDispose === dispose) {
+				previewPopupDispose = null;
+				closePreviewPopup = null;
+			}
+			dispose();
+		},
+	});
+
+	previewPopupDispose = dispose;
+	closePreviewPopup = () => {
+		showing.value = false;
+	};
+}
+
+function startPreview(emoji: string, ev: PointerEvent): void {
+	if (ev.pointerType === 'touch') return;
+
+	const target = ev.currentTarget as HTMLElement | null;
+	if (target == null) return;
+
+	clearPreviewTimer();
+	hidePreviewPopup();
+
+	previewTimer = window.setTimeout(() => {
+		showPreviewPopup(emoji, target);
+	}, PREVIEW_DELAY);
+}
+
+function endPreview(): void {
+	clearPreviewTimer();
+	hidePreviewPopup();
+}
 
 const searchEl = useTemplateRef('searchEl');
 const emojisEl = useTemplateRef('emojisEl');
@@ -422,12 +484,14 @@ function getDef(emoji: string): string | Misskey.entities.EmojiSimple | UnicodeE
 
 /** @see MkEmojiPicker.section.vue */
 function computeButtonTitle(ev: PointerEvent): void {
-	const elm = ev.target as HTMLElement;
+	const elm = ev.currentTarget as HTMLElement;
 	const emoji = elm.dataset.emoji as string;
 	elm.title = getEmojiName(emoji);
 }
 
 function chosen(emoji: string | Misskey.entities.EmojiSimple | UnicodeEmojiDef, ev?: PointerEvent) {
+	endPreview();
+
 	const el = ev && (ev.currentTarget ?? ev.target) as HTMLElement | null | undefined;
 	if (el && prefer.s.animation) {
 		const rect = el.getBoundingClientRect();
@@ -512,6 +576,10 @@ function settings() {
 
 onMounted(() => {
 	focus();
+});
+
+onUnmounted(() => {
+	endPreview();
 });
 
 defineExpose({

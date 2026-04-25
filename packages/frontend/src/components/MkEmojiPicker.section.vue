@@ -17,8 +17,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:data-emoji="emoji"
 			class="_button item"
 			:disabled="disabledEmojis?.value.includes(emoji)"
-			@pointerenter="(ev) => { onPointerEnter(ev); computeButtonTitle(ev); }"
-			@pointerleave="onPointerLeave"
+			@pointerenter="(ev) => { emit('previewEnter', emoji, ev); computeButtonTitle(ev); }"
+			@pointerleave="emit('previewLeave')"
 			@click="emit('chosen', emoji, $event)"
 		>
 			<MkCustomEmoji v-if="emoji[0] === ':'" class="emoji" :name="emoji" :normal="true" :fallbackToImage="true"/>
@@ -40,6 +40,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:hasChildSection="child.children.length !== 0"
 			:customEmojiTree="child.children"
 			@chosen="nestedChosen"
+			@previewEnter="nestedPreviewEnter"
+			@previewLeave="emit('previewLeave')"
 		>
 			{{ child.value || i18n.ts.other }}
 		</MkEmojiPickerSection>
@@ -51,8 +53,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:data-emoji="emoji"
 			class="_button item"
 			:disabled="disabledEmojis?.value.includes(emoji)"
-			@pointerenter="(ev) => { onPointerEnter(ev); computeButtonTitle(ev); }"
-			@pointerleave="onPointerLeave"
+			@pointerenter="(ev) => { emit('previewEnter', emoji, ev); computeButtonTitle(ev); }"
+			@pointerleave="emit('previewLeave')"
 			@click="emit('chosen', emoji, $event)"
 		>
 			<MkCustomEmoji v-if="emoji[0] === ':'" class="emoji" :name="emoji" :normal="true"/>
@@ -70,7 +72,6 @@ import type { CustomEmojiFolderTree } from '@@/js/emojilist.js';
 import { i18n } from '@/i18n.js';
 import { customEmojis } from '@/custom-emojis.js';
 import MkEmojiPickerSection from '@/components/MkEmojiPicker.section.vue';
-import { useLongHover } from '@/composables/use-long-hover.js';
 
 const props = defineProps<{
 	emojis: string[] | Ref<string[]>;
@@ -82,22 +83,26 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	(ev: 'chosen', v: string, event: PointerEvent): void;
+	(ev: 'previewEnter', v: string, event: PointerEvent): void;
+	(ev: 'previewLeave'): void;
 }>();
 
 const emojis = computed(() => Array.isArray(props.emojis) ? props.emojis : props.emojis.value);
 
 const shown = ref(!!props.initialShown);
 
-const { onPointerEnter, onPointerLeave } = useLongHover();
-
 /** @see MkEmojiPicker.vue */
 function computeButtonTitle(ev: PointerEvent): void {
-	const elm = ev.target as HTMLElement;
+	const elm = ev.currentTarget as HTMLElement;
 	const emoji = elm.dataset.emoji as string;
 	elm.title = getEmojiName(emoji);
 }
 
 function nestedChosen(emoji: string, ev: PointerEvent) {
 	emit('chosen', emoji, ev);
+}
+
+function nestedPreviewEnter(emoji: string, ev: PointerEvent) {
+	emit('previewEnter', emoji, ev);
 }
 </script>

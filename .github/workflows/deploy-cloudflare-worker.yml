@@ -75,4 +75,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: packages/frontend-worker
-          command: deploy
+          wranglerVersion: "4"

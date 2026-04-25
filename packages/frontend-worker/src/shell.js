@@ -24,6 +24,7 @@ export async function renderFrontendShell(request, env, overrides = {}) {
 		cssFiles: viteFiles.css,
 		modulePreloads: viteFiles.modulePreloads,
 		includeManifest: true,
+		version: getVersionWithCommit(buildVersion.version ?? common.version, buildVersion.commit),
 		commit: buildVersion.commit,
 		body: overrides.body ?? `<div id="misskey_app"></div>${renderSplash(overrides.icon ?? common.icon)}`,
 	});
@@ -50,6 +51,7 @@ export async function renderEmbedShell(request, env, overrides = {}) {
 		modulePreloads: viteFiles.modulePreloads,
 		includeManifest: false,
 		robots: 'noindex',
+		version: getVersionWithCommit(buildVersion.version ?? common.version, buildVersion.commit),
 		commit: buildVersion.commit,
 		body: overrides.body ?? `<div id="misskey_app"></div>${renderSplash(overrides.icon ?? common.icon)}`,
 	});
@@ -78,6 +80,10 @@ function createCommonProps(url, env, meta) {
 		title: instanceName || 'Misskey',
 		version: env.VERSION || '2026.4.0-beta.0-tp.0',
 	};
+}
+
+function getVersionWithCommit(version, commit) {
+	return commit ? `${version}+${commit}` : version;
 }
 
 function renderShell(props) {

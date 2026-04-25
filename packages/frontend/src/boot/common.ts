@@ -70,12 +70,8 @@ export async function common(createVue: () => Promise<App<Element>>) {
 
 	//#region クライアントが更新されたかチェック
 	const lastVersion = miLocalStorage.getItem('lastVersion');
-	const lastCommit = miLocalStorage.getItem('lastCommit');
-	if (lastVersion !== version || (typeof _COMMIT_ !== 'undefined' && _COMMIT_ && _COMMIT_ !== lastCommit)) {
+	if (lastVersion !== version) {
 		miLocalStorage.setItem('lastVersion', version);
-		if (typeof _COMMIT_ !== 'undefined' && _COMMIT_) {
-			miLocalStorage.setItem('lastCommit', _COMMIT_);
-		}
 
 		try { // 変なバージョン文字列来るとcompareVersionsでエラーになるため
 			if (lastVersion != null && compareVersions(version, lastVersion) === 1) {
@@ -83,7 +79,7 @@ export async function common(createVue: () => Promise<App<Element>>) {
 			}
 		} catch (err) { /* empty */ }
 
-		if (!isClientUpdated && typeof _COMMIT_ !== 'undefined' && _COMMIT_ && lastCommit && _COMMIT_ !== lastCommit) {
+		if (!isClientUpdated && lastVersion != null) {
 			isClientUpdated = true;
 		}
 	}
@@ -405,7 +401,6 @@ export async function common(createVue: () => Promise<App<Element>>) {
 	return {
 		isClientUpdated,
 		lastVersion,
-		lastCommit,
 		app,
 	};
 }

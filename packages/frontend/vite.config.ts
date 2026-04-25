@@ -20,6 +20,14 @@ import { pluginRemoveUnrefI18n } from '../frontend-builder/rollup-plugin-remove-
 
 const url = process.env.NODE_ENV === 'development' ? (yaml.load(await fsp.readFile('../../.config/default.yml', 'utf-8')) as any).url : null;
 const host = url ? (new URL(url)).hostname : undefined;
+const commitHash = (() => {
+	try {
+		return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
+	} catch {
+		return null;
+	}
+})();
+const buildVersion = commitHash ? `${meta.version}+${commitHash}` : meta.version;
 
 const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', '.json5', '.svg', '.sass', '.scss', '.css', '.vue'];
 
@@ -158,14 +166,8 @@ export function getConfig(): UserConfig {
 		},
 
 		define: {
-			_VERSION_: JSON.stringify(meta.version),
-			_COMMIT_: JSON.stringify((() => {
-				try {
-					return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
-				} catch {
-					return null;
-				}
-			})()),
+			_VERSION_: JSON.stringify(buildVersion),
+			_COMMIT_: JSON.stringify(commitHash),
 			_LANGS_: JSON.stringify(Object.entries(locales).map(([k, v]) => [k, v._lang_])),
 			_ENV_: JSON.stringify(process.env.NODE_ENV),
 			_DEV_: process.env.NODE_ENV !== 'production',

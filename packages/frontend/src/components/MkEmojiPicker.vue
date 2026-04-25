@@ -18,7 +18,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 		@paste.stop="paste"
 		@keydown="onKeydown"
 	>
-	<!-- FirefoxのTabフォーカスが想定外の挙動となるためtabindex="-1"を追加 https://github.com/misskey-dev/misskey/issues/10744 -->
 	<div ref="emojisEl" class="emojis" tabindex="-1">
 		<section class="result">
 			<div v-if="searchResultCustom.length > 0" class="body">
@@ -29,7 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:disabled="!canReact(emoji)"
 					:title="emoji.name"
 					tabindex="0"
-					@pointerenter="(ev) => startPreview(`:${emoji.name}:`, ev)"
+					@pointerenter="(ev) => { startPreview(':' + emoji.name + ':', ev); computeButtonTitle(ev); }"
 					@pointerleave="endPreview"
 					@click="chosen(emoji, $event)"
 				>
@@ -43,7 +42,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					class="_button item"
 					:title="emoji.name"
 					tabindex="0"
-					@pointerenter="(ev) => startPreview(emoji.char, ev)"
+					@pointerenter="(ev) => { startPreview(emoji.char, ev); computeButtonTitle(ev); }"
 					@pointerleave="endPreview"
 					@click="chosen(emoji, $event)"
 				>
@@ -163,7 +162,7 @@ const props = withDefaults(defineProps<{
 	maxHeight?: number;
 	asDrawer?: boolean;
 	asWindow?: boolean;
-	asReactionPicker?: boolean; // 今は使われてないが将来的に使いそう
+	asReactionPicker?: boolean;
 	targetNote?: Misskey.entities.Note | null;
 }>(), {
 	showPinned: true,
@@ -179,14 +178,14 @@ const previewX = ref(0);
 const previewY = ref(0);
 let previewTimeoutId: number | null = null;
 
-function startPreview(emoji: string, ev: PointerEvent): void {
-	if (ev.pointerType === 'touch') return;
+function startPreview(emoji: string, ev?: PointerEvent): void {
 	if (previewTimeoutId !== null) {
 		clearTimeout(previewTimeoutId);
 	}
-	previewEmoji.value = null;
-	previewX.value = ev.clientX;
-	previewY.value = ev.clientY;
+	if (ev) {
+		previewX.value = ev.clientX;
+		previewY.value = ev.clientY;
+	}
 	previewTimeoutId = window.setTimeout(() => {
 		previewEmoji.value = emoji;
 	}, 1000);
@@ -275,10 +274,9 @@ watch(q, () => {
 		const exactMatch = emojis.find(emoji => emoji.name === newQ);
 		if (exactMatch) matches.add(exactMatch);
 
-		if (newQ.includes(' ')) { // AND検索
+		if (newQ.includes(' ')) {
 			const keywords = newQ.split(' ');
 
-			// 名前にキーワードが含まれている
 			for (const emoji of emojis) {
 				if (keywords.every(keyword => emoji.name.includes(keyword))) {
 					matches.add(emoji);
@@ -287,7 +285,6 @@ watch(q, () => {
 			}
 			if (matches.size >= max) return matches;
 
-			// 名前またはエイリアスにキーワードが含まれている
 			for (const emoji of emojis) {
 				if (keywords.every(keyword => emoji.name.includes(keyword) || emoji.aliases.some(alias => alias.includes(keyword)))) {
 					matches.add(emoji);
@@ -351,7 +348,7 @@ watch(q, () => {
 		const exactMatch = emojis.find(emoji => emoji.name === newQ);
 		if (exactMatch) matches.add(exactMatch);
 
-		if (newQ.includes(' ')) { // AND検索
+		if (newQ.includes(' ')) {
 			const keywords = newQ.split(' ');
 
 			for (const emoji of emojis) {
@@ -440,8 +437,6 @@ function getKey(emoji: string | Misskey.entities.EmojiSimple | UnicodeEmojiDef):
 
 function getDef(emoji: string): string | Misskey.entities.EmojiSimple | UnicodeEmojiDef {
 	if (emoji.includes(':')) {
-		// カスタム絵文字が存在する場合はその情報を持つオブジェクトを返し、
-		// サーバの管理画面から削除された等で情報が見つからない場合は名前の文字列をそのまま返しておく（undefinedを返すとエラーになるため）
 		const name = emoji.replaceAll(':', '');
 		return customEmojisMap.get(name) ?? emoji;
 	} else {
@@ -449,7 +444,6 @@ function getDef(emoji: string): string | Misskey.entities.EmojiSimple | UnicodeE
 	}
 }
 
-/** @see MkEmojiPicker.section.vue */
 function computeButtonTitle(ev: PointerEvent): void {
 	const elm = ev.target as HTMLElement;
 	const emoji = elm.dataset.emoji as string;
@@ -472,7 +466,6 @@ function chosen(emoji: string | Misskey.entities.EmojiSimple | UnicodeEmojiDef, 
 
 	haptic();
 
-	// 最近使った絵文字更新
 	if (!pinned.value?.includes(key)) {
 		let recents = store.s.recentlyUsedEmojis;
 		recents = recents.filter((emoji) => emoji !== key);
@@ -482,9 +475,6 @@ function chosen(emoji: string | Misskey.entities.EmojiSimple | UnicodeEmojiDef, 
 }
 
 function input(): void {
-	// Using custom input event instead of v-model to respond immediately on
-	// Android, where composition happens on all languages
-	// (v-model does not update during composition)
 	q.value = searchEl.value?.value.trim() ?? '';
 }
 
@@ -556,184 +546,25 @@ defineExpose({
 	display: flex;
 	flex-direction: column;
 
-	&.s1 {
-		--eachSize: 40px;
-	}
+	&.s1 { --eachSize: 40px; }
+	&.s2 { --eachSize: 45px; }
+	&.s3 { --eachSize: 50px; }
+	&.s4 { --eachSize: 55px; }
+	&.s5 { --eachSize: 60px; }
 
-	&.s2 {
-		--eachSize: 45px;
-	}
+	&.w1 { --columns: 5; }
+	&.w2 { --columns: 6; }
+	&.w3 { --columns: 7; }
+	&.w4 { --columns: 8; }
+	&.w5 { --columns: 9; }
 
-	&.s3 {
-		--eachSize: 50px;
-	}
-
-	&.s4 {
-		--eachSize: 55px;
-	}
-
-	&.s5 {
-		--eachSize: 60px;
-	}
-
-	&.w1 {
-		--columns: 5;
-	}
-
-	&.w2 {
-		--columns: 6;
-	}
-
-	&.w3 {
-		--columns: 7;
-	}
-
-	&.w4 {
-		--columns: 8;
-	}
-
-	&.w5 {
-		--columns: 9;
-	}
-
-	&.h1 {
-		--rows: 4;
-	}
-
-	&.h2 {
-		--rows: 6;
-	}
-
-	&.h3 {
-		--rows: 8;
-	}
-
-	&.h4 {
-		--rows: 10;
-	}
+	&.h1 { --rows: 4; }
+	&.h2 { --rows: 6; }
+	&.h3 { --rows: 8; }
+	&.h4 { --rows: 10; }
 
 	width: calc((var(--eachSize) * var(--columns)) + (#{$pad} * 2));
 	height: calc((var(--eachSize) * var(--rows)) + (#{$pad} * 2));
-
-	&.asDrawer {
-		width: 100% !important;
-
-		> .emojis {
-			::v-deep(section) {
-				> header {
-					height: 32px;
-					line-height: 32px;
-					padding: 0 12px;
-					font-size: 15px;
-				}
-
-				> .body {
-					display: grid;
-					grid-template-columns: repeat(var(--columns), 1fr);
-					font-size: 30px;
-
-					> .config {
-						aspect-ratio: 1 / 1;
-						width: auto;
-						height: auto;
-						min-width: 0;
-						font-size: 14px;
-					}
-
-					> .item {
-						aspect-ratio: 1 / 1;
-						width: auto;
-						height: auto;
-						min-width: 0;
-
-						&:disabled {
-							cursor: not-allowed;
-							background: linear-gradient(-45deg, transparent 0% 48%, light-dark(rgba(0, 0, 0, 0.25), rgba(255, 255, 255, 0.15)) 48% 52%, transparent 52% 100%);
-							opacity: 1;
-
-							> .emoji {
-								filter: grayscale(1);
-								mix-blend-mode: exclusion;
-								opacity: 0.8;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	&.asWindow {
-		width: 100% !important;
-		height: 100% !important;
-
-		> .emojis {
-			::v-deep(section) {
-				> .body {
-					display: grid;
-					grid-template-columns: repeat(var(--columns), 1fr);
-					font-size: 30px;
-
-					> .item {
-						aspect-ratio: 1 / 1;
-						width: auto;
-						height: auto;
-						min-width: 0;
-						padding: 0;
-
-						&:disabled {
-							cursor: not-allowed;
-							background: linear-gradient(-45deg, transparent 0% 48%, light-dark(rgba(0, 0, 0, 0.25), rgba(255, 255, 255, 0.15)) 48% 52%, transparent 52% 100%);
-							opacity: 1;
-
-							> .emoji {
-								filter: grayscale(1);
-								mix-blend-mode: exclusion;
-								opacity: 0.8;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	> .search {
-		width: 100%;
-		padding: 12px;
-		box-sizing: border-box;
-		font-size: 1em;
-		outline: none;
-		border: none;
-		background: transparent;
-		color: var(--MI_THEME-fg);
-
-		&:not(:focus):not(.filled) {
-			margin-bottom: env(safe-area-inset-bottom, 0px);
-		}
-
-		&:not(.filled) {
-			order: 1;
-			z-index: 2;
-			box-shadow: 0px -1px 0 0px var(--MI_THEME-divider);
-		}
-	}
-
-	> .tabs {
-		display: flex;
-		display: none;
-
-		> .tab {
-			flex: 1;
-			height: 38px;
-			border-top: solid 0.5px var(--MI_THEME-divider);
-
-			&.active {
-				border-top: solid 1px var(--MI_THEME-accent);
-				color: var(--MI_THEME-accent);
-			}
-		}
-	}
 
 	> .emojis {
 		height: 100%;
@@ -748,9 +579,6 @@ defineExpose({
 			}
 
 			> header {
-				/*position: sticky;
-				top: 0;
-				left: 0;*/
 				height: 32px;
 				line-height: 32px;
 				z-index: 2;
@@ -778,15 +606,6 @@ defineExpose({
 			> .body {
 				position: relative;
 				padding: $pad;
-
-				> .config {
-					position: relative;
-					padding: 0 3px;
-					width: var(--eachSize);
-					height: var(--eachSize);
-					contain: strict;
-					opacity: 0.5;
-				}
 
 				> .item {
 					position: relative;
@@ -825,14 +644,6 @@ defineExpose({
 						width: 100%;
 						object-fit: contain;
 					}
-				}
-			}
-
-			&.result {
-				border-bottom: solid 0.5px var(--MI_THEME-divider);
-
-				&:empty {
-					display: none;
 				}
 			}
 		}

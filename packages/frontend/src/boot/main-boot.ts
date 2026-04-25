@@ -24,12 +24,13 @@ import { initializeSw } from '@/utility/initialize-sw.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
 import { mainRouter } from '@/router.js';
 import { makeHotkey } from '@/utility/hotkey.js';
-import { addCustomEmoji, removeCustomEmojis, updateCustomEmojis } from '@/custom-emojis.js';
+import { addCustomEmoji, removeCustomEmojis, updateCustomEmojis, fetchCustomEmojis } from '@/custom-emojis.js';
 import { prefer } from '@/preferences.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
 import { migrateOldSettings } from '@/pref-migrate.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 import { isBirthday } from '@/utility/is-birthday.js';
+import { get, set } from '@/utility/idb-proxy.js';
 
 export async function mainBoot() {
 	const { isClientUpdated, lastVersion } = await common(async () => {
@@ -66,8 +67,14 @@ export async function mainBoot() {
 	emojiPicker.init();
 
 	if (isClientUpdated && $i) {
+		// クライアント更新時はIndexedDBキャッシュをクリア
+		miLocalStorage.removeItem('emojis');
+		miLocalStorage.removeItem('lastEmojisFetchedAt');
+		await set('emojis', []);
+		fetchCustomEmojis(true);
+
 		const { dispose } = popup(defineAsyncComponent(() => import('@/components/MkUpdated.vue')), {}, {
-			closed: () => dispose(),
+			closed: () => unisonReload(),
 		});
 
 		// prefereces migration

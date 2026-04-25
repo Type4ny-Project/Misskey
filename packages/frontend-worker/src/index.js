@@ -37,6 +37,6 @@ export default {
 			? await renderEmbedShell(request, env)
 			: await renderFrontendShell(request, env);
 
-		return htmlResponse(shell, { cacheControl: 'public, max-age=30' });
+		return htmlResponse(shell, { cacheControl: 'no-store' });
 	},
 };

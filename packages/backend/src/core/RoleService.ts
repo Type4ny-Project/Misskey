@@ -589,7 +589,7 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 			resultSet.add(id);
 		}
 
-		return [...new Set(assigns.map(a => a.userId))].sort((x, y) => x.localeCompare(y));
+		return [...resultSet].sort((x, y) => x.localeCompare(y));
 	}
 
 	@bindThis

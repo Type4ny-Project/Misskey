@@ -41,6 +41,7 @@ variable "backend_override_patterns" {
     "/embed.js",
     "/url*",
     "/flush",
-    "/emoji/*"
+    "/emoji/*",
+		"/proxy/*"
   ]
 }

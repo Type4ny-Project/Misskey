@@ -1,5 +1,4 @@
 import { isAssetPath, isOriginOnlyRoute, matchSsrRoute } from './routes.js';
-import { handleMediaProxy, isMediaProxyRoute } from './media-proxy.js';
 import { fetchOrigin } from './proxy.js';
 import { htmlResponse, renderEmbedShell, renderFrontendShell } from './shell.js';
 import { renderSsrRoute } from './ssr.js';
@@ -7,10 +6,6 @@ import { renderSsrRoute } from './ssr.js';
 export default {
 	async fetch(request, env) {
 		const url = new URL(request.url);
-
-		if (request.method === 'GET' && isMediaProxyRoute(url.pathname)) {
-			return handleMediaProxy(request, env);
-		}
 
 		if (isOriginOnlyRoute(request)) {
 			return fetchOrigin(request, env);

@@ -42,6 +42,7 @@ variable "backend_override_patterns" {
     "/url*",
     "/flush",
     "/emoji/*",
-		"/proxy/*"
+		"/proxy/*",
+		"/avatar/*"
   ]
 }

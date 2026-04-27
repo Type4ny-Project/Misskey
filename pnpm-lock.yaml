@@ -1207,6 +1207,8 @@ importers:
         specifier: 10.4.0
         version: 10.4.0(eslint@9.39.4)
 
+  packages/frontend-worker: {}
+
   packages/i18n:
     dependencies:
       js-yaml:

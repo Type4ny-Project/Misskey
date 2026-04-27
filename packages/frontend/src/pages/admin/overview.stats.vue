@@ -55,6 +55,35 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div class="label">Online</div>
 				</div>
 			</div>
+			<template v-if="meta?.isManaged">
+				<div class="item _panel managed">
+					<div class="icon"><i class="ti ti-users"></i></div>
+					<div class="body">
+						<div class="value">
+							<MkNumber :value="meta?.nowLocalUsers" style="margin-right: 0.5em;"/>
+						</div>
+						<div class="label">{{ i18n.ts.nowLocalUsers }}</div>
+					</div>
+				</div>
+				<div class="item _panel managed">
+					<div class="icon"><i class="ti ti-users"></i></div>
+					<div class="body">
+						<div class="value">
+							<MkNumber :value="meta?.maxLocalUsers" style="margin-right: 0.5em;"/>
+						</div>
+						<div class="label">{{ i18n.ts.maxLocalUsers }}</div>
+					</div>
+				</div>
+				<div class="item _panel managed">
+					<div class="icon"><i class="ti ti-users"></i></div>
+					<div class="body">
+						<div class="value">
+							<MkNumber :value="(meta?.maxLocalUsers ?? 0) - (meta?.nowLocalUsers ?? 0)" style="margin-right: 0.5em;"/>
+						</div>
+						<div class="label">{{ i18n.ts.remainingLocalUsers }}</div>
+					</div>
+				</div>
+			</template>
 		</div>
 		<MkError v-else/>
 	</Transition>
@@ -72,18 +101,21 @@ import { customEmojis } from '@/custom-emojis.js';
 import { prefer } from '@/preferences.js';
 
 const stats = ref<Misskey.entities.StatsResponse | null>(null);
+const meta = ref<Misskey.entities.AdminMetaResponse | null>(null);
 const usersComparedToThePrevDay = ref<number | null>(null);
 const notesComparedToThePrevDay = ref<number | null>(null);
 const onlineUsersCount = ref(0);
 const fetching = ref(true);
 
 onMounted(async () => {
-	const [_stats, _onlineUsersCount] = await Promise.all([
+	const [_stats, _onlineUsersCount, _meta] = await Promise.all([
 		misskeyApi('stats', {}),
 		misskeyApiGet('get-online-users-count').then(res => res.count),
+		misskeyApi('admin/meta', {}),
 	]);
 	stats.value = _stats;
 	onlineUsersCount.value = _onlineUsersCount;
+	meta.value = _meta;
 
 	misskeyApiGet('charts/users', { limit: 2, span: 'day' }).then(chart => {
 		usersComparedToThePrevDay.value = _stats.originalUsersCount - chart.local.total[1];
@@ -152,6 +184,13 @@ onMounted(async () => {
 				> .icon {
 					background: #8a00d126;
 					color: #c01ac3;
+				}
+			}
+
+			&.managed {
+				> .icon {
+					background: #00a80026;
+					color: #00a800;
 				}
 			}
 

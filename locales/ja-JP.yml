@@ -1834,6 +1834,9 @@ _serverSettings:
   entrancePageStyle: "エントランスページのスタイル"
   showTimelineForVisitor: "タイムラインを表示する"
   showActivitiesForVisitor: "アクティビティを表示する"
+  nowLocalUsers: "Now Local Users"
+  maxLocalUsers: "Max Local Users"
+  remainingLocalUsers: "登録できるユーザー数"
 
   _userGeneratedContentsVisibilityForVisitor:
     all: "全て公開"

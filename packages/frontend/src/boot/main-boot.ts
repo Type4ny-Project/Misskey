@@ -32,6 +32,12 @@ import { unisonReload } from '@/utility/unison-reload.js';
 import { isBirthday } from '@/utility/is-birthday.js';
 import { get, set } from '@/utility/idb-proxy.js';
 
+const DISCONNECTED_WARNING_DELAY = 150;
+
+function delay(ms: number): Promise<void> {
+	return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
 export async function mainBoot() {
 	const { isClientUpdated, lastVersion } = await common(async () => {
 		let uiStyle = ui;
@@ -312,6 +318,10 @@ export async function mainBoot() {
 
 			let reloadDialogShowing = false;
 			stream.on('_disconnected_', async () => {
+				await delay(DISCONNECTED_WARNING_DELAY);
+
+				if (stream.state !== 'reconnecting') return;
+
 				if (prefer.s.serverDisconnectedBehavior === 'reload') {
 					window.location.reload();
 				} else if (prefer.s.serverDisconnectedBehavior === 'dialog') {

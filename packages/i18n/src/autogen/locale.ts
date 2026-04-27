@@ -7192,6 +7192,18 @@ export interface Locale extends ILocale {
          * アクティビティを表示する
          */
         "showActivitiesForVisitor": string;
+        /**
+         * Now Local Users
+         */
+        "nowLocalUsers": string;
+        /**
+         * Max Local Users
+         */
+        "maxLocalUsers": string;
+        /**
+         * 登録できるユーザー数
+         */
+        "remainingLocalUsers": string;
         "_userGeneratedContentsVisibilityForVisitor": {
             /**
              * 全て公開

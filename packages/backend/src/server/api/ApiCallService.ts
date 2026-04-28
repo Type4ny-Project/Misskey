@@ -442,10 +442,10 @@ export class ApiCallService implements OnApplicationShutdown {
 		if (this.Sentry != null) {
 			return await this.Sentry.startSpan({
 				name: 'API: ' + ep.name,
-			}, () => ep.exec(data, user, token, file, request.ip, request.headers)
+			}, () => ep.exec(data, user, token, file, request.ip, request.headers, request)
 				.catch((err: Error) => this.#onExecError(ep, data, err, user?.id)));
 		} else {
-			return await ep.exec(data, user, token, file, request.ip, request.headers)
+			return await ep.exec(data, user, token, file, request.ip, request.headers, request)
 				.catch((err: Error) => this.#onExecError(ep, data, err, user?.id));
 		}
 	}

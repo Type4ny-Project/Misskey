@@ -6,6 +6,7 @@
 import * as fs from 'node:fs/promises';
 import { Inject, Injectable } from '@nestjs/common';
 import * as Redis from 'ioredis';
+import type { FastifyRequest } from 'fastify';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
@@ -118,14 +119,31 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private driveFileEntityService: DriveFileEntityService,
 		private driveService: DriveService,
 	) {
-		super(meta, paramDef, async (ps, me, _, _1, _2, ip, headers) => {
+		super(meta, paramDef, async (ps, me, _, _1, _2, ip, headers, request) => {
+			const rawRequest = request?.raw as FastifyRequest['raw'] | undefined;
+			let requestAborted = rawRequest?.aborted ?? false;
+			const onRequestAborted = () => {
+				requestAborted = true;
+			};
+			rawRequest?.once('aborted', onRequestAborted);
+
+			let committedFile: Awaited<ReturnType<DriveService['addFile']>> | null = null;
+			const rollbackCommittedFile = async () => {
+				if (committedFile == null) return;
+				const file = committedFile;
+				committedFile = null;
+				await this.driveService.deleteFileSync(file, false, me);
+			};
+
 			const sessionJson = await this.redisClient.get(getSessionKey(ps.sessionId));
 			if (sessionJson == null) {
+				rawRequest?.off('aborted', onRequestAborted);
 				throw new ApiError(meta.errors.sessionNotFound);
 			}
 
 			const session = JSON.parse(sessionJson) as UploadSession;
 			if (session.userId !== me.id) {
+				rawRequest?.off('aborted', onRequestAborted);
 				throw new ApiError(meta.errors.sessionNotFound);
 			}
 
@@ -138,11 +156,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const stats = await fs.stat(session.tempFilePath);
 			if (stats.size !== session.size) {
+				rawRequest?.off('aborted', onRequestAborted);
 				throw new ApiError(meta.errors.missingChunks);
 			}
 
 			try {
-				const driveFile = await this.driveService.addFile({
+				committedFile = await this.driveService.addFile({
 					user: me,
 					path: session.tempFilePath,
 					name: session.name,
@@ -154,11 +173,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					requestHeaders: this.serverSettings.enableIpLogging ? headers : null,
 				});
 
+				if (requestAborted) {
+					await rollbackCommittedFile();
+					throw new Error('Chunk upload commit request aborted after file persistence.');
+				}
+
 				await cleanupUpload(this.redisClient, session);
 
-				return await this.driveFileEntityService.pack(driveFile, { self: true });
+				const packedDriveFile = await this.driveFileEntityService.pack(committedFile, { self: true });
+
+				if (requestAborted) {
+					await rollbackCommittedFile();
+					throw new Error('Chunk upload commit request aborted before response completion.');
+				}
+
+				committedFile = null;
+				return packedDriveFile;
 			} catch (err) {
 				await cleanupUpload(this.redisClient, session);
+				await rollbackCommittedFile().catch(rollbackError => {
+					console.error(rollbackError);
+				});
 				if (err instanceof Error || typeof err === 'string') {
 					console.error(err);
 				}
@@ -169,6 +204,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					if (err.id === 'bd71c601-f9b0-4808-9137-a330647ced9b') throw new ApiError(meta.errors.unallowedFileType);
 				}
 				throw new ApiError();
+			} finally {
+				rawRequest?.off('aborted', onRequestAborted);
 			}
 		});
 	}

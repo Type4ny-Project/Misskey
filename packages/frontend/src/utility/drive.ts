@@ -26,6 +26,7 @@ type UploadReturnType = {
 const CHUNK_UPLOAD_THRESHOLD = 20 * 1024 * 1024;
 const DEFAULT_CHUNK_SIZE = 5 * 1024 * 1024;
 const MAX_RETRIES = 3;
+const CHUNK_TRANSFER_PROGRESS_WEIGHT = 0.95;
 
 const UPLOAD_ERROR_IDS = {
 	inappropriate: 'bec5bd69-fba3-43c9-b4fb-2894b66ad5d2',
@@ -144,6 +145,25 @@ function throwIfAborted(signal: AbortSignal): void {
 	}
 }
 
+function waitWithAbort(signal: AbortSignal, ms: number): Promise<void> {
+	return new Promise((resolve, reject) => {
+		throwIfAborted(signal);
+
+		const timer = window.setTimeout(() => {
+			signal.removeEventListener('abort', abortHandler);
+			resolve();
+		}, ms);
+
+		const abortHandler = () => {
+			window.clearTimeout(timer);
+			signal.removeEventListener('abort', abortHandler);
+			reject(new UploadAbortedError());
+		};
+
+		signal.addEventListener('abort', abortHandler, { once: true });
+	});
+}
+
 function sendUploadRequest<T>(endpoint: string, body: FormData | string, options: {
 	signal: AbortSignal;
 	contentType?: string;
@@ -254,10 +274,25 @@ async function uploadFileChunked(file: File | Blob, options: UploadOptions, sign
 	}
 
 	const CONCURRENCY = 3;
-	const progressTracker = { loaded: 0 };
+	const chunkProgress = new Map<number, number>();
+
+	const emitTransferProgress = () => {
+		if (options.onProgress == null) return;
+
+		const transferredBytes = Array.from(chunkProgress.values()).reduce((sum, loaded) => sum + loaded, 0);
+		const scaledLoaded = file.size === 0
+			? 0
+			: Math.min(file.size * CHUNK_TRANSFER_PROGRESS_WEIGHT, transferredBytes * CHUNK_TRANSFER_PROGRESS_WEIGHT);
+
+		options.onProgress({
+			total: file.size,
+			loaded: scaledLoaded,
+		});
+	};
 
 	async function uploadChunkWithRetry(chunk: (typeof chunks)[0]): Promise<void> {
 		let attempt = 0;
+		chunkProgress.set(chunk.index, 0);
 
 		while (attempt <= MAX_RETRIES) {
 			try {
@@ -267,22 +302,18 @@ async function uploadFileChunked(file: File | Blob, options: UploadOptions, sign
 				formData.append('index', chunk.index.toString());
 				formData.append('file', chunk.blob);
 
-				let lastProgressLoaded = 0;
-
 				await sendUploadRequest<void>('drive/files/upload-chunk', formData, {
 					signal,
 					onProgress: options.onProgress == null ? undefined : ev => {
 						if (ev.lengthComputable) {
-							const delta = ev.loaded - lastProgressLoaded;
-							lastProgressLoaded = ev.loaded;
-							progressTracker.loaded += delta;
-							options.onProgress({
-								total: file.size,
-								loaded: Math.min(file.size, progressTracker.loaded),
-							});
+							chunkProgress.set(chunk.index, Math.min(chunk.blob.size, ev.loaded));
+							emitTransferProgress();
 						}
 					},
 				});
+
+				chunkProgress.set(chunk.index, chunk.blob.size);
+				emitTransferProgress();
 
 				return;
 			} catch (error) {
@@ -291,11 +322,13 @@ async function uploadFileChunked(file: File | Blob, options: UploadOptions, sign
 				if (error instanceof UploadRequestError) {
 					if (error.status >= 400 && error.status < 500) throw error;
 
+					chunkProgress.set(chunk.index, 0);
+					emitTransferProgress();
 					attempt++;
 					if (attempt > MAX_RETRIES) throw error;
 
 					const delay = Math.pow(2, attempt - 1) * 1000;
-					await new Promise(resolve => setTimeout(resolve, delay));
+					await waitWithAbort(signal, delay);
 					continue;
 				}
 
@@ -320,6 +353,10 @@ async function uploadFileChunked(file: File | Blob, options: UploadOptions, sign
 	);
 
 	throwIfAborted(signal);
+	options.onProgress?.({
+		total: file.size,
+		loaded: file.size * CHUNK_TRANSFER_PROGRESS_WEIGHT,
+	});
 
 	const driveFile = await sendUploadRequest<Misskey.entities.DriveFile>('drive/files/upload-commit', JSON.stringify({
 		i: $i!.token,
@@ -327,6 +364,11 @@ async function uploadFileChunked(file: File | Blob, options: UploadOptions, sign
 	}), {
 		signal,
 		contentType: 'application/json',
+	});
+
+	options.onProgress?.({
+		total: file.size,
+		loaded: file.size,
 	});
 
 	globalEvents.emit('driveFileCreated', driveFile);

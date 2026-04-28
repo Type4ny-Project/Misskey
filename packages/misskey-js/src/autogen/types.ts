@@ -1884,6 +1884,24 @@ export type paths = {
          */
         post: operations['drive___files___update'];
     };
+    '/drive/files/upload-chunk': {
+        /**
+         * drive/files/upload-chunk
+         * @description Upload a chunk for a chunked drive file upload session.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:drive*
+         */
+        post: operations['drive___files___upload-chunk'];
+    };
+    '/drive/files/upload-commit': {
+        /**
+         * drive/files/upload-commit
+         * @description Commit a chunked drive file upload session.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:drive*
+         */
+        post: operations['drive___files___upload-commit'];
+    };
     '/drive/files/upload-from-url': {
         /**
          * drive/files/upload-from-url
@@ -1892,6 +1910,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:drive*
          */
         post: operations['drive___files___upload-from-url'];
+    };
+    '/drive/files/upload-init': {
+        /**
+         * drive/files/upload-init
+         * @description Initialize a chunked drive file upload session.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:drive*
+         */
+        post: operations['drive___files___upload-init'];
     };
     '/drive/folders': {
         /**
@@ -3224,6 +3251,15 @@ export type paths = {
          */
         post: operations['notes___local-timeline'];
     };
+    '/notes/media-timeline': {
+        /**
+         * notes/media-timeline
+         * @description No description provided.
+         *
+         *     **Credential required**: *No*
+         */
+        post: operations['notes___media-timeline'];
+    };
     '/notes/mentions': {
         /**
          * notes/mentions
@@ -3385,6 +3421,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:notes*
          */
         post: operations['notes___unrenote'];
+    };
+    '/notes/update': {
+        /**
+         * notes/update
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:notes*
+         */
+        post: operations['notes___update'];
     };
     '/notes/user-list-timeline': {
         /**
@@ -5141,12 +5186,12 @@ export type components = {
             notesCount: number;
             isSensitive: boolean;
             allowRenoteToExternal: boolean;
-            isLocalOnly: boolean;
             isFollowing?: boolean;
             isFavorited?: boolean;
             isMuting?: boolean;
             pinnedNotes?: components['schemas']['Note'][];
             collaboratorIds?: string[];
+            isLocalOnly: boolean;
         };
         QueueCount: {
             waiting: number;
@@ -20871,6 +20916,144 @@ export interface operations {
             };
         };
     };
+    'drive___files___upload-chunk': {
+        requestBody: {
+            content: {
+                'multipart/form-data': {
+                    sessionId: string;
+                    index: number;
+                    /**
+                     * Format: binary
+                     * @description The file contents.
+                     */
+                    file: Blob;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        uploaded: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'drive___files___upload-commit': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    sessionId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['DriveFile'];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     'drive___files___upload-from-url': {
         requestBody: {
             content: {
@@ -20937,6 +21120,86 @@ export interface operations {
             };
             /** @description Too many requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'drive___files___upload-init': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    name: string;
+                    size: number;
+                    /**
+                     * Format: misskey:id
+                     * @default null
+                     */
+                    folderId?: string | null;
+                    /** @default null */
+                    comment?: string | null;
+                    /** @default false */
+                    isSensitive?: boolean;
+                    /** @default false */
+                    force?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        sessionId: string;
+                        chunkSize: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -31366,6 +31629,82 @@ export interface operations {
             };
         };
     };
+    'notes___media-timeline': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** @default true */
+                    withRenotes?: boolean;
+                    /** @default 10 */
+                    limit?: number;
+                    /** Format: misskey:id */
+                    sinceId?: string;
+                    /** Format: misskey:id */
+                    untilId?: string;
+                    /** @default false */
+                    allowPartial?: boolean;
+                    sinceDate?: number;
+                    untilDate?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Note'][];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     notes___mentions: {
         requestBody: {
             content: {
@@ -31720,6 +32059,7 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     noteId: string;
+                    reaction?: string;
                 };
             };
         };
@@ -32626,6 +32966,86 @@ export interface operations {
             204: {
                 headers: {
                     [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    notes___update: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    noteId: string;
+                    text?: string | null;
+                    cw?: string | null;
+                    fileIds?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        updatedNote: components['schemas']['Note'];
+                    };
                 };
             };
             /** @description Client error */
@@ -38169,3 +38589,4 @@ export interface operations {
         };
     };
 }
+

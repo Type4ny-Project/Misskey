@@ -2300,11 +2300,44 @@ declare module '../api.js' {
     ): Promise<SwitchCaseResponseType<E, P>>;
 
     /**
+     * Upload a chunk for a chunked drive file upload session.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:drive*
+     */
+    request<E extends 'drive/files/upload-chunk', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * Commit a chunked drive file upload session.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:drive*
+     */
+    request<E extends 'drive/files/upload-commit', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
      * Request the server to download a new drive file from the specified URL.
      * 
      * **Credential required**: *Yes* / **Permission**: *write:drive*
      */
     request<E extends 'drive/files/upload-from-url', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * Initialize a chunked drive file upload session.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:drive*
+     */
+    request<E extends 'drive/files/upload-init', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,
@@ -3932,6 +3965,17 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Credential required**: *No*
+     */
+    request<E extends 'notes/media-timeline', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
      * **Credential required**: *Yes* / **Permission**: *read:account*
      */
     request<E extends 'notes/mentions', P extends Endpoints[E]['req']>(
@@ -4122,6 +4166,17 @@ declare module '../api.js' {
      * **Credential required**: *Yes* / **Permission**: *write:notes*
      */
     request<E extends 'notes/unrenote', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:notes*
+     */
+    request<E extends 'notes/update', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,

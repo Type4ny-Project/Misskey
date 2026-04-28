@@ -319,7 +319,13 @@ import type {
 	DriveFilesShowResponse,
 	DriveFilesUpdateRequest,
 	DriveFilesUpdateResponse,
+	DriveFilesUploadChunkRequest,
+	DriveFilesUploadChunkResponse,
+	DriveFilesUploadCommitRequest,
+	DriveFilesUploadCommitResponse,
 	DriveFilesUploadFromUrlRequest,
+	DriveFilesUploadInitRequest,
+	DriveFilesUploadInitResponse,
 	DriveFoldersRequest,
 	DriveFoldersResponse,
 	DriveFoldersCreateRequest,
@@ -540,6 +546,8 @@ import type {
 	NotesHybridTimelineResponse,
 	NotesLocalTimelineRequest,
 	NotesLocalTimelineResponse,
+	NotesMediaTimelineRequest,
+	NotesMediaTimelineResponse,
 	NotesMentionsRequest,
 	NotesMentionsResponse,
 	NotesPollsRecommendationRequest,
@@ -570,6 +578,8 @@ import type {
 	NotesTranslateRequest,
 	NotesTranslateResponse,
 	NotesUnrenoteRequest,
+	NotesUpdateRequest,
+	NotesUpdateResponse,
 	NotesUserListTimelineRequest,
 	NotesUserListTimelineResponse,
 	NotificationsCreateRequest,
@@ -897,7 +907,10 @@ export type Endpoints = {
 	'drive/files/move-bulk': { req: DriveFilesMoveBulkRequest; res: EmptyResponse };
 	'drive/files/show': { req: DriveFilesShowRequest; res: DriveFilesShowResponse };
 	'drive/files/update': { req: DriveFilesUpdateRequest; res: DriveFilesUpdateResponse };
+	'drive/files/upload-chunk': { req: DriveFilesUploadChunkRequest; res: DriveFilesUploadChunkResponse };
+	'drive/files/upload-commit': { req: DriveFilesUploadCommitRequest; res: DriveFilesUploadCommitResponse };
 	'drive/files/upload-from-url': { req: DriveFilesUploadFromUrlRequest; res: EmptyResponse };
+	'drive/files/upload-init': { req: DriveFilesUploadInitRequest; res: DriveFilesUploadInitResponse };
 	'drive/folders': { req: DriveFoldersRequest; res: DriveFoldersResponse };
 	'drive/folders/create': { req: DriveFoldersCreateRequest; res: DriveFoldersCreateResponse };
 	'drive/folders/delete': { req: DriveFoldersDeleteRequest; res: EmptyResponse };
@@ -1042,6 +1055,7 @@ export type Endpoints = {
 	'notes/global-timeline': { req: NotesGlobalTimelineRequest; res: NotesGlobalTimelineResponse };
 	'notes/hybrid-timeline': { req: NotesHybridTimelineRequest; res: NotesHybridTimelineResponse };
 	'notes/local-timeline': { req: NotesLocalTimelineRequest; res: NotesLocalTimelineResponse };
+	'notes/media-timeline': { req: NotesMediaTimelineRequest; res: NotesMediaTimelineResponse };
 	'notes/mentions': { req: NotesMentionsRequest; res: NotesMentionsResponse };
 	'notes/polls/recommendation': { req: NotesPollsRecommendationRequest; res: NotesPollsRecommendationResponse };
 	'notes/polls/vote': { req: NotesPollsVoteRequest; res: EmptyResponse };
@@ -1060,6 +1074,7 @@ export type Endpoints = {
 	'notes/timeline': { req: NotesTimelineRequest; res: NotesTimelineResponse };
 	'notes/translate': { req: NotesTranslateRequest; res: NotesTranslateResponse };
 	'notes/unrenote': { req: NotesUnrenoteRequest; res: EmptyResponse };
+	'notes/update': { req: NotesUpdateRequest; res: NotesUpdateResponse };
 	'notes/user-list-timeline': { req: NotesUserListTimelineRequest; res: NotesUserListTimelineResponse };
 	'notifications/create': { req: NotificationsCreateRequest; res: EmptyResponse };
 	'notifications/flush': { req: EmptyRequest; res: EmptyResponse };
@@ -1145,4 +1160,5 @@ export type Endpoints = {
  */
 export const endpointReqTypes = {
 	'drive/files/create': 'multipart/form-data',
+	'drive/files/upload-chunk': 'multipart/form-data',
 } as const satisfies { [K in keyof Endpoints]?: 'multipart/form-data'; };

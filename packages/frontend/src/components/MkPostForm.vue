@@ -32,7 +32,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span :class="$style.headerRightButtonText">{{ targetChannel.name }}</span>
 				</button>
 			</template>
-			<button v-if="visibility !== 'specified'" v-tooltip="i18n.ts._visibility.disableFederation" class="_button" :class="[$style.headerRightItem, { [$style.danger]: localOnly }]" :disabled="targetChannel != null" @click="toggleLocalOnly">
+			<button v-if="visibility !== 'specified'" v-tooltip="i18n.ts._visibility.disableFederation" class="_button" :class="[$style.headerRightItem, { [$style.danger]: localOnly }]" :disabled="isChannelLocalOnly" @click="toggleLocalOnly">
 				<span v-if="!localOnly"><i class="ti ti-rocket"></i></span>
 				<span v-else><i class="ti ti-rocket-off"></i></span>
 			</button>
@@ -223,11 +223,13 @@ const justEndedComposition = ref(false);
 const renoteTargetNote: ShallowRef<PostFormProps['renote'] | null> = shallowRef(props.renote);
 const replyTargetNote: ShallowRef<PostFormProps['reply'] | null> = shallowRef(props.reply);
 const targetChannel = shallowRef(props.channel);
+const isChannelLocalOnly = ref(targetChannel.value?.isLocalOnly ?? false);
 
 function applyChannelPostDefaults() {
 	if (targetChannel.value) {
 		visibility.value = 'public';
-		localOnly.value = true; // TODO: チャンネルが連合するようになった折には消す
+		console.log(isChannelLocalOnly.value);
+		if (isChannelLocalOnly.value)	localOnly.value = true;
 	}
 }
 
@@ -303,11 +305,11 @@ const submitText = computed((): string => {
 		? i18n.ts.schedule
 		: props.updateMode
 			? i18n.ts.edit
-		: renoteTargetNote.value
-			? i18n.ts.quote
-			: replyTargetNote.value
-				? i18n.ts.reply
-				: i18n.ts.note;
+			: renoteTargetNote.value
+				? i18n.ts.quote
+				: replyTargetNote.value
+					? i18n.ts.reply
+					: i18n.ts.note;
 });
 
 const submitIcon = computed((): string => {
@@ -545,7 +547,7 @@ function updateFileName(file: Misskey.entities.DriveFile, name: Misskey.entities
 function setVisibility() {
 	if (targetChannel.value) {
 		visibility.value = 'public';
-		localOnly.value = true; // TODO: チャンネルが連合するようになった折には消す
+		if (isChannelLocalOnly.value)	localOnly.value = true;
 		return;
 	}
 
@@ -568,8 +570,12 @@ function setVisibility() {
 async function toggleLocalOnly() {
 	if (targetChannel.value) {
 		visibility.value = 'public';
-		localOnly.value = true; // TODO: チャンネルが連合するようになった折には消す
-		return;
+
+		// ローカルのみなチャンネルはここでreturnさせてあげる必要がある。
+		if (isChannelLocalOnly.value)	{
+			localOnly.value = true;
+			return;
+		}
 	}
 
 	const neverShowInfo = miLocalStorage.getItem('neverShowLocalOnlyInfo');

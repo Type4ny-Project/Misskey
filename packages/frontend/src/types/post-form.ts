@@ -15,6 +15,7 @@ export interface PostFormProps {
 		isSensitive: boolean;
 		allowRenoteToExternal: boolean;
 		userId: string | null;
+		isLocalOnly: boolean;
 	} | null;
 	mention?: Misskey.entities.User;
 	specified?: Misskey.entities.UserDetailed;

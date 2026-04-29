@@ -104,4 +104,35 @@ export class PointService {
 		const user = await this.usersRepository.findOneByOrFail({ id: userId });
 		return user.points;
 	}
+
+	/**
+	 * Subtract points from a user (for admin/moderator use)
+	 * @param userId The ID of the user to subtract points from
+	 * @param amount The amount of points to subtract
+	 * @returns Object containing success status and new balance
+	 */
+	@bindThis
+	public async subtractPoints(
+		userId: MiUser['id'],
+		amount: number,
+	): Promise<{
+		success: boolean;
+		newBalance: number;
+	}> {
+		if (amount <= 0) {
+			throw new Error('Amount must be positive');
+		}
+
+		const user = await this.usersRepository.findOneByOrFail({ id: userId });
+		const newBalance = Math.max(0, user.points - amount);
+
+		await this.usersRepository.update(userId, {
+			points: newBalance,
+		});
+
+		return {
+			success: true,
+			newBalance,
+		};
+	}
 }

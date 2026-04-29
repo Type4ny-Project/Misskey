@@ -13109,6 +13109,23 @@ export interface Locale extends ILocale {
          * ファイルはまだアップロードされていません。このダイアログで、アップロード前の確認・リネーム・圧縮・クロッピングなどが行えます。準備が出来たら、「アップロード」ボタンを押してアップロードを開始できます。
          */
         "tip": string;
+        /**
+         * 動画の圧縮
+         */
+        "compressVideoConfirm": string;
+        /**
+         * この動画ファイルを圧縮しますか？
+         * 圧縮するとファイルサイズが小さくなりますが、品質が低下する場合があります。
+         */
+        "compressVideoConfirmDescription": string;
+        /**
+         * 圧縮する
+         */
+        "compress": string;
+        /**
+         * 圧縮しない
+         */
+        "doNotCompress": string;
     };
     "_clientPerformanceIssueTip": {
         /**

@@ -702,6 +702,22 @@ export function useUploader(options: {
 	async function preprocessForVideo(item: UploaderItem): Promise<void> {
 		let preprocessedFile: Blob | File = item.file;
 
+		if (VIDEO_COMPRESSION_SUPPORTED_TYPES.includes(preprocessedFile.type)) {
+			const { canceled } = await os.confirm({
+				type: 'question',
+				title: i18n.ts._uploader.compressVideoConfirm,
+				text: i18n.ts._uploader.compressVideoConfirmDescription,
+				okText: i18n.ts._uploader.compress,
+				cancelText: i18n.ts._uploader.doNotCompress,
+			});
+
+			if (canceled) {
+				item.compressionLevel = 0;
+			} else if (item.compressionLevel === 0) {
+				item.compressionLevel = 1;
+			}
+		}
+
 		const needsCompress = item.compressionLevel !== 0 && VIDEO_COMPRESSION_SUPPORTED_TYPES.includes(preprocessedFile.type);
 
 		if (needsCompress) {

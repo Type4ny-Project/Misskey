@@ -34,6 +34,9 @@ import { startRealtimeSkyBackground, stopRealtimeSkyBackground } from '@/utility
 
 export async function common(createVue: () => Promise<App<Element>>) {
 	console.info(`Misskey v${version}`);
+	if (typeof _COMMIT_ !== 'undefined' && _COMMIT_) {
+		console.info(`Commit ${_COMMIT_}`);
+	}
 
 	if (_DEV_) {
 		console.warn('Development mode!!!');
@@ -75,6 +78,10 @@ export async function common(createVue: () => Promise<App<Element>>) {
 				isClientUpdated = true;
 			}
 		} catch (err) { /* empty */ }
+
+		if (!isClientUpdated && lastVersion != null) {
+			isClientUpdated = true;
+		}
 	}
 	//#endregion
 

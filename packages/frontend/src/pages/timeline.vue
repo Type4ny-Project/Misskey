@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkTip v-if="isBasicTimeline(src)" :k="`tl.${src}`" style="margin-bottom: var(--MI-margin);">
 			{{ i18n.ts._timelineDescription[src] }}
 		</MkTip>
-		<MkPostForm v-if="prefer.r.showFixedPostForm.value" :class="$style.postForm" class="_panel" fixed style="margin-bottom: var(--MI-margin);" :channel="src.startsWith('channel:') ? currentChannel : undefined"/>
+		<MkPostForm v-if="prefer.r.showFixedPostForm.value || (src.startsWith('channel:') && prefer.r.showFixedPostFormInChannel)" :class="$style.postForm" class="_panel" fixed style="margin-bottom: var(--MI-margin);" :channel="src.startsWith('channel:') ? currentChannel : undefined"/>
 		<MkStreamingNotesTimeline
 			ref="tlComponent"
 			:key="src + withRenotes + withReplies + onlyFiles + withSensitive"
@@ -35,6 +35,7 @@ import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import type { MenuItem } from '@/types/menu.js';
 import type { BasicTimelineType } from '@/timelines.js';
 import type { PageHeaderItem } from '@/types/page-header.js';
+import type { TimelineHeaderItem } from '@/timeline-header.js';
 import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue';
 import MkPostForm from '@/components/MkPostForm.vue';
 import * as os from '@/os.js';
@@ -49,7 +50,7 @@ import { deepMerge } from '@/utility/merge.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { availableBasicTimelines, hasWithReplies, isAvailableBasicTimeline, isBasicTimeline, basicTimelineIconClass } from '@/timelines.js';
 import { prefer } from '@/preferences.js';
-import {type TimelineHeaderItem, timelineHeaderItemDef} from '@/timeline-header.js';
+import { timelineHeaderItemDef } from '@/timeline-header.js';
 import { isLocalTimelineAvailable, isGlobalTimelineAvailable } from '@/scripts/get-timeline-available.js';
 
 const tlComponent = useTemplateRef('tlComponent');
@@ -68,7 +69,11 @@ const currentChannel = shallowRef<Misskey.entities.Channel | undefined>(undefine
 watch(src, async (newSrc) => {
 	if (newSrc.startsWith('channel:')) {
 		const channelId = newSrc.split(':')[1];
-		currentChannel.value = await misskeyApi('channels/show', { channelId });
+		currentChannel.value = undefined;
+		const channel = await misskeyApi('channels/show', { channelId });
+		if (src.value === newSrc) {
+			currentChannel.value = channel;
+		}
 	} else {
 		currentChannel.value = undefined;
 	}
@@ -97,6 +102,7 @@ const withReplies = computed<boolean>({
 	},
 	set: (x) => saveTlFilter('withReplies', x),
 });
+
 const onlyFiles = computed<boolean>({
 	get: () => {
 		if (['local', 'social'].includes(src.value) && localSocialTLFilterSwitchStore.value === 'withReplies') {

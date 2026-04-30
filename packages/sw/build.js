@@ -7,12 +7,21 @@
 
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
+import { execSync } from 'node:child_process';
 import locales from 'i18n';
 import meta from '../../package.json' with { type: 'json' };
 
 const watch = process.argv[2]?.includes('watch');
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const commitHash = (() => {
+	try {
+		return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
+	} catch {
+		return null;
+	}
+})();
+const buildVersion = commitHash ? `${meta.version}+${commitHash}` : meta.version;
 
 console.log('Starting SW building...');
 
@@ -22,10 +31,11 @@ const buildOptions = {
 	bundle: true,
 	define: {
 		_DEV_: JSON.stringify(process.env.NODE_ENV !== 'production'),
-		_ENV_: JSON.stringify(process.env.NODE_ENV ?? ''), // `NODE_ENV`が`undefined`なとき`JSON.stringify`が`undefined`を返してエラーになってしまうので`??`を使っている
+		_ENV_: JSON.stringify(process.env.NODE_ENV ?? ''),
 		_LANGS_: JSON.stringify(Object.entries(locales).map(([k, v]) => [k, v._lang_])),
 		_PERF_PREFIX_: JSON.stringify('Misskey:'),
-		_VERSION_: JSON.stringify(meta.version),
+		_VERSION_: JSON.stringify(buildVersion),
+		_COMMIT_: JSON.stringify(commitHash),
 	},
 	entryPoints: [`${__dirname}/src/sw.ts`],
 	format: 'esm',

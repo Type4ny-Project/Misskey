@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "cloudflare": {
+      "source": "developers.cloudflare.com",
+      "sourceType": "well-known",
+      "computedHash": "f87ea54de1ad7d8197a21640888af6ccb2e912682710658a9bafb5df0093df61"
+    }
+  }
+}

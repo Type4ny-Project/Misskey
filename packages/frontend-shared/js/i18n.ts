@@ -8,6 +8,38 @@ import type { ILocale, ParameterizedString } from 'i18n';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TODO = any;
 
+function createMissingLocaleProxy(path: string): unknown {
+	const target = function missingLocaleKey() {
+		return path;
+	};
+
+	return new Proxy(target, {
+		apply() {
+			return path;
+		},
+
+		get(_target, p: string | symbol) {
+			if (p === Symbol.toPrimitive) {
+				return () => path;
+			}
+
+			if (p === Symbol.toStringTag) {
+				return 'MissingLocaleKey';
+			}
+
+			if (p === 'toString' || p === 'valueOf' || p === 'toJSON') {
+				return () => path;
+			}
+
+			if (typeof p === 'symbol') {
+				return undefined;
+			}
+
+			return createMissingLocaleProxy(`${path}.${p}`);
+		},
+	});
+}
+
 type FlattenKeys<T extends ILocale, TPrediction> = keyof {
 	[K in keyof T as T[K] extends ILocale
 		? FlattenKeys<T[K], TPrediction> extends infer C extends string
@@ -50,11 +82,18 @@ export class I18n<T extends ILocale> {
 	public get ts(): T {
 		if (this.devMode) {
 			class Handler<TTarget extends ILocale> implements ProxyHandler<TTarget> {
-				get(target: TTarget, p: string | symbol): unknown {
-					const value = target[p as keyof TTarget];
+				constructor(private readonly path = '') {}
 
-					if (typeof value === 'object') {
-						return new Proxy(value, new Handler<TTarget[keyof TTarget] & ILocale>());
+				get(target: TTarget, p: string | symbol): unknown {
+					if (typeof p === 'symbol') {
+						return Reflect.get(target, p);
+					}
+
+					const value = target[p as keyof TTarget];
+					const nextPath = this.path ? `${this.path}.${p}` : p;
+
+					if (value != null && typeof value === 'object') {
+						return new Proxy(value, new Handler<TTarget[keyof TTarget] & ILocale>(nextPath));
 					}
 
 					if (typeof value === 'string') {
@@ -67,9 +106,9 @@ export class I18n<T extends ILocale> {
 						return value;
 					}
 
-					console.error(`Unexpected locale key: ${String(p)}`);
+					console.error(`Unexpected locale key: ${nextPath}`);
 
-					return new Proxy({} as any, new Handler<TTarget[keyof TTarget] & ILocale>());
+					return createMissingLocaleProxy(nextPath);
 				}
 			}
 
@@ -86,11 +125,18 @@ export class I18n<T extends ILocale> {
 			}
 
 			class Handler<TTarget extends ILocale> implements ProxyHandler<TTarget> {
-				get(target: TTarget, p: string | symbol): unknown {
-					const value = target[p as keyof TTarget];
+				constructor(private readonly path = '') {}
 
-					if (typeof value === 'object') {
-						return new Proxy(value, new Handler<TTarget[keyof TTarget] & ILocale>());
+				get(target: TTarget, p: string | symbol): unknown {
+					if (typeof p === 'symbol') {
+						return Reflect.get(target, p);
+					}
+
+					const value = target[p as keyof TTarget];
+					const nextPath = this.path ? `${this.path}.${p}` : p;
+
+					if (value != null && typeof value === 'object') {
+						return new Proxy(value, new Handler<TTarget[keyof TTarget] & ILocale>(nextPath));
 					}
 
 					if (typeof value === 'string') {
@@ -116,7 +162,7 @@ export class I18n<T extends ILocale> {
 						}
 
 						if (!expressions.length) {
-							console.error(`Unexpected locale key: ${String(p)}`);
+							console.error(`Unexpected locale key: ${nextPath}`);
 
 							return () => value;
 						}
@@ -136,9 +182,9 @@ export class I18n<T extends ILocale> {
 						};
 					}
 
-					console.error(`Unexpected locale key: ${String(p)}`);
+					console.error(`Unexpected locale key: ${nextPath}`);
 
-					return new Proxy((() => p) as any, new Handler<TTarget[keyof TTarget] & ILocale>());
+					return createMissingLocaleProxy(nextPath);
 				}
 			}
 

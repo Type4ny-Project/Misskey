@@ -4,6 +4,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import type { InstancesRepository, NoteReactionsRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
@@ -60,6 +61,9 @@ export const paramDef = {
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
+		@Inject(DI.db)
+		private db: DataSource,
+
 		@Inject(DI.instancesRepository)
 		private instancesRepository: InstancesRepository,
 
@@ -78,12 +82,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const usersCount = usersChart.local.total[0] + usersChart.remote.total[0];
 			const originalUsersCount = usersChart.local.total[0];
 
+			const estimatedReactionsCount = await this.db.query<[{ estimated_count: string | null }]>(`
+				SELECT CASE
+					WHEN reltuples < 0 THEN NULL
+					ELSE reltuples::bigint
+				END AS estimated_count
+				FROM pg_class
+				WHERE relname = 'note_reaction'
+				LIMIT 1
+			`)
+				.then(recs => recs[0]?.estimated_count ? parseInt(recs[0].estimated_count, 10) : null);
+
 			const [
 				reactionsCount,
 				//originalReactionsCount,
 				instances,
 			] = await Promise.all([
-				this.noteReactionsRepository.count({ cache: 3600000 }), // 1 hour
+				estimatedReactionsCount ?? this.noteReactionsRepository.count(),
 				//this.noteReactionsRepository.count({ where: { userHost: IsNull() }, cache: 3600000 }),
 				this.instancesRepository.count({ cache: 3600000 }),
 			]);

@@ -33,7 +33,8 @@ class SwLang {
 
 	private async _fetch(): Promise<I18n<Locale>> {
 		// Service Workerは何度も起動しそのたびにlocaleを読み込むので、CacheStorageを使う
-		const localeUrl = `/assets/locales/${await this.lang}.${_VERSION_}.json`;
+		const baseVersion = _VERSION_.split('+')[0];
+		const localeUrl = `/assets/locales/${await this.lang}.${baseVersion}.json`;
 		let localeRes = await caches.match(localeUrl);
 
 		// _DEV_がtrueの場合は常に最新化

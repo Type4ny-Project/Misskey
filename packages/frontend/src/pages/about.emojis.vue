@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div class="_gaps">
-	<MkButton v-if="$i && ($i.isModerator || $i.policies.canManageCustomEmojis)" primary link to="/custom-emojis-manager">{{ i18n.ts.manageCustomEmojis }}</MkButton>
+	<MkButton v-if="$i && ($i.isModerator || $i.policies.canManageCustomEmojis)" primary type="routerLink" to="/custom-emojis-manager">{{ i18n.ts.manageCustomEmojis }}</MkButton>
 	<div v-if="$i" class="_buttons">
 		<MkButton link to="/emoji-requests">{{ i18n.ts.emojiRequestYourRequests }}</MkButton>
 		<MkButton primary @click="createEmojiRequest">{{ i18n.ts.emojiRequestCreate }}</MkButton>

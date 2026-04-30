@@ -20,6 +20,7 @@ export * as 'admin/accounts/create' from './endpoints/admin/accounts/create.js';
 export * as 'admin/accounts/delete' from './endpoints/admin/accounts/delete.js';
 export * as 'admin/accounts/find-by-email' from './endpoints/admin/accounts/find-by-email.js';
 export * as 'admin/accounts/present-points' from './endpoints/admin/accounts/present-points.js';
+export * as 'admin/accounts/revoke-points' from './endpoints/admin/accounts/revoke-points.js';
 export * as 'admin/ad/create' from './endpoints/admin/ad/create.js';
 export * as 'admin/ad/delete' from './endpoints/admin/ad/delete.js';
 export * as 'admin/ad/list' from './endpoints/admin/ad/list.js';
@@ -188,6 +189,9 @@ export * as 'drive/files/find-by-hash' from './endpoints/drive/files/find-by-has
 export * as 'drive/files/show' from './endpoints/drive/files/show.js';
 export * as 'drive/files/update' from './endpoints/drive/files/update.js';
 export * as 'drive/files/move-bulk' from './endpoints/drive/files/move-bulk.js';
+export * as 'drive/files/upload-init' from './endpoints/drive/files/upload-init.js';
+export * as 'drive/files/upload-chunk' from './endpoints/drive/files/upload-chunk.js';
+export * as 'drive/files/upload-commit' from './endpoints/drive/files/upload-commit.js';
 export * as 'drive/files/upload-from-url' from './endpoints/drive/files/upload-from-url.js';
 export * as 'drive/folders' from './endpoints/drive/folders.js';
 export * as 'drive/folders/create' from './endpoints/drive/folders/create.js';

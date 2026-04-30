@@ -4,7 +4,7 @@
  */
 
 import { Global, Module } from '@nestjs/common';
-import { MeiliSearch } from 'meilisearch';
+import { Meilisearch } from 'meilisearch';
 import { DI } from './di-symbols.js';
 import { type Config, loadConfigInput } from './config.js';
 import { RepositoryModule } from './models/RepositoryModule.js';
@@ -72,10 +72,10 @@ const $meilisearch: Provider = {
 	useFactory: (config: Config) => {
 		if (config.fulltextSearch?.provider === 'meilisearch') {
 			if (!config.meilisearch) {
-				throw new Error('MeiliSearch is enabled but no configuration is provided');
+				throw new Error('Meilisearch is enabled but no configuration is provided');
 			}
 
-			return new MeiliSearch({
+			return new Meilisearch({
 				host: `${config.meilisearch.ssl ? 'https' : 'http'}://${config.meilisearch.host}:${config.meilisearch.port}`,
 				apiKey: config.meilisearch.apiKey,
 			});

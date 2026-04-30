@@ -1457,6 +1457,7 @@ frame: "フレーム"
 presets: "プリセット"
 zeroPadding: "ゼロ埋め"
 nothingToConfigure: "設定項目はありません"
+viewRenotedChannel: "リノート先のチャンネルを見る"
 
 _imageEditing:
   _vars:
@@ -1833,6 +1834,9 @@ _serverSettings:
   entrancePageStyle: "エントランスページのスタイル"
   showTimelineForVisitor: "タイムラインを表示する"
   showActivitiesForVisitor: "アクティビティを表示する"
+  nowLocalUsers: "Now Local Users"
+  maxLocalUsers: "Max Local Users"
+  remainingLocalUsers: "登録できるユーザー数"
 
   _userGeneratedContentsVisibilityForVisitor:
     all: "全て公開"
@@ -3500,6 +3504,10 @@ _uploader:
   maxFileSizeIsX: "アップロード可能な最大ファイルサイズは{x}です。"
   allowedTypes: "アップロード可能なファイル種別"
   tip: "ファイルはまだアップロードされていません。このダイアログで、アップロード前の確認・リネーム・圧縮・クロッピングなどが行えます。準備が出来たら、「アップロード」ボタンを押してアップロードを開始できます。"
+  compressVideoConfirm: "動画の圧縮"
+  compressVideoConfirmDescription: "この動画ファイルを圧縮しますか？\n圧縮するとファイルサイズが小さくなりますが、品質が低下する場合があります。"
+  compress: "圧縮する"
+  doNotCompress: "圧縮しない"
 
 _clientPerformanceIssueTip:
   title: "バッテリー消費が多いと感じたら"

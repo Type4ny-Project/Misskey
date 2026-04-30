@@ -24,12 +24,19 @@ import { initializeSw } from '@/utility/initialize-sw.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
 import { mainRouter } from '@/router.js';
 import { makeHotkey } from '@/utility/hotkey.js';
-import { addCustomEmoji, removeCustomEmojis, updateCustomEmojis } from '@/custom-emojis.js';
+import { addCustomEmoji, removeCustomEmojis, updateCustomEmojis, fetchCustomEmojis } from '@/custom-emojis.js';
 import { prefer } from '@/preferences.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
 import { migrateOldSettings } from '@/pref-migrate.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 import { isBirthday } from '@/utility/is-birthday.js';
+import { get, set } from '@/utility/idb-proxy.js';
+
+const DISCONNECTED_WARNING_DELAY = 150;
+
+function delay(ms: number): Promise<void> {
+	return new Promise(resolve => window.setTimeout(resolve, ms));
+}
 
 export async function mainBoot() {
 	const { isClientUpdated, lastVersion } = await common(async () => {
@@ -66,8 +73,14 @@ export async function mainBoot() {
 	emojiPicker.init();
 
 	if (isClientUpdated && $i) {
+		// クライアント更新時はIndexedDBキャッシュをクリア
+		miLocalStorage.removeItem('emojis');
+		miLocalStorage.removeItem('lastEmojisFetchedAt');
+		await set('emojis', []);
+		fetchCustomEmojis(true);
+
 		const { dispose } = popup(defineAsyncComponent(() => import('@/components/MkUpdated.vue')), {}, {
-			closed: () => dispose(),
+			closed: () => unisonReload(),
 		});
 
 		// prefereces migration
@@ -305,6 +318,10 @@ export async function mainBoot() {
 
 			let reloadDialogShowing = false;
 			stream.on('_disconnected_', async () => {
+				await delay(DISCONNECTED_WARNING_DELAY);
+
+				if (stream.state !== 'reconnecting') return;
+
 				if (prefer.s.serverDisconnectedBehavior === 'reload') {
 					window.location.reload();
 				} else if (prefer.s.serverDisconnectedBehavior === 'dialog') {

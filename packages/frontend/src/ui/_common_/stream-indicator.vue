@@ -22,12 +22,30 @@ import * as os from '@/os.js';
 import { prefer } from '@/preferences.js';
 import { store } from '@/store.js';
 
+const DISCONNECTED_WARNING_DELAY = 150;
+
 const zIndex = os.claimZIndex('high');
 
 const hasDisconnected = ref(false);
+let disconnectedTimer: number | null = null;
+
+function clearDisconnectedTimer() {
+	if (disconnectedTimer == null) return;
+	window.clearTimeout(disconnectedTimer);
+	disconnectedTimer = null;
+}
 
 function onDisconnected() {
-	hasDisconnected.value = true;
+	clearDisconnectedTimer();
+	disconnectedTimer = window.setTimeout(() => {
+		if (useStream().state !== 'reconnecting') return;
+		hasDisconnected.value = true;
+		disconnectedTimer = null;
+	}, DISCONNECTED_WARNING_DELAY);
+}
+
+function onConnected() {
+	clearDisconnectedTimer();
 }
 
 function resetDisconnected() {
@@ -39,10 +57,14 @@ function reload() {
 }
 
 if (store.s.realtimeMode) {
-	useStream().on('_disconnected_', onDisconnected);
+	const stream = useStream();
+	stream.on('_connected_', onConnected);
+	stream.on('_disconnected_', onDisconnected);
 
 	onUnmounted(() => {
-		useStream().off('_disconnected_', onDisconnected);
+		clearDisconnectedTimer();
+		stream.off('_connected_', onConnected);
+		stream.off('_disconnected_', onDisconnected);
 	});
 }
 </script>

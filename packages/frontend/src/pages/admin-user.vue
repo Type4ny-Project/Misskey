@@ -100,6 +100,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkButton v-if="user.host == null" inline style="margin-right: 8px;" @click="resetPassword"><i class="ti ti-key"></i> {{ i18n.ts.resetPassword }}</MkButton>
 					</div>
 
+					<div>
+						<MkButton v-if="user.host == null" inline primary style="margin-right: 8px;" @click="grantPoints"><i class="ti ti-coin"></i> {{ i18n.tsx.grantPoints({ pointName: instance.pointName ?? i18n.ts.point }) }}</MkButton>
+						<MkButton v-if="user.host == null" inline danger @click="revokePoints"><i class="ti ti-coin-off"></i> {{ i18n.tsx.revokePoints({ pointName: instance.pointName ?? i18n.ts.point }) }}</MkButton>
+					</div>
+
 					<MkFolder>
 						<template #icon><i class="ti ti-license"></i></template>
 						<template #label>{{ i18n.ts._role.policies }}</template>
@@ -232,6 +237,7 @@ import { ensureSignin, iAmAdmin, iAmModerator } from '@/i.js';
 import MkRolePreview from '@/components/MkRolePreview.vue';
 import MkPagination from '@/components/MkPagination.vue';
 import { Paginator } from '@/utility/paginator.js';
+import { instance } from '@/instance.js';
 
 const $i = ensureSignin();
 
@@ -342,6 +348,48 @@ async function resetPassword() {
 			text: i18n.tsx.newPasswordIs({ password }),
 		});
 	}
+}
+
+async function grantPoints() {
+	const pointName = instance.pointName ?? i18n.ts.point;
+	const { canceled, result } = await os.inputNumber({
+		title: i18n.tsx.grantPoints({ pointName }),
+	});
+	if (canceled || !result) return;
+	const points = result;
+	if (points <= 0) {
+		await os.alert({ type: 'error', text: String(i18n.ts.pointsMustBeNumber) });
+		return;
+	}
+	const { canceled: confirmCanceled } = await os.confirm({
+		type: 'warning',
+		text: i18n.tsx.sendPointsConfirm({ name: user.value.name ?? user.value.username, pointName, points }),
+	});
+	if (confirmCanceled) return;
+	await misskeyApi('admin/accounts/present-points', { userId: user.value.id, points });
+	await refreshUser();
+	os.success();
+}
+
+async function revokePoints() {
+	const pointName = instance.pointName ?? i18n.ts.point;
+	const { canceled, result } = await os.inputNumber({
+		title: i18n.tsx.revokePoints({ pointName }),
+	});
+	if (canceled || !result) return;
+	const points = result;
+	if (points <= 0) {
+		await os.alert({ type: 'error', text: String(i18n.ts.pointsMustBeNumber) });
+		return;
+	}
+	const { canceled: confirmCanceled } = await os.confirm({
+		type: 'warning',
+		text: i18n.tsx.sendPointsConfirm({ name: user.value.name ?? user.value.username, pointName, points }),
+	});
+	if (confirmCanceled) return;
+	await misskeyApi('admin/accounts/revoke-points', { userId: user.value.id, points });
+	await refreshUser();
+	os.success();
 }
 
 async function toggleSuspend(v: boolean) {

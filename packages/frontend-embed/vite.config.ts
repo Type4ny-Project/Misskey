@@ -3,15 +3,24 @@ import pluginVue from '@vitejs/plugin-vue';
 import { defineConfig, type UserConfig } from 'vite';
 import * as yaml from 'js-yaml';
 import { promises as fsp } from 'fs';
+import { execSync } from 'node:child_process';
 
 import locales from 'i18n';
 import meta from '../../package.json';
 import packageInfo from './package.json' with { type: 'json' };
-import pluginJson5 from './vite.json5.js';
+import pluginJson5 from './lib/vite-plugin-json5.js';
 import { pluginRemoveUnrefI18n } from '../frontend-builder/rollup-plugin-remove-unref-i18n';
 
-const url = process.env.NODE_ENV === 'development' ? yaml.load(await fsp.readFile('../../.config/default.yml', 'utf-8')).url : null;
+const url = process.env.NODE_ENV === 'development' ? (yaml.load(await fsp.readFile('../../.config/default.yml', 'utf-8')) as any).url : null;
 const host = url ? (new URL(url)).hostname : undefined;
+const commitHash = (() => {
+	try {
+		return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
+	} catch {
+		return null;
+	}
+})();
+const buildVersion = commitHash ? `${meta.version}+${commitHash}` : meta.version;
 
 const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', '.json5', '.svg', '.sass', '.scss', '.css', '.vue'];
 
@@ -113,15 +122,11 @@ export function getConfig(): UserConfig {
 					}
 				},
 			},
-			preprocessorOptions: {
-				scss: {
-					api: 'modern-compiler',
-				},
-			},
 		},
 
 		define: {
-			_VERSION_: JSON.stringify(meta.version),
+			_VERSION_: JSON.stringify(buildVersion),
+			_COMMIT_: JSON.stringify(commitHash),
 			_LANGS_: JSON.stringify(Object.entries(locales).map(([k, v]) => [k, v._lang_])),
 			_ENV_: JSON.stringify(process.env.NODE_ENV),
 			_DEV_: process.env.NODE_ENV !== 'production',
@@ -137,7 +142,10 @@ export function getConfig(): UserConfig {
 				'safari16',
 			],
 			manifest: 'manifest.json',
-			rollupOptions: {
+			rolldownOptions: {
+				experimental: {
+					nativeMagicString: true,
+				},
 				input: {
 					i18n: './src/i18n.ts',
 					entry: './src/boot.ts',
@@ -145,10 +153,15 @@ export function getConfig(): UserConfig {
 				external: externalPackages.map(p => p.match),
 				preserveEntrySignatures: 'allow-extension',
 				output: {
-					manualChunks: {
-						vue: ['vue'],
-						// dependencies of i18n.ts
-						'config': ['@@/js/config.js'],
+					codeSplitting: {
+						groups: [{
+							name: 'vue',
+							test: /node_modules[\\/]vue/,
+						}, {
+							// dependencies of i18n.ts
+							name: 'config',
+							test: /@@[\\/]js[\\/]config\.js/,
+						}],
 					},
 					entryFileNames: `scripts/${localesHash}-[hash:8].js`,
 					chunkFileNames: `scripts/${localesHash}-[hash:8].js`,

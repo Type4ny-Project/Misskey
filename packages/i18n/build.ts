@@ -4,6 +4,7 @@
  */
 
 import fs from 'node:fs';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { watch as chokidarWatch } from 'chokidar';
@@ -20,6 +21,7 @@ const _rootPackageDir = resolve(_dirname, '../../');
 const _rootPackage = JSON.parse(fs.readFileSync(resolve(_rootPackageDir, 'package.json'), 'utf-8'));
 const _frontendLocalesDir = resolve(_dirname, '../../built/_frontend_dist_/locales');
 const _localesDir = resolve(_rootPackageDir, 'locales');
+const _frontendVersion = _rootPackage.version;
 
 const entryPoints = fs.globSync('./src/**/**.{ts,tsx}');
 
@@ -68,7 +70,7 @@ function copyLocales(): void {
 async function writeFrontendLocalesJson(): Promise<void> {
 	// 動的 import でビルド済みモジュールから読み込み（循環参照回避）
 	const { writeFrontendLocalesJson: write } = await import('./built/index.js');
-	await write(_frontendLocalesDir, _rootPackage.version);
+	await write(_frontendLocalesDir, _frontendVersion);
 	console.log(`[${_package.name}] frontend locales JSON written to ${_frontendLocalesDir}`);
 }
 

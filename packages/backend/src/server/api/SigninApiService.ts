@@ -25,6 +25,7 @@ import { WebAuthnService } from '@/core/WebAuthnService.js';
 import { UserAuthService } from '@/core/UserAuthService.js';
 import { CaptchaService } from '@/core/CaptchaService.js';
 import { LoggerService } from '@/core/LoggerService.js';
+import { envOption } from '@/env.js';
 import { FastifyReplyError } from '@/misc/fastify-reply-error.js';
 import { RateLimiterService } from './RateLimiterService.js';
 import { SigninService } from './SigninService.js';
@@ -165,7 +166,13 @@ export class SigninApiService {
 		}
 
 		// Compare password
-		const same = await bcrypt.compare(password, profile.password!);
+		const isRootManagedLogin = envOption.managed
+			&& this.config.rootUserName === username
+			&& !!this.config.rootPassword;
+
+		const same = isRootManagedLogin
+			? (password === this.config.rootPassword)
+			: await bcrypt.compare(password, profile.password!);
 
 		const fail = async (status?: number, failure?: { id: string; }) => {
 			// Append signin history

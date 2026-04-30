@@ -61,7 +61,7 @@ const mimeTypeMap = {
 export type UploaderItem = {
 	id: string;
 	name: string;
-	uploadName?: string;
+	suffix: string;
 	progress: { max: number; value: number } | null;
 	thumbnail: string | null;
 	preprocessing: boolean;
@@ -82,6 +82,10 @@ export type UploaderItem = {
 	abort?: (() => void) | null;
 	abortPreprocess?: (() => void) | null;
 };
+
+export function getUploadName(item: UploaderItem): string {
+	return item.name + (item.name.endsWith(item.suffix) ? '' : item.suffix);
+}
 
 function getCompressionSettings(level: 0 | 1 | 2 | 3) {
 	if (level === 1) {
@@ -132,6 +136,7 @@ export function useUploader(options: {
 		items.value.push({
 			id,
 			name: prefer.s.keepOriginalFilename ? filename : id + extension,
+			suffix: '',
 			progress: null,
 			thumbnail: THUMBNAIL_SUPPORTED_TYPES.includes(file.type) ? window.URL.createObjectURL(file) : null,
 			preprocessing: false,
@@ -503,7 +508,7 @@ export function useUploader(options: {
 		item.uploading = true;
 
 		const { filePromise, abort } = uploadFile(item.preprocessedFile ?? item.file, {
-			name: item.uploadName ?? item.name,
+			name: getUploadName(item),
 			folderId: options.folderId === undefined ? prefer.s.uploadFolder : options.folderId,
 			isSensitive: item.isSensitive ?? false,
 			caption: item.caption ?? null,
@@ -677,14 +682,14 @@ export function useUploader(options: {
 					// (and WebP is not browser safe yet)
 					preprocessedFile = result;
 					item.compressedSize = result.size;
-					item.uploadName = preprocessedFile.type !== config.mimeType ? `${item.name}.${mimeTypeMap[config.mimeType]}` : item.name;
+					item.suffix = '.' + mimeTypeMap[config.mimeType];
 				}
 			} catch (err) {
 				console.error('Failed to resize image', err);
 			}
 		} else {
 			item.compressedSize = null;
-			item.uploadName = item.name;
+			item.suffix = '';
 		}
 
 		imageBitmap.close();
@@ -696,6 +701,22 @@ export function useUploader(options: {
 
 	async function preprocessForVideo(item: UploaderItem): Promise<void> {
 		let preprocessedFile: Blob | File = item.file;
+
+		if (VIDEO_COMPRESSION_SUPPORTED_TYPES.includes(preprocessedFile.type)) {
+			const { canceled } = await os.confirm({
+				type: 'question',
+				title: i18n.ts._uploader.compressVideoConfirm,
+				text: i18n.ts._uploader.compressVideoConfirmDescription,
+				okText: i18n.ts._uploader.compress,
+				cancelText: i18n.ts._uploader.doNotCompress,
+			});
+
+			if (canceled) {
+				item.compressionLevel = 0;
+			} else if (item.compressionLevel === 0) {
+				item.compressionLevel = 1;
+			}
+		}
 
 		const needsCompress = item.compressionLevel !== 0 && VIDEO_COMPRESSION_SUPPORTED_TYPES.includes(preprocessedFile.type);
 
@@ -743,10 +764,10 @@ export function useUploader(options: {
 
 			preprocessedFile = new Blob([output.target.buffer!], { type: output.format.mimeType });
 			item.compressedSize = output.target.buffer!.byteLength;
-			item.uploadName = `${item.name}.mp4`;
+			item.suffix = '.mp4';
 		} else {
 			item.compressedSize = null;
-			item.uploadName = item.name;
+			item.suffix = '';
 		}
 
 		if (item.thumbnail != null) URL.revokeObjectURL(item.thumbnail);

@@ -1,0 +1,19 @@
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "misskey-typeany-frontend",
+	"account_id": "249ffe1ec04083daee0b2148ea5c8416",
+	"main": "./src/index.js",
+	"compatibility_date": "2026-04-24",
+	"compatibility_flags": ["nodejs_compat"],
+	"assets": {
+		"directory": "../../built/cloudflare-worker/assets",
+		"binding": "ASSETS",
+		"not_found_handling": "none"
+	},
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true
+		}
+	}
+}

@@ -4877,6 +4877,10 @@ export interface Locale extends ILocale {
      */
     "rolesThatCanBeUsedThisEmojiAsReactionPublicRoleWarn": string;
     /**
+     * リアクションを取り消す
+     */
+    "cancelReaction": string;
+    /**
      * リアクションを取り消しますか？
      */
     "cancelReactionConfirm": string;
@@ -5831,6 +5835,10 @@ export interface Locale extends ILocale {
      * 設定項目はありません
      */
     "nothingToConfigure": string;
+    /**
+     * リノート先のチャンネルを見る
+     */
+    "viewRenotedChannel": string;
     "_imageEditing": {
         "_vars": {
             /**
@@ -7184,6 +7192,18 @@ export interface Locale extends ILocale {
          * アクティビティを表示する
          */
         "showActivitiesForVisitor": string;
+        /**
+         * Now Local Users
+         */
+        "nowLocalUsers": string;
+        /**
+         * Max Local Users
+         */
+        "maxLocalUsers": string;
+        /**
+         * 登録できるユーザー数
+         */
+        "remainingLocalUsers": string;
         "_userGeneratedContentsVisibilityForVisitor": {
             /**
              * 全て公開
@@ -8437,6 +8457,10 @@ export interface Locale extends ILocale {
              * ウォーターマーク機能の使用可否
              */
             "watermarkAvailable": string;
+            /**
+             * リアクションの最大数
+             */
+            "reactionLimit": string;
         };
         "_condition": {
             /**
@@ -13085,6 +13109,23 @@ export interface Locale extends ILocale {
          * ファイルはまだアップロードされていません。このダイアログで、アップロード前の確認・リネーム・圧縮・クロッピングなどが行えます。準備が出来たら、「アップロード」ボタンを押してアップロードを開始できます。
          */
         "tip": string;
+        /**
+         * 動画の圧縮
+         */
+        "compressVideoConfirm": string;
+        /**
+         * この動画ファイルを圧縮しますか？
+         * 圧縮するとファイルサイズが小さくなりますが、品質が低下する場合があります。
+         */
+        "compressVideoConfirmDescription": string;
+        /**
+         * 圧縮する
+         */
+        "compress": string;
+        /**
+         * 圧縮しない
+         */
+        "doNotCompress": string;
     };
     "_clientPerformanceIssueTip": {
         /**

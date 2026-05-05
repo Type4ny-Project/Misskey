@@ -176,8 +176,8 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 
 const router = useRouter();
 const PREVIEW_DELAY = 500;
-const SUGGESTION_TIMEOUT_MS = 1500;
 const FALLBACK_SUGGESTION_LIMIT = 8;
+const MIN_SUGGESTION_SCORE = 0.4;
 
 type EmojiSuggestionItem = {
 	name: string;
@@ -308,7 +308,6 @@ const suggestedEmojis = ref<Misskey.entities.EmojiSimple[]>([]);
 const tab = ref<'index' | 'custom' | 'unicode' | 'tags'>('index');
 
 let suggestionAbortController: AbortController | null = null;
-let suggestionTimeoutId: number | null = null;
 
 const customEmojiFolderRoot: CustomEmojiFolderTree = { value: '', category: '', children: [] };
 
@@ -517,15 +516,10 @@ function canRequestSuggestions(): boolean {
 	return props.asReactionPicker === true &&
 		instance.emojiSuggestion?.enabled === true &&
 		note != null &&
-		note.visibility === 'public';
+		(note.visibility === 'public' || note.visibility === 'home');
 }
 
 function clearSuggestionRequest(): void {
-	if (suggestionTimeoutId !== null) {
-		window.clearTimeout(suggestionTimeoutId);
-		suggestionTimeoutId = null;
-	}
-
 	if (suggestionAbortController !== null) {
 		suggestionAbortController.abort();
 		suggestionAbortController = null;
@@ -538,6 +532,8 @@ function normalizeSuggestionItems(items: EmojiSuggestionItem[]): Misskey.entitie
 	const emojis: Misskey.entities.EmojiSimple[] = [];
 
 	for (const item of items) {
+		if (item.score < MIN_SUGGESTION_SCORE) continue;
+
 		const name = item.name.replaceAll(':', '').trim();
 		if (name === '' || seen.has(name)) continue;
 
@@ -583,9 +579,6 @@ async function loadSuggestedEmojis(): Promise<void> {
 	const noteId = props.targetNote!.id;
 	const abortController = new AbortController();
 	suggestionAbortController = abortController;
-	suggestionTimeoutId = window.setTimeout(() => {
-		abortController.abort();
-	}, SUGGESTION_TIMEOUT_MS);
 
 	try {
 		const response: unknown = await misskeyApi('notes/reactions/suggestions', {
@@ -603,10 +596,6 @@ async function loadSuggestedEmojis(): Promise<void> {
 		}
 	} finally {
 		if (suggestionAbortController === abortController) {
-			if (suggestionTimeoutId !== null) {
-				window.clearTimeout(suggestionTimeoutId);
-				suggestionTimeoutId = null;
-			}
 			suggestionAbortController = null;
 		}
 	}

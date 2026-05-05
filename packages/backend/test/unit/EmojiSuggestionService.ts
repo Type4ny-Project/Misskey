@@ -82,7 +82,7 @@ describe('EmojiSuggestionService', () => {
 		};
 	}
 
-	test('calls Worker for public notes regardless of localOnly', async () => {
+	test('calls Worker for public and home notes regardless of localOnly', async () => {
 		const send = vi.fn(async () => jsonResponse(workerResponse()));
 		const { service, logInfo } = createService(createMeta(), send);
 
@@ -125,8 +125,15 @@ describe('EmojiSuggestionService', () => {
 		const localOnlyBody = JSON.parse(send.mock.calls[1][1].body as string) as { eligibility: { visibility: string; localOnly: boolean } };
 		expect(localOnlyBody.eligibility).toEqual({ visibility: 'public', localOnly: true });
 
+		await expect(service.suggestForNote(createNote({ visibility: 'home' }))).resolves.toMatchObject({
+			source: 'live',
+			items: [{ name: 'ablobgoodnightreverse' }],
+		});
+		expect(send).toHaveBeenCalledTimes(3);
+		const homeBody = JSON.parse(send.mock.calls[2][1].body as string) as { eligibility: { visibility: string; localOnly: boolean } };
+		expect(homeBody.eligibility).toEqual({ visibility: 'home', localOnly: false });
+
 		for (const note of [
-			createNote({ visibility: 'home' }),
 			createNote({ visibility: 'followers' }),
 			createNote({ visibility: 'specified' }),
 		]) {
@@ -137,7 +144,7 @@ describe('EmojiSuggestionService', () => {
 			});
 		}
 
-		expect(send).toHaveBeenCalledTimes(2);
+		expect(send).toHaveBeenCalledTimes(3);
 	});
 
 	test('emits redacted backend observability for cache hit, auth failure, and timeout', async () => {
@@ -216,6 +223,23 @@ describe('EmojiSuggestionService', () => {
 			});
 			expect(send).toHaveBeenCalledTimes(1);
 		}
+	});
+
+	test('filters proxied Worker suggestions below the minimum score', async () => {
+		const send = vi.fn(async () => jsonResponse(workerResponse({
+			items: [
+				{ name: 'below-threshold', score: 0.39, aliases: ['below'], category: 'fixture' },
+				{ name: 'threshold-ok', score: 0.4, aliases: ['threshold'], category: 'fixture' },
+			],
+		})));
+		const { service, logInfo } = createService(createMeta(), send);
+
+		await expect(service.suggestForNote(createNote({ visibility: 'home' }))).resolves.toMatchObject({
+			source: 'live',
+			items: [{ name: 'threshold-ok', score: 0.4 }],
+		});
+		expect(send).toHaveBeenCalledTimes(1);
+		expect(readLastLogEvent(logInfo)).toMatchObject({ resultCount: 1 });
 	});
 
 	test('normalizes cw notes without exposing hidden body text', () => {

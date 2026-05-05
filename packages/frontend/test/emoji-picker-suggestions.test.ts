@@ -136,6 +136,26 @@ const fallbackEmoji: Misskey.entities.EmojiSimple = {
 	roleIdsThatCanBeUsedThisEmojiAsReaction: [],
 };
 
+const thresholdEmoji: Misskey.entities.EmojiSimple = {
+	name: 'threshold_ok',
+	aliases: ['threshold'],
+	category: 'story',
+	url: '/client-assets/about-icon.png',
+	localOnly: false,
+	isSensitive: false,
+	roleIdsThatCanBeUsedThisEmojiAsReaction: [],
+};
+
+const belowThresholdEmoji: Misskey.entities.EmojiSimple = {
+	name: 'below_threshold',
+	aliases: ['below'],
+	category: 'story',
+	url: '/client-assets/about-icon.png',
+	localOnly: false,
+	isSensitive: false,
+	roleIdsThatCanBeUsedThisEmojiAsReaction: [],
+};
+
 function createNote(overrides: Partial<Misskey.entities.Note> = {}): Misskey.entities.Note {
 	return {
 		id: 'qa-note-fixture',
@@ -210,7 +230,7 @@ beforeEach(() => {
 	clearFlatEmojiSuggestionPublicMeta();
 	setEmojiSuggestionPublicMeta({ enabled: true, maxSuggestions: 4 });
 
-	customEmojis.value = [suggestedEmoji, fallbackEmoji];
+	customEmojis.value = [suggestedEmoji, fallbackEmoji, thresholdEmoji, belowThresholdEmoji];
 	mockedRecentlyUsedEmojis.value = [];
 	customEmojisMap.clear();
 	for (const emoji of customEmojis.value) {
@@ -327,8 +347,64 @@ describe('MkEmojiPicker emoji suggestions QA flows', () => {
 		expect(mockedMisskeyApi.mock.calls[0][0]).toBe('notes/reactions/suggestions');
 	});
 
+	test('shows eligible home suggestions', async () => {
+		mockedMisskeyApi.mockResolvedValueOnce({
+			items: [{
+				name: suggestedEmoji.name,
+				score: 0.98,
+				aliases: suggestedEmoji.aliases,
+				category: suggestedEmoji.category,
+			}],
+			source: 'live',
+			reason: 'component-test',
+			modelVersion: 'fixture-model',
+			emojiIndexVersion: 'fixture-index',
+		});
+
+		const result = await renderPicker({
+			targetNote: createNote({ visibility: 'home' }),
+			pinnedEmojis: [':fallback_ok:'],
+		});
+
+		await waitFor(() => expect(result.getByText('Suggested')).not.toBeNull());
+		await waitFor(() => expect(mockedMisskeyApi).toHaveBeenCalledTimes(1));
+		expect(mockedMisskeyApi.mock.calls[0][0]).toBe('notes/reactions/suggestions');
+	});
+
+	test('filters suggestion items below the minimum score before rendering', async () => {
+		mockedMisskeyApi.mockResolvedValueOnce({
+			items: [
+				{
+					name: belowThresholdEmoji.name,
+					score: 0.39,
+					aliases: belowThresholdEmoji.aliases,
+					category: belowThresholdEmoji.category,
+				},
+				{
+					name: thresholdEmoji.name,
+					score: 0.4,
+					aliases: thresholdEmoji.aliases,
+					category: thresholdEmoji.category,
+				},
+			],
+			source: 'live',
+			reason: 'component-test',
+			modelVersion: 'fixture-model',
+			emojiIndexVersion: 'fixture-index',
+		});
+
+		const result = await renderPicker({
+			targetNote: createNote({ visibility: 'home' }),
+			pinnedEmojis: [':fallback_ok:'],
+		});
+
+		await waitFor(() => expect(result.getByText('Suggested')).not.toBeNull());
+		await waitFor(() => expect(mockedMisskeyApi).toHaveBeenCalledTimes(1));
+		expect(result.container.querySelector('[data-emoji=":threshold_ok:"]')).not.toBeNull();
+		expect(result.container.querySelector('[data-emoji=":below_threshold:"]')).toBeNull();
+	});
+
 	test.each([
-		{ visibility: 'home' },
 		{ visibility: 'followers' },
 		{ visibility: 'specified' },
 	] satisfies Partial<Misskey.entities.Note>[])('does not request suggestions for ineligible note fixture %#', async (overrides) => {

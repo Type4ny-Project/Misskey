@@ -20,6 +20,7 @@ const WORKER_RESPONSE_SCHEMA_VERSION = 'emoji-suggest-worker-response-v1';
 const NORMALIZATION_SCHEMA_VERSION = 'emoji-suggest-normalization-v1';
 const WORKER_OWNED_VERSION_PLACEHOLDER = 'worker-owned';
 const MAX_NORMALIZED_TEXT_LENGTH = 1000;
+const MIN_SUGGESTION_SCORE = 0.4;
 
 export type EmojiSuggestionCandidate = {
 	name: string;
@@ -173,7 +174,7 @@ export class EmojiSuggestionService {
 	}
 
 	private isEligible(note: MiNote): boolean {
-		return note.visibility === 'public';
+		return note.visibility === 'public' || note.visibility === 'home';
 	}
 
 	private createFallback(meta: MiMeta, reason: string): EmojiSuggestionResponse {
@@ -233,6 +234,7 @@ function parseWorkerResponse(value: unknown, maxResults: number): EmojiSuggestio
 	const items: EmojiSuggestionCandidate[] = [];
 	for (const item of value.items) {
 		if (!isWorkerSuggestItem(item)) return createMalformedFallback();
+		if (item.score < MIN_SUGGESTION_SCORE) continue;
 		items.push({
 			name: item.name,
 			score: item.score,

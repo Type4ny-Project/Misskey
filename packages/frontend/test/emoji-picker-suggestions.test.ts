@@ -246,13 +246,13 @@ afterEach(() => {
 describe('MkEmojiPicker emoji suggestions QA flows', () => {
 	test('shows eligible public suggestions and emits the existing chosen reaction path', async () => {
 		mockedMisskeyApi.mockResolvedValueOnce({
-				items: [{
-					name: suggestedEmoji.name,
-					score: 0.98,
-					aliases: suggestedEmoji.aliases,
-					category: suggestedEmoji.category,
-				}],
-				reason: 'component-test',
+			items: [{
+				name: suggestedEmoji.name,
+				score: 0.98,
+				aliases: suggestedEmoji.aliases,
+				category: suggestedEmoji.category,
+			}],
+			reason: 'component-test',
 		});
 
 		const result = await renderPicker({
@@ -284,6 +284,42 @@ describe('MkEmojiPicker emoji suggestions QA flows', () => {
 
 		await fireEvent.click(suggestedButton);
 		expect(result.emitted('chosen')).toEqual([[':suggest_smile:']]);
+	});
+
+	test('refreshes stale custom emoji cache before rendering suggestions', async () => {
+		customEmojis.value = [fallbackEmoji];
+		customEmojisMap.clear();
+		customEmojisMap.set(fallbackEmoji.name, fallbackEmoji);
+
+		const uncachedSuggestedEmoji: Misskey.entities.EmojiSimple = {
+			...suggestedEmoji,
+			category: null,
+		};
+
+		mockedMisskeyApi
+			.mockResolvedValueOnce({
+				items: [{
+					name: uncachedSuggestedEmoji.name,
+					score: 0.412465,
+					aliases: [],
+					category: null,
+				}],
+				reason: null,
+			})
+			.mockResolvedValueOnce({
+				emojis: [fallbackEmoji, uncachedSuggestedEmoji],
+			});
+
+		const result = await renderPicker({
+			targetNote: createNote(),
+			pinnedEmojis: [':fallback_ok:'],
+		});
+
+		await waitFor(() => expect(result.getByText('Suggested')).not.toBeNull());
+		await waitFor(() => expect(mockedMisskeyApi).toHaveBeenCalledTimes(2));
+		expect(mockedMisskeyApi.mock.calls[0][0]).toBe('notes/reactions/suggestions');
+		expect(mockedMisskeyApi.mock.calls[1][0]).toBe('emojis');
+		expect(result.container.querySelector('[data-emoji=":suggest_smile:"]')).not.toBeNull();
 	});
 
 	test('does not request suggestions when disabled and pinned picker behavior still works', async () => {

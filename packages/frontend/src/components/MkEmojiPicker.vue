@@ -164,7 +164,7 @@ import { isTouchUsing } from '@/utility/touch.js';
 import { deviceKind } from '@/utility/device-kind.js';
 import { i18n } from '@/i18n.js';
 import { store } from '@/store.js';
-import { customEmojiCategories, customEmojis, customEmojisMap } from '@/custom-emojis.js';
+import { customEmojiCategories, customEmojis, customEmojisMap, fetchCustomEmojis } from '@/custom-emojis.js';
 import { $i } from '@/i.js';
 import { checkReactionPermissions } from '@/utility/check-reaction-permissions.js';
 import { prefer } from '@/preferences.js';
@@ -539,6 +539,19 @@ function normalizeSuggestionItems(items: EmojiSuggestionItem[]): Misskey.entitie
 	return emojis;
 }
 
+async function normalizeSuggestionItemsWithRefresh(items: EmojiSuggestionItem[]): Promise<Misskey.entities.EmojiSimple[]> {
+	const emojis = normalizeSuggestionItems(items);
+	if (emojis.length > 0 || items.length === 0) return emojis;
+
+	try {
+		await fetchCustomEmojis(true);
+	} catch (_err) {
+		return emojis;
+	}
+
+	return normalizeSuggestionItems(items);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
 }
@@ -575,7 +588,7 @@ async function loadSuggestedEmojis(): Promise<void> {
 		if (!isEmojiSuggestionResponse(response)) throw new Error('invalid emoji suggestion response');
 
 		if (suggestionAbortController !== abortController) return;
-		suggestedEmojis.value = normalizeSuggestionItems(response.items ?? []).filter(canReact);
+		suggestedEmojis.value = (await normalizeSuggestionItemsWithRefresh(response.items ?? [])).filter(canReact);
 	} catch {
 		if (suggestionAbortController === abortController) {
 			suggestedEmojis.value = [];

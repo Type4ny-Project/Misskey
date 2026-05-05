@@ -252,10 +252,7 @@ describe('MkEmojiPicker emoji suggestions QA flows', () => {
 					aliases: suggestedEmoji.aliases,
 					category: suggestedEmoji.category,
 				}],
-				source: 'live',
 				reason: 'component-test',
-				modelVersion: 'fixture-model',
-				emojiIndexVersion: 'fixture-index',
 		});
 
 		const result = await renderPicker({
@@ -270,9 +267,9 @@ describe('MkEmojiPicker emoji suggestions QA flows', () => {
 		expect(endpoint).toBe('notes/reactions/suggestions');
 		expect(payload).toMatchObject({
 			noteId: 'qa-note-fixture',
-			locale: expect.any(String),
-			language: expect.any(String),
 		});
+		expect(payload).not.toHaveProperty('locale');
+		expect(payload).not.toHaveProperty('language');
 		expect(payload).not.toHaveProperty('text');
 		expect(payload).not.toHaveProperty('cw');
 		expect(payload).not.toHaveProperty('i');
@@ -331,10 +328,7 @@ describe('MkEmojiPicker emoji suggestions QA flows', () => {
 				aliases: suggestedEmoji.aliases,
 				category: suggestedEmoji.category,
 			}],
-			source: 'live',
 			reason: 'component-test',
-			modelVersion: 'fixture-model',
-			emojiIndexVersion: 'fixture-index',
 		});
 
 		const result = await renderPicker({
@@ -355,10 +349,7 @@ describe('MkEmojiPicker emoji suggestions QA flows', () => {
 				aliases: suggestedEmoji.aliases,
 				category: suggestedEmoji.category,
 			}],
-			source: 'live',
 			reason: 'component-test',
-			modelVersion: 'fixture-model',
-			emojiIndexVersion: 'fixture-index',
 		});
 
 		const result = await renderPicker({
@@ -371,7 +362,7 @@ describe('MkEmojiPicker emoji suggestions QA flows', () => {
 		expect(mockedMisskeyApi.mock.calls[0][0]).toBe('notes/reactions/suggestions');
 	});
 
-	test('filters suggestion items below the minimum score before rendering', async () => {
+	test('renders backend suggestion items without frontend score filtering', async () => {
 		mockedMisskeyApi.mockResolvedValueOnce({
 			items: [
 				{
@@ -387,10 +378,7 @@ describe('MkEmojiPicker emoji suggestions QA flows', () => {
 					category: thresholdEmoji.category,
 				},
 			],
-			source: 'live',
 			reason: 'component-test',
-			modelVersion: 'fixture-model',
-			emojiIndexVersion: 'fixture-index',
 		});
 
 		const result = await renderPicker({
@@ -401,7 +389,7 @@ describe('MkEmojiPicker emoji suggestions QA flows', () => {
 		await waitFor(() => expect(result.getByText('Suggested')).not.toBeNull());
 		await waitFor(() => expect(mockedMisskeyApi).toHaveBeenCalledTimes(1));
 		expect(result.container.querySelector('[data-emoji=":threshold_ok:"]')).not.toBeNull();
-		expect(result.container.querySelector('[data-emoji=":below_threshold:"]')).toBeNull();
+		expect(result.container.querySelector('[data-emoji=":below_threshold:"]')).not.toBeNull();
 	});
 
 	test.each([

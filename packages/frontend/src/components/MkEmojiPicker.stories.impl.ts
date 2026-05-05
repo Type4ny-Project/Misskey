@@ -25,8 +25,6 @@ type EmojiSuggestionStoryMeta = typeof instance & {
 
 type SuggestionRequestBody = {
 	noteId: string;
-	locale?: string;
-	language?: string;
 	i?: string | null;
 };
 
@@ -97,8 +95,6 @@ function renderDisabledReactionPickerStory(args: Record<string, unknown>) {
 function isSuggestionRequestBody(value: unknown): value is SuggestionRequestBody {
 	return typeof value === 'object' && value !== null &&
 		'noteId' in value && typeof value.noteId === 'string' &&
-		(!('locale' in value) || typeof value.locale === 'string') &&
-		(!('language' in value) || typeof value.language === 'string') &&
 		(!('i' in value) || value.i == null || typeof value.i === 'string');
 }
 
@@ -108,6 +104,8 @@ function assertSuggestionRequestBody(value: unknown, noteId: string): asserts va
 		throw new Error('invalid suggestion request body');
 	}
 	expect(value.noteId).toBe(noteId);
+	expect(value).not.toHaveProperty('locale');
+	expect(value).not.toHaveProperty('language');
 	expect(value).not.toHaveProperty('text');
 	expect(value).not.toHaveProperty(['c', 'w'].join(''));
 }
@@ -221,10 +219,7 @@ export const SuggestedReaction = {
 							aliases: suggestedEmoji.aliases,
 							category: suggestedEmoji.category,
 						}],
-						source: 'live',
 						reason: 'story',
-						modelVersion: 'story-model',
-						emojiIndexVersion: 'story-index',
 					});
 				}),
 			],
@@ -260,7 +255,7 @@ export const SuggestionsDisabledNoCall = {
 				http.post('/api/notes/reactions/suggestions', async ({ request }) => {
 					const body: unknown = await request.json();
 					noCallRequestBodies.push(body);
-					return HttpResponse.json({ items: [], source: 'fallback' });
+					return HttpResponse.json({ items: [], reason: 'fallback' });
 				}),
 			],
 		},
@@ -299,7 +294,7 @@ export const SuggestionsIneligibleNoCall = {
 				http.post('/api/notes/reactions/suggestions', async ({ request }) => {
 					const body: unknown = await request.json();
 					noCallRequestBodies.push(body);
-					return HttpResponse.json({ items: [], source: 'fallback' });
+					return HttpResponse.json({ items: [], reason: 'fallback' });
 				}),
 			],
 		},

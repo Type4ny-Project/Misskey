@@ -8,7 +8,6 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
 import type { MiNote } from '@/models/Note.js';
-import type { MiMeta } from '@/models/Meta.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
 import type Logger from '@/logger.js';
 import { LoggerService } from '@/core/LoggerService.js';
@@ -21,6 +20,7 @@ const NORMALIZATION_SCHEMA_VERSION = 'emoji-suggest-normalization-v1';
 const WORKER_OWNED_VERSION_PLACEHOLDER = 'worker-owned';
 const MAX_NORMALIZED_TEXT_LENGTH = 1000;
 const MIN_SUGGESTION_SCORE = 0.4;
+const MAX_RENOTE_NORMALIZATION_DEPTH = 4;
 
 export type EmojiSuggestionCandidate = {
 	name: string;
@@ -31,8 +31,14 @@ export type EmojiSuggestionCandidate = {
 
 export type EmojiSuggestionResponse = {
 	items: EmojiSuggestionCandidate[];
-	source: 'cache' | 'live' | 'fallback';
 	reason: string | null;
+};
+
+type EmojiSuggestionSource = 'cache' | 'live' | 'fallback';
+
+type ParsedWorkerResponse = {
+	response: EmojiSuggestionResponse;
+	source: EmojiSuggestionSource;
 	modelVersion: string;
 	emojiIndexVersion: string;
 };
@@ -51,7 +57,7 @@ type EmojiSuggestionLogEvent = {
 	schemaVersion: 'emoji-suggestion-observability-v1';
 	requestId: string;
 	outcome: 'success' | 'fallback';
-	source: EmojiSuggestionResponse['source'];
+	source: EmojiSuggestionSource;
 	fallbackReason: string | null;
 	workerStatus: number | null;
 	workerAuthStatus: 'not_attempted' | 'accepted' | 'rejected';
@@ -107,7 +113,7 @@ export class EmojiSuggestionService {
 
 		try {
 			const meta = await this.metaService.fetch();
-			const fallback = (reason: string): EmojiSuggestionResponse => this.createFallback(meta, reason);
+			const fallback = (reason: string): EmojiSuggestionResponse => this.createFallback(reason);
 
 			if (!meta.emojiSuggestionEnabled) return response = fallback('disabled');
 			if (!meta.emojiSuggestionEndpoint || !meta.emojiSuggestionApiKey) return response = fallback('unconfigured');
@@ -162,7 +168,11 @@ export class EmojiSuggestionService {
 
 				event.workerAuthStatus = 'accepted';
 
-				return response = parseWorkerResponse(await res.json(), maxResults);
+				const workerResponse = parseWorkerResponse(await res.json(), maxResults);
+				event.source = workerResponse.source;
+				event.modelVersion = workerResponse.modelVersion;
+				event.emojiIndexVersion = workerResponse.emojiIndexVersion;
+				return response = workerResponse.response;
 			} catch {
 				return response = fallback('timeout');
 			}
@@ -177,25 +187,19 @@ export class EmojiSuggestionService {
 		return note.visibility === 'public' || note.visibility === 'home';
 	}
 
-	private createFallback(meta: MiMeta, reason: string): EmojiSuggestionResponse {
+	private createFallback(reason: string): EmojiSuggestionResponse {
 		return {
 			items: [],
-			source: 'fallback',
 			reason,
-			modelVersion: WORKER_OWNED_VERSION_PLACEHOLDER,
-			emojiIndexVersion: WORKER_OWNED_VERSION_PLACEHOLDER,
 		};
 	}
 
 	private logCompletion(event: EmojiSuggestionLogEvent, response: EmojiSuggestionResponse, startedAt: number): void {
 		const durationMs = Math.max(0, Date.now() - startedAt);
-		event.outcome = response.source === 'fallback' ? 'fallback' : 'success';
-		event.source = response.source;
+		event.outcome = event.source === 'fallback' ? 'fallback' : 'success';
 		event.fallbackReason = response.reason;
-		event.cacheStatus = response.source === 'cache' ? 'hit' : response.source === 'live' ? 'miss' : event.cacheStatus;
+		event.cacheStatus = event.source === 'cache' ? 'hit' : event.source === 'live' ? 'miss' : event.cacheStatus;
 		event.resultCount = response.items.length;
-		event.modelVersion = response.modelVersion;
-		event.emojiIndexVersion = response.emojiIndexVersion;
 		event.durationMs = durationMs;
 		event.latencyBucket = bucketDurationMs(durationMs);
 		this.logger.info('emoji_suggestion_request', event);
@@ -207,10 +211,17 @@ export function clampMaxSuggestions(value: number): number {
 	return Math.min(16, Math.max(1, Math.trunc(value)));
 }
 
-export function normalizeEmojiSuggestionNoteText(note: Pick<MiNote, 'text' | 'cw' | 'tags'>): string {
-	const source = note.cw != null
-		? [note.cw, ...(note.tags ?? []).map(tag => `#${tag}`)].join(' ')
-		: note.text ?? '';
+type EmojiSuggestionTextSource = Pick<MiNote, 'text' | 'cw' | 'tags' | 'renote'>;
+
+export function normalizeEmojiSuggestionNoteText(note: EmojiSuggestionTextSource, depth = 0): string {
+	let source = '';
+	if (note.cw != null) {
+		source = [note.cw, ...(note.tags ?? []).map(tag => `#${tag}`)].join(' ');
+	} else if (note.text != null) {
+		source = note.text;
+	} else if (note.renote != null && depth < MAX_RENOTE_NORMALIZATION_DEPTH) {
+		source = normalizeEmojiSuggestionNoteText(note.renote, depth + 1);
+	}
 
 	return source
 		.normalize('NFKC')
@@ -224,7 +235,7 @@ export function normalizeEmojiSuggestionNoteText(note: Pick<MiNote, 'text' | 'cw
 		.slice(0, MAX_NORMALIZED_TEXT_LENGTH);
 }
 
-function parseWorkerResponse(value: unknown, maxResults: number): EmojiSuggestionResponse {
+function parseWorkerResponse(value: unknown, maxResults: number): ParsedWorkerResponse {
 	if (!isWorkerSuggestResponse(value)) return createMalformedFallback();
 	if (!Array.isArray(value.items)) return createMalformedFallback();
 	if (value.source !== 'cache' && value.source !== 'live' && value.source !== 'fallback') return createMalformedFallback();
@@ -245,9 +256,11 @@ function parseWorkerResponse(value: unknown, maxResults: number): EmojiSuggestio
 	}
 
 	return {
-		items,
+		response: {
+			items,
+			reason: value.reason,
+		},
 		source: value.source,
-		reason: value.reason,
 		modelVersion: value.modelVersion,
 		emojiIndexVersion: value.emojiIndexVersion,
 	};
@@ -268,11 +281,13 @@ function isWorkerSuggestItem(value: unknown): value is EmojiSuggestionCandidate 
 		&& (typeof item.category === 'string' || item.category === null);
 }
 
-function createMalformedFallback(): EmojiSuggestionResponse {
+function createMalformedFallback(): ParsedWorkerResponse {
 	return {
-		items: [],
+		response: {
+			items: [],
+			reason: 'malformedResponse',
+		},
 		source: 'fallback',
-		reason: 'malformedResponse',
 		modelVersion: WORKER_OWNED_VERSION_PLACEHOLDER,
 		emojiIndexVersion: WORKER_OWNED_VERSION_PLACEHOLDER,
 	};

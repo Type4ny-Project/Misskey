@@ -86,10 +86,13 @@ describe('EmojiSuggestionService', () => {
 		const send = vi.fn(async () => jsonResponse(workerResponse()));
 		const { service, logInfo } = createService(createMeta(), send);
 
-		await expect(service.suggestForNote(createNote())).resolves.toMatchObject({
-			source: 'live',
+		const publicResult = await service.suggestForNote(createNote());
+		expect(publicResult).toMatchObject({
 			items: [{ name: 'ablobgoodnightreverse' }],
 		});
+		expect(publicResult).not.toHaveProperty('source');
+		expect(publicResult).not.toHaveProperty('modelVersion');
+		expect(publicResult).not.toHaveProperty('emojiIndexVersion');
 		expect(send).toHaveBeenCalledTimes(1);
 		expect(readLastLogEvent(logInfo)).toMatchObject({
 			event: 'emoji_suggestion_request',
@@ -118,7 +121,6 @@ describe('EmojiSuggestionService', () => {
 		expect(body.normalizedText).toContain('@user');
 
 		await expect(service.suggestForNote(createNote({ localOnly: true }))).resolves.toMatchObject({
-			source: 'live',
 			items: [{ name: 'ablobgoodnightreverse' }],
 		});
 		expect(send).toHaveBeenCalledTimes(2);
@@ -126,7 +128,6 @@ describe('EmojiSuggestionService', () => {
 		expect(localOnlyBody.eligibility).toEqual({ visibility: 'public', localOnly: true });
 
 		await expect(service.suggestForNote(createNote({ visibility: 'home' }))).resolves.toMatchObject({
-			source: 'live',
 			items: [{ name: 'ablobgoodnightreverse' }],
 		});
 		expect(send).toHaveBeenCalledTimes(3);
@@ -139,7 +140,6 @@ describe('EmojiSuggestionService', () => {
 		]) {
 			await expect(service.suggestForNote(note)).resolves.toMatchObject({
 				items: [],
-				source: 'fallback',
 				reason: 'ineligible',
 			});
 		}
@@ -158,7 +158,7 @@ describe('EmojiSuggestionService', () => {
 
 		const cacheSend = vi.fn(async () => jsonResponse(workerResponse({ source: 'cache' })));
 		const cacheHarness = createService(createMeta(), cacheSend);
-		await expect(cacheHarness.service.suggestForNote(createNote())).resolves.toMatchObject({ source: 'cache' });
+		await expect(cacheHarness.service.suggestForNote(createNote())).resolves.toMatchObject({ items: [{ name: 'ablobgoodnightreverse' }] });
 		expect(readLastLogEvent(cacheHarness.logInfo)).toMatchObject({
 			outcome: 'success',
 			source: 'cache',
@@ -170,7 +170,7 @@ describe('EmojiSuggestionService', () => {
 
 		const authSend = vi.fn(async () => jsonResponse({ ok: false }, 401));
 		const authHarness = createService(createMeta(), authSend);
-		await expect(authHarness.service.suggestForNote(createNote())).resolves.toMatchObject({ source: 'fallback', reason: 'workerUnauthorized' });
+		await expect(authHarness.service.suggestForNote(createNote())).resolves.toMatchObject({ reason: 'workerUnauthorized' });
 		expect(readLastLogEvent(authHarness.logInfo)).toMatchObject({
 			outcome: 'fallback',
 			fallbackReason: 'workerUnauthorized',
@@ -181,7 +181,7 @@ describe('EmojiSuggestionService', () => {
 
 		const timeoutSend = vi.fn(async () => { throw new Error('aborted'); });
 		const timeoutHarness = createService(createMeta(), timeoutSend);
-		await expect(timeoutHarness.service.suggestForNote(createNote())).resolves.toMatchObject({ source: 'fallback', reason: 'timeout' });
+		await expect(timeoutHarness.service.suggestForNote(createNote())).resolves.toMatchObject({ reason: 'timeout' });
 		expect(readLastLogEvent(timeoutHarness.logInfo)).toMatchObject({
 			outcome: 'fallback',
 			fallbackReason: 'timeout',
@@ -202,7 +202,6 @@ describe('EmojiSuggestionService', () => {
 
 			await expect(service.suggestForNote(createNote())).resolves.toMatchObject({
 				items: [],
-				source: 'fallback',
 			});
 			expect(send).not.toHaveBeenCalled();
 		}
@@ -219,7 +218,6 @@ describe('EmojiSuggestionService', () => {
 
 			await expect(service.suggestForNote(createNote())).resolves.toMatchObject({
 				items: [],
-				source: 'fallback',
 			});
 			expect(send).toHaveBeenCalledTimes(1);
 		}
@@ -235,7 +233,6 @@ describe('EmojiSuggestionService', () => {
 		const { service, logInfo } = createService(createMeta(), send);
 
 		await expect(service.suggestForNote(createNote({ visibility: 'home' }))).resolves.toMatchObject({
-			source: 'live',
 			items: [{ name: 'threshold-ok', score: 0.4 }],
 		});
 		expect(send).toHaveBeenCalledTimes(1);
@@ -253,6 +250,19 @@ describe('EmojiSuggestionService', () => {
 		expect(normalized).toContain('#fixtureTag');
 		expect(normalized).not.toContain('hidden body');
 		expect(normalized).not.toContain('https://example.invalid');
+	});
+
+	test('uses renote source text when the reaction target has no body text', async () => {
+		const send = vi.fn(async () => jsonResponse(workerResponse()));
+		const { service } = createService(createMeta(), send);
+
+		await service.suggestForNote(createNote({
+			text: null,
+			renote: createNote({ text: 'renote source text' }),
+		}));
+
+		const body = JSON.parse(send.mock.calls[0][1].body as string) as { normalizedText: string };
+		expect(body.normalizedText).toBe('renote source text');
 	});
 });
 

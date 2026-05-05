@@ -146,7 +146,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { ref, useTemplateRef, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import * as Misskey from 'misskey-js';
-import { lang } from '@@/js/config.js';
 import {
 	emojilist,
 	emojiCharByCategory,
@@ -177,7 +176,6 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 const router = useRouter();
 const PREVIEW_DELAY = 500;
 const FALLBACK_SUGGESTION_LIMIT = 8;
-const MIN_SUGGESTION_SCORE = 0.4;
 
 type EmojiSuggestionItem = {
 	name: string;
@@ -188,16 +186,11 @@ type EmojiSuggestionItem = {
 
 type EmojiSuggestionResponse = {
 	items: EmojiSuggestionItem[];
-	source: 'cache' | 'live' | 'fallback';
-	reason?: string;
-	modelVersion?: string;
-	emojiIndexVersion?: string;
+	reason?: string | null;
 };
 
 type EmojiSuggestionRequest = {
 	noteId: Misskey.entities.Note['id'];
-	locale?: string;
-	language?: string;
 };
 
 const props = withDefaults(defineProps<{
@@ -532,8 +525,6 @@ function normalizeSuggestionItems(items: EmojiSuggestionItem[]): Misskey.entitie
 	const emojis: Misskey.entities.EmojiSimple[] = [];
 
 	for (const item of items) {
-		if (item.score < MIN_SUGGESTION_SCORE) continue;
-
 		const name = item.name.replaceAll(':', '').trim();
 		if (name === '' || seen.has(name)) continue;
 
@@ -564,10 +555,7 @@ function isEmojiSuggestionResponse(value: unknown): value is EmojiSuggestionResp
 	return isRecord(value) &&
 		Array.isArray(value.items) &&
 		value.items.every(isEmojiSuggestionItem) &&
-		(value.source === 'cache' || value.source === 'live' || value.source === 'fallback') &&
-		(value.reason == null || typeof value.reason === 'string') &&
-		(value.modelVersion == null || typeof value.modelVersion === 'string') &&
-		(value.emojiIndexVersion == null || typeof value.emojiIndexVersion === 'string');
+		(value.reason == null || typeof value.reason === 'string');
 }
 
 async function loadSuggestedEmojis(): Promise<void> {
@@ -583,9 +571,7 @@ async function loadSuggestedEmojis(): Promise<void> {
 	try {
 		const response: unknown = await misskeyApi('notes/reactions/suggestions', {
 			noteId,
-			locale: lang,
-			language: lang.split('-')[0],
-		}, undefined, abortController.signal);
+		} satisfies EmojiSuggestionRequest, undefined, abortController.signal);
 		if (!isEmojiSuggestionResponse(response)) throw new Error('invalid emoji suggestion response');
 
 		if (suggestionAbortController !== abortController) return;

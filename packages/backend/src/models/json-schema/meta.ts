@@ -222,6 +222,20 @@ export const packedMetaLiteSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		emojiSuggestion: {
+			type: 'object',
+			optional: false, nullable: false,
+			properties: {
+				enabled: {
+					type: 'boolean',
+					optional: false, nullable: false,
+				},
+				maxSuggestions: {
+					type: 'number',
+					optional: false, nullable: false,
+				},
+			},
+		},
 		sentryForFrontend: {
 			type: 'object',
 			optional: false, nullable: true,

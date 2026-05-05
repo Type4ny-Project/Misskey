@@ -126,6 +126,10 @@ export class MetaEntityService {
 			enableServiceWorker: instance.enableServiceWorker,
 
 			translatorAvailable: instance.deeplAuthKey != null,
+			emojiSuggestion: {
+				enabled: instance.emojiSuggestionEnabled,
+				maxSuggestions: instance.emojiSuggestionMaxSuggestions,
+			},
 
 			serverRules: instance.serverRules,
 

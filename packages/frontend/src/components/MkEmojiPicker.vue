@@ -52,6 +52,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</section>
 
+		<section v-if="q === '' && suggestedEmojis.length > 0" class="suggested">
+			<header class="_acrylic"><i class="ti ti-sparkles ti-fw"></i> Suggested</header>
+			<div class="body">
+				<button
+					v-for="emoji in suggestedEmojis"
+					:key="emoji.name"
+					:data-emoji="`:${emoji.name}:`"
+					class="_button item suggestedItem"
+					:disabled="!canReact(emoji)"
+					:title="emoji.name"
+					tabindex="0"
+					@pointerenter="(ev) => startPreview(`:${emoji.name}:`, ev)"
+					@pointerleave="endPreview"
+					@click="chosen(emoji, $event)"
+				>
+					<MkCustomEmoji class="emoji" :name="emoji.name" :normal="true"/>
+				</button>
+			</div>
+		</section>
+
 		<div v-if="tab === 'index'" class="group index">
 			<section v-if="showPinned && (pinned && pinned.length > 0)">
 				<div class="body">
@@ -126,6 +146,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { ref, useTemplateRef, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import * as Misskey from 'misskey-js';
+import { lang } from '@@/js/config.js';
 import {
 	emojilist,
 	emojiCharByCategory,
@@ -150,9 +171,34 @@ import { checkReactionPermissions } from '@/utility/check-reaction-permissions.j
 import { prefer } from '@/preferences.js';
 import { useRouter } from '@/router.js';
 import { haptic } from '@/utility/haptic.js';
+import { instance } from '@/instance.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 
 const router = useRouter();
 const PREVIEW_DELAY = 500;
+const SUGGESTION_TIMEOUT_MS = 1500;
+const FALLBACK_SUGGESTION_LIMIT = 8;
+
+type EmojiSuggestionItem = {
+	name: string;
+	score: number;
+	aliases?: string[];
+	category?: string | null;
+};
+
+type EmojiSuggestionResponse = {
+	items: EmojiSuggestionItem[];
+	source: 'cache' | 'live' | 'fallback';
+	reason?: string;
+	modelVersion?: string;
+	emojiIndexVersion?: string;
+};
+
+type EmojiSuggestionRequest = {
+	noteId: Misskey.entities.Note['id'];
+	locale?: string;
+	language?: string;
+};
 
 const props = withDefaults(defineProps<{
 	showPinned?: boolean;
@@ -258,7 +304,11 @@ const height = computed(() => emojiPickerHeight.value);
 const q = ref<string>('');
 const searchResultCustom = ref<Misskey.entities.EmojiSimple[]>([]);
 const searchResultUnicode = ref<UnicodeEmojiDef[]>([]);
+const suggestedEmojis = ref<Misskey.entities.EmojiSimple[]>([]);
 const tab = ref<'index' | 'custom' | 'unicode' | 'tags'>('index');
+
+let suggestionAbortController: AbortController | null = null;
+let suggestionTimeoutId: number | null = null;
 
 const customEmojiFolderRoot: CustomEmojiFolderTree = { value: '', category: '', children: [] };
 
@@ -446,8 +496,120 @@ watch(q, () => {
 	searchResultUnicode.value = Array.from(searchUnicode());
 });
 
+watch(() => [
+	props.asReactionPicker,
+	props.targetNote?.id,
+	props.targetNote?.visibility,
+	instance.emojiSuggestion?.enabled,
+], () => {
+	loadSuggestedEmojis();
+}, {
+	immediate: true,
+});
+
 function canReact(emoji: Misskey.entities.EmojiSimple | UnicodeEmojiDef | string): boolean {
 	return !props.targetNote || checkReactionPermissions($i!, props.targetNote, emoji);
+}
+
+function canRequestSuggestions(): boolean {
+	const note = props.targetNote;
+
+	return props.asReactionPicker === true &&
+		instance.emojiSuggestion?.enabled === true &&
+		note != null &&
+		note.visibility === 'public';
+}
+
+function clearSuggestionRequest(): void {
+	if (suggestionTimeoutId !== null) {
+		window.clearTimeout(suggestionTimeoutId);
+		suggestionTimeoutId = null;
+	}
+
+	if (suggestionAbortController !== null) {
+		suggestionAbortController.abort();
+		suggestionAbortController = null;
+	}
+}
+
+function normalizeSuggestionItems(items: EmojiSuggestionItem[]): Misskey.entities.EmojiSimple[] {
+	const max = Math.max(1, Math.min(instance.emojiSuggestion?.maxSuggestions ?? FALLBACK_SUGGESTION_LIMIT, 16));
+	const seen = new Set<string>();
+	const emojis: Misskey.entities.EmojiSimple[] = [];
+
+	for (const item of items) {
+		const name = item.name.replaceAll(':', '').trim();
+		if (name === '' || seen.has(name)) continue;
+
+		const emoji = customEmojisMap.get(name);
+		if (emoji == null) continue;
+
+		seen.add(name);
+		emojis.push(emoji);
+		if (emojis.length >= max) break;
+	}
+
+	return emojis;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null;
+}
+
+function isEmojiSuggestionItem(value: unknown): value is EmojiSuggestionItem {
+	return isRecord(value) &&
+		typeof value.name === 'string' &&
+		typeof value.score === 'number' &&
+		(value.aliases == null || (Array.isArray(value.aliases) && value.aliases.every(alias => typeof alias === 'string'))) &&
+		(value.category == null || typeof value.category === 'string');
+}
+
+function isEmojiSuggestionResponse(value: unknown): value is EmojiSuggestionResponse {
+	return isRecord(value) &&
+		Array.isArray(value.items) &&
+		value.items.every(isEmojiSuggestionItem) &&
+		(value.source === 'cache' || value.source === 'live' || value.source === 'fallback') &&
+		(value.reason == null || typeof value.reason === 'string') &&
+		(value.modelVersion == null || typeof value.modelVersion === 'string') &&
+		(value.emojiIndexVersion == null || typeof value.emojiIndexVersion === 'string');
+}
+
+async function loadSuggestedEmojis(): Promise<void> {
+	clearSuggestionRequest();
+	suggestedEmojis.value = [];
+
+	if (!canRequestSuggestions()) return;
+
+	const noteId = props.targetNote!.id;
+	const abortController = new AbortController();
+	suggestionAbortController = abortController;
+	suggestionTimeoutId = window.setTimeout(() => {
+		abortController.abort();
+	}, SUGGESTION_TIMEOUT_MS);
+
+	try {
+		const response: unknown = await misskeyApi('notes/reactions/suggestions', {
+			noteId,
+			locale: lang,
+			language: lang.split('-')[0],
+		}, undefined, abortController.signal);
+		if (!isEmojiSuggestionResponse(response)) throw new Error('invalid emoji suggestion response');
+
+		if (suggestionAbortController !== abortController) return;
+		suggestedEmojis.value = normalizeSuggestionItems(response.items ?? []).filter(canReact);
+	} catch {
+		if (suggestionAbortController === abortController) {
+			suggestedEmojis.value = [];
+		}
+	} finally {
+		if (suggestionAbortController === abortController) {
+			if (suggestionTimeoutId !== null) {
+				window.clearTimeout(suggestionTimeoutId);
+				suggestionTimeoutId = null;
+			}
+			suggestionAbortController = null;
+		}
+	}
 }
 
 function filterCategory(emoji: Misskey.entities.EmojiSimple, category: string): boolean {
@@ -580,6 +742,7 @@ onMounted(() => {
 
 onUnmounted(() => {
 	endPreview();
+	clearSuggestionRequest();
 });
 
 defineExpose({
@@ -899,6 +1062,28 @@ defineExpose({
 
 				&:empty {
 					display: none;
+				}
+			}
+
+			&.suggested {
+				border-bottom: solid 0.5px var(--MI_THEME-divider);
+				background: linear-gradient(135deg, color-mix(in srgb, var(--MI_THEME-accent) 10%, transparent), transparent 56%);
+
+				> header {
+					color: var(--MI_THEME-accent);
+				}
+
+				> .body {
+					padding-top: 4px;
+					padding-bottom: 6px;
+
+					> .suggestedItem {
+						border-radius: 10px;
+
+						&:hover {
+							background: color-mix(in srgb, var(--MI_THEME-accent) 16%, transparent);
+						}
+					}
 				}
 			}
 		}

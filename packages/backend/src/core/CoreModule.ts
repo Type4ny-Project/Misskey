@@ -25,6 +25,7 @@ import { AchievementService } from './AchievementService.js';
 import { AvatarDecorationService } from './AvatarDecorationService.js';
 import { CaptchaService } from './CaptchaService.js';
 import { CustomEmojiService } from './CustomEmojiService.js';
+import { EmojiSuggestionService } from './EmojiSuggestionService.js';
 import { EmojiRequestService } from './EmojiRequestService.js';
 import { DeleteAccountService } from './DeleteAccountService.js';
 import { DownloadService } from './DownloadService.js';
@@ -175,6 +176,7 @@ const $AchievementService: Provider = { provide: 'AchievementService', useExisti
 const $AvatarDecorationService: Provider = { provide: 'AvatarDecorationService', useExisting: AvatarDecorationService };
 const $CaptchaService: Provider = { provide: 'CaptchaService', useExisting: CaptchaService };
 const $CustomEmojiService: Provider = { provide: 'CustomEmojiService', useExisting: CustomEmojiService };
+const $EmojiSuggestionService: Provider = { provide: 'EmojiSuggestionService', useExisting: EmojiSuggestionService };
 const $DeleteAccountService: Provider = { provide: 'DeleteAccountService', useExisting: DeleteAccountService };
 const $DownloadService: Provider = { provide: 'DownloadService', useExisting: DownloadService };
 const $DriveService: Provider = { provide: 'DriveService', useExisting: DriveService };
@@ -333,6 +335,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AvatarDecorationService,
 		CaptchaService,
 		CustomEmojiService,
+		EmojiSuggestionService,
 		EmojiRequestService,
 		DeleteAccountService,
 		DownloadService,
@@ -489,6 +492,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AvatarDecorationService,
 		$CaptchaService,
 		$CustomEmojiService,
+		$EmojiSuggestionService,
 		$DeleteAccountService,
 		$DownloadService,
 		$DriveService,
@@ -643,6 +647,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AvatarDecorationService,
 		CaptchaService,
 		CustomEmojiService,
+		EmojiSuggestionService,
 		EmojiRequestService,
 		DeleteAccountService,
 		DownloadService,
@@ -798,6 +803,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AvatarDecorationService,
 		$CaptchaService,
 		$CustomEmojiService,
+		$EmojiSuggestionService,
 		$DeleteAccountService,
 		$DownloadService,
 		$DriveService,

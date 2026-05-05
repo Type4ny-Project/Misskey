@@ -625,6 +625,33 @@ export class MiMeta {
 	})
 	public enableReactionsBuffering: boolean;
 
+	@Column('boolean', {
+		default: false,
+	})
+	public emojiSuggestionEnabled: boolean;
+
+	@Column('varchar', {
+		length: 1024,
+		nullable: true,
+	})
+	public emojiSuggestionEndpoint: string | null;
+
+	@Column('varchar', {
+		length: 1024,
+		nullable: true,
+	})
+	public emojiSuggestionApiKey: string | null;
+
+	@Column('integer', {
+		default: 300,
+	})
+	public emojiSuggestionTimeoutMs: number;
+
+	@Column('integer', {
+		default: 8,
+	})
+	public emojiSuggestionMaxSuggestions: number;
+
 	@Column('integer', {
 		default: 0,
 	})

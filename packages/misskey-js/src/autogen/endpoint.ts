@@ -19,6 +19,8 @@ import type {
 	AdminAccountsFindByEmailResponse,
 	AdminAccountsPresentPointsRequest,
 	AdminAccountsPresentPointsResponse,
+	AdminAccountsRevokePointsRequest,
+	AdminAccountsRevokePointsResponse,
 	AdminAdCreateRequest,
 	AdminAdCreateResponse,
 	AdminAdDeleteRequest,
@@ -557,6 +559,8 @@ import type {
 	NotesReactionsResponse,
 	NotesReactionsCreateRequest,
 	NotesReactionsDeleteRequest,
+	NotesReactionsSuggestionsRequest,
+	NotesReactionsSuggestionsResponse,
 	NotesRenotesRequest,
 	NotesRenotesResponse,
 	NotesRepliesRequest,
@@ -710,6 +714,7 @@ export type Endpoints = {
 	'admin/accounts/delete': { req: AdminAccountsDeleteRequest; res: EmptyResponse };
 	'admin/accounts/find-by-email': { req: AdminAccountsFindByEmailRequest; res: AdminAccountsFindByEmailResponse };
 	'admin/accounts/present-points': { req: AdminAccountsPresentPointsRequest; res: AdminAccountsPresentPointsResponse };
+	'admin/accounts/revoke-points': { req: AdminAccountsRevokePointsRequest; res: AdminAccountsRevokePointsResponse };
 	'admin/ad/create': { req: AdminAdCreateRequest; res: AdminAdCreateResponse };
 	'admin/ad/delete': { req: AdminAdDeleteRequest; res: EmptyResponse };
 	'admin/ad/list': { req: AdminAdListRequest; res: AdminAdListResponse };
@@ -1062,6 +1067,7 @@ export type Endpoints = {
 	'notes/reactions': { req: NotesReactionsRequest; res: NotesReactionsResponse };
 	'notes/reactions/create': { req: NotesReactionsCreateRequest; res: EmptyResponse };
 	'notes/reactions/delete': { req: NotesReactionsDeleteRequest; res: EmptyResponse };
+	'notes/reactions/suggestions': { req: NotesReactionsSuggestionsRequest; res: NotesReactionsSuggestionsResponse };
 	'notes/renotes': { req: NotesRenotesRequest; res: NotesRenotesResponse };
 	'notes/replies': { req: NotesRepliesRequest; res: NotesRepliesResponse };
 	'notes/search': { req: NotesSearchRequest; res: NotesSearchResponse };

@@ -26,6 +26,15 @@
       "agent": "explore",
       "category": "",
       "updated_at": "2026-05-03T19:36:02.996Z"
+    },
+    "todo:2": {
+      "task_key": "todo:2",
+      "task_label": "2",
+      "task_title": "Add `emoji-suggest-worker` workspace scaffold and mockable provider interfaces",
+      "session_id": "ses_210a32adaffeSUkujwCm7CWJoL",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-05-03T19:42:55.275Z"
     }
   }
 }

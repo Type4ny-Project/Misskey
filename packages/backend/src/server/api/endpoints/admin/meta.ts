@@ -13,7 +13,7 @@ import { DEFAULT_POLICIES } from '@/core/RoleService.js';
 import { SystemAccountService } from '@/core/SystemAccountService.js';
 import { envOption } from '@/env.js';
 import type { MiUser } from '@/models/User.js';
-import type {UsersRepository} from "@/models/_.js";
+import type { UsersRepository } from "@/models/_.js";
 
 export const meta = {
 	tags: ['meta'],
@@ -407,6 +407,26 @@ export const meta = {
 				type: 'boolean',
 				optional: false, nullable: false,
 			},
+			emojiSuggestionEnabled: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			emojiSuggestionEndpoint: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			emojiSuggestionApiKey: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			emojiSuggestionTimeoutMs: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			emojiSuggestionMaxSuggestions: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
 			notesPerOneAd: {
 				type: 'number',
 				optional: false, nullable: false,
@@ -759,6 +779,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				perUserHomeTimelineCacheMax: instance.perUserHomeTimelineCacheMax,
 				perUserListTimelineCacheMax: instance.perUserListTimelineCacheMax,
 				enableReactionsBuffering: instance.enableReactionsBuffering,
+				emojiSuggestionEnabled: instance.emojiSuggestionEnabled,
+				emojiSuggestionEndpoint: instance.emojiSuggestionEndpoint,
+				emojiSuggestionApiKey: instance.emojiSuggestionApiKey == null ? null : 'Masked',
+				emojiSuggestionTimeoutMs: instance.emojiSuggestionTimeoutMs,
+				emojiSuggestionMaxSuggestions: instance.emojiSuggestionMaxSuggestions,
 				notesPerOneAd: instance.notesPerOneAd,
 				summalyProxy: instance.urlPreviewSummaryProxyUrl,
 				urlPreviewEnabled: instance.urlPreviewEnabled,

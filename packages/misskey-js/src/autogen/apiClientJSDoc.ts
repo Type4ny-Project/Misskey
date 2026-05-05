@@ -121,6 +121,17 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Credential required**: *Yes* / **Permission**: *write:admin:account*
+     */
+    request<E extends 'admin/accounts/revoke-points', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
      * **Credential required**: *Yes* / **Permission**: *write:admin:ad*
      */
     request<E extends 'admin/ad/create', P extends Endpoints[E]['req']>(
@@ -4034,6 +4045,17 @@ declare module '../api.js' {
      * **Credential required**: *Yes* / **Permission**: *write:reactions*
      */
     request<E extends 'notes/reactions/delete', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *read:account*
+     */
+    request<E extends 'notes/reactions/suggestions', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,

@@ -97,6 +97,15 @@ export type paths = {
          */
         post: operations['admin___accounts___present-points'];
     };
+    '/admin/accounts/revoke-points': {
+        /**
+         * admin/accounts/revoke-points
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:account*
+         */
+        post: operations['admin___accounts___revoke-points'];
+    };
     '/admin/ad/create': {
         /**
          * admin/ad/create
@@ -3314,6 +3323,15 @@ export type paths = {
          */
         post: operations['notes___reactions___delete'];
     };
+    '/notes/reactions/suggestions': {
+        /**
+         * notes/reactions/suggestions
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:account*
+         */
+        post: operations['notes___reactions___suggestions'];
+    };
     '/notes/renotes': {
         /**
          * notes/renotes
@@ -5681,6 +5699,10 @@ export type components = {
             enableEmail: boolean;
             enableServiceWorker: boolean;
             translatorAvailable: boolean;
+            emojiSuggestion: {
+                enabled: boolean;
+                maxSuggestions: number;
+            };
             sentryForFrontend: {
                 options: {
                     dsn: string;
@@ -6534,6 +6556,76 @@ export interface operations {
         };
     };
     'admin___accounts___present-points': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    userId: string;
+                    points: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        success: boolean;
+                        newBalance: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___accounts___revoke-points': {
         requestBody: {
             content: {
                 'application/json': {
@@ -10458,6 +10550,11 @@ export interface operations {
                         perUserHomeTimelineCacheMax: number;
                         perUserListTimelineCacheMax: number;
                         enableReactionsBuffering: boolean;
+                        emojiSuggestionEnabled: boolean;
+                        emojiSuggestionEndpoint: string | null;
+                        emojiSuggestionApiKey: string | null;
+                        emojiSuggestionTimeoutMs: number;
+                        emojiSuggestionMaxSuggestions: number;
                         notesPerOneAd: number;
                         backgroundImageUrl: string | null;
                         backgroundImageUrls: {
@@ -13816,6 +13913,11 @@ export interface operations {
                     perUserHomeTimelineCacheMax?: number;
                     perUserListTimelineCacheMax?: number;
                     enableReactionsBuffering?: boolean;
+                    emojiSuggestionEnabled?: boolean;
+                    emojiSuggestionEndpoint?: string | null;
+                    emojiSuggestionApiKey?: string | null;
+                    emojiSuggestionTimeoutMs?: number;
+                    emojiSuggestionMaxSuggestions?: number;
                     notesPerOneAd?: number;
                     silencedHosts?: string[] | null;
                     mediaSilencedHosts?: string[] | null;
@@ -32109,6 +32211,88 @@ export interface operations {
             };
             /** @description Too many requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    notes___reactions___suggestions: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    noteId: string;
+                    /** @default ja-JP */
+                    locale?: string;
+                    /** @default ja */
+                    language?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        items: {
+                            name: string;
+                            score: number;
+                            aliases: string[];
+                            category: string | null;
+                        }[];
+                        /** @enum {string} */
+                        source: 'cache' | 'live' | 'fallback';
+                        reason: string | null;
+                        modelVersion: string;
+                        emojiIndexVersion: string;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
                 headers: {
                     [name: string]: unknown;
                 };

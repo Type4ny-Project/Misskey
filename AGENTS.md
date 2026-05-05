@@ -35,6 +35,7 @@
 ## Architecture gotchas
 - Backend build uses Rolldown (`packages/backend/rolldown.config.ts`), not plain `tsc`; backend typecheck uses `tsgo` for app, test, and federation configs.
 - Frontend build uses `packages/frontend/build.ts` around Vite; frontend routing is the custom `nirax` router, and route order matters.
+- Frontend code must call Misskey API endpoints through `misskeyApi`/`misskeyApiGet` from `@/utility/misskey-api.js`, not ad hoc `window.fetch` calls or manual `apiUrl` wrappers. Use direct fetch only for non-Misskey endpoints such as file upload transports or explicitly documented exceptions.
 - New Vue components should use Composition API with setup syntax; existing Options API components are legacy.
 - The Worker package is a broad frontend/static/SSR layer, not an `/api` proxy. Before `pnpm deploy:cloudflare-worker`, configure the no-worker backend overrides in `packages/frontend-worker/CLOUDFLARE_SINGLE_ORIGIN_ROUTES.md` (`/api/*`, `/streaming*`, auth, ActivityPub, etc.).
 - Worker build/deploy commands are root wrappers: `pnpm build:cloudflare-worker` and `pnpm deploy:cloudflare-worker`; package-local scripts are `pnpm --filter frontend-worker cf:build`, `dev`, `deploy`, and `check`.

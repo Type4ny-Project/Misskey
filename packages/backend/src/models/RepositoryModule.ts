@@ -89,6 +89,13 @@ import {
 	MiUserPublickey,
 	MiUserSecurityKey,
 	MiWebhook,
+	MiChatMessage,
+	MiChatRoom,
+	MiChatRoomMembership,
+	MiChatRoomInvitation,
+	MiChatApproval,
+	MiInboxRule,
+	MiEvent,
 } from './_.js';
 
 function createRepositoryProxy<T extends ObjectLiteral>(runtime: TenantRuntimeService, target: EntityTarget<T>, extend = true): Repository<T> {
@@ -190,6 +197,12 @@ const providers = [
 	repositoryProvider(DI.bubbleGameRecordsRepository, MiBubbleGameRecord),
 	repositoryProvider(DI.reversiGamesRepository, MiReversiGame),
 ];
+
+const $eventsRepository: Provider = {
+	provide: DI.eventsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiEvent).extend(miRepository as MiRepository<MiEvent>),
+	inject: [DI.db],
+};
 
 @Module({
 	imports: [],

@@ -344,6 +344,24 @@ export const ROUTE_DEF = [{
 	path: '/gallery',
 	component: page(() => import('@/pages/gallery/index.vue')),
 }, {
+	path: '/events/new',
+	component: page(() => import('@/pages/event-editor.vue')),
+	loginRequired: true,
+}, {
+	path: '/events/:eventId/edit',
+	component: page(() => import('@/pages/event-editor.vue')),
+	loginRequired: true,
+}, {
+	path: '/events/:eventId',
+	component: page(() => import('@/pages/event.vue')),
+}, {
+	path: '/events',
+	component: page(() => import('@/pages/events.vue')),
+}, {
+	path: '/channels/:channelId/events/new',
+	component: page(() => import('@/pages/event-editor.vue')),
+	loginRequired: true,
+}, {
 	path: '/channels/:channelId/edit',
 	component: page(() => import('@/pages/channel-editor.vue')),
 	loginRequired: true,
@@ -442,6 +460,10 @@ export const ROUTE_DEF = [{
 		path: '/ads',
 		name: 'ads',
 		component: page(() => import('@/pages/admin/ads.vue')),
+	}, {
+		path: '/events',
+		name: 'events',
+		component: page(() => import('@/pages/admin/events.vue')),
 	}, {
 		path: '/roles/:id/edit',
 		name: 'roles',

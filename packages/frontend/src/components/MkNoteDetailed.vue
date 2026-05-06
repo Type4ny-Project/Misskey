@@ -138,6 +138,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkA :to="notePage(appearNote)">
 						<MkTime :time="appearNote.createdAt" mode="detail" colored/>
 					</MkA>
+					<span style="margin-left: 0.5em;">
+						<span style="border: 1px solid var(--MI_THEME-divider); margin-right: 0.5em;"></span>
+						<i v-if="appearNote.visibility === 'public'" class="ti ti-world"></i>
+						<i v-else-if="appearNote.visibility === 'home'" class="ti ti-home"></i>
+						<i v-else-if="appearNote.visibility === 'followers'" class="ti ti-lock"></i>
+						<i v-else-if="appearNote.visibility === 'specified'" ref="specified" class="ti ti-mail"></i>
+						<span style="margin-left: 0.3em;">{{ i18n.ts._visibility[appearNote.visibility] }}</span>
+					</span>
 				</div>
 				<MkReactionsViewer
 					v-if="appearNote.reactionAcceptance !== 'likeOnly'"
@@ -303,7 +311,7 @@ import MkUserCardMini from '@/components/MkUserCardMini.vue';
 import MkPagination from '@/components/MkPagination.vue';
 import MkReactionIcon from '@/components/MkReactionIcon.vue';
 import MkButton from '@/components/MkButton.vue';
-import { isEnabledUrlPreview } from '@/utility/url-preview.js';
+import { getLocalEventId, isEnabledUrlPreview } from '@/utility/url-preview.js';
 import { getAppearNote } from '@/utility/get-appear-note.js';
 import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
@@ -362,7 +370,7 @@ const muted = ref($i ? checkWordMute(appearNote, $i, $i.mutedWords) : false);
 const translation = ref<Misskey.entities.NotesTranslateResponse | null>(null);
 const translating = ref(false);
 const parsed = computed(() => appearNote.text ? mfm.parse(appearNote.text) : null);
-const urls = computed(() => parsed.value ? extractUrlFromMfm(parsed.value).filter((url) => appearNote.renote?.url !== url && appearNote.renote?.uri !== url) : null);
+const urls = computed(() => parsed.value ? extractUrlFromMfm(parsed.value).filter((url) => getLocalEventId(url) == null && appearNote.renote?.url !== url && appearNote.renote?.uri !== url) : null);
 const showTicker = (prefer.s.instanceTicker === 'always') || (prefer.s.instanceTicker === 'remote' && appearNote.user.instance);
 const conversation = ref<Misskey.entities.Note[]>([]);
 const replies = ref<Misskey.entities.Note[]>([]);

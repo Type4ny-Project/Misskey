@@ -172,6 +172,11 @@ export const paramDef = {
 		perUserHomeTimelineCacheMax: { type: 'integer' },
 		perUserListTimelineCacheMax: { type: 'integer' },
 		enableReactionsBuffering: { type: 'boolean' },
+		emojiSuggestionEnabled: { type: 'boolean' },
+		emojiSuggestionEndpoint: { type: 'string', nullable: true },
+		emojiSuggestionApiKey: { type: 'string', nullable: true },
+		emojiSuggestionTimeoutMs: { type: 'integer', minimum: 1 },
+		emojiSuggestionMaxSuggestions: { type: 'integer', minimum: 1, maximum: 16 },
 		notesPerOneAd: { type: 'integer' },
 		silencedHosts: {
 			type: 'array',
@@ -709,6 +714,31 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.enableReactionsBuffering !== undefined) {
 				set.enableReactionsBuffering = ps.enableReactionsBuffering;
+			}
+
+			if (ps.emojiSuggestionEnabled !== undefined) {
+				set.emojiSuggestionEnabled = ps.emojiSuggestionEnabled;
+			}
+
+			if (ps.emojiSuggestionEndpoint !== undefined) {
+				const value = (ps.emojiSuggestionEndpoint ?? '').trim();
+				set.emojiSuggestionEndpoint = value === '' ? null : value;
+			}
+
+			if (ps.emojiSuggestionApiKey !== undefined) {
+				if (ps.emojiSuggestionApiKey === '') {
+					set.emojiSuggestionApiKey = null;
+				} else if (ps.emojiSuggestionApiKey !== 'Masked') {
+					set.emojiSuggestionApiKey = ps.emojiSuggestionApiKey;
+				}
+			}
+
+			if (ps.emojiSuggestionTimeoutMs !== undefined) {
+				set.emojiSuggestionTimeoutMs = ps.emojiSuggestionTimeoutMs;
+			}
+
+			if (ps.emojiSuggestionMaxSuggestions !== undefined) {
+				set.emojiSuggestionMaxSuggestions = ps.emojiSuggestionMaxSuggestions;
 			}
 
 			if (ps.notesPerOneAd !== undefined) {

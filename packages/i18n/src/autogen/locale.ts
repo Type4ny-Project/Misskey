@@ -8406,6 +8406,10 @@ export interface Locale extends ILocale {
              */
             "canUseTranslator": string;
             /**
+             * チャンネルの作成
+             */
+            "canCreateChannel": string;
+            /**
              * アイコンデコレーションの最大取付個数
              */
             "avatarDecorationLimit": string;
@@ -13660,5 +13664,183 @@ export interface Locale extends ILocale {
          * MFM
          */
         "mfm": string;
+    };
+    "_events": {
+        /**
+         * イベント
+         */
+        "events": string;
+        /**
+         * イベントカレンダー
+         */
+        "eventCalendar": string;
+        /**
+         * イベント作成
+         */
+        "createEvent": string;
+        /**
+         * イベント編集
+         */
+        "editEvent": string;
+        /**
+         * イベント詳細
+         */
+        "eventDetail": string;
+        /**
+         * 自分の投稿
+         */
+        "mySubmissions": string;
+        /**
+         * 承認待ち
+         */
+        "approvalQueue": string;
+        /**
+         * タイトル
+         */
+        "title": string;
+        /**
+         * 開始日時
+         */
+        "startAt": string;
+        /**
+         * 終了日時
+         */
+        "endAt": string;
+        /**
+         * 説明
+         */
+        "description": string;
+        /**
+         * URL
+         */
+        "url": string;
+        /**
+         * タグ
+         */
+        "tags": string;
+        /**
+         * チャンネル
+         */
+        "channel": string;
+        /**
+         * ステータス
+         */
+        "status": string;
+        /**
+         * 承認待ち
+         */
+        "pending": string;
+        /**
+         * 承認済み
+         */
+        "approved": string;
+        /**
+         * 却下
+         */
+        "rejected": string;
+        /**
+         * 承認
+         */
+        "approve": string;
+        /**
+         * 却下
+         */
+        "reject": string;
+        /**
+         * ノートする
+         */
+        "noteIt": string;
+        /**
+         * イベントはありません
+         */
+        "noEvents": string;
+        /**
+         * この日のイベントはありません
+         */
+        "noEventsOnThisDay": string;
+        /**
+         * イベントを投稿
+         */
+        "submitEvent": string;
+        /**
+         * イベントを投稿しました。承認をお待ちください。
+         */
+        "eventSubmitted": string;
+        /**
+         * イベントを承認しました
+         */
+        "eventApproved": string;
+        /**
+         * イベントを却下しました
+         */
+        "eventRejected": string;
+        /**
+         * イベントを削除しました
+         */
+        "eventDeleted": string;
+        /**
+         * イベントを更新しました
+         */
+        "eventUpdated": string;
+        /**
+         * このイベントを削除しますか？
+         */
+        "confirmDelete": string;
+        /**
+         * すべてのイベント
+         */
+        "allEvents": string;
+        /**
+         * 今日
+         */
+        "today": string;
+        /**
+         * 日
+         */
+        "sun": string;
+        /**
+         * 月
+         */
+        "mon": string;
+        /**
+         * 火
+         */
+        "tue": string;
+        /**
+         * 水
+         */
+        "wed": string;
+        /**
+         * 木
+         */
+        "thu": string;
+        /**
+         * 金
+         */
+        "fri": string;
+        /**
+         * 土
+         */
+        "sat": string;
+        /**
+         * 年
+         */
+        "year": string;
+        /**
+         * 月
+         */
+        "month": string;
+        /**
+         * カンマ区切りで入力
+         */
+        "tagsCaption": string;
+        /**
+         * イベントの作成上限に達しました（1日5件まで）
+         */
+        "rateLimitReached": string;
+        /**
+         * エラーが発生しました
+         */
+        "unknownError": string;
     };
 }

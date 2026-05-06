@@ -43,12 +43,13 @@ import { extractUrlFromMfm } from '@/utility/extract-url-from-mfm';
 import MkCode from '@/components/MkCode.vue';
 import MkUrlPreview from '@/components/MkUrlPreview.vue';
 import { i18n } from '@/i18n.js';
+import { getLocalEventId } from '@/utility/url-preview.js';
 
 const props = defineProps<{
 	data: string;
 }>();
 
 const parsed = computed(() => mfm.parse(props.data));
-const urls = computed(() => extractUrlFromMfm(parsed.value));
+const urls = computed(() => extractUrlFromMfm(parsed.value).filter((url) => getLocalEventId(url) == null));
 const tab = ref<'mfm' | 'raw'>('mfm');
 </script>

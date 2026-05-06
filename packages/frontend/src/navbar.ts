@@ -122,6 +122,11 @@ export const navbarItemDef = reactive<{
 		show: computed(() => $i != null),
 		to: '/my/clips',
 	},
+	events: {
+		title: i18n.ts._events.eventCalendar,
+		icon: 'ti ti-calendar-event',
+		to: '/events',
+	},
 	channels: {
 		title: i18n.ts.channel,
 		icon: 'ti ti-device-tv',

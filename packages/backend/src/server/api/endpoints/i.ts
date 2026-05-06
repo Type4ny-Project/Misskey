@@ -74,6 +74,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.userIsDeleted);
 			}
 
+			const packedUser = userProfile.user;
+			if (packedUser == null) {
+				throw new ApiError(meta.errors.userIsDeleted);
+			}
+
 			if (!userProfile.loggedInDates.includes(today)) {
 				// ログインボーナス付与
 				const meta = await this.metaService.fetch();
@@ -82,22 +87,24 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					if (policies.loginBonusGrantEnabled) {
 						const bonusPoints = randomInt(1, 6); // 1-5 points
 						const currentUser = await this.usersRepository.findOneByOrFail({ id: user.id });
+						const updatedPoints = currentUser.points + bonusPoints;
 						await this.usersRepository.update(user.id, {
-							points: currentUser.points + bonusPoints,
+							points: updatedPoints,
 						});
+						packedUser.points = updatedPoints;
 						this.notificationService.createNotification(user.id, 'loginBonus', {
 							points: bonusPoints,
 						});
 					}
 				}
 
-				this.userProfilesRepository.update({ userId: user.id }, {
+				await this.userProfilesRepository.update({ userId: user.id }, {
 					loggedInDates: [...userProfile.loggedInDates, today],
 				});
 				userProfile.loggedInDates = [...userProfile.loggedInDates, today];
 			}
 
-			return await this.userEntityService.pack(userProfile.user!, userProfile.user!, {
+			return await this.userEntityService.pack(packedUser, packedUser, {
 				schema: 'MeDetailed',
 				includeSecrets: isSecure,
 				userProfile,

@@ -5,7 +5,7 @@
 
 import * as crypto from 'node:crypto';
 import { URL } from 'node:url';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import * as htmlParser from 'node-html-parser';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
@@ -14,6 +14,7 @@ import { UserKeypairService } from '@/core/UserKeypairService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { LoggerService } from '@/core/LoggerService.js';
+import { MemoryKVCache } from '@/misc/cache.js';
 import { bindThis } from '@/decorators.js';
 import type Logger from '@/logger.js';
 import { validateContentTypeSetAsActivityPub } from '@/core/activitypub/misc/validator.js';
@@ -34,8 +35,14 @@ type Signed = {
 };
 
 type PrivateKey = {
-	privateKeyPem: string;
+	privateKey?: string | crypto.KeyObject;
+	privateKeyPem?: string;
 	keyId: string;
+};
+
+type CachedPrivateKey = {
+	privateKeyPem: string;
+	privateKey: crypto.KeyObject;
 };
 
 export class ApRequestCreator {
@@ -93,7 +100,9 @@ export class ApRequestCreator {
 
 	static #signToRequest(request: Request, key: PrivateKey, includeHeaders: string[]): Signed {
 		const signingString = this.#genSigningString(request, includeHeaders);
-		const signature = crypto.sign('sha256', Buffer.from(signingString), key.privateKeyPem).toString('base64');
+		const privateKey = key.privateKey ?? key.privateKeyPem;
+		if (privateKey == null) throw new Error('privateKey is required');
+		const signature = crypto.sign('sha256', Buffer.from(signingString), privateKey).toString('base64');
 		const signatureHeader = `keyId="${key.keyId}",algorithm="rsa-sha256",headers="${includeHeaders.join(' ')}",signature="${signature}"`;
 
 		request.headers = this.#objectAssignWithLcKey(request.headers, {
@@ -138,8 +147,9 @@ export class ApRequestCreator {
 }
 
 @Injectable()
-export class ApRequestService {
+export class ApRequestService implements OnApplicationShutdown {
 	private logger: Logger;
+	private privateKeyCache: MemoryKVCache<CachedPrivateKey>;
 
 	constructor(
 		@Inject(DI.config)
@@ -152,19 +162,36 @@ export class ApRequestService {
 	) {
 		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 		this.logger = this.loggerService?.getLogger('ap-request'); // なぜか TypeError: Cannot read properties of undefined (reading 'getLogger') と言われる
+		this.privateKeyCache = new MemoryKVCache<CachedPrivateKey>(1000 * 60 * 60); // 1h
+	}
+
+	@bindThis
+	private async getPrivateKey(user: { id: MiUser['id'] }): Promise<PrivateKey> {
+		const keypair = await this.userKeypairService.getUserKeypair(user.id);
+		const cached = await this.privateKeyCache.fetch(user.id, async () => ({
+			privateKeyPem: keypair.privateKey,
+			privateKey: crypto.createPrivateKey(keypair.privateKey),
+		}), cachedValue => cachedValue.privateKeyPem === keypair.privateKey);
+
+		return {
+			privateKey: cached.privateKey,
+			keyId: `${this.config.url}/users/${user.id}#main-key`,
+		};
+	}
+
+	@bindThis
+	public onApplicationShutdown(signal?: string | undefined): void {
+		this.privateKeyCache.dispose();
 	}
 
 	@bindThis
 	public async signedPost(user: { id: MiUser['id'] }, url: string, object: unknown, digest?: string): Promise<void> {
 		const body = typeof object === 'string' ? object : JSON.stringify(object);
 
-		const keypair = await this.userKeypairService.getUserKeypair(user.id);
+		const key = await this.getPrivateKey(user);
 
 		const req = ApRequestCreator.createSignedPost({
-			key: {
-				privateKeyPem: keypair.privateKey,
-				keyId: `${this.config.url}/users/${user.id}#main-key`,
-			},
+			key,
 			url,
 			body,
 			digest,
@@ -187,13 +214,10 @@ export class ApRequestService {
 	@bindThis
 	public async signedGet(url: string, user: { id: MiUser['id'] }, allowSoftfail: FetchAllowSoftFailMask = FetchAllowSoftFailMask.Strict, followAlternate?: boolean): Promise<unknown> {
 		const _followAlternate = followAlternate ?? true;
-		const keypair = await this.userKeypairService.getUserKeypair(user.id);
+		const key = await this.getPrivateKey(user);
 
 		const req = ApRequestCreator.createSignedGet({
-			key: {
-				privateKeyPem: keypair.privateKey,
-				keyId: `${this.config.url}/users/${user.id}#main-key`,
-			},
+			key,
 			url,
 			additionalHeaders: {
 			},

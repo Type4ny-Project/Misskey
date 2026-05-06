@@ -17,7 +17,7 @@ import { defineAsyncComponent } from 'vue';
 import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
 import { extractUrlFromMfm } from '@/utility/extract-url-from-mfm.js';
-import { isEnabledUrlPreview } from '@/utility/url-preview.js';
+import { getLocalEventId, isEnabledUrlPreview } from '@/utility/url-preview.js';
 
 const MkUrlPreview = defineAsyncComponent(() => import('@/components/MkUrlPreview.vue'));
 
@@ -26,7 +26,9 @@ const props = defineProps<{
 	page: Misskey.entities.Page,
 }>();
 
-const urls = props.block.text ? extractUrlFromMfm(mfm.parse(props.block.text)) : [];
+const urls = props.block.text
+	? extractUrlFromMfm(mfm.parse(props.block.text)).filter((url) => getLocalEventId(url) == null)
+	: [];
 </script>
 
 <style lang="scss" module>

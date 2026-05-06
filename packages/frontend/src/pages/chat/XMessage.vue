@@ -73,6 +73,7 @@ import MkReactionIcon from '@/components/MkReactionIcon.vue';
 import { prefer } from '@/preferences.js';
 import { DI } from '@/di.js';
 import { getHTMLElementOrNull } from '@/utility/get-dom-node-or-null.js';
+import { getLocalEventId } from '@/utility/url-preview.js';
 
 const $i = ensureSignin();
 
@@ -82,7 +83,10 @@ const props = defineProps<{
 }>();
 
 const isMe = computed(() => props.message.fromUserId === $i.id);
-const urls = computed(() => props.message.text ? extractUrlFromMfm(mfm.parse(props.message.text)) : []);
+const urls = computed(() => props.message.text
+	? extractUrlFromMfm(mfm.parse(props.message.text)).filter((url) => getLocalEventId(url) == null)
+	: []
+);
 
 provide(DI.mfmEmojiReactCallback, (reaction) => {
 	if ($i.policies.chatAvailability !== 'available') return;

@@ -89,3 +89,6 @@ vite.config.local-dev.ts.timestamp-*
 /packages/frontend-worker/terraform/terraform.tfstate
 
 packages/frontend-worker/terraform/te
+/.sisyphus/
+/.playwright-cli/
+/.playwright-mcp/

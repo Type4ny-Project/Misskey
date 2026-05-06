@@ -19,6 +19,8 @@ import type {
 	AdminAccountsFindByEmailResponse,
 	AdminAccountsPresentPointsRequest,
 	AdminAccountsPresentPointsResponse,
+	AdminAccountsRevokePointsRequest,
+	AdminAccountsRevokePointsResponse,
 	AdminAdCreateRequest,
 	AdminAdCreateResponse,
 	AdminAdDeleteRequest,
@@ -73,6 +75,8 @@ import type {
 	AdminEmojiUpdateRequestResponse,
 	AdminEmojiUpdateRequestSettingsRequest,
 	AdminEmojiUpdateRequestSettingsResponse,
+	AdminEventsListRequest,
+	AdminEventsListResponse,
 	AdminFederationDeleteAllFilesRequest,
 	AdminFederationRefreshRemoteInstanceMetadataRequest,
 	AdminFederationRemoveAllFollowingRequest,
@@ -351,6 +355,25 @@ import type {
 	EndpointRequest,
 	EndpointResponse,
 	EndpointsResponse,
+	EventsApproveRequest,
+	EventsApproveResponse,
+	EventsCreateRequest,
+	EventsCreateResponse,
+	EventsDeleteRequest,
+	EventsListRequest,
+	EventsListResponse,
+	EventsMySubmissionsRequest,
+	EventsMySubmissionsResponse,
+	EventsPendingRequest,
+	EventsPendingResponse,
+	EventsRejectRequest,
+	EventsRejectResponse,
+	EventsRelevantRequest,
+	EventsRelevantResponse,
+	EventsShowRequest,
+	EventsShowResponse,
+	EventsUpdateRequest,
+	EventsUpdateResponse,
 	FederationFollowersRequest,
 	FederationFollowersResponse,
 	FederationFollowingRequest,
@@ -557,6 +580,8 @@ import type {
 	NotesReactionsResponse,
 	NotesReactionsCreateRequest,
 	NotesReactionsDeleteRequest,
+	NotesReactionsSuggestionsRequest,
+	NotesReactionsSuggestionsResponse,
 	NotesRenotesRequest,
 	NotesRenotesResponse,
 	NotesRepliesRequest,
@@ -710,6 +735,7 @@ export type Endpoints = {
 	'admin/accounts/delete': { req: AdminAccountsDeleteRequest; res: EmptyResponse };
 	'admin/accounts/find-by-email': { req: AdminAccountsFindByEmailRequest; res: AdminAccountsFindByEmailResponse };
 	'admin/accounts/present-points': { req: AdminAccountsPresentPointsRequest; res: AdminAccountsPresentPointsResponse };
+	'admin/accounts/revoke-points': { req: AdminAccountsRevokePointsRequest; res: AdminAccountsRevokePointsResponse };
 	'admin/ad/create': { req: AdminAdCreateRequest; res: AdminAdCreateResponse };
 	'admin/ad/delete': { req: AdminAdDeleteRequest; res: EmptyResponse };
 	'admin/ad/list': { req: AdminAdListRequest; res: AdminAdListResponse };
@@ -749,6 +775,7 @@ export type Endpoints = {
 	'admin/emoji/update': { req: AdminEmojiUpdateRequest; res: EmptyResponse };
 	'admin/emoji/update-request': { req: AdminEmojiUpdateRequestRequest; res: AdminEmojiUpdateRequestResponse };
 	'admin/emoji/update-request-settings': { req: AdminEmojiUpdateRequestSettingsRequest; res: AdminEmojiUpdateRequestSettingsResponse };
+	'admin/events/list': { req: AdminEventsListRequest; res: AdminEventsListResponse };
 	'admin/federation/delete-all-files': { req: AdminFederationDeleteAllFilesRequest; res: EmptyResponse };
 	'admin/federation/refresh-remote-instance-metadata': { req: AdminFederationRefreshRemoteInstanceMetadataRequest; res: EmptyResponse };
 	'admin/federation/remove-all-following': { req: AdminFederationRemoveAllFollowingRequest; res: EmptyResponse };
@@ -925,6 +952,16 @@ export type Endpoints = {
 	'emojis': { req: EmptyRequest; res: EmojisResponse };
 	'endpoint': { req: EndpointRequest; res: EndpointResponse };
 	'endpoints': { req: EmptyRequest; res: EndpointsResponse };
+	'events/approve': { req: EventsApproveRequest; res: EventsApproveResponse };
+	'events/create': { req: EventsCreateRequest; res: EventsCreateResponse };
+	'events/delete': { req: EventsDeleteRequest; res: EmptyResponse };
+	'events/list': { req: EventsListRequest; res: EventsListResponse };
+	'events/my-submissions': { req: EventsMySubmissionsRequest; res: EventsMySubmissionsResponse };
+	'events/pending': { req: EventsPendingRequest; res: EventsPendingResponse };
+	'events/reject': { req: EventsRejectRequest; res: EventsRejectResponse };
+	'events/relevant': { req: EventsRelevantRequest; res: EventsRelevantResponse };
+	'events/show': { req: EventsShowRequest; res: EventsShowResponse };
+	'events/update': { req: EventsUpdateRequest; res: EventsUpdateResponse };
 	'export-custom-emojis': { req: EmptyRequest; res: EmptyResponse };
 	'federation/followers': { req: FederationFollowersRequest; res: FederationFollowersResponse };
 	'federation/following': { req: FederationFollowingRequest; res: FederationFollowingResponse };
@@ -1062,6 +1099,7 @@ export type Endpoints = {
 	'notes/reactions': { req: NotesReactionsRequest; res: NotesReactionsResponse };
 	'notes/reactions/create': { req: NotesReactionsCreateRequest; res: EmptyResponse };
 	'notes/reactions/delete': { req: NotesReactionsDeleteRequest; res: EmptyResponse };
+	'notes/reactions/suggestions': { req: NotesReactionsSuggestionsRequest; res: NotesReactionsSuggestionsResponse };
 	'notes/renotes': { req: NotesRenotesRequest; res: NotesRenotesResponse };
 	'notes/replies': { req: NotesRepliesRequest; res: NotesRepliesResponse };
 	'notes/search': { req: NotesSearchRequest; res: NotesSearchResponse };

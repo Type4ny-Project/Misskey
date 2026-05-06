@@ -25,6 +25,7 @@ import { AchievementService } from './AchievementService.js';
 import { AvatarDecorationService } from './AvatarDecorationService.js';
 import { CaptchaService } from './CaptchaService.js';
 import { CustomEmojiService } from './CustomEmojiService.js';
+import { EmojiSuggestionService } from './EmojiSuggestionService.js';
 import { EmojiRequestService } from './EmojiRequestService.js';
 import { DeleteAccountService } from './DeleteAccountService.js';
 import { DownloadService } from './DownloadService.js';
@@ -85,6 +86,7 @@ import { PageService } from './PageService.js';
 import { PointService } from './PointService.js';
 import { InboxRuleService } from './InboxRuleService.js';
 import { LoginBonusService } from './LoginBonusService.js';
+import { EventService } from './EventService.js';
 
 import { ChartLoggerService } from './chart/ChartLoggerService.js';
 import FederationChart from './chart/charts/federation.js';
@@ -138,6 +140,7 @@ import { FlashLikeEntityService } from './entities/FlashLikeEntityService.js';
 import { RoleEntityService } from './entities/RoleEntityService.js';
 import { ReversiGameEntityService } from './entities/ReversiGameEntityService.js';
 import { MetaEntityService } from './entities/MetaEntityService.js';
+import { EventEntityService } from './entities/EventEntityService.js';
 
 import { ApAudienceService } from './activitypub/ApAudienceService.js';
 import { ApDbResolverService } from './activitypub/ApDbResolverService.js';
@@ -175,6 +178,7 @@ const $AchievementService: Provider = { provide: 'AchievementService', useExisti
 const $AvatarDecorationService: Provider = { provide: 'AvatarDecorationService', useExisting: AvatarDecorationService };
 const $CaptchaService: Provider = { provide: 'CaptchaService', useExisting: CaptchaService };
 const $CustomEmojiService: Provider = { provide: 'CustomEmojiService', useExisting: CustomEmojiService };
+const $EmojiSuggestionService: Provider = { provide: 'EmojiSuggestionService', useExisting: EmojiSuggestionService };
 const $DeleteAccountService: Provider = { provide: 'DeleteAccountService', useExisting: DeleteAccountService };
 const $DownloadService: Provider = { provide: 'DownloadService', useExisting: DownloadService };
 const $DriveService: Provider = { provide: 'DriveService', useExisting: DriveService };
@@ -240,6 +244,7 @@ const $PageService: Provider = { provide: 'PageService', useExisting: PageServic
 const $PointService: Provider = { provide: 'PointService', useExisting: PointService };
 const $InboxRuleService: Provider = { provide: 'InboxRuleService', useExisting: InboxRuleService };
 const $LoginBonusService: Provider = { provide: 'LoginBonusService', useExisting: LoginBonusService };
+const $EventService: Provider = { provide: 'EventService', useExisting: EventService };
 
 const $ChartLoggerService: Provider = { provide: 'ChartLoggerService', useExisting: ChartLoggerService };
 const $FederationChart: Provider = { provide: 'FederationChart', useExisting: FederationChart };
@@ -295,6 +300,7 @@ const $RoleEntityService: Provider = { provide: 'RoleEntityService', useExisting
 const $ReversiGameEntityService: Provider = { provide: 'ReversiGameEntityService', useExisting: ReversiGameEntityService };
 const $MetaEntityService: Provider = { provide: 'MetaEntityService', useExisting: MetaEntityService };
 const $SystemWebhookEntityService: Provider = { provide: 'SystemWebhookEntityService', useExisting: SystemWebhookEntityService };
+const $EventEntityService: Provider = { provide: 'EventEntityService', useExisting: EventEntityService };
 
 const $ApAudienceService: Provider = { provide: 'ApAudienceService', useExisting: ApAudienceService };
 const $ApDbResolverService: Provider = { provide: 'ApDbResolverService', useExisting: ApDbResolverService };
@@ -333,6 +339,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AvatarDecorationService,
 		CaptchaService,
 		CustomEmojiService,
+		EmojiSuggestionService,
 		EmojiRequestService,
 		DeleteAccountService,
 		DownloadService,
@@ -399,6 +406,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		PointService,
 		InboxRuleService,
 		LoginBonusService,
+		EventService,
 
 		ChartLoggerService,
 		FederationChart,
@@ -455,6 +463,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		MetaEntityService,
 		SystemWebhookEntityService,
 
+		EventEntityService,
 		ApAudienceService,
 		ApDbResolverService,
 		ApDeliverManagerService,
@@ -489,6 +498,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AvatarDecorationService,
 		$CaptchaService,
 		$CustomEmojiService,
+		$EmojiSuggestionService,
 		$DeleteAccountService,
 		$DownloadService,
 		$DriveService,
@@ -554,6 +564,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$InboxRuleService,
 		$LoginBonusService,
 
+		$EventService,
 		$ChartLoggerService,
 		$FederationChart,
 		$NotesChart,
@@ -609,6 +620,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$MetaEntityService,
 		$SystemWebhookEntityService,
 
+		$EventEntityService,
 		$ApAudienceService,
 		$ApDbResolverService,
 		$ApDeliverManagerService,
@@ -643,6 +655,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AvatarDecorationService,
 		CaptchaService,
 		CustomEmojiService,
+		EmojiSuggestionService,
 		EmojiRequestService,
 		DeleteAccountService,
 		DownloadService,
@@ -710,6 +723,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		InboxRuleService,
 		LoginBonusService,
 
+		EventService,
 		FederationChart,
 		NotesChart,
 		UsersChart,
@@ -764,6 +778,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		MetaEntityService,
 		SystemWebhookEntityService,
 
+		EventEntityService,
 		ApAudienceService,
 		ApDbResolverService,
 		ApDeliverManagerService,
@@ -798,6 +813,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AvatarDecorationService,
 		$CaptchaService,
 		$CustomEmojiService,
+		$EmojiSuggestionService,
 		$DeleteAccountService,
 		$DownloadService,
 		$DriveService,
@@ -861,6 +877,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$PointService,
 		$InboxRuleService,
 		$LoginBonusService,
+		$EventService,
 
 		$FederationChart,
 		$NotesChart,
@@ -915,6 +932,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$ReversiGameEntityService,
 		$MetaEntityService,
 		$SystemWebhookEntityService,
+		$EventEntityService,
 
 		$ApAudienceService,
 		$ApDbResolverService,

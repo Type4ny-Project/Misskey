@@ -6,7 +6,6 @@
 import * as Misskey from 'misskey-js';
 import { onMounted, onUnmounted } from 'vue';
 import { useInterval } from '@@/js/use-interval.js';
-import { favoritedChannelsCache, userChannelFollowingsCache } from '@/cache.js';
 import { $i } from '@/i.js';
 import { globalEvents } from '@/events.js';
 import { i18n } from '@/i18n.js';
@@ -20,6 +19,12 @@ const FETCH_INTERVAL_MS = 5 * 60 * 1000;
 const CHECK_INTERVAL_MS = 30 * 1000;
 const NOTIFICATION_GRACE_PERIOD_MS = 10 * 60 * 1000;
 const NOTIFIED_EVENTS_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+type RelevantEventsRequest = {
+	limit: number;
+	sinceDate: number;
+	untilDate: number;
+};
 
 export function useEventTimingNotifier(): void {
 	if (!$i) return;
@@ -124,48 +129,6 @@ export function useEventTimingNotifier(): void {
 			.sort((a, b) => getEventStartAt(a) - getEventStartAt(b));
 	}
 
-	function deduplicateEvents(events: Misskey.entities.Event[]): Misskey.entities.Event[] {
-		const deduplicatedEvents = new Map<string, Misskey.entities.Event>();
-
-		for (const event of events) {
-			deduplicatedEvents.set(getEventNotificationKey(event), event);
-		}
-
-		return [...deduplicatedEvents.values()];
-	}
-
-	async function fetchEventsForChannelScope(now: number): Promise<Misskey.entities.Event[]> {
-		const [followedChannels, favoritedChannels] = await Promise.all([
-			userChannelFollowingsCache.fetch(),
-			favoritedChannelsCache.fetch(),
-		]);
-
-		const channelIds = [...new Set([
-			...followedChannels.map(channel => channel.id),
-			...favoritedChannels.map(channel => channel.id),
-		])];
-
-		const requests = [
-			misskeyApi('events/list', {
-				limit: 100,
-				sinceDate: now - NOTIFICATION_GRACE_PERIOD_MS,
-				untilDate: now + UPCOMING_EVENTS_WINDOW_MS,
-				includeChannelEvents: false,
-				channelId: null,
-			} satisfies Misskey.entities.EventsListRequest),
-			...channelIds.map(channelId => misskeyApi('events/list', {
-				limit: 100,
-				sinceDate: now - NOTIFICATION_GRACE_PERIOD_MS,
-				untilDate: now + UPCOMING_EVENTS_WINDOW_MS,
-				includeChannelEvents: false,
-				channelId,
-			} satisfies Misskey.entities.EventsListRequest)),
-		];
-
-		const eventsByScope = await Promise.all(requests);
-		return deduplicateEvents(eventsByScope.flat());
-	}
-
 	async function fetchUpcomingEvents(): Promise<void> {
 		if (isFetchingUpcomingEvents) return;
 
@@ -173,7 +136,14 @@ export function useEventTimingNotifier(): void {
 
 		try {
 			const now = Date.now();
-			const events = await fetchEventsForChannelScope(now);
+			const events = await misskeyApi<Misskey.entities.Event[], keyof Misskey.Endpoints, RelevantEventsRequest>(
+				'events/relevant' as keyof Misskey.Endpoints,
+				{
+					limit: 100,
+					sinceDate: now - NOTIFICATION_GRACE_PERIOD_MS,
+					untilDate: now + UPCOMING_EVENTS_WINDOW_MS,
+				},
+			);
 			upcomingEvents = sortAndFilterUpcomingEvents(events, now);
 		} catch (error) {
 			console.error('Failed to fetch upcoming events for notifications.', error);

@@ -184,6 +184,7 @@ export * as 'events/delete' from './endpoints/events/delete.js';
 export * as 'events/list' from './endpoints/events/list.js';
 export * as 'events/my-submissions' from './endpoints/events/my-submissions.js';
 export * as 'events/pending' from './endpoints/events/pending.js';
+export * as 'events/relevant' from './endpoints/events/relevant.js';
 export * as 'events/reject' from './endpoints/events/reject.js';
 export * as 'events/show' from './endpoints/events/show.js';
 export * as 'events/update' from './endpoints/events/update.js';

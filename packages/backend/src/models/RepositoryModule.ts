@@ -200,7 +200,7 @@ const $eventsRepository: Provider = {
 
 @Module({
 	imports: [],
-	providers,
-	exports: providers,
+	providers: [...providers, $eventsRepository],
+	exports: [...providers, $eventsRepository],
 })
 export class RepositoryModule {}

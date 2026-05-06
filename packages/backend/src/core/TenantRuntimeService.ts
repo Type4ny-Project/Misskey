@@ -12,6 +12,8 @@ import {
 	type Config,
 	type DbSlaveSource,
 	type DbSource,
+	type Source,
+	type TenantSource,
 	buildConfig,
 } from '@/config.js';
 import { createPostgresDataSource } from '@/postgres.js';
@@ -71,7 +73,6 @@ async function loadMeta(db: DataSource): Promise<MiMeta> {
 @Injectable()
 export class TenantRuntimeService {
 	private readonly tenants = new Map<string, TenantDefinition>();
-	private defaultHost: string | null = null;
 	private buildInfo!: ConfigBuildInfo;
 	private redisSubMultiplexer: TenantRedisSubMultiplexer | null = null;
 
@@ -83,28 +84,44 @@ export class TenantRuntimeService {
 	public async initialize(): Promise<void> {
 		this.buildInfo = this.configInput.buildInfo;
 		const source = this.configInput.source;
+		if (source.hosts != null) {
+			const hosts = Object.entries(source.hosts);
+			if (hosts.length === 0) {
+				throw new Error('hosts must contain at least one tenant.');
+			}
 
-		const defaultConfig = buildConfig(source, this.buildInfo);
-		await this.addTenant(defaultConfig.host, defaultConfig);
-		this.defaultHost = defaultConfig.host;
+			for (const [host, tenant] of hosts) {
+				await this.addTenantFromSource(host, source, tenant, tenant.url ?? `https://${host}`);
+			}
+
+			return;
+		}
+
+		const legacyConfig = buildConfig(source, this.buildInfo);
+		await this.addTenant(legacyConfig.host, legacyConfig);
 
 		for (const [host, tenant] of Object.entries(source.tenants?.hosts ?? {})) {
-			const tenantConfig = buildConfig({
-				...source,
-				url: tenant.url ?? `${defaultConfig.scheme}://${host}`,
-				db: cloneDb(tenant.db),
-				dbReplications: tenant.dbReplications ?? source.dbReplications,
-				dbSlaves: cloneDbSlaves(tenant.dbSlaves ?? source.dbSlaves),
-				redis: tenant.redis ? { ...tenant.redis } : { ...source.redis },
-				redisForPubsub: tenant.redisForPubsub ? { ...tenant.redisForPubsub } : source.redisForPubsub ? { ...source.redisForPubsub } : undefined,
-				redisForJobQueue: tenant.redisForJobQueue ? { ...tenant.redisForJobQueue } : source.redisForJobQueue ? { ...source.redisForJobQueue } : undefined,
-				redisForTimelines: tenant.redisForTimelines ? { ...tenant.redisForTimelines } : source.redisForTimelines ? { ...source.redisForTimelines } : undefined,
-				redisForReactions: tenant.redisForReactions ? { ...tenant.redisForReactions } : source.redisForReactions ? { ...source.redisForReactions } : undefined,
-				meilisearch: tenant.meilisearch ?? source.meilisearch,
-				objectStorage: tenant.objectStorage ?? source.objectStorage,
-			}, this.buildInfo);
-			await this.addTenant(host, tenantConfig);
+			await this.addTenantFromSource(host, source, tenant, tenant.url ?? `${legacyConfig.scheme}://${host}`);
 		}
+	}
+
+	private async addTenantFromSource(host: string, source: Source, tenant: TenantSource, fallbackUrl: string): Promise<void> {
+		const tenantConfig = buildConfig({
+			...source,
+			url: tenant.url ?? fallbackUrl,
+			db: cloneDb(tenant.db),
+			dbReplications: tenant.dbReplications ?? source.dbReplications,
+			dbSlaves: cloneDbSlaves(tenant.dbSlaves ?? source.dbSlaves),
+			redis: tenant.redis ? { ...tenant.redis } : source.redis ? { ...source.redis } : undefined,
+			redisForPubsub: tenant.redisForPubsub ? { ...tenant.redisForPubsub } : source.redisForPubsub ? { ...source.redisForPubsub } : undefined,
+			redisForJobQueue: tenant.redisForJobQueue ? { ...tenant.redisForJobQueue } : source.redisForJobQueue ? { ...source.redisForJobQueue } : undefined,
+			redisForTimelines: tenant.redisForTimelines ? { ...tenant.redisForTimelines } : source.redisForTimelines ? { ...source.redisForTimelines } : undefined,
+			redisForReactions: tenant.redisForReactions ? { ...tenant.redisForReactions } : source.redisForReactions ? { ...source.redisForReactions } : undefined,
+			meilisearch: tenant.meilisearch ?? source.meilisearch,
+			objectStorage: tenant.objectStorage ?? source.objectStorage,
+		}, this.buildInfo);
+
+		await this.addTenant(host, tenantConfig);
 	}
 
 	private async addTenant(host: string, config: Config): Promise<void> {
@@ -145,17 +162,17 @@ export class TenantRuntimeService {
 		return [...this.tenants.keys()];
 	}
 
-	public getDefaultTenant(): TenantDefinition {
-		if (this.defaultHost == null) {
+	public getSingleTenantHost(): string {
+		const hosts = this.getKnownHosts();
+		if (hosts.length === 0) {
 			throw new Error('Tenant runtime is not initialized');
 		}
 
-		const tenant = this.tenants.get(this.defaultHost);
-		if (tenant == null) {
-			throw new Error(`Default tenant not found: ${this.defaultHost}`);
+		if (hosts.length !== 1) {
+			throw new Error(`Tenant host is required because ${hosts.length} tenants are configured: ${hosts.join(', ')}`);
 		}
 
-		return tenant;
+		return hosts[0];
 	}
 
 	public resolveHost(rawHost: string | undefined): string {
@@ -171,11 +188,11 @@ export class TenantRuntimeService {
 			}
 		}
 
-		return this.getDefaultTenant().host;
+		throw new Error(`Unknown tenant host: ${normalized ?? '(missing)'}`);
 	}
 
 	public getCurrentHost(): string {
-		return getTenantHost() ?? this.getDefaultTenant().host;
+		return getTenantHost() ?? this.getSingleTenantHost();
 	}
 
 	public getTenant(host?: string): TenantDefinition {

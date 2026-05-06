@@ -87,11 +87,15 @@ export class ServerService implements OnApplicationShutdown {
 		});
 		this.#fastify = fastify;
 
-		fastify.addHook('onRequest', (request, _reply, done) => {
-			const host = this.tenantRuntimeService.resolveHost(request.headers.host);
-			this.tenantRuntimeService.runWithHost(host, () => {
-				done();
-			});
+		fastify.addHook('onRequest', (request, reply, done) => {
+			try {
+				const host = this.tenantRuntimeService.resolveHost(request.headers.host);
+				this.tenantRuntimeService.runWithHost(host, () => {
+					done();
+				});
+			} catch (err) {
+				reply.code(404).send({ error: err instanceof Error ? err.message : String(err) });
+			}
 		});
 
 		// HSTS

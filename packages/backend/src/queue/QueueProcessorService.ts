@@ -135,7 +135,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 		const runInTenant = <T>(job: Bull.Job, fn: () => T): T => {
 			const tenantHost = typeof job.data === 'object' && job.data !== null && 'tenantHost' in job.data && typeof job.data.tenantHost === 'string'
 				? job.data.tenantHost
-				: this.tenantRuntimeService.getDefaultTenant().host;
+				: this.tenantRuntimeService.getSingleTenantHost();
 
 			return this.tenantRuntimeService.runWithHost(tenantHost, () => {
 				return fn();

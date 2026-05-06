@@ -264,6 +264,12 @@ type AdminEmojiUpdateRequestSettingsRequest = operations['admin___emoji___update
 type AdminEmojiUpdateRequestSettingsResponse = operations['admin___emoji___update-request-settings']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminEventsListRequest = operations['admin___events___list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminEventsListResponse = operations['admin___events___list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminFederationDeleteAllFilesRequest = operations['admin___federation___delete-all-files']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -1723,6 +1729,8 @@ declare namespace entities {
         AdminEmojiUpdateRequestResponse,
         AdminEmojiUpdateRequestSettingsRequest,
         AdminEmojiUpdateRequestSettingsResponse,
+        AdminEventsListRequest,
+        AdminEventsListResponse,
         AdminFederationDeleteAllFilesRequest,
         AdminFederationRefreshRemoteInstanceMetadataRequest,
         AdminFederationRemoveAllFollowingRequest,
@@ -2013,6 +2021,8 @@ declare namespace entities {
         EventsPendingResponse,
         EventsRejectRequest,
         EventsRejectResponse,
+        EventsRelevantRequest,
+        EventsRelevantResponse,
         EventsShowRequest,
         EventsShowResponse,
         EventsUpdateRequest,
@@ -2484,6 +2494,12 @@ type EventsRejectRequest = operations['events___reject']['requestBody']['content
 
 // @public (undocumented)
 type EventsRejectResponse = operations['events___reject']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type EventsRelevantRequest = operations['events___relevant']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type EventsRelevantResponse = operations['events___relevant']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type EventsShowRequest = operations['events___show']['requestBody']['content']['application/json'];

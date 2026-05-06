@@ -368,6 +368,8 @@ import type {
 	EventsPendingResponse,
 	EventsRejectRequest,
 	EventsRejectResponse,
+	EventsRelevantRequest,
+	EventsRelevantResponse,
 	EventsShowRequest,
 	EventsShowResponse,
 	EventsUpdateRequest,
@@ -957,6 +959,7 @@ export type Endpoints = {
 	'events/my-submissions': { req: EventsMySubmissionsRequest; res: EventsMySubmissionsResponse };
 	'events/pending': { req: EventsPendingRequest; res: EventsPendingResponse };
 	'events/reject': { req: EventsRejectRequest; res: EventsRejectResponse };
+	'events/relevant': { req: EventsRelevantRequest; res: EventsRelevantResponse };
 	'events/show': { req: EventsShowRequest; res: EventsShowResponse };
 	'events/update': { req: EventsUpdateRequest; res: EventsUpdateResponse };
 	'export-custom-emojis': { req: EmptyRequest; res: EmptyResponse };

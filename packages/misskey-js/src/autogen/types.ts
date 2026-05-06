@@ -2128,6 +2128,15 @@ export type paths = {
          */
         post: operations['events___reject'];
     };
+    '/events/relevant': {
+        /**
+         * events/relevant
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:account*
+         */
+        post: operations['events___relevant'];
+    };
     '/events/show': {
         /**
          * events/show
@@ -6005,6 +6014,7 @@ export type components = {
             endAt: string | null;
             description: string | null;
             url: string | null;
+            color: string | null;
             tags: string[];
             /** Format: id */
             createdById: string;
@@ -22590,6 +22600,7 @@ export interface operations {
                     endAt?: number | null;
                     description?: string | null;
                     url?: string | null;
+                    color?: string | null;
                     tags?: string[];
                     /** Format: misskey:id */
                     channelId?: string | null;
@@ -23009,6 +23020,78 @@ export interface operations {
             };
         };
     };
+    events___relevant: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** @default 10 */
+                    limit?: number;
+                    /** Format: misskey:id */
+                    sinceId?: string;
+                    /** Format: misskey:id */
+                    untilId?: string;
+                    sinceDate?: number;
+                    untilDate?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Event'][];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     events___show: {
         requestBody: {
             content: {
@@ -23086,6 +23169,7 @@ export interface operations {
                     endAt?: number | null;
                     description?: string | null;
                     url?: string | null;
+                    color?: string | null;
                     tags?: string[];
                     /** Format: misskey:id */
                     channelId?: string | null;
@@ -33079,10 +33163,6 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     noteId: string;
-                    /** @default ja-JP */
-                    locale?: string;
-                    /** @default ja */
-                    language?: string;
                 };
             };
         };
@@ -33100,11 +33180,7 @@ export interface operations {
                             aliases: string[];
                             category: string | null;
                         }[];
-                        /** @enum {string} */
-                        source: 'cache' | 'live' | 'fallback';
                         reason: string | null;
-                        modelVersion: string;
-                        emojiIndexVersion: string;
                     };
                 };
             };

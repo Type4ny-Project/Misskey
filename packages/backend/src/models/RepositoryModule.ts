@@ -5,7 +5,7 @@
 
 import { Module } from '@nestjs/common';
 import type { Provider } from '@nestjs/common';
-import type { EntityTarget, ObjectLiteral, Repository } from 'typeorm';
+import type { DataSource, EntityTarget, ObjectLiteral, Repository } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import { TenantRuntimeService } from '@/core/TenantRuntimeService.js';
 import {
@@ -89,12 +89,6 @@ import {
 	MiUserPublickey,
 	MiUserSecurityKey,
 	MiWebhook,
-	MiChatMessage,
-	MiChatRoom,
-	MiChatRoomMembership,
-	MiChatRoomInvitation,
-	MiChatApproval,
-	MiInboxRule,
 	MiEvent,
 } from './_.js';
 

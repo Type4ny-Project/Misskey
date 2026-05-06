@@ -54,12 +54,21 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const query = this.queryService.makePaginationQuery(this.eventsRepository.createQueryBuilder('event'), ps.sinceId, ps.untilId)
 				.andWhere('event.status = :status', { status: 'approved' });
 
-			// Filter by startAt date range (for calendar month views)
-			if (ps.sinceDate != null) {
-				query.andWhere('event.startAt >= :sinceDate', { sinceDate: new Date(ps.sinceDate) });
-			}
-			if (ps.untilDate != null) {
-				query.andWhere('event.startAt <= :untilDate', { untilDate: new Date(ps.untilDate) });
+			// Include any event whose time range overlaps the requested window.
+			// This keeps long-running or month-spanning events visible in calendar views.
+			if (ps.sinceDate != null && ps.untilDate != null) {
+				query.andWhere('(event.startAt <= :untilDate AND COALESCE(event.endAt, event.startAt) >= :sinceDate)', {
+					sinceDate: new Date(ps.sinceDate),
+					untilDate: new Date(ps.untilDate),
+				});
+			} else if (ps.sinceDate != null) {
+				query.andWhere('COALESCE(event.endAt, event.startAt) >= :sinceDate', {
+					sinceDate: new Date(ps.sinceDate),
+				});
+			} else if (ps.untilDate != null) {
+				query.andWhere('event.startAt <= :untilDate', {
+					untilDate: new Date(ps.untilDate),
+				});
 			}
 
 			if (ps.channelId != null) {

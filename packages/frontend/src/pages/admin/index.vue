@@ -172,6 +172,11 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		to: '/admin/ads',
 		active: currentPage.value?.route.name === 'ads',
 	}, {
+		icon: 'ti ti-calendar-event',
+		text: i18n.ts._events.approvalQueue,
+		to: '/admin/events',
+		active: currentPage.value?.route.name === 'events',
+	}, {
 		icon: 'ti ti-exclamation-circle',
 		text: i18n.ts.abuseReports,
 		to: '/admin/abuses',

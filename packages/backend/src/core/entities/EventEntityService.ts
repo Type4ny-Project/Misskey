@@ -47,6 +47,7 @@ export class EventEntityService {
 			endAt: event.endAt ? event.endAt.toISOString() : null,
 			description: event.description,
 			url: event.url,
+			color: event.color,
 			tags: event.tags,
 			createdById: event.createdById,
 			createdBy: this.userEntityService.pack(event.createdBy ?? event.createdById, me),

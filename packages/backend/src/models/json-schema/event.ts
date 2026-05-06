@@ -34,6 +34,10 @@ export const packedEventSchema = {
 			type: 'string',
 			optional: false, nullable: true,
 		},
+		color: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
 		tags: {
 			type: 'array',
 			optional: false, nullable: false,

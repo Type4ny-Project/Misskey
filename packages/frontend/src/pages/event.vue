@@ -5,12 +5,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <PageWithHeader :actions="headerActions" :tabs="[]">
-	<div v-if="event" :class="$style.root">
-		<div :class="$style.header">
-			<div :class="$style.title">{{ event.title }}</div>
-			<div :class="$style.date">
-				<i class="ti ti-calendar"></i>
-				{{ formatDate(event.startAt) }}
+		<div v-if="event" :class="$style.root">
+			<div :class="$style.header">
+				<MkButton :class="$style.backButton" @click="router.push('/events')">
+					<i class="ti ti-arrow-left"></i>
+					{{ i18n.ts.goBack }}
+				</MkButton>
+				<div :class="$style.titleRow">
+					<span v-if="event.color" :class="$style.colorSwatch" :style="{ backgroundColor: event.color }"></span>
+					<div :class="$style.title">{{ event.title }}</div>
+				</div>
+				<div :class="$style.date">
+					<i class="ti ti-calendar"></i>
+					{{ formatDate(event.startAt) }}
 				<template v-if="event.endAt">〜 {{ formatDate(event.endAt) }}</template>
 			</div>
 			<span :class="[$style.statusBadge, $style['status_' + event.status]]">
@@ -157,11 +164,29 @@ definePage(computed(() => ({
 	margin-bottom: 24px;
 }
 
+.backButton {
+	margin-bottom: 12px;
+}
+
+.titleRow {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
 .title {
 	font-size: 1.5em;
 	font-weight: 700;
 	margin-bottom: 8px;
 	color: var(--MI_THEME-fg);
+}
+
+.colorSwatch {
+	width: 14px;
+	height: 14px;
+	border-radius: 999px;
+	flex-shrink: 0;
+	box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
 }
 
 .date {

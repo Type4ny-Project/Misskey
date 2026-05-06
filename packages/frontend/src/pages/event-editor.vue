@@ -27,6 +27,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template #label>{{ i18n.ts._events.url }}</template>
 			</MkInput>
 
+			<MkColorInput v-model="color" :class="$style.field">
+				<template #label>{{ i18n.ts.color }}</template>
+			</MkColorInput>
+
+			<div :class="$style.field">
+				<div :class="$style.channelLabel">{{ i18n.ts._events.channel }}</div>
+				<div :class="$style.channelActions">
+					<MkButton @click="chooseChannel($event)">
+						<i class="ti ti-device-tv"></i>
+						{{ selectedChannelName ?? i18n.ts._events.channel }}
+					</MkButton>
+					<MkButton v-if="selectedChannelId != null" @click="clearChannel">
+						{{ i18n.ts.cancel }}
+					</MkButton>
+				</div>
+			</div>
+
 			<MkInput v-model="tagsStr" :class="$style.field">
 				<template #label>{{ i18n.ts._events.tags }}</template>
 				<template #caption>{{ i18n.ts._events.tagsCaption }}</template>
@@ -48,9 +65,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { ref, computed, onMounted } from 'vue';
+import MkColorInput from '@/components/MkColorInput.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkButton from '@/components/MkButton.vue';
+import { favoritedChannelsCache, userChannelsCache, userChannelFollowingsCache } from '@/cache.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
@@ -70,11 +89,27 @@ const startAtStr = ref('');
 const endAtStr = ref('');
 const description = ref('');
 const url = ref('');
+const color = ref('#3b82f6');
 const tagsStr = ref('');
+const selectedChannelId = ref<string | null>(props.channelId ?? null);
+const selectedChannelName = ref<string | null>(null);
 
 const canSubmit = computed(() => {
 	return title.value.length > 0 && startAtStr.value.length > 0;
 });
+
+function toLocalDatetimeInput(date: Date): string {
+	const pad = (n: number) => String(n).padStart(2, '0');
+	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function initNewEventDates() {
+	if (startAtStr.value || endAtStr.value) return;
+	const now = new Date();
+	const end = new Date(now.getTime() + 60 * 60 * 1000);
+	startAtStr.value = toLocalDatetimeInput(now);
+	endAtStr.value = toLocalDatetimeInput(end);
+}
 
 async function loadEvent() {
 	if (!props.eventId) return;
@@ -84,7 +119,57 @@ async function loadEvent() {
 	if (event.endAt) endAtStr.value = toLocalDatetime(event.endAt);
 	description.value = event.description ?? '';
 	url.value = event.url ?? '';
+	color.value = event.color ?? '#3b82f6';
 	tagsStr.value = event.tags?.join(', ') ?? '';
+	selectedChannelId.value = event.channelId ?? null;
+	selectedChannelName.value = event.channel?.name ?? null;
+}
+
+async function loadSelectedChannelName() {
+	if (selectedChannelId.value == null) {
+		selectedChannelName.value = null;
+		return;
+	}
+	try {
+		const channel = await misskeyApi('channels/show', { channelId: selectedChannelId.value });
+		selectedChannelName.value = channel.name;
+	} catch {
+		selectedChannelName.value = null;
+	}
+}
+
+async function chooseChannel(ev?: Event) {
+	const [ownedChannels, followedChannels, favoritedChannels] = await Promise.all([
+		userChannelsCache.fetch(),
+		userChannelFollowingsCache.fetch(),
+		favoritedChannelsCache.fetch(),
+	]);
+	const channels = [...ownedChannels, ...followedChannels, ...favoritedChannels]
+		.filter((channel, index, array) => array.findIndex(x => x.id === channel.id) === index)
+		.sort((a, b) => a.name.localeCompare(b.name));
+	const items = [
+		...channels.map(channel => ({
+			type: 'button' as const,
+			text: channel.name,
+			action: () => {
+				selectedChannelId.value = channel.id;
+				selectedChannelName.value = channel.name;
+			},
+		})),
+		(channels.length === 0 ? undefined : { type: 'divider' as const }),
+		{
+			type: 'button' as const,
+			text: i18n.ts.clear,
+			action: () => clearChannel(),
+		},
+	].filter(item => item != null);
+
+	os.popupMenu(items, (ev?.currentTarget ?? ev?.target ?? undefined) as HTMLElement | undefined);
+}
+
+function clearChannel() {
+	selectedChannelId.value = null;
+	selectedChannelName.value = null;
 }
 
 function toLocalDatetime(isoStr: string): string {
@@ -108,7 +193,9 @@ async function submit() {
 				endAt: endAtStr.value ? new Date(endAtStr.value).getTime() : null,
 				description: description.value || null,
 				url: url.value || null,
+				color: color.value || null,
 				tags,
+				channelId: selectedChannelId.value,
 			});
 			os.alert({ type: 'success', text: i18n.ts._events.eventUpdated });
 			router.push('/events/:eventId', { params: { eventId: props.eventId! } });
@@ -119,8 +206,9 @@ async function submit() {
 				endAt: endAtStr.value ? new Date(endAtStr.value).getTime() : null,
 				description: description.value || null,
 				url: url.value || null,
+				color: color.value || null,
 				tags,
-				...(props.channelId ? { channelId: props.channelId } : {}),
+				channelId: selectedChannelId.value,
 			});
 			os.alert({ type: 'success', text: i18n.ts._events.eventSubmitted });
 			router.push('/events/:eventId', { params: { eventId: event.id } });
@@ -143,7 +231,14 @@ function cancel() {
 }
 
 onMounted(() => {
-	if (isEdit.value) loadEvent();
+	if (isEdit.value) {
+		loadEvent();
+	} else if (selectedChannelId.value != null) {
+		loadSelectedChannelName();
+		initNewEventDates();
+	} else {
+		initNewEventDates();
+	}
 });
 
 definePage(() => ({
@@ -167,6 +262,19 @@ definePage(() => ({
 
 .field {
 	width: 100%;
+}
+
+.channelLabel {
+	font-size: 0.9em;
+	font-weight: 700;
+	margin-bottom: 8px;
+	color: var(--MI_THEME-fg);
+}
+
+.channelActions {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
 }
 
 .actions {

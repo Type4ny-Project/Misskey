@@ -461,6 +461,10 @@ export const ROUTE_DEF = [{
 		name: 'ads',
 		component: page(() => import('@/pages/admin/ads.vue')),
 	}, {
+		path: '/events',
+		name: 'events',
+		component: page(() => import('@/pages/admin/events.vue')),
+	}, {
 		path: '/roles/:id/edit',
 		name: 'roles',
 		component: page(() => import('@/pages/admin/roles.edit.vue')),

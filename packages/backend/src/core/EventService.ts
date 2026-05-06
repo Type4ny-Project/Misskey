@@ -40,6 +40,7 @@ export class EventService {
 		endAt?: Date | null;
 		description?: string | null;
 		url?: string | null;
+		color?: string | null;
 		tags?: string[];
 		channelId?: string | null;
 	}): Promise<MiEvent> {
@@ -69,6 +70,7 @@ export class EventService {
 			endAt: params.endAt ?? null,
 			description: params.description ?? null,
 			url: params.url ?? null,
+			color: params.color ?? null,
 			tags: params.tags ?? [],
 			createdById: params.user.id,
 			status: 'pending',
@@ -87,6 +89,7 @@ export class EventService {
 		endAt?: Date | null;
 		description?: string | null;
 		url?: string | null;
+		color?: string | null;
 		tags?: string[];
 		channelId?: string | null;
 	}): Promise<MiEvent> {
@@ -118,6 +121,7 @@ export class EventService {
 		if (params.endAt !== undefined) set.endAt = params.endAt;
 		if (params.description !== undefined) set.description = params.description;
 		if (params.url !== undefined) set.url = params.url;
+		if (params.color !== undefined) set.color = params.color;
 		if (params.tags !== undefined) set.tags = params.tags;
 		if (params.channelId !== undefined) set.channelId = params.channelId;
 

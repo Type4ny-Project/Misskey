@@ -46,6 +46,13 @@ export class MiEvent {
 	public url: string | null;
 
 	@Column('varchar', {
+		length: 7,
+		nullable: true,
+		comment: 'The display color of the Event.',
+	})
+	public color: string | null;
+
+	@Column('varchar', {
 		array: true,
 		length: 128,
 		default: '{}',

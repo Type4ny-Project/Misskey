@@ -46,6 +46,7 @@ export const paramDef = {
 		endAt: { type: 'integer', nullable: true },
 		description: { type: 'string', nullable: true, maxLength: 2048 },
 		url: { type: 'string', nullable: true, maxLength: 512 },
+		color: { type: 'string', nullable: true, pattern: '^#[0-9a-fA-F]{6}$' },
 		tags: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 64 }, maxItems: 16, uniqueItems: true },
 		channelId: { type: 'string', format: 'misskey:id', nullable: true },
 	},
@@ -67,6 +68,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					endAt: ps.endAt != null ? new Date(ps.endAt) : null,
 					description: ps.description ?? null,
 					url: ps.url ?? null,
+					color: ps.color ?? null,
 					tags: ps.tags ?? [],
 					channelId: ps.channelId ?? null,
 				});

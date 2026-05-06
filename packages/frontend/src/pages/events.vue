@@ -57,34 +57,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 
-		<div v-if="tab === 'queue' && iAmModerator" :class="$style.eventList">
-			<div v-if="pendingEvents.length === 0" :class="$style.empty">
-				{{ i18n.ts._events.noEvents }}
-			</div>
-			<div v-for="event in pendingEvents" :key="event.id" :class="$style.eventCard">
-				<div :class="$style.eventDate">
-					<i class="ti ti-calendar"></i>
-					{{ formatDate(event.startAt) }}
-					<template v-if="event.endAt">〜 {{ formatDate(event.endAt) }}</template>
-				</div>
-				<div :class="$style.eventTitle">{{ event.title }}</div>
-				<div v-if="event.description" :class="$style.eventDesc">{{ event.description }}</div>
-				<div v-if="event.url" :class="$style.eventUrl">
-					<a :href="event.url" target="_blank" rel="noopener noreferrer">{{ event.url }}</a>
-				</div>
-				<div :class="$style.eventMeta">
-					<MkAvatar :user="event.createdBy" :class="$style.avatar"/> {{ event.createdBy.name || event.createdBy.username }}
-				</div>
-				<div :class="$style.queueActions">
-					<MkButton primary @click="approveEvent(event.id)">
-						<i class="ti ti-check"></i> {{ i18n.ts._events.approve }}
-					</MkButton>
-					<MkButton danger @click="rejectEvent(event.id)">
-						<i class="ti ti-x"></i> {{ i18n.ts._events.reject }}
-					</MkButton>
-				</div>
-			</div>
-		</div>
 	</div>
 </PageWithHeader>
 </template>
@@ -92,14 +64,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { ref, computed, onMounted } from 'vue';
 import * as Misskey from 'misskey-js';
-import MkButton from '@/components/MkButton.vue';
 import MkEventCalendar from '@/components/MkEventCalendar.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { useRouter } from '@/router.js';
-import { $i, iAmModerator } from '@/i.js';
-import * as os from '@/os.js';
+import { $i } from '@/i.js';
 
 const router = useRouter();
 
@@ -107,7 +77,6 @@ const tab = ref('upcoming');
 const selectedDate = ref<string | null>(null);
 const approvedEvents = ref<Misskey.entities.Event[]>([]);
 const myEvents = ref<Misskey.entities.Event[]>([]);
-const pendingEvents = ref<Misskey.entities.Event[]>([]);
 
 // Current month boundaries for calendar event fetching
 const monthStart = ref<number>(0);
@@ -146,30 +115,25 @@ async function fetchMyEvents() {
 	}
 }
 
-async function fetchPendingEvents() {
-	if (!iAmModerator) return;
-	try {
-		const res = await misskeyApi('events/pending', {
-			limit: 50,
-		});
-		pendingEvents.value = res;
-	} catch (e) {
-		console.error(e);
-	}
-}
-
 const calendarEvents = computed(() => {
 	return approvedEvents.value.map(ev => ({
+		title: ev.title,
 		startAt: ev.startAt,
 		endAt: ev.endAt,
+		color: ev.color,
 	}));
 });
+
+function toLocalDateStr(dateStr: string): string {
+	const d = new Date(dateStr);
+	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const filteredEvents = computed(() => {
 	if (!selectedDate.value) return approvedEvents.value;
 	return approvedEvents.value.filter(ev => {
-		const startDate = ev.startAt.substring(0, 10);
-		const endDate = ev.endAt ? ev.endAt.substring(0, 10) : startDate;
+		const startDate = toLocalDateStr(ev.startAt);
+		const endDate = ev.endAt ? toLocalDateStr(ev.endAt) : startDate;
 		return selectedDate.value! >= startDate && selectedDate.value! <= endDate;
 	});
 });
@@ -181,19 +145,6 @@ function formatDate(dateStr: string): string {
 
 function showEvent(eventId: string) {
 	router.push('/events/:eventId', { params: { eventId } });
-}
-
-async function approveEvent(eventId: string) {
-	await misskeyApi('events/approve', { eventId });
-	os.alert({ type: 'success', text: i18n.ts._events.eventApproved });
-	pendingEvents.value = pendingEvents.value.filter(e => e.id !== eventId);
-	fetchEvents();
-}
-
-async function rejectEvent(eventId: string) {
-	await misskeyApi('events/reject', { eventId });
-	os.alert({ type: 'success', text: i18n.ts._events.eventRejected });
-	pendingEvents.value = pendingEvents.value.filter(e => e.id !== eventId);
 }
 
 const headerActions = computed(() => {
@@ -215,28 +166,25 @@ const headerTabs = computed(() => {
 	if ($i) {
 		tabs.push({ key: 'mySubmissions', title: i18n.ts._events.mySubmissions, icon: 'ti ti-send' });
 	}
-	if (iAmModerator) {
-		tabs.push({ key: 'queue', title: i18n.ts._events.approvalQueue, icon: 'ti ti-checklist' });
-	}
 	return tabs;
 });
 
 onMounted(() => {
 	fetchEvents();
 	if ($i) fetchMyEvents();
-	if (iAmModerator) fetchPendingEvents();
 });
 
 definePage(() => ({
 	title: i18n.ts._events.eventCalendar,
 	icon: 'ti ti-calendar-event',
+	needWideArea: true,
 }));
 </script>
 
 <style lang="scss" module>
 .root {
 	padding: 16px;
-	max-width: 800px;
+	max-width: 1200px;
 	margin: 0 auto;
 }
 
@@ -328,14 +276,6 @@ definePage(() => ({
 	color: var(--MI_THEME-accent);
 }
 
-.eventUrl {
-	font-size: 0.85em;
-	margin-bottom: 8px;
-	a {
-		color: var(--MI_THEME-link);
-	}
-}
-
 .statusBadge {
 	font-size: 0.75em;
 	padding: 2px 8px;
@@ -358,14 +298,4 @@ definePage(() => ({
 	color: #fff;
 }
 
-.avatar {
-	width: 24px;
-	height: 24px;
-}
-
-.queueActions {
-	display: flex;
-	gap: 8px;
-	margin-top: 12px;
-}
 </style>

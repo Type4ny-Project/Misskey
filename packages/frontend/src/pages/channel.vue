@@ -67,20 +67,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkEventCalendar
 					v-model:selectedDate="selectedEventDate"
 					:events="channelCalendarEvents"
-					@monthChange="onChannelMonthChange"
+					:allowCreate="!!$i"
+					:defaultChannelId="channelId"
+					:defaultChannelName="channel?.name ?? null"
+					@rangeChange="onChannelRangeChange"
+					@eventCreated="fetchChannelEvents"
 				/>
-				<div v-if="channelEvents.length === 0" :class="$style.eventsEmpty">
-					{{ i18n.ts._events.noEvents }}
-				</div>
-				<div v-for="ev in filteredChannelEvents" :key="ev.id" class="_panel" :class="$style.eventCard" @click="router.push('/events/:eventId', { params: { eventId: ev.id } })">
-					<div :class="$style.eventCardDate">
-						<i class="ti ti-calendar"></i>
-						{{ formatEventDate(ev.startAt) }}
-						<template v-if="ev.endAt">〜 {{ formatEventDate(ev.endAt) }}</template>
-					</div>
-					<div :class="$style.eventCardTitle">{{ ev.title }}</div>
-					<div v-if="ev.description" :class="$style.eventCardDesc">{{ ev.description?.substring(0, 100) }}</div>
-				</div>
 			</div>
 		</div>
 	</div>
@@ -292,58 +284,43 @@ async function search() {
 // Channel events
 const selectedEventDate = ref<string | null>(null);
 const channelEvents = ref<Misskey.entities.Event[]>([]);
-const channelMonthStart = ref<number>(0);
-const channelMonthEnd = ref<number>(0);
+const channelRangeStart = ref<number>(0);
+const channelRangeEnd = ref<number>(0);
 
-function onChannelMonthChange(year: number, month: number) {
-	const start = new Date(year, month, 1);
-	const end = new Date(year, month + 1, 0, 23, 59, 59);
-	channelMonthStart.value = start.getTime();
-	channelMonthEnd.value = end.getTime();
+function onChannelRangeChange(range: { startAt: number; endAt: number; view: 'month' | 'week' | 'schedule' }) {
+	channelRangeStart.value = range.startAt;
+	channelRangeEnd.value = range.endAt;
 	fetchChannelEvents();
 }
 
 async function fetchChannelEvents() {
+	if (channelRangeStart.value === 0 || channelRangeEnd.value === 0) return;
+
 	try {
 		const res = await misskeyApi('events/list', {
 			limit: 100,
-			sinceDate: channelMonthStart.value,
-			untilDate: channelMonthEnd.value,
+			sinceDate: channelRangeStart.value,
+			untilDate: channelRangeEnd.value,
 			channelId: props.channelId,
 		});
 		channelEvents.value = res;
-	} catch (e) {
-		console.error(e);
+	} catch (error) {
+		console.error(error);
 	}
 }
 
 const channelCalendarEvents = computed(() => {
 	return channelEvents.value.map(ev => ({
+		id: ev.id,
 		title: ev.title,
+		description: ev.description,
 		startAt: ev.startAt,
 		endAt: ev.endAt,
 		color: ev.color,
+		channelName: ev.channel?.name ?? null,
+		tags: ev.tags,
 	}));
 });
-
-function toLocalEventDateStr(dateStr: string): string {
-	const d = new Date(dateStr);
-	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-const filteredChannelEvents = computed(() => {
-	if (!selectedEventDate.value) return channelEvents.value;
-	return channelEvents.value.filter(ev => {
-		const startDate = toLocalEventDateStr(ev.startAt);
-		const endDate = ev.endAt ? toLocalEventDateStr(ev.endAt) : startDate;
-		return selectedEventDate.value! >= startDate && selectedEventDate.value! <= endDate;
-	});
-});
-
-function formatEventDate(dateStr: string): string {
-	const d = new Date(dateStr);
-	return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
 
 const headerActions = computed(() => {
 	if (channel.value) {

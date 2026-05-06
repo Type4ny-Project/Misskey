@@ -6,63 +6,47 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs" :swipable="true">
 	<div :class="$style.root">
-		<MkEventCalendar
-			v-model:selectedDate="selectedDate"
-			:events="calendarEvents"
-			@monthChange="onMonthChange"
-		/>
+		<template v-if="tab === 'upcoming'">
+			<MkEventCalendar
+				v-model:selectedDate="selectedDate"
+				:events="calendarEvents"
+				:allowCreate="!!$i"
+				@rangeChange="onRangeChange"
+				@eventCreated="refreshEventsData"
+			/>
+		</template>
 
-		<div v-if="tab === 'upcoming'" :class="$style.eventList">
-			<div v-if="selectedDate" :class="$style.selectedDateLabel">
-				{{ selectedDate }}
-				<button class="_button" :class="$style.clearDate" @click="selectedDate = null">
-					<i class="ti ti-x"></i>
-				</button>
+		<section v-else-if="$i" :class="$style.pendingSection">
+			<div :class="$style.pendingHeader">
+				<h2 :class="$style.pendingTitle">{{ i18n.ts._events.mySubmissions }}</h2>
+				<span :class="$style.pendingCount">{{ myEvents.length }}</span>
 			</div>
-			<div v-if="filteredEvents.length === 0" :class="$style.empty">
-				{{ selectedDate ? i18n.ts._events.noEventsOnThisDay : i18n.ts._events.noEvents }}
-			</div>
-			<div v-for="event in filteredEvents" :key="event.id" :class="$style.eventCard" @click="showEvent(event.id)">
-				<div :class="$style.eventDate">
-					<i class="ti ti-calendar"></i>
-					{{ formatDate(event.startAt) }}
-					<template v-if="event.endAt">〜 {{ formatDate(event.endAt) }}</template>
-				</div>
-				<div :class="$style.eventTitle">{{ event.title }}</div>
-				<div v-if="event.description" :class="$style.eventDesc">{{ event.description?.substring(0, 100) }}</div>
-				<div :class="$style.eventMeta">
-					<span v-if="event.channel" :class="$style.eventChannel">
-						<i class="ti ti-device-tv"></i> {{ event.channel.name }}
-					</span>
-					<span v-if="event.tags && event.tags.length > 0" :class="$style.eventTags">
-						<span v-for="tag in event.tags" :key="tag" :class="$style.tag">#{{ tag }}</span>
-					</span>
-				</div>
-			</div>
-		</div>
 
-		<div v-if="tab === 'mySubmissions'" :class="$style.eventList">
 			<div v-if="myEvents.length === 0" :class="$style.empty">
 				{{ i18n.ts._events.noEvents }}
 			</div>
-			<div v-for="event in myEvents" :key="event.id" :class="$style.eventCard" @click="showEvent(event.id)">
-				<div :class="$style.eventDate">
-					<i class="ti ti-calendar"></i>
-					{{ formatDate(event.startAt) }}
-					<span :class="[$style.statusBadge, $style['status_' + event.status]]">
-						{{ i18n.ts._events[event.status] }}
-					</span>
-				</div>
-				<div :class="$style.eventTitle">{{ event.title }}</div>
-			</div>
-		</div>
 
+			<div v-else :class="$style.pendingList">
+				<button
+					v-for="event in myEvents"
+					:key="event.id"
+					class="_button"
+					:class="$style.pendingCard"
+					@click="router.push('/events/:eventId', { params: { eventId: event.id } })"
+				>
+					<div :class="$style.pendingDate">{{ formatDate(event.startAt) }}</div>
+					<div :class="$style.pendingEventTitle">{{ event.title }}</div>
+					<div :class="$style.pendingStatus">{{ i18n.ts._events[event.status] }}</div>
+					<div v-if="event.description" :class="$style.pendingDescription">{{ event.description }}</div>
+				</button>
+			</div>
+		</section>
 	</div>
 </PageWithHeader>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkEventCalendar from '@/components/MkEventCalendar.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -78,74 +62,65 @@ const selectedDate = ref<string | null>(null);
 const approvedEvents = ref<Misskey.entities.Event[]>([]);
 const myEvents = ref<Misskey.entities.Event[]>([]);
 
-// Current month boundaries for calendar event fetching
-const monthStart = ref<number>(0);
-const monthEnd = ref<number>(0);
+const rangeStart = ref<number>(0);
+const rangeEnd = ref<number>(0);
 
-function onMonthChange(year: number, month: number) {
-	const start = new Date(year, month, 1);
-	const end = new Date(year, month + 1, 0, 23, 59, 59);
-	monthStart.value = start.getTime();
-	monthEnd.value = end.getTime();
+function onRangeChange(range: { startAt: number; endAt: number; view: 'month' | 'week' | 'schedule' }) {
+	rangeStart.value = range.startAt;
+	rangeEnd.value = range.endAt;
 	fetchEvents();
 }
-
-async function fetchEvents() {
-	try {
-		const res = await misskeyApi('events/list', {
-			limit: 100,
-			sinceDate: monthStart.value,
-			untilDate: monthEnd.value,
-		});
-		approvedEvents.value = res;
-	} catch (e) {
-		console.error(e);
-	}
-}
-
-async function fetchMyEvents() {
-	if (!$i) return;
-	try {
-		const res = await misskeyApi('events/my-submissions', {
-			limit: 50,
-		});
-		myEvents.value = res;
-	} catch (e) {
-		console.error(e);
-	}
-}
-
-const calendarEvents = computed(() => {
-	return approvedEvents.value.map(ev => ({
-		title: ev.title,
-		startAt: ev.startAt,
-		endAt: ev.endAt,
-		color: ev.color,
-	}));
-});
-
-function toLocalDateStr(dateStr: string): string {
-	const d = new Date(dateStr);
-	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-const filteredEvents = computed(() => {
-	if (!selectedDate.value) return approvedEvents.value;
-	return approvedEvents.value.filter(ev => {
-		const startDate = toLocalDateStr(ev.startAt);
-		const endDate = ev.endAt ? toLocalDateStr(ev.endAt) : startDate;
-		return selectedDate.value! >= startDate && selectedDate.value! <= endDate;
-	});
-});
 
 function formatDate(dateStr: string): string {
 	const d = new Date(dateStr);
 	return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-function showEvent(eventId: string) {
-	router.push('/events/:eventId', { params: { eventId } });
+async function fetchEvents() {
+	if (rangeStart.value === 0 || rangeEnd.value === 0) return;
+
+	try {
+		const res = await misskeyApi('events/list', {
+			limit: 100,
+			sinceDate: rangeStart.value,
+			untilDate: rangeEnd.value,
+		});
+		approvedEvents.value = res;
+	} catch (error) {
+		console.error(error);
+	}
 }
+
+async function fetchMyEvents() {
+	if (!$i) return;
+
+	try {
+		const res = await misskeyApi('events/my-submissions', {
+			limit: 50,
+		});
+		myEvents.value = res;
+	} catch (error) {
+		console.error(error);
+	}
+}
+
+function refreshEventsData() {
+	fetchEvents();
+	fetchMyEvents();
+}
+
+const calendarEvents = computed(() => {
+	return approvedEvents.value.map(ev => ({
+		id: ev.id,
+		title: ev.title,
+		description: ev.description,
+		startAt: ev.startAt,
+		endAt: ev.endAt,
+		color: ev.color,
+		channelName: ev.channel?.name ?? null,
+		tags: ev.tags,
+	}));
+});
 
 const headerActions = computed(() => {
 	const actions: { icon: string; text: string; handler: () => void }[] = [];
@@ -163,16 +138,17 @@ const headerTabs = computed(() => {
 	const tabs = [
 		{ key: 'upcoming', title: i18n.ts._events.allEvents, icon: 'ti ti-calendar-event' },
 	];
+
 	if ($i) {
 		tabs.push({ key: 'mySubmissions', title: i18n.ts._events.mySubmissions, icon: 'ti ti-send' });
 	}
+
 	return tabs;
 });
 
-onMounted(() => {
-	fetchEvents();
-	if ($i) fetchMyEvents();
-});
+if ($i) {
+	fetchMyEvents();
+}
 
 definePage(() => ({
 	title: i18n.ts._events.eventCalendar,
@@ -186,6 +162,91 @@ definePage(() => ({
 	padding: 16px;
 	max-width: 1200px;
 	margin: 0 auto;
+}
+
+.pendingSection {
+	margin-top: 20px;
+	padding: 18px;
+	border-radius: 16px;
+	background: color-mix(in srgb, var(--MI_THEME-bg) 48%, transparent);
+	border: 1px solid color-mix(in srgb, var(--MI_THEME-fg) 8%, transparent);
+}
+
+.pendingHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 14px;
+}
+
+.pendingTitle {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 800;
+	color: var(--MI_THEME-fg);
+}
+
+.pendingCount {
+	min-width: 28px;
+	height: 28px;
+	padding: 0 8px;
+	border-radius: 999px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.82rem;
+	font-weight: 800;
+	color: var(--MI_THEME-fgOnAccent);
+	background: var(--MI_THEME-accent);
+}
+
+.pendingList {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 10px;
+}
+
+.pendingCard {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+	padding: 14px;
+	border-radius: 14px;
+	text-align: left;
+	background: var(--MI_THEME-panel);
+	border: 1px solid color-mix(in srgb, var(--MI_THEME-fg) 8%, transparent);
+}
+
+.pendingDate {
+	font-size: 0.8rem;
+	font-weight: 700;
+	color: var(--MI_THEME-fgTransparent);
+}
+
+.pendingEventTitle {
+	font-size: 0.96rem;
+	font-weight: 800;
+	color: var(--MI_THEME-fg);
+	word-break: break-word;
+}
+
+.pendingStatus {
+	font-size: 0.78rem;
+	font-weight: 700;
+	color: var(--MI_THEME-accent);
+}
+
+.pendingDescription {
+	font-size: 0.88rem;
+	line-height: 1.45;
+	color: var(--MI_THEME-fgTransparent);
+	word-break: break-word;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
 }
 
 .eventList {

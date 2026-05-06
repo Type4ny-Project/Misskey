@@ -73,7 +73,7 @@ import { favoritedChannelsCache, userChannelsCache, userChannelFollowingsCache }
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
-import { useRouter } from '@/router.js';
+import { useRoute, useRouter } from '@/router.js';
 import * as os from '@/os.js';
 
 const props = defineProps<{
@@ -82,6 +82,7 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
+const route = useRoute();
 const isEdit = computed(() => !!props.eventId);
 
 const title = ref('');
@@ -105,6 +106,16 @@ function toLocalDatetimeInput(date: Date): string {
 
 function initNewEventDates() {
 	if (startAtStr.value || endAtStr.value) return;
+	const initialStartAt = typeof route.query.startAt === 'string' ? route.query.startAt : null;
+	if (initialStartAt != null) {
+		const start = new Date(initialStartAt);
+		if (!Number.isNaN(start.getTime())) {
+			const end = new Date(start.getTime() + 60 * 60 * 1000);
+			startAtStr.value = toLocalDatetimeInput(start);
+			endAtStr.value = toLocalDatetimeInput(end);
+			return;
+		}
+	}
 	const now = new Date();
 	const end = new Date(now.getTime() + 60 * 60 * 1000);
 	startAtStr.value = toLocalDatetimeInput(now);

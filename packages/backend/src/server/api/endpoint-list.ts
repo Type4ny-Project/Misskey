@@ -60,6 +60,7 @@ export * as 'admin/emoji/approve-request' from './endpoints/admin/emoji/approve-
 export * as 'admin/emoji/reject-request' from './endpoints/admin/emoji/reject-request.js';
 export * as 'admin/emoji/update-request' from './endpoints/admin/emoji/update-request.js';
 export * as 'admin/emoji/update-request-settings' from './endpoints/admin/emoji/update-request-settings.js';
+export * as 'admin/events/list' from './endpoints/admin/events/list.js';
 export * as 'admin/federation/delete-all-files' from './endpoints/admin/federation/delete-all-files.js';
 export * as 'admin/federation/refresh-remote-instance-metadata' from './endpoints/admin/federation/refresh-remote-instance-metadata.js';
 export * as 'admin/federation/remove-all-following' from './endpoints/admin/federation/remove-all-following.js';

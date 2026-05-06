@@ -4,31 +4,47 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader :actions="headerActions" :tabs="headerTabs">
-	<div class="_spacer" style="--MI_SPACER-w: 900px;">
+<PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs">
+	<div class="_spacer" style="--MI_SPACER-w: 1040px;">
 		<div class="_gaps">
+			<div :class="$style.toolbar">
+				<div :class="$style.statusSummary">
+					<span :class="$style.summaryLabel">{{ activeTabTitle }}</span>
+					<span :class="$style.summaryCount">{{ events.length }}</span>
+				</div>
+			</div>
+
 			<MkLoading v-if="loading"/>
 
-			<div v-else-if="pendingEvents.length === 0" class="_fullInfo">
+			<div v-else-if="events.length === 0" class="_fullInfo">
 				<span>{{ i18n.ts._events.noEvents }}</span>
 			</div>
 
 			<div v-else :class="$style.eventList">
-				<div v-for="event in pendingEvents" :key="event.id" class="_panel" :class="$style.eventCard">
-					<div :class="$style.eventDate">
-						<i class="ti ti-calendar"></i>
-						{{ formatDate(event.startAt) }}
-						<template v-if="event.endAt">〜 {{ formatDate(event.endAt) }}</template>
+				<div v-for="event in events" :key="event.id" class="_panel" :class="$style.eventCard">
+					<div :class="$style.headerRow">
+						<div>
+							<div :class="$style.eventDate">
+								<i class="ti ti-calendar"></i>
+								{{ formatDate(event.startAt) }}
+								<template v-if="event.endAt">〜 {{ formatDate(event.endAt) }}</template>
+							</div>
+							<div :class="$style.eventTitle">{{ event.title }}</div>
+						</div>
+						<span :class="[$style.statusBadge, $style[`status_${event.status}`]]">{{ i18n.ts._events[event.status] }}</span>
 					</div>
-					<div :class="$style.eventTitle">{{ event.title }}</div>
+
 					<div v-if="event.color" :class="$style.colorRow">
 						<span :class="$style.colorSwatch" :style="{ backgroundColor: event.color }"></span>
 						<span>{{ event.color }}</span>
 					</div>
+
 					<div v-if="event.description" :class="$style.eventDesc">{{ event.description }}</div>
+
 					<div v-if="event.url" :class="$style.eventUrl">
 						<a :href="event.url" target="_blank" rel="noopener noreferrer">{{ event.url }}</a>
 					</div>
+
 					<div :class="$style.eventMeta">
 						<MkAvatar :user="event.createdBy" :class="$style.avatar"/>
 						<span>{{ event.createdBy.name || event.createdBy.username }}</span>
@@ -36,14 +52,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<i class="ti ti-device-tv"></i> {{ event.channel.name }}
 						</span>
 					</div>
+
 					<div :class="$style.actions">
 						<MkButton @click="openEvent(event.id)">
 							<i class="ti ti-external-link"></i> {{ i18n.ts.details }}
 						</MkButton>
-						<MkButton primary @click="approveEvent(event.id)">
+						<MkButton v-if="event.status !== 'approved'" primary @click="approveEvent(event.id)">
 							<i class="ti ti-check"></i> {{ i18n.ts._events.approve }}
 						</MkButton>
-						<MkButton danger @click="rejectEvent(event.id)">
+						<MkButton v-if="event.status !== 'rejected'" danger @click="rejectEvent(event.id)">
 							<i class="ti ti-x"></i> {{ i18n.ts._events.reject }}
 						</MkButton>
 					</div>
@@ -55,7 +72,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, watch, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
@@ -65,19 +82,24 @@ import { useRouter } from '@/router.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import * as os from '@/os.js';
 
+type EventAdminStatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
+
 const router = useRouter();
 
+const tab = ref<EventAdminStatusFilter>('pending');
 const loading = ref(true);
-const pendingEvents = ref<Misskey.entities.Event[]>([]);
+const events = ref<Misskey.entities.Event[]>([]);
 
-async function fetchPendingEvents() {
+async function fetchEvents() {
 	loading.value = true;
+
 	try {
-		pendingEvents.value = await misskeyApi('events/pending', {
+		events.value = await misskeyApi('admin/events/list', {
 			limit: 100,
+			status: tab.value,
 		});
-	} catch (e) {
-		console.error(e);
+	} catch (error) {
+		console.error(error);
 	} finally {
 		loading.value = false;
 	}
@@ -95,21 +117,35 @@ function openEvent(eventId: string) {
 async function approveEvent(eventId: string) {
 	await misskeyApi('events/approve', { eventId });
 	os.alert({ type: 'success', text: i18n.ts._events.eventApproved });
-	pendingEvents.value = pendingEvents.value.filter(e => e.id !== eventId);
+	fetchEvents();
 }
 
 async function rejectEvent(eventId: string) {
 	await misskeyApi('events/reject', { eventId });
 	os.alert({ type: 'success', text: i18n.ts._events.eventRejected });
-	pendingEvents.value = pendingEvents.value.filter(e => e.id !== eventId);
+	fetchEvents();
 }
 
-const headerActions = computed(() => []);
-const headerTabs = computed(() => []);
+const headerActions = computed(() => [{
+	icon: 'ti ti-refresh',
+	text: i18n.ts.reload,
+	handler: () => fetchEvents(),
+}]);
 
-onMounted(() => {
-	fetchPendingEvents();
+const headerTabs = computed(() => [
+	{ key: 'pending', title: i18n.ts._events.pending, icon: 'ti ti-clock-hour-4' },
+	{ key: 'approved', title: i18n.ts._events.approved, icon: 'ti ti-check' },
+	{ key: 'rejected', title: i18n.ts._events.rejected, icon: 'ti ti-x' },
+	{ key: 'all', title: i18n.ts.all, icon: 'ti ti-list' },
+]);
+
+const activeTabTitle = computed(() => {
+	return headerTabs.value.find(item => item.key === tab.value)?.title ?? i18n.ts.all;
 });
+
+watch(tab, () => {
+	fetchEvents();
+}, { immediate: true });
 
 definePage(() => ({
 	title: i18n.ts._events.approvalQueue,
@@ -118,6 +154,41 @@ definePage(() => ({
 </script>
 
 <style lang="scss" module>
+.toolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+}
+
+.statusSummary {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 14px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--MI_THEME-fg) 6%, transparent);
+}
+
+.summaryLabel {
+	font-weight: 700;
+	color: var(--MI_THEME-fg);
+}
+
+.summaryCount {
+	min-width: 26px;
+	height: 26px;
+	padding: 0 8px;
+	border-radius: 999px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.82rem;
+	font-weight: 800;
+	background: var(--MI_THEME-accent);
+	color: var(--MI_THEME-fgOnAccent);
+}
+
 .eventList {
 	display: flex;
 	flex-direction: column;
@@ -126,6 +197,15 @@ definePage(() => ({
 
 .eventCard {
 	padding: 16px;
+	border-radius: 16px;
+}
+
+.headerRow {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 12px;
+	margin-bottom: 8px;
 }
 
 .eventDate {
@@ -135,12 +215,36 @@ definePage(() => ({
 	display: flex;
 	align-items: center;
 	gap: 6px;
+	flex-wrap: wrap;
 }
 
 .eventTitle {
 	font-size: 1.1em;
 	font-weight: 700;
-	margin-bottom: 6px;
+	word-break: break-word;
+}
+
+.statusBadge {
+	flex-shrink: 0;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: 0.78rem;
+	font-weight: 800;
+}
+
+.status_pending {
+	background: color-mix(in srgb, #f59e0b 18%, transparent);
+	color: #f59e0b;
+}
+
+.status_approved {
+	background: color-mix(in srgb, #22c55e 18%, transparent);
+	color: #22c55e;
+}
+
+.status_rejected {
+	background: color-mix(in srgb, #ef4444 18%, transparent);
+	color: #ef4444;
 }
 
 .eventDesc {

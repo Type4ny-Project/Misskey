@@ -17,8 +17,11 @@ import * as Redis from 'ioredis';
 import { MiMeta } from '@/models/Meta.js';
 
 function createLiveProxy<T extends object>(getValue: () => T): T {
-	return new Proxy({} as T, {
+	const target = {} as T;
+	return new Proxy(target, {
 		get(_target, property, receiver) {
+			if (property === 'then') return undefined;
+
 			const value = Reflect.get(getValue(), property, receiver);
 			return typeof value === 'function' ? value.bind(getValue()) : value;
 		},
@@ -26,10 +29,10 @@ function createLiveProxy<T extends object>(getValue: () => T): T {
 			return Reflect.set(getValue(), property, value, receiver);
 		},
 		ownKeys() {
-			return Reflect.ownKeys(getValue());
+			return Reflect.ownKeys(target);
 		},
 		getOwnPropertyDescriptor(_target, property) {
-			return Reflect.getOwnPropertyDescriptor(getValue(), property);
+			return Reflect.getOwnPropertyDescriptor(target, property);
 		},
 	});
 }

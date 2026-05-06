@@ -16,11 +16,19 @@ import type { DataSource } from 'typeorm';
 import * as Redis from 'ioredis';
 import { MiMeta } from '@/models/Meta.js';
 
+const NEST_LIFECYCLE_HOOKS = new Set<string | symbol>([
+	'onModuleInit',
+	'onApplicationBootstrap',
+	'onModuleDestroy',
+	'beforeApplicationShutdown',
+	'onApplicationShutdown',
+]);
+
 function createLiveProxy<T extends object>(getValue: () => T): T {
 	const target = {} as T;
 	return new Proxy(target, {
 		get(_target, property, receiver) {
-			if (property === 'then') return undefined;
+			if (property === 'then' || NEST_LIFECYCLE_HOOKS.has(property)) return undefined;
 
 			const value = Reflect.get(getValue(), property, receiver);
 			return typeof value === 'function' ? value.bind(getValue()) : value;

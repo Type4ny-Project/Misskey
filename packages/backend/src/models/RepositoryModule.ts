@@ -5,7 +5,7 @@
 
 import { Module } from '@nestjs/common';
 import type { Provider } from '@nestjs/common';
-import type { DataSource, EntityTarget, ObjectLiteral, Repository } from 'typeorm';
+import type { EntityTarget, ObjectLiteral, Repository } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import { TenantRuntimeService } from '@/core/TenantRuntimeService.js';
 import {
@@ -92,9 +92,19 @@ import {
 	MiEvent,
 } from './_.js';
 
+const NEST_LIFECYCLE_HOOKS = new Set<string | symbol>([
+	'onModuleInit',
+	'onApplicationBootstrap',
+	'onModuleDestroy',
+	'beforeApplicationShutdown',
+	'onApplicationShutdown',
+]);
+
 function createRepositoryProxy<T extends ObjectLiteral>(runtime: TenantRuntimeService, target: EntityTarget<T>, extend = true): Repository<T> {
 	return new Proxy({} as Repository<T>, {
 		get(_target, property, receiver) {
+			if (property === 'then' || NEST_LIFECYCLE_HOOKS.has(property)) return undefined;
+
 			const repository = runtime.getCurrentDb().getRepository(target);
 			const actual = extend ? repository.extend(miRepository as MiRepository<T>) : repository;
 			const value = Reflect.get(actual, property, receiver);
@@ -190,17 +200,12 @@ const providers = [
 	repositoryProvider(DI.chatApprovalsRepository, MiChatApproval),
 	repositoryProvider(DI.bubbleGameRecordsRepository, MiBubbleGameRecord),
 	repositoryProvider(DI.reversiGamesRepository, MiReversiGame),
+	repositoryProvider(DI.eventsRepository, MiEvent),
 ];
-
-const $eventsRepository: Provider = {
-	provide: DI.eventsRepository,
-	useFactory: (db: DataSource) => db.getRepository(MiEvent).extend(miRepository as MiRepository<MiEvent>),
-	inject: [DI.db],
-};
 
 @Module({
 	imports: [],
-	providers: [...providers, $eventsRepository],
-	exports: [...providers, $eventsRepository],
+	providers,
+	exports: providers,
 })
 export class RepositoryModule {}

@@ -15,11 +15,18 @@ import { dateUTC, isTimeSame, isTimeBefore, subtractTime, addTime } from '@/misc
 import type Logger from '@/logger.js';
 import { bindThis } from '@/decorators.js';
 import { MiRepository, miRepository } from '@/models/_.js';
-import type { DataSource, Repository } from 'typeorm';
+import type { DataSource, EntityTarget, ObjectLiteral, Repository } from 'typeorm';
 
 const COLUMN_PREFIX = '___' as const;
 const UNIQUE_TEMP_COLUMN_PREFIX = 'unique_temp___' as const;
 const COLUMN_DELIMITER = '_' as const;
+const NEST_LIFECYCLE_HOOKS = new Set<string | symbol>([
+	'onModuleInit',
+	'onApplicationBootstrap',
+	'onModuleDestroy',
+	'beforeApplicationShutdown',
+	'onApplicationShutdown',
+]);
 
 type Schema = Record<string, {
 	uniqueIncrement?: boolean;
@@ -41,6 +48,18 @@ type Columns<S extends Schema> = {
 type TempColumnsForUnique<S extends Schema> = {
 	[K in keyof S as `${typeof UNIQUE_TEMP_COLUMN_PREFIX}${KeyToColumnName<string & K>}`]: S[K]['uniqueIncrement'] extends true ? string[] : never;
 };
+
+function createRepositoryProxy<T extends ObjectLiteral>(db: DataSource, target: EntityTarget<T>): Repository<T> & MiRepository<T> {
+	return new Proxy({} as Repository<T> & MiRepository<T>, {
+		get(_target, property, receiver) {
+			if (property === 'then' || NEST_LIFECYCLE_HOOKS.has(property)) return undefined;
+
+			const repository = db.getRepository(target).extend(miRepository as MiRepository<T>);
+			const value = Reflect.get(repository, property, receiver);
+			return typeof value === 'function' ? value.bind(repository) : value;
+		},
+	});
+}
 
 type RawRecord<S extends Schema> = {
 	id: number;
@@ -276,8 +295,8 @@ export default abstract class Chart<T extends Schema> {
 		this.logger = logger;
 
 		const { hour, day } = Chart.schemaToEntity(name, schema, grouped);
-		this.repositoryForHour = db.getRepository<{ id: number; group?: string | null; date: number; }>(hour).extend(miRepository as MiRepository<{ id: number; group?: string | null; date: number; }>);
-		this.repositoryForDay = db.getRepository<{ id: number; group?: string | null; date: number; }>(day).extend(miRepository as MiRepository<{ id: number; group?: string | null; date: number; }>);
+		this.repositoryForHour = createRepositoryProxy(db, hour);
+		this.repositoryForDay = createRepositoryProxy(db, day);
 	}
 
 	@bindThis

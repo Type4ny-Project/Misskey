@@ -21,7 +21,16 @@ const _rootPackageDir = resolve(_dirname, '../../');
 const _rootPackage = JSON.parse(fs.readFileSync(resolve(_rootPackageDir, 'package.json'), 'utf-8'));
 const _frontendLocalesDir = resolve(_dirname, '../../built/_frontend_dist_/locales');
 const _localesDir = resolve(_rootPackageDir, 'locales');
-const _frontendVersion = _rootPackage.version;
+const _frontendVersion = getFrontendVersion();
+
+function getFrontendVersion(): string {
+	try {
+		const commitHash = execSync('git rev-parse --short HEAD', { cwd: _rootPackageDir, encoding: 'utf-8' }).trim();
+		return `${_rootPackage.version}+${commitHash}`;
+	} catch {
+		return _rootPackage.version;
+	}
+}
 
 const entryPoints = fs.globSync('./src/**/**.{ts,tsx}');
 

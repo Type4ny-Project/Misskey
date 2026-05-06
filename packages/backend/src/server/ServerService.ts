@@ -35,6 +35,7 @@ import { ClientServerService } from './web/ClientServerService.js';
 import { OpenApiServerService } from './api/openapi/OpenApiServerService.js';
 import { OAuth2ProviderService } from './oauth/OAuth2ProviderService.js';
 import { TenantRuntimeService } from '@/core/TenantRuntimeService.js';
+import { getTenantHost } from '@/core/tenant-context.js';
 
 const _dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -126,9 +127,19 @@ export class ServerService implements OnApplicationShutdown {
 		// this will break lookup that involve copying a URL from a third-party server, like trying to lookup http://charlie.example.com/@alice@alice.com
 		//
 		// this is not required by standard but protect us from peers that did not validate final URL.
-		if (!this.meta.allowExternalApRedirect) {
+		{
 			const maybeApLookupRegex = /application\/activity\+json|application\/ld\+json.+activitystreams/i;
 			fastify.addHook('onSend', (request, reply, _, done) => {
+				if (getTenantHost() == null) {
+					done();
+					return;
+				}
+
+				if (this.meta.allowExternalApRedirect) {
+					done();
+					return;
+				}
+
 				const location = reply.getHeader('location');
 				if (reply.statusCode < 300 || reply.statusCode >= 400 || typeof location !== 'string') {
 					done();

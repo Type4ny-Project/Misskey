@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import Xev from 'xev';
 import * as osUtils from 'os-utils';
 import { bindThis } from '@/decorators.js';
-import { MiMeta } from '@/models/_.js';
-import { DI } from '@/di-symbols.js';
+import { TenantRuntimeService } from '@/core/TenantRuntimeService.js';
 import type { OnApplicationShutdown } from '@nestjs/common';
 
 const ev = new Xev();
@@ -23,8 +22,7 @@ export class ServerStatsService implements OnApplicationShutdown {
 	private intervalId: NodeJS.Timeout | null = null;
 
 	constructor(
-		@Inject(DI.meta)
-		private meta: MiMeta,
+		private tenantRuntimeService: TenantRuntimeService,
 	) {
 	}
 
@@ -33,7 +31,7 @@ export class ServerStatsService implements OnApplicationShutdown {
 	 */
 	@bindThis
 	public async start(): Promise<void> {
-		if (!this.meta.enableServerMachineStats) return;
+		if (!this.tenantRuntimeService.getKnownHosts().some(host => this.tenantRuntimeService.getTenant(host).meta.enableServerMachineStats)) return;
 
 		const log = [] as any[];
 

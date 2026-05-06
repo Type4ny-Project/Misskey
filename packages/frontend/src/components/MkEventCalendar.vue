@@ -24,12 +24,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 			v-for="week in calendarWeeks"
 			:key="week.key"
 			:class="$style.weekRow"
-			:style="{ '--all-day-height': `${week.allDayHeight}px` }"
+			:style="{
+				'--all-day-height': `${week.allDayHeight}px`,
+				'--timed-events-offset': `${week.timedEventsOffset}px`,
+			}"
 		>
 			<div :class="$style.weekGrid">
 				<button
-					v-for="cell in week.cells"
+					v-for="(cell, cellIndex) in week.cells"
 					:key="cell.key"
+					:ref="cellIndex === 0 ? (el) => setWeekCellRef(week.key, el) : undefined"
 					:class="[
 						$style.cell,
 						{ [$style.otherMonth]: !cell.isCurrentMonth },
@@ -41,7 +45,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				>
 					<span :class="$style.cellDate">{{ cell.day }}</span>
 					<div :class="$style.cellBody">
-						<div v-if="cell.timedEvents.length > 0" :class="$style.timedEvents">
+						<div v-if="cell.timedEvents.length > 0 || cell.moreCount > 0" :class="$style.timedEvents">
 							<div
 								v-for="timedEvent in cell.timedEvents"
 								:key="timedEvent.key"
@@ -50,6 +54,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<span :class="$style.timedEventDot" :style="{ backgroundColor: timedEvent.color }"></span>
 								<span :class="$style.timedEventLabel">{{ timedEvent.title }}</span>
 							</div>
+							<div v-if="cell.moreCount > 0" :class="$style.moreEvents">{{ formatMoreEventsLabel(cell.moreCount) }}</div>
 						</div>
 					</div>
 				</button>
@@ -66,7 +71,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:style="{
 						left: `calc(${(bar.startIndex / 7) * 100}% + ${bar.startsInWeek ? 3 : 0}px)`,
 						width: `calc(${((bar.endIndex - bar.startIndex + 1) / 7) * 100}% - ${(bar.startsInWeek ? 3 : 0) + (bar.endsInWeek ? 3 : 0)}px)`,
-						top: `${bar.lane * 18}px`,
+						top: `${bar.lane * EVENT_BAR_HEIGHT}px`,
 						backgroundColor: bar.color,
 						color: bar.textColor,
 					}"
@@ -80,8 +85,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, nextTick, onBeforeUnmount } from 'vue';
+import { lang } from '@@/js/config.js';
 import { i18n } from '@/i18n.js';
+import type { ComponentPublicInstance } from 'vue';
 
 const props = withDefaults(defineProps<{
 	selectedDate?: string | null;
@@ -101,7 +108,7 @@ const defaultBarColor = ref('#3b82f6');
 
 onMounted(() => {
 	// Try to read the accent color from CSS custom property
-	const accent = getComputedStyle(document.documentElement).getPropertyValue('--MI_THEME-accent').trim();
+	const accent = getComputedStyle(window.document.documentElement).getPropertyValue('--MI_THEME-accent').trim();
 	if (accent) {
 		defaultBarColor.value = accent;
 	}
@@ -121,6 +128,24 @@ const weekdays = computed(() => [
 	i18n.ts._events.sat,
 ]);
 
+const EVENT_ROW_HEIGHT = 18;
+const EVENT_BAR_HEIGHT = EVENT_ROW_HEIGHT;
+const EVENT_BAR_BOTTOM_PADDING = 2;
+const EVENT_AREA_TOP_OFFSET = 36;
+const TIMED_EVENTS_OFFSET_WITH_BARS = 12;
+const TIMED_EVENTS_OFFSET_WITHOUT_BARS = 2;
+const DEFAULT_CELL_MIN_HEIGHT = 124;
+const DEFAULT_CELL_PADDING_BOTTOM = 6;
+const isJapaneseLanguage = lang.startsWith('ja');
+
+const defaultWeekEventAreaHeight = DEFAULT_CELL_MIN_HEIGHT - EVENT_AREA_TOP_OFFSET - DEFAULT_CELL_PADDING_BOTTOM;
+
+const weekEventAreaHeights = ref<Record<string, number>>({});
+const weekCellElements = new Map<string, HTMLButtonElement>();
+const observedWeekCellElements = new Map<string, HTMLButtonElement>();
+
+let weekCellResizeObserver: ResizeObserver | null = null;
+
 function parseDateStr(dateStr: string): Date {
 	const [year, month, day] = dateStr.split('-').map(Number);
 	return new Date(year, month - 1, day);
@@ -132,6 +157,63 @@ function diffDays(from: string, to: string): number {
 
 function formatDateStr(d: Date): string {
 	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function formatMoreEventsLabel(count: number): string {
+	return isJapaneseLanguage ? `他${count}件` : `+${count}`;
+}
+
+function setWeekCellRef(weekKey: string, el: Element | ComponentPublicInstance | null): void {
+	if (!(el instanceof HTMLButtonElement)) {
+		weekCellElements.delete(weekKey);
+		return;
+	}
+
+	weekCellElements.set(weekKey, el);
+}
+
+function measureWeekEventAreaHeight(element: HTMLButtonElement): number {
+	const style = window.getComputedStyle(element);
+	const paddingBottom = Number.parseFloat(style.paddingBottom) || 0;
+	return Math.max(0, element.clientHeight - EVENT_AREA_TOP_OFFSET - paddingBottom);
+}
+
+function measureWeekEventAreaHeights(): void {
+	const nextHeights: Record<string, number> = {};
+
+	for (const [weekKey, element] of weekCellElements) {
+		nextHeights[weekKey] = measureWeekEventAreaHeight(element);
+	}
+
+	const currentKeys = Object.keys(weekEventAreaHeights.value);
+	const nextKeys = Object.keys(nextHeights);
+	const changed = currentKeys.length !== nextKeys.length || nextKeys.some(key => weekEventAreaHeights.value[key] !== nextHeights[key]);
+
+	if (changed) {
+		weekEventAreaHeights.value = nextHeights;
+	}
+}
+
+function syncWeekCellObservers(): void {
+	if (weekCellResizeObserver == null) return;
+
+	for (const [weekKey, element] of observedWeekCellElements) {
+		if (weekCellElements.get(weekKey) === element) continue;
+		weekCellResizeObserver.unobserve(element);
+		observedWeekCellElements.delete(weekKey);
+	}
+
+	for (const [weekKey, element] of weekCellElements) {
+		if (observedWeekCellElements.get(weekKey) === element) continue;
+
+		const prevElement = observedWeekCellElements.get(weekKey);
+		if (prevElement != null) {
+			weekCellResizeObserver.unobserve(prevElement);
+		}
+
+		weekCellResizeObserver.observe(element);
+		observedWeekCellElements.set(weekKey, element);
+	}
 }
 
 // Convert ISO datetime string to local date string "YYYY-MM-DD"
@@ -249,6 +331,7 @@ const calendarWeeks = computed(() => {
 				title: string;
 				color: string;
 			}[];
+			moreCount: number;
 		}>;
 		bars: {
 			key: string;
@@ -263,6 +346,7 @@ const calendarWeeks = computed(() => {
 		}[];
 		laneCount: number;
 		allDayHeight: number;
+		timedEventsOffset: number;
 	}[] = [];
 
 	for (let i = 0; i < calendarCells.value.length; i += 7) {
@@ -302,7 +386,7 @@ const calendarWeeks = computed(() => {
 		const laneEnds: number[] = [];
 		const bars = allDaySegments.map(segment => {
 			let lane = 0;
-			while (laneEnds[lane] != null && laneEnds[lane] >= segment.startIndex) {
+			while (lane < laneEnds.length && laneEnds[lane] >= segment.startIndex) {
 				lane++;
 			}
 			laneEnds[lane] = segment.endIndex;
@@ -343,22 +427,62 @@ const calendarWeeks = computed(() => {
 			}
 		}
 
-		const cellsWithTimedEvents = cells.map(cell => ({
-			...cell,
-			timedEvents: (timedEventsByDate.get(cell.date) ?? [])
-				.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
-				.slice(0, 4)
-				.map(({ key, title, color }) => ({ key, title, color })),
-		}));
+		const eventAreaHeight = weekEventAreaHeights.value[weekStart] ?? defaultWeekEventAreaHeight;
+		const maxVisibleLaneCount = Math.min(
+			laneEnds.length,
+			Math.max(0, Math.floor((eventAreaHeight - EVENT_BAR_BOTTOM_PADDING) / EVENT_ROW_HEIGHT)),
+		);
+		const visibleLaneCount = maxVisibleLaneCount;
 
-		const allDayHeight = bars.length > 0 ? laneEnds.length * 18 + 2 : 0;
+		const visibleBars = bars.filter(bar => bar.lane < visibleLaneCount);
+		const hiddenBarCountsByDate = new Map<string, number>();
+
+		for (const cell of cells) {
+			hiddenBarCountsByDate.set(cell.date, 0);
+		}
+
+		for (const bar of bars) {
+			if (bar.lane < visibleLaneCount) continue;
+
+			for (let dateIndex = bar.startIndex; dateIndex <= bar.endIndex; dateIndex++) {
+				const date = cells[dateIndex].date;
+				hiddenBarCountsByDate.set(date, (hiddenBarCountsByDate.get(date) ?? 0) + 1);
+			}
+		}
+
+		const timedEventsOffset = visibleLaneCount > 0 ? TIMED_EVENTS_OFFSET_WITH_BARS : TIMED_EVENTS_OFFSET_WITHOUT_BARS;
+		const availableTimedContentHeight = eventAreaHeight - (visibleLaneCount > 0 ? visibleLaneCount * EVENT_ROW_HEIGHT + EVENT_BAR_BOTTOM_PADDING : 0) - timedEventsOffset;
+		const visibleTimedRowsBase = Math.max(
+			0,
+			Math.floor(availableTimedContentHeight / EVENT_ROW_HEIGHT),
+		);
+
+		const cellsWithTimedEvents = cells.map(cell => {
+			const timedEvents = (timedEventsByDate.get(cell.date) ?? [])
+				.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+			const hiddenBarCount = hiddenBarCountsByDate.get(cell.date) ?? 0;
+			const needsMoreLabel = hiddenBarCount > 0 || timedEvents.length > visibleTimedRowsBase;
+			const visibleTimedEventLimit = needsMoreLabel ? Math.max(0, visibleTimedRowsBase - 1) : visibleTimedRowsBase;
+			const hiddenTimedEventCount = Math.max(0, timedEvents.length - visibleTimedEventLimit);
+
+			return {
+				...cell,
+				timedEvents: timedEvents
+					.slice(0, visibleTimedEventLimit)
+					.map(({ key, title, color }) => ({ key, title, color })),
+				moreCount: hiddenBarCount + hiddenTimedEventCount,
+			};
+		});
+
+		const allDayHeight = visibleBars.length > 0 ? visibleLaneCount * EVENT_BAR_HEIGHT + EVENT_BAR_BOTTOM_PADDING : 0;
 
 		weeks.push({
 			key: weekStart,
 			cells: cellsWithTimedEvents,
-			bars,
+			bars: visibleBars,
 			laneCount: laneEnds.length,
 			allDayHeight,
+			timedEventsOffset: visibleLaneCount > 0 ? TIMED_EVENTS_OFFSET_WITH_BARS : TIMED_EVENTS_OFFSET_WITHOUT_BARS,
 		});
 	}
 
@@ -400,6 +524,28 @@ function onDateClick(dateStr: string) {
 watch([currentYear, currentMonth], () => {
 	emit('monthChange', currentYear.value, currentMonth.value);
 }, { immediate: true });
+
+watch(() => calendarWeeks.value.map(week => week.key).join(','), async () => {
+	await nextTick();
+	syncWeekCellObservers();
+	measureWeekEventAreaHeights();
+}, { immediate: true });
+
+onMounted(() => {
+	weekCellResizeObserver = new ResizeObserver(() => {
+		measureWeekEventAreaHeights();
+	});
+
+	syncWeekCellObservers();
+	measureWeekEventAreaHeights();
+});
+
+onBeforeUnmount(() => {
+	weekCellResizeObserver?.disconnect();
+	weekCellResizeObserver = null;
+	observedWeekCellElements.clear();
+	weekCellElements.clear();
+});
 </script>
 
 <style lang="scss" module>
@@ -500,7 +646,7 @@ watch([currentYear, currentMonth], () => {
 .cellBody {
 	width: 100%;
 	flex: 1;
-	padding-top: calc(var(--all-day-height) + 2px);
+	padding-top: calc(var(--all-day-height) + var(--timed-events-offset));
 	min-height: 0;
 }
 
@@ -533,6 +679,17 @@ watch([currentYear, currentMonth], () => {
 
 .timedEventLabel {
 	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.moreEvents {
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1.2;
+	color: var(--MI_THEME-fgTransparent);
+	padding-left: 15px;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;

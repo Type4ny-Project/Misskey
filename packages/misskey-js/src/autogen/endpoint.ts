@@ -353,6 +353,23 @@ import type {
 	EndpointRequest,
 	EndpointResponse,
 	EndpointsResponse,
+	EventsApproveRequest,
+	EventsApproveResponse,
+	EventsCreateRequest,
+	EventsCreateResponse,
+	EventsDeleteRequest,
+	EventsListRequest,
+	EventsListResponse,
+	EventsMySubmissionsRequest,
+	EventsMySubmissionsResponse,
+	EventsPendingRequest,
+	EventsPendingResponse,
+	EventsRejectRequest,
+	EventsRejectResponse,
+	EventsShowRequest,
+	EventsShowResponse,
+	EventsUpdateRequest,
+	EventsUpdateResponse,
 	FederationFollowersRequest,
 	FederationFollowersResponse,
 	FederationFollowingRequest,
@@ -930,6 +947,15 @@ export type Endpoints = {
 	'emojis': { req: EmptyRequest; res: EmojisResponse };
 	'endpoint': { req: EndpointRequest; res: EndpointResponse };
 	'endpoints': { req: EmptyRequest; res: EndpointsResponse };
+	'events/approve': { req: EventsApproveRequest; res: EventsApproveResponse };
+	'events/create': { req: EventsCreateRequest; res: EventsCreateResponse };
+	'events/delete': { req: EventsDeleteRequest; res: EmptyResponse };
+	'events/list': { req: EventsListRequest; res: EventsListResponse };
+	'events/my-submissions': { req: EventsMySubmissionsRequest; res: EventsMySubmissionsResponse };
+	'events/pending': { req: EventsPendingRequest; res: EventsPendingResponse };
+	'events/reject': { req: EventsRejectRequest; res: EventsRejectResponse };
+	'events/show': { req: EventsShowRequest; res: EventsShowResponse };
+	'events/update': { req: EventsUpdateRequest; res: EventsUpdateResponse };
 	'export-custom-emojis': { req: EmptyRequest; res: EmptyResponse };
 	'federation/followers': { req: FederationFollowersRequest; res: FederationFollowersResponse };
 	'federation/following': { req: FederationFollowingRequest; res: FederationFollowingResponse };

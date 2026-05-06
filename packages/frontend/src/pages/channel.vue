@@ -57,6 +57,32 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkInfo warn>{{ i18n.ts.notesSearchNotAvailable }}</MkInfo>
 			</div>
 		</div>
+		<div v-else-if="tab === 'events'" class="_gaps">
+			<div :class="$style.eventsContainer">
+				<div v-if="$i" :class="$style.eventsActions">
+					<MkButton primary rounded @click="router.push('/channels/:channelId/events/new', { params: { channelId } })">
+						<i class="ti ti-plus"></i> {{ i18n.ts._events.createEvent }}
+					</MkButton>
+				</div>
+				<MkEventCalendar
+					v-model:selectedDate="selectedEventDate"
+					:events="channelCalendarEvents"
+					@monthChange="onChannelMonthChange"
+				/>
+				<div v-if="channelEvents.length === 0" :class="$style.eventsEmpty">
+					{{ i18n.ts._events.noEvents }}
+				</div>
+				<div v-for="ev in filteredChannelEvents" :key="ev.id" class="_panel" :class="$style.eventCard" @click="router.push('/events/:eventId', { params: { eventId: ev.id } })">
+					<div :class="$style.eventCardDate">
+						<i class="ti ti-calendar"></i>
+						{{ formatEventDate(ev.startAt) }}
+						<template v-if="ev.endAt">〜 {{ formatEventDate(ev.endAt) }}</template>
+					</div>
+					<div :class="$style.eventCardTitle">{{ ev.title }}</div>
+					<div v-if="ev.description" :class="$style.eventCardDesc">{{ ev.description?.substring(0, 100) }}</div>
+				</div>
+			</div>
+		</div>
 	</div>
 	<template #footer>
 		<div :class="$style.footer">
@@ -93,6 +119,7 @@ import { prefer } from '@/preferences.js';
 import MkNote from '@/components/MkNote.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
+import MkEventCalendar from '@/components/MkEventCalendar.vue';
 import { isSupportShare } from '@/utility/navigator.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { notesSearchAvailable } from '@/utility/check-permissions.js';
@@ -149,6 +176,12 @@ watch(() => props.channelId, async () => {
 
 	channel.value = _channel;
 }, { immediate: true });
+
+watch(tab, (newTab) => {
+	if (newTab === 'events' && channelEvents.value.length === 0) {
+		fetchChannelEvents();
+	}
+});
 
 function edit() {
 	router.push('/channels/:channelId/edit', {
@@ -256,6 +289,55 @@ async function search() {
 	searchKey.value = query;
 }
 
+// Channel events
+const selectedEventDate = ref<string | null>(null);
+const channelEvents = ref<Misskey.entities.Event[]>([]);
+const channelMonthStart = ref<number>(0);
+const channelMonthEnd = ref<number>(0);
+
+function onChannelMonthChange(year: number, month: number) {
+	const start = new Date(year, month, 1);
+	const end = new Date(year, month + 1, 0, 23, 59, 59);
+	channelMonthStart.value = start.getTime();
+	channelMonthEnd.value = end.getTime();
+	fetchChannelEvents();
+}
+
+async function fetchChannelEvents() {
+	try {
+		const res = await misskeyApi('events/list', {
+			limit: 100,
+			sinceDate: channelMonthStart.value,
+			untilDate: channelMonthEnd.value,
+			channelId: props.channelId,
+		});
+		channelEvents.value = res;
+	} catch (e) {
+		console.error(e);
+	}
+}
+
+const channelCalendarEvents = computed(() => {
+	return channelEvents.value.map(ev => ({
+		startAt: ev.startAt,
+		endAt: ev.endAt,
+	}));
+});
+
+const filteredChannelEvents = computed(() => {
+	if (!selectedEventDate.value) return channelEvents.value;
+	return channelEvents.value.filter(ev => {
+		const startDate = ev.startAt.substring(0, 10);
+		const endDate = ev.endAt ? ev.endAt.substring(0, 10) : startDate;
+		return selectedEventDate.value! >= startDate && selectedEventDate.value! <= endDate;
+	});
+});
+
+function formatEventDate(dateStr: string): string {
+	const d = new Date(dateStr);
+	return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 const headerActions = computed(() => {
 	if (channel.value) {
 		const headerItems: PageHeaderItem[] = [];
@@ -335,6 +417,10 @@ const headerTabs = computed(() => [{
 	key: 'featured',
 	title: i18n.ts.featured,
 	icon: 'ti ti-bolt',
+}, {
+	key: 'events',
+	title: i18n.ts._events.eventCalendar,
+	icon: 'ti ti-calendar-event',
 }, {
 	key: 'search',
 	title: i18n.ts.search,
@@ -416,5 +502,47 @@ definePage(() => ({
 	font-weight: bold;
 	font-size: 1em;
 	padding: 4px 7px;
+}
+
+.eventsContainer {
+	padding: 16px;
+}
+
+.eventsActions {
+	margin-bottom: 16px;
+	display: flex;
+	justify-content: flex-end;
+}
+
+.eventsEmpty {
+	text-align: center;
+	padding: 32px 16px;
+	color: var(--MI_THEME-fgTransparent);
+}
+
+.eventCard {
+	padding: 16px;
+	margin-top: 8px;
+	cursor: pointer;
+}
+
+.eventCardDate {
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparent);
+	margin-bottom: 4px;
+}
+
+.eventCardTitle {
+	font-size: 1.1em;
+	font-weight: 700;
+}
+
+.eventCardDesc {
+	font-size: 0.9em;
+	color: var(--MI_THEME-fgTransparent);
+	margin-top: 4px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 </style>

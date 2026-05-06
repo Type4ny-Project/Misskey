@@ -4,14 +4,9 @@
  */
 
 import { EventEmitter } from 'node:events';
-import { runWithTenantHost } from '@/core/tenant-context.js';
 import type * as Redis from 'ioredis';
 
 type ListenerMap = Map<string | symbol, Set<(...args: any[]) => void>>;
-type TenantRedisSubClient = {
-	host: string;
-	client: Redis.Redis;
-};
 
 export class TenantRedisSubMultiplexer {
 	private readonly emitter = new EventEmitter();
@@ -19,13 +14,11 @@ export class TenantRedisSubMultiplexer {
 
 	constructor(
 		private readonly getCurrentClient: () => Redis.Redis,
-		private readonly clients: TenantRedisSubClient[],
+		private readonly clients: Redis.Redis[],
 	) {
-		for (const { host, client } of clients) {
+		for (const client of clients) {
 			client.on('message', (channel, message) => {
-				runWithTenantHost(host, () => {
-					this.emitter.emit('message', channel, message);
-				});
+				this.emitter.emit('message', channel, message);
 			});
 		}
 	}

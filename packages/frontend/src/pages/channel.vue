@@ -208,6 +208,7 @@ type ChannelManageStatus = GetMkSelectValueTypesFromDef<typeof channelManageStat
 const tab = ref('overview');
 
 const channel = ref<Misskey.entities.Channel | null>(null);
+const canManageChannelEvents = computed(() => hasChannelEventManagePermission(channel.value));
 const favorited = ref(false);
 const searchQuery = ref('');
 const searchPaginator = shallowRef();
@@ -363,6 +364,13 @@ async function search() {
 	}));
 
 	searchKey.value = query;
+}
+
+function hasChannelEventManagePermission(targetChannel: Misskey.entities.Channel | null): boolean {
+	if (!$i || targetChannel == null) return false;
+	if (iAmModerator) return true;
+
+	return $i.id === targetChannel.userId || targetChannel.collaboratorIds?.includes($i.id) === true;
 }
 
 // Channel events

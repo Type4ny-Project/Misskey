@@ -244,6 +244,39 @@ redis:
 #  # You can specify more ioredis options...
 #  #username: example-username
 
+#   ┌───────────────────────────┐
+#───┘ Multitenant configuration └────────────────────────────────
+
+# The top-level url/db/redis settings above are the single-tenant
+# style kept for legacy and development configs. For multitenant
+# deployments, put every tenant under top-level hosts instead.
+# Each Host header must match one of these entries; unknown hosts
+# are rejected.
+#
+#hosts:
+#  main.example.com:
+#    url: https://main.example.com/
+#    db:
+#      host: localhost
+#      port: 5432
+#      db: tenant_main
+#      user: example-misskey-user
+#      pass: example-misskey-pass
+#    redis:
+#      host: localhost
+#      port: 6379
+#  mattyaski.co:
+#    url: https://mattyaski.co/
+#    db:
+#      host: localhost
+#      port: 5432
+#      db: tenant_mattyaski
+#      user: example-misskey-user
+#      pass: example-misskey-pass
+#    redis:
+#      host: localhost
+#      port: 6379
+
 #   ┌───────────────────────────────┐
 #───┘ Fulltext search configuration └─────────────────────────────
 

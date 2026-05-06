@@ -11,10 +11,16 @@ if (!fs.existsSync(builtConfigPath)) {
 
 const config = JSON.parse(fs.readFileSync(builtConfigPath, 'utf-8'));
 
-const tenants = [
-	{ host: config.url ? new URL(config.url).host : 'default', db: config.db },
-	...Object.entries(config.tenants?.hosts ?? {}).map(([host, tenant]) => ({ host, db: tenant.db })),
-];
+const hosts = config.hosts && Object.keys(config.hosts).length > 0
+	? config.hosts
+	: null;
+
+const tenants = hosts
+	? Object.entries(hosts).map(([host, tenant]) => ({ host, db: tenant.db }))
+	: [
+		{ host: config.url ? new URL(config.url).host : 'default', db: config.db },
+		...Object.entries(config.tenants?.hosts ?? {}).map(([host, tenant]) => ({ host, db: tenant.db })),
+	];
 
 for (const { host, db } of tenants) {
 	console.log(`running migrations for ${host} -> ${db.host}:${db.port}/${db.db}`);

@@ -16,31 +16,35 @@ const hostA = new URL(urlA).host;
 const hostB = new URL(urlB).host;
 
 const doc = {
-	url: `${urlA}/`,
 	port: 3000,
-	db: {
-		host: 'localhost',
-		port: 5432,
-		db: 'tenant_a',
-		user: 'example-misskey-user',
-		pass: 'example-misskey-pass',
-	},
 	dbReplications: false,
-	redis: {
-		host: 'localhost',
-		port: 6379,
-	},
-	tenants: {
-		hosts: {
-			[hostB]: {
-				url: `${urlB}/`,
-				db: {
-					host: 'localhost',
-					port: 5432,
-					db: 'tenant_b',
-					user: 'example-misskey-user',
-					pass: 'example-misskey-pass',
-				},
+	hosts: {
+		[hostA]: {
+			url: `${urlA}/`,
+			db: {
+				host: 'localhost',
+				port: 5432,
+				db: 'tenant_a',
+				user: 'example-misskey-user',
+				pass: 'example-misskey-pass',
+			},
+			redis: {
+				host: 'localhost',
+				port: 6379,
+			},
+		},
+		[hostB]: {
+			url: `${urlB}/`,
+			db: {
+				host: 'localhost',
+				port: 5432,
+				db: 'tenant_b',
+				user: 'example-misskey-user',
+				pass: 'example-misskey-pass',
+			},
+			redis: {
+				host: 'localhost',
+				port: 6379,
 			},
 		},
 	},

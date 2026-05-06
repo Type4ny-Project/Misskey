@@ -241,7 +241,10 @@ export class TenantRuntimeService {
 		if (this.redisSubMultiplexer == null) {
 			this.redisSubMultiplexer = new TenantRedisSubMultiplexer(
 				() => this.getCurrentRedisForSub(),
-				[...this.tenants.values()].map(tenant => tenant.redisForSub),
+				[...this.tenants.values()].map(tenant => ({
+					host: tenant.host,
+					client: tenant.redisForSub,
+				})),
 			);
 		}
 

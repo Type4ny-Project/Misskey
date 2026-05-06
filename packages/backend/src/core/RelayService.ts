@@ -118,9 +118,8 @@ export class RelayService {
 		if (!copy.to) copy.to = ['https://www.w3.org/ns/activitystreams#Public'];
 
 		const signed = await this.apRendererService.attachLdSignature(copy, user);
+		const inboxes = new Map(relays.map(relay => [relay.inbox, false]));
 
-		for (const relay of relays) {
-			this.queueService.deliver(user, signed, relay.inbox, false);
-		}
+		await this.queueService.deliverMany(user, signed, inboxes);
 	}
 }

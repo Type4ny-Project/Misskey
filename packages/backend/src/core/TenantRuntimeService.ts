@@ -15,6 +15,7 @@ import {
 	type Source,
 	type TenantSource,
 	buildConfig,
+	getProcessConfigSource,
 } from '@/config.js';
 import { createPostgresDataSource } from '@/postgres.js';
 import { MiMeta } from '@/models/Meta.js';
@@ -74,6 +75,7 @@ async function loadMeta(db: DataSource): Promise<MiMeta> {
 export class TenantRuntimeService {
 	private readonly tenants = new Map<string, TenantDefinition>();
 	private buildInfo!: ConfigBuildInfo;
+	private processConfig!: Config;
 	private redisSubMultiplexer: TenantRedisSubMultiplexer | null = null;
 
 	constructor(
@@ -84,6 +86,7 @@ export class TenantRuntimeService {
 	public async initialize(): Promise<void> {
 		this.buildInfo = this.configInput.buildInfo;
 		const source = this.configInput.source;
+		this.processConfig = buildConfig(getProcessConfigSource(source), this.buildInfo);
 		if (source.hosts != null) {
 			const hosts = Object.entries(source.hosts);
 			if (hosts.length === 0) {
@@ -210,7 +213,8 @@ export class TenantRuntimeService {
 	}
 
 	public getCurrentConfig(): Config {
-		return this.getTenant().config;
+		const host = getTenantHost();
+		return host == null ? this.processConfig : this.getTenant(host).config;
 	}
 
 	public getCurrentDb(): DataSource {

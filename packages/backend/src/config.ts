@@ -472,7 +472,7 @@ export function loadConfig(): Config {
 	return buildConfig(getProcessConfigSource(input.source), input.buildInfo);
 }
 
-function getProcessConfigSource(source: Source): Source {
+export function getProcessConfigSource(source: Source): Source {
 	if (source.hosts == null) {
 		return source;
 	}

@@ -32,7 +32,7 @@ import { maybeMakeRelative } from '@@/js/url.js';
 import type { MkABehavior } from '@/components/global/MkA.vue';
 import * as os from '@/os.js';
 import { useTooltip } from '@/composables/use-tooltip.js';
-import { isEnabledUrlPreview } from '@/utility/url-preview.js';
+import { getLocalEventId, isEnabledUrlPreview } from '@/utility/url-preview.js';
 
 function safeURIDecode(str: string): string {
 	try {
@@ -56,8 +56,9 @@ const self = maybeRelativeUrl !== props.url;
 const url = new URL(props.url);
 if (!['http:', 'https:'].includes(url.protocol)) throw new Error('invalid url');
 const el = ref();
+const localEventId = getLocalEventId(props.url);
 
-if (props.showUrlPreview && isEnabledUrlPreview.value) {
+if (props.showUrlPreview && isEnabledUrlPreview.value && localEventId == null) {
 	useTooltip(el, (showing) => {
 		const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/MkUrlPreviewPopup.vue')), {
 			showing,

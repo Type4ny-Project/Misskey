@@ -43,6 +43,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</MkButton>
 	</div>
 </template>
+<template v-else-if="localEventId !== null">
+	<MkUrlEventCard :event-id="localEventId"/>
+</template>
 <div v-else>
 	<component :is="self ? 'MkA' : 'a'" :class="[$style.link, { [$style.compact]: compact }]" :[attr]="maybeRelativeUrl" rel="nofollow noopener" :target="target" :title="url">
 		<div v-if="thumbnail && !sensitive" :class="$style.thumbnail" :style="prefer.s.dataSaver.urlPreviewThumbnail ? '' : { backgroundImage: `url('${thumbnail}')` }">
@@ -91,7 +94,8 @@ import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { deviceKind } from '@/utility/device-kind.js';
 import MkButton from '@/components/MkButton.vue';
-import { transformPlayerUrl } from '@/utility/url-preview.js';
+import MkUrlEventCard from '@/components/MkUrlEventCard.vue';
+import { getLocalEventId, transformPlayerUrl } from '@/utility/url-preview.js';
 import { store } from '@/store.js';
 import { prefer } from '@/preferences.js';
 import { maybeMakeRelative } from '@@/js/url.js';
@@ -146,8 +150,9 @@ onMounted(() => {
 	}
 });
 
-const requestUrl = new URL(props.url);
+const requestUrl = new URL(props.url, local);
 if (!['http:', 'https:'].includes(requestUrl.protocol)) throw new Error('invalid url');
+const localEventId = getLocalEventId(requestUrl.href);
 
 if (requestUrl.hostname === 'twitter.com' || requestUrl.hostname === 'mobile.twitter.com' || requestUrl.hostname === 'x.com' || requestUrl.hostname === 'mobile.x.com') {
 	const m = requestUrl.pathname.match(/^\/.+\/status(?:es)?\/(\d+)/);
@@ -160,35 +165,37 @@ if (requestUrl.hostname === 'music.youtube.com' && requestUrl.pathname.match('^/
 
 requestUrl.hash = '';
 
-window.fetch(`/url?url=${encodeURIComponent(requestUrl.href)}&lang=${versatileLang}`)
-	.then(res => {
-		if (!res.ok) {
-			if (_DEV_) {
-				console.warn(`[HTTP${res.status}] Failed to fetch url preview`);
+if (localEventId == null) {
+	window.fetch(`/url?url=${encodeURIComponent(requestUrl.href)}&lang=${versatileLang}`)
+		.then(res => {
+			if (!res.ok) {
+				if (_DEV_) {
+					console.warn(`[HTTP${res.status}] Failed to fetch url preview`);
+				}
+				return null;
 			}
-			return null;
-		}
 
-		return res.json();
-	})
-	.then((info: SummalyResult | null) => {
-		if (!info || info.url == null) {
+			return res.json();
+		})
+		.then((info: SummalyResult | null) => {
+			if (!info || info.url == null) {
+				fetching.value = false;
+				unknownUrl.value = true;
+				return;
+			}
+
 			fetching.value = false;
-			unknownUrl.value = true;
-			return;
-		}
+			unknownUrl.value = false;
 
-		fetching.value = false;
-		unknownUrl.value = false;
-
-		title.value = info.title;
-		description.value = info.description;
-		thumbnail.value = info.thumbnail;
-		icon.value = info.icon;
-		sitename.value = info.sitename;
-		player.value = info.player;
-		sensitive.value = info.sensitive ?? false;
-	});
+			title.value = info.title;
+			description.value = info.description;
+			thumbnail.value = info.thumbnail;
+			icon.value = info.icon;
+			sitename.value = info.sitename;
+			player.value = info.player;
+			sensitive.value = info.sensitive ?? false;
+		});
+}
 
 function adjustTweetHeight(message: MessageEvent) {
 	if (message.origin !== 'https://platform.twitter.com') return;

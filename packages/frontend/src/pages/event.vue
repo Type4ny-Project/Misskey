@@ -20,7 +20,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					{{ formatDate(event.startAt) }}
 				<template v-if="event.endAt">〜 {{ formatDate(event.endAt) }}</template>
 			</div>
-			<span :class="[$style.statusBadge, $style['status_' + event.status]]">
+			<span v-if="event.status !== 'approved'" :class="[$style.statusBadge, $style['status_' + event.status]]">
 				{{ i18n.ts._events[event.status] }}
 			</span>
 		</div>
@@ -42,15 +42,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-if="event.tags && event.tags.length > 0" :class="$style.section">
 			<div :class="$style.sectionTitle">{{ i18n.ts._events.tags }}</div>
 			<div :class="$style.tags">
-				<span v-for="tag in event.tags" :key="tag" :class="$style.tag">#{{ tag }}</span>
+				<button
+					v-for="tag in event.tags"
+					:key="tag"
+					class="_button"
+					:class="$style.tag"
+					@click="openTag(tag)"
+				>
+					#{{ tag }}
+				</button>
 			</div>
 		</div>
 
 		<div v-if="event.channel" :class="$style.section">
 			<div :class="$style.sectionTitle">{{ i18n.ts._events.channel }}</div>
-			<div :class="$style.channel">
+			<MkButton :class="$style.channelButton" @click="openChannel">
 				<i class="ti ti-device-tv"></i> {{ event.channel.name }}
-			</div>
+			</MkButton>
 		</div>
 
 		<div :class="$style.section">
@@ -63,6 +71,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div :class="$style.actions">
 			<MkButton primary @click="noteIt">
 				<i class="ti ti-pencil"></i> {{ i18n.ts._events.noteIt }}
+			</MkButton>
+			<MkButton v-if="canManagePendingEvent && event.status !== 'approved'" primary @click="approveEvent">
+				<i class="ti ti-check"></i> {{ i18n.ts._events.approve }}
+			</MkButton>
+			<MkButton v-if="canManagePendingEvent && event.status !== 'rejected'" danger @click="rejectEvent">
+				<i class="ti ti-x"></i> {{ i18n.ts._events.reject }}
 			</MkButton>
 			<MkButton v-if="isOwner" @click="editEvent">
 				<i class="ti ti-edit"></i> {{ i18n.ts._events.editEvent }}
@@ -81,6 +95,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { ref, computed, onMounted } from 'vue';
 import * as Misskey from 'misskey-js';
+import { url } from '@@/js/config.js';
 import MkButton from '@/components/MkButton.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -96,6 +111,7 @@ const props = defineProps<{
 
 const router = useRouter();
 const event = ref<Misskey.entities.Event | null>(null);
+const canManagePendingEvent = ref(false);
 
 const isOwner = computed(() => {
 	if (!$i || !event.value) return false;
@@ -104,6 +120,31 @@ const isOwner = computed(() => {
 
 async function fetch() {
 	event.value = await misskeyApi('events/show', { eventId: props.eventId });
+	await updateManagePermission();
+}
+
+async function updateManagePermission() {
+	if (!$i || event.value == null || event.value.status === 'approved') {
+		canManagePendingEvent.value = false;
+		return;
+	}
+
+	if (iAmModerator) {
+		canManagePendingEvent.value = true;
+		return;
+	}
+
+	if (event.value.channelId == null) {
+		canManagePendingEvent.value = false;
+		return;
+	}
+
+	try {
+		const channel = await misskeyApi('channels/show', { channelId: event.value.channelId });
+		canManagePendingEvent.value = channel.userId === $i.id || channel.collaboratorIds?.includes($i.id) === true;
+	} catch {
+		canManagePendingEvent.value = false;
+	}
 }
 
 function formatDate(dateStr: string): string {
@@ -113,12 +154,16 @@ function formatDate(dateStr: string): string {
 
 function noteIt() {
 	if (!event.value) return;
-	const ev = event.value;
-	const dateStr = formatDate(ev.startAt);
-	const tags = ev.tags && ev.tags.length > 0 ? ev.tags.map(t => `#${t}`).join(' ') : '';
-	const text = `${ev.title} ${dateStr}${ev.url ? ' ' + ev.url : ''} #event${tags ? ' ' + tags : ''}`;
-	// Open the note form with pre-filled text
-	os.post({ initialText: text });
+	os.post({ initialText: `${url}/events/${event.value.id}` });
+}
+
+function openTag(tag: string) {
+	router.push('/tags/:tag', { params: { tag } });
+}
+
+function openChannel() {
+	if (event.value?.channelId == null) return;
+	router.push('/channels/:channelId', { params: { channelId: event.value.channelId } });
 }
 
 function editEvent() {
@@ -135,6 +180,18 @@ async function deleteEvent() {
 	await misskeyApi('events/delete', { eventId: props.eventId });
 	os.alert({ type: 'success', text: i18n.ts._events.eventDeleted });
 	router.push('/events');
+}
+
+async function approveEvent() {
+	await misskeyApi('events/approve', { eventId: props.eventId });
+	os.alert({ type: 'success', text: i18n.ts._events.eventApproved });
+	await fetch();
+}
+
+async function rejectEvent() {
+	await misskeyApi('events/reject', { eventId: props.eventId });
+	os.alert({ type: 'success', text: i18n.ts._events.eventRejected });
+	await fetch();
 }
 
 const headerActions = computed(() => []);
@@ -207,6 +264,12 @@ definePage(computed(() => ({
 	font-weight: 600;
 	color: var(--MI_THEME-fgTransparent);
 	margin-bottom: 6px;
+}
+
+.channelButton {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
 }
 
 .description {

@@ -4,9 +4,10 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { ChannelService } from '@/core/ChannelService.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { QueryService } from '@/core/QueryService.js';
-import type { EventsRepository } from '@/models/_.js';
+import type { ChannelsRepository, EventsRepository } from '@/models/_.js';
 import { EventEntityService } from '@/core/entities/EventEntityService.js';
 import { DI } from '@/di-symbols.js';
 import { RoleService } from '@/core/RoleService.js';
@@ -44,6 +45,8 @@ export const paramDef = {
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
 		sinceId: { type: 'string', format: 'misskey:id' },
 		untilId: { type: 'string', format: 'misskey:id' },
+		channelId: { type: 'string', format: 'misskey:id', nullable: true },
+		status: { type: 'string', enum: ['all', 'pending', 'approved', 'rejected'], default: 'pending' },
 	},
 	required: [],
 } as const;
@@ -54,18 +57,35 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.eventsRepository)
 		private eventsRepository: EventsRepository,
 
+		@Inject(DI.channelsRepository)
+		private channelsRepository: ChannelsRepository,
+
+		private channelService: ChannelService,
 		private queryService: QueryService,
 		private eventEntityService: EventEntityService,
 		private roleService: RoleService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const isModerator = await this.roleService.isModerator(me);
-			if (!isModerator) {
+
+			if (ps.channelId != null) {
+				const channel = await this.channelsRepository.findOneBy({ id: ps.channelId });
+				if (channel == null || !(await this.channelService.canEditChannel(channel, me, isModerator))) {
+					throw new ApiError(meta.errors.accessDenied);
+				}
+			} else if (!isModerator) {
 				throw new ApiError(meta.errors.accessDenied);
 			}
 
-			const query = this.queryService.makePaginationQuery(this.eventsRepository.createQueryBuilder('event'), ps.sinceId, ps.untilId)
-				.andWhere('event.status = :status', { status: 'pending' });
+			const query = this.queryService.makePaginationQuery(this.eventsRepository.createQueryBuilder('event'), ps.sinceId, ps.untilId);
+
+			if (ps.status !== 'all') {
+				query.andWhere('event.status = :status', { status: ps.status });
+			}
+
+			if (ps.channelId != null) {
+				query.andWhere('event.channelId = :channelId', { channelId: ps.channelId });
+			}
 
 			const events = await query
 				.orderBy('event.createdAt', 'ASC')

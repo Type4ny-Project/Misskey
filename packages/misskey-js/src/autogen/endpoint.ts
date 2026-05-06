@@ -75,6 +75,8 @@ import type {
 	AdminEmojiUpdateRequestResponse,
 	AdminEmojiUpdateRequestSettingsRequest,
 	AdminEmojiUpdateRequestSettingsResponse,
+	AdminEventsListRequest,
+	AdminEventsListResponse,
 	AdminFederationDeleteAllFilesRequest,
 	AdminFederationRefreshRemoteInstanceMetadataRequest,
 	AdminFederationRemoveAllFollowingRequest,
@@ -771,6 +773,7 @@ export type Endpoints = {
 	'admin/emoji/update': { req: AdminEmojiUpdateRequest; res: EmptyResponse };
 	'admin/emoji/update-request': { req: AdminEmojiUpdateRequestRequest; res: AdminEmojiUpdateRequestResponse };
 	'admin/emoji/update-request-settings': { req: AdminEmojiUpdateRequestSettingsRequest; res: AdminEmojiUpdateRequestSettingsResponse };
+	'admin/events/list': { req: AdminEventsListRequest; res: AdminEventsListResponse };
 	'admin/federation/delete-all-files': { req: AdminFederationDeleteAllFilesRequest; res: EmptyResponse };
 	'admin/federation/refresh-remote-instance-metadata': { req: AdminFederationRefreshRemoteInstanceMetadataRequest; res: EmptyResponse };
 	'admin/federation/remove-all-following': { req: AdminFederationRemoveAllFollowingRequest; res: EmptyResponse };

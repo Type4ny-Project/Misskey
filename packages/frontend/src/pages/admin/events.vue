@@ -4,13 +4,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs">
+<PageWithHeader v-model:tab="scope" :actions="headerActions" :tabs="headerTabs">
 	<div class="_spacer" style="--MI_SPACER-w: 1040px;">
 		<div class="_gaps">
 			<div :class="$style.toolbar">
 				<div :class="$style.statusSummary">
-					<span :class="$style.summaryLabel">{{ activeTabTitle }}</span>
+					<span :class="$style.summaryLabel">{{ activeScopeTitle }}</span>
 					<span :class="$style.summaryCount">{{ events.length }}</span>
+				</div>
+				<div :class="$style.filters">
+					<MkSelect v-model="status" :items="statusItems">
+						<template #label>{{ i18n.ts.filter }}</template>
+					</MkSelect>
 				</div>
 			</div>
 
@@ -75,6 +80,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, watch, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
+import type { GetMkSelectValueTypesFromDef, MkSelectItem } from '@/components/MkSelect.vue';
+import MkSelect from '@/components/MkSelect.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
@@ -84,9 +91,25 @@ import * as os from '@/os.js';
 
 type EventAdminStatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 
+const scopeItems = [
+	{ label: i18n.ts.all, value: 'all' },
+	{ label: i18n.ts.channel, value: 'channel' },
+	{ label: i18n.ts.instance, value: 'server' },
+] as const satisfies MkSelectItem[];
+
+type EventAdminScopeFilter = GetMkSelectValueTypesFromDef<typeof scopeItems>;
+
+const statusItems = [
+	{ label: i18n.ts._events.pending, value: 'pending' },
+	{ label: i18n.ts._events.approved, value: 'approved' },
+	{ label: i18n.ts._events.rejected, value: 'rejected' },
+	{ label: i18n.ts.all, value: 'all' },
+] as const satisfies MkSelectItem[];
+
 const router = useRouter();
 
-const tab = ref<EventAdminStatusFilter>('pending');
+const status = ref<EventAdminStatusFilter>('pending');
+const scope = ref<EventAdminScopeFilter>('all');
 const loading = ref(true);
 const events = ref<Misskey.entities.Event[]>([]);
 
@@ -94,10 +117,11 @@ async function fetchEvents() {
 	loading.value = true;
 
 	try {
-		events.value = await misskeyApi('admin/events/list', {
+		events.value = await misskeyApi<Misskey.entities.Event[]>(('admin/events/list' as keyof Misskey.Endpoints), {
 			limit: 100,
-			status: tab.value,
-		});
+			status: status.value,
+			scope: scope.value,
+		} as never);
 	} catch (error) {
 		console.error(error);
 	} finally {
@@ -133,17 +157,16 @@ const headerActions = computed(() => [{
 }]);
 
 const headerTabs = computed(() => [
-	{ key: 'pending', title: i18n.ts._events.pending, icon: 'ti ti-clock-hour-4' },
-	{ key: 'approved', title: i18n.ts._events.approved, icon: 'ti ti-check' },
-	{ key: 'rejected', title: i18n.ts._events.rejected, icon: 'ti ti-x' },
 	{ key: 'all', title: i18n.ts.all, icon: 'ti ti-list' },
+	{ key: 'channel', title: i18n.ts.channel, icon: 'ti ti-device-tv' },
+	{ key: 'server', title: i18n.ts.instance, icon: 'ti ti-server' },
 ]);
 
-const activeTabTitle = computed(() => {
-	return headerTabs.value.find(item => item.key === tab.value)?.title ?? i18n.ts.all;
+const activeScopeTitle = computed(() => {
+	return headerTabs.value.find(item => item.key === scope.value)?.title ?? i18n.ts.all;
 });
 
-watch(tab, () => {
+watch([status, scope], () => {
 	fetchEvents();
 }, { immediate: true });
 
@@ -159,6 +182,13 @@ definePage(() => ({
 	justify-content: space-between;
 	align-items: center;
 	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.filters {
+	min-width: 220px;
+	max-width: 280px;
+	width: 100%;
 }
 
 .statusSummary {

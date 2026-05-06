@@ -1466,12 +1466,15 @@ onMounted(() => {
 	if (cwInputEl.value) cwAutocomplete = new Autocomplete(cwInputEl.value, cw);
 	if (hashtagsInputEl.value) hashtagAutocomplete = new Autocomplete(hashtagsInputEl.value, hashtags);
 
-	nextTick(() => {
-		// 書きかけの投稿を復元
-		if (!props.instant && !props.mention && !props.specified && !props.mock) {
-			const draft = JSON.parse(miLocalStorage.getItem('drafts') ?? '{}')[draftKey.value] as StoredDrafts[string] | undefined;
-			if (draft != null) {
-				text.value = draft.data.text;
+		nextTick(() => {
+			// 明示的な初期文面がある共有導線では、下書き復元よりその内容を優先する
+			const shouldRestoreDraft = !props.instant && !props.mention && !props.specified && !props.mock && props.initialText == null;
+
+			// 書きかけの投稿を復元
+			if (shouldRestoreDraft) {
+				const draft = JSON.parse(miLocalStorage.getItem('drafts') ?? '{}')[draftKey.value] as StoredDrafts[string] | undefined;
+				if (draft != null) {
+					text.value = draft.data.text;
 				useCw.value = draft.data.useCw;
 				cw.value = draft.data.cw;
 				visibility.value = draft.data.visibility;

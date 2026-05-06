@@ -7,19 +7,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div :class="$style.root">
 	<div :class="$style.header">
 		<div :class="$style.headerNav">
-			<button :class="$style.navBtn" class="_button" @click="prevPeriod">
+			<MkButton :class="$style.navBtn" class="_button" @click="prevPeriod">
 				<i class="ti ti-chevron-left"></i>
-			</button>
-			<button :class="$style.monthLabel" class="_button" @click="goToday">
+			</MkButton>
+			<MkButton ref="monthLabelEl" :class="$style.monthLabel" class="_button" @click="showMonthPicker">
 				{{ currentRangeLabel }}
-			</button>
-			<button :class="$style.navBtn" class="_button" @click="nextPeriod">
+			</MkButton>
+			<MkButton :class="$style.navBtn" class="_button" @click="nextPeriod">
 				<i class="ti ti-chevron-right"></i>
-			</button>
+			</MkButton>
 		</div>
 
 		<div :class="$style.viewSwitcher">
-			<button
+			<MkButton
 				v-for="viewOption in viewOptions"
 				:key="viewOption.key"
 				:class="[$style.viewButton, { [$style.viewButtonActive]: view === viewOption.key }]"
@@ -28,7 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			>
 				<i :class="viewOption.icon"></i>
 				<span>{{ viewOption.label }}</span>
-			</button>
+			</MkButton>
 		</div>
 	</div>
 
@@ -168,12 +168,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { ComponentPublicInstance } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { lang } from '@@/js/config.js';
+import type { ComponentPublicInstance } from 'vue';
+import MkEventCalendarMonthPicker from '@/components/MkEventCalendarMonthPicker.vue';
 import MkEventCalendarPopover from '@/components/MkEventCalendarPopover.vue';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
+import MkButton from '@/components/MkButton.vue';
 
 type CalendarView = 'month' | 'week' | 'schedule';
 type CalendarEvent = {
@@ -236,6 +238,7 @@ const activeDate = ref(todayDateStr);
 const currentYear = ref(parseDateStr(todayDateStr).getFullYear());
 const currentMonth = ref(parseDateStr(todayDateStr).getMonth());
 const view = ref<CalendarView>('month');
+const monthLabelEl = useTemplateRef('monthLabelEl');
 
 const weekEventAreaHeights = ref<Record<string, number>>({});
 const weekCellElements = new Map<string, HTMLElement>();
@@ -919,6 +922,24 @@ function goToday(): void {
 	if (view.value !== 'month') {
 		emit('update:selectedDate', todayDateStr);
 	}
+}
+
+async function showMonthPicker(): Promise<void> {
+	const anchor = monthLabelEl.value?.$el;
+	if (!(anchor instanceof HTMLElement)) return;
+
+	const { dispose } = os.popup(MkEventCalendarMonthPicker, {
+		anchorElement: anchor,
+		year: currentYear.value,
+		currentMonth: currentMonth.value,
+	}, {
+		select: ({ year, month }: { year: number; month: number }) => {
+			setDisplayedMonth(year, month);
+		},
+		closed: () => {
+			dispose();
+		},
+	});
 }
 
 watch(() => props.defaultView, (value) => {

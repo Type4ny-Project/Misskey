@@ -104,21 +104,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { defineAsyncComponent, ref, TransitionGroup } from 'vue';
 import * as Misskey from 'misskey-js';
-import { swInject } from './sw-inject.js';
-import XNotification from './notification.vue';
 import { isSafeMode } from '@@/js/config.js';
-import { popups } from '@/os.js';
-import { unisonReload } from '@/utility/unison-reload.js';
-import { miLocalStorage } from '@/local-storage.js';
-import { pendingApiRequestsCount } from '@/utility/misskey-api.js';
-import * as sound from '@/utility/sound.js';
-import { $i } from '@/i.js';
-import { useStream } from '@/stream.js';
-import { i18n } from '@/i18n.js';
-import { prefer } from '@/preferences.js';
+import XNotification from './notification.vue';
+import XNavbar from './navbar.vue';
+import { swInject } from './sw-inject.js';
+import { useEventTimingNotifier } from '@/composables/use-event-timing-notifier.js';
 import { globalEvents } from '@/events.js';
+import { $i } from '@/i.js';
+import { i18n } from '@/i18n.js';
+import { miLocalStorage } from '@/local-storage.js';
+import { popups } from '@/os.js';
+import { prefer } from '@/preferences.js';
+import { pendingApiRequestsCount } from '@/utility/misskey-api.js';
 import { store } from '@/store.js';
-import XNavbar from '@/ui/_common_/navbar.vue';
+import { useStream } from '@/stream.js';
+import * as sound from '@/utility/sound.js';
+import { unisonReload } from '@/utility/unison-reload.js';
 
 const XStreamIndicator = defineAsyncComponent(() => import('./stream-indicator.vue'));
 const XWidgets = defineAsyncComponent(() => import('./widgets.vue'));
@@ -129,6 +130,8 @@ const widgetsShowing = defineModel<boolean>('widgetsShowing');
 const dev = _DEV_;
 
 const notifications = ref<Misskey.entities.Notification[]>([]);
+
+useEventTimingNotifier();
 
 function onNotification(notification: Misskey.entities.Notification, isClient = false) {
 	if (window.document.visibilityState === 'visible') {

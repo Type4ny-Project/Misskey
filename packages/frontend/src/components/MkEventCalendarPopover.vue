@@ -30,6 +30,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #label>{{ i18n.ts._events.startAt }}</template>
 				</MkInput>
 
+				<MkInput v-model="endAtStr" type="datetime-local" :class="$style.field">
+					<template #label>{{ i18n.ts._events.endAt }}</template>
+				</MkInput>
+
 				<MkTextarea v-model="description" :class="$style.field">
 					<template #label>{{ i18n.ts._events.description }}</template>
 				</MkTextarea>
@@ -40,7 +44,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 				<div :class="$style.field">
 					<div :class="$style.channelLabel">{{ i18n.ts._events.channel }}</div>
-					<div :class="$style.channelActions">
+					<div v-if="isChannelLocked" :class="$style.channelLocked">
+						<i class="ti ti-device-tv"></i>
+						{{ selectedChannelName ?? i18n.ts._events.channel }}
+					</div>
+					<div v-else :class="$style.channelActions">
 						<MkButton @click="chooseChannel($event)">
 							<i class="ti ti-device-tv"></i>
 							{{ selectedChannelName ?? i18n.ts._events.channel }}
@@ -129,7 +137,9 @@ const url = ref('');
 const selectedChannelId = ref<string | null>(createForm.value?.defaultChannelId ?? null);
 const selectedChannelName = ref<string | null>(createForm.value?.defaultChannelName ?? null);
 const startAtStr = ref(createForm.value ? `${createForm.value.date}T09:00` : '');
+const endAtStr = ref(createForm.value ? `${createForm.value.date}T10:00` : '');
 const canCreate = computed(() => formTitle.value.trim().length > 0 && startAtStr.value.length > 0);
+const isChannelLocked = computed(() => createForm.value?.defaultChannelId != null);
 
 function openDetails(): void {
 	if (!props.event.id) return;
@@ -144,6 +154,8 @@ function openEvent(event: CalendarPopoverEvent): void {
 }
 
 async function chooseChannel(ev?: Event): Promise<void> {
+	if (isChannelLocked.value) return;
+
 	const [ownedChannels, followedChannels, favoritedChannels] = await Promise.all([
 		userChannelsCache.fetch(),
 		userChannelFollowingsCache.fetch(),
@@ -173,6 +185,8 @@ async function chooseChannel(ev?: Event): Promise<void> {
 }
 
 function clearChannel(): void {
+	if (isChannelLocked.value) return;
+
 	selectedChannelId.value = null;
 	selectedChannelName.value = null;
 }
@@ -184,7 +198,7 @@ async function createEvent(): Promise<void> {
 		await misskeyApi('events/create', {
 			title: formTitle.value.trim(),
 			startAt: new Date(startAtStr.value).getTime(),
-			endAt: null,
+			endAt: endAtStr.value ? new Date(endAtStr.value).getTime() : null,
 			description: description.value.trim() || null,
 			url: url.value.trim() || null,
 			color: null,
@@ -259,6 +273,18 @@ async function createEvent(): Promise<void> {
 	display: flex;
 	gap: 8px;
 	flex-wrap: wrap;
+}
+
+.channelLocked {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 40px;
+	padding: 0 14px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--MI_THEME-fg) 6%, transparent);
+	color: var(--MI_THEME-fg);
+	font-weight: 700;
 }
 
 .actions {

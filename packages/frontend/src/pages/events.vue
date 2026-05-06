@@ -7,13 +7,52 @@ SPDX-License-Identifier: AGPL-3.0-only
 <PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs" :swipable="true">
 	<div :class="$style.root">
 		<template v-if="tab === 'upcoming'">
-			<MkEventCalendar
-				v-model:selectedDate="selectedDate"
-				:events="calendarEvents"
-				:allowCreate="!!$i"
-				@rangeChange="onRangeChange"
-				@eventCreated="refreshEventsData"
-			/>
+			<div :class="$style.calendarSection">
+				<div :class="$style.filters">
+					<MkSelect v-model="eventScope" :items="eventScopeItems">
+						<template #label>{{ i18n.ts.filter }}</template>
+					</MkSelect>
+
+					<MkSelect
+						v-if="eventScope === 'channel'"
+						v-model="selectedChannelId"
+						:items="channelSelectItems"
+						:disabled="isLoadingChannels"
+					>
+						<template #label>{{ i18n.ts.channel }}</template>
+					</MkSelect>
+				</div>
+
+				<MkEventCalendar
+					v-model:selectedDate="selectedDate"
+					:events="calendarEvents"
+					:allowCreate="!!$i"
+					@rangeChange="onRangeChange"
+					@eventCreated="refreshEventsData"
+				/>
+
+				<section v-if="$i && myPendingOrRejectedEvents.length > 0" :class="$style.pendingSection">
+					<div :class="$style.pendingHeader">
+						<h2 :class="$style.pendingTitle">{{ i18n.ts._events.mySubmissions }}</h2>
+						<span :class="$style.pendingCount">{{ myPendingOrRejectedEvents.length }}</span>
+					</div>
+
+					<div :class="$style.pendingList">
+						<button
+							v-for="event in myPendingOrRejectedEvents"
+							:key="event.id"
+							class="_button"
+							:class="$style.pendingCard"
+							@click="router.push('/events/:eventId', { params: { eventId: event.id } })"
+						>
+						<div :class="$style.pendingDate">{{ formatDate(event.startAt) }}</div>
+						<div :class="$style.pendingEventTitle">{{ event.title }}</div>
+						<div v-if="event.status !== 'approved'" :class="$style.pendingStatus">{{ i18n.ts._events[event.status] }}</div>
+						<div v-if="event.description" :class="$style.pendingDescription">{{ event.description }}</div>
+					</button>
+					</div>
+				</section>
+			</div>
 		</template>
 
 		<section v-else-if="$i" :class="$style.pendingSection">
@@ -46,9 +85,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkEventCalendar from '@/components/MkEventCalendar.vue';
+import type { MkSelectItem, GetMkSelectValueTypesFromDef } from '@/components/MkSelect.vue';
+import MkSelect from '@/components/MkSelect.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
@@ -61,9 +102,32 @@ const tab = ref('upcoming');
 const selectedDate = ref<string | null>(null);
 const approvedEvents = ref<Misskey.entities.Event[]>([]);
 const myEvents = ref<Misskey.entities.Event[]>([]);
+const availableChannels = ref<Misskey.entities.Channel[]>([]);
+const isLoadingChannels = ref(false);
+
+const eventScopeItems = [
+	{ label: i18n.ts.instance, value: 'server' },
+	{ label: i18n.ts.all, value: 'all' },
+	{ label: i18n.ts.channel, value: 'channel' },
+] as const satisfies MkSelectItem[];
+
+type EventScope = GetMkSelectValueTypesFromDef<typeof eventScopeItems>;
+
+const eventScope = ref<EventScope>('server');
+const selectedChannelId = ref<string | null>(null);
 
 const rangeStart = ref<number>(0);
 const rangeEnd = ref<number>(0);
+
+const channelSelectItems = computed<MkSelectItem<string | null>[]>(() => {
+	return availableChannels.value
+		.slice()
+		.sort((a, b) => a.name.localeCompare(b.name))
+		.map(channel => ({
+			label: channel.name,
+			value: channel.id,
+		}));
+});
 
 function onRangeChange(range: { startAt: number; endAt: number; view: 'month' | 'week' | 'schedule' }) {
 	rangeStart.value = range.startAt;
@@ -78,16 +142,48 @@ function formatDate(dateStr: string): string {
 
 async function fetchEvents() {
 	if (rangeStart.value === 0 || rangeEnd.value === 0) return;
+	if (eventScope.value === 'channel' && selectedChannelId.value == null) {
+		approvedEvents.value = [];
+		return;
+	}
 
 	try {
-		const res = await misskeyApi('events/list', {
+		const request = {
 			limit: 100,
 			sinceDate: rangeStart.value,
 			untilDate: rangeEnd.value,
-		});
+			includeChannelEvents: eventScope.value === 'all',
+			channelId: eventScope.value === 'channel' ? selectedChannelId.value : null,
+		} satisfies Misskey.entities.EventsListRequest;
+
+		const res = await misskeyApi('events/list', request);
 		approvedEvents.value = res;
 	} catch (error) {
 		console.error(error);
+	}
+}
+
+async function fetchAvailableChannels() {
+	if (isLoadingChannels.value || availableChannels.value.length > 0) return;
+
+	isLoadingChannels.value = true;
+
+	try {
+		const channels = await misskeyApi('channels/search', {
+			query: '',
+			type: 'nameOnly',
+			limit: 100,
+		});
+		availableChannels.value = channels;
+
+		if (selectedChannelId.value == null && channels.length > 0) {
+			const [firstChannel] = channels.slice().sort((a, b) => a.name.localeCompare(b.name));
+			selectedChannelId.value = firstChannel?.id ?? null;
+		}
+	} catch (error) {
+		console.error(error);
+	} finally {
+		isLoadingChannels.value = false;
 	}
 }
 
@@ -109,6 +205,22 @@ function refreshEventsData() {
 	fetchMyEvents();
 }
 
+watch(eventScope, () => {
+	if (eventScope.value === 'channel') {
+		fetchAvailableChannels();
+	}
+
+	if (rangeStart.value !== 0 && rangeEnd.value !== 0) {
+		fetchEvents();
+	}
+});
+
+watch(selectedChannelId, () => {
+	if (eventScope.value === 'channel' && rangeStart.value !== 0 && rangeEnd.value !== 0) {
+		fetchEvents();
+	}
+});
+
 const calendarEvents = computed(() => {
 	return approvedEvents.value.map(ev => ({
 		id: ev.id,
@@ -120,6 +232,10 @@ const calendarEvents = computed(() => {
 		channelName: ev.channel?.name ?? null,
 		tags: ev.tags,
 	}));
+});
+
+const myPendingOrRejectedEvents = computed(() => {
+	return myEvents.value.filter(event => event.status === 'pending' || event.status === 'rejected');
 });
 
 const headerActions = computed(() => {
@@ -162,6 +278,19 @@ definePage(() => ({
 	padding: 16px;
 	max-width: 1200px;
 	margin: 0 auto;
+}
+
+.calendarSection {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.filters {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 280px));
+	gap: 12px;
+	align-items: start;
 }
 
 .pendingSection {

@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs" :swipable="true">
-	<div class="_spacer" style="--MI_SPACER-w: 700px;">
+	<div class="_spacer" :style="spacerStyle">
 		<div v-if="channel && tab === 'overview'" class="_gaps">
 			<div class="_panel" :class="$style.bannerContainer">
 				<XChannelFollowButton :channel="channel" :full="true" :class="$style.subscribe"/>
@@ -59,11 +59,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 		<div v-else-if="tab === 'events'" class="_gaps">
 			<div :class="$style.eventsContainer">
-				<div v-if="$i" :class="$style.eventsActions">
-					<MkButton primary rounded @click="router.push('/channels/:channelId/events/new', { params: { channelId } })">
-						<i class="ti ti-plus"></i> {{ i18n.ts._events.createEvent }}
-					</MkButton>
-				</div>
 				<MkEventCalendar
 					v-model:selectedDate="selectedEventDate"
 					:events="channelCalendarEvents"
@@ -71,8 +66,79 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:defaultChannelId="channelId"
 					:defaultChannelName="channel?.name ?? null"
 					@rangeChange="onChannelRangeChange"
-					@eventCreated="fetchChannelEvents"
+					@eventCreated="refreshManagedChannelEvents"
 				/>
+			</div>
+		</div>
+		<div v-else-if="tab === 'manage' && canManageChannelEvents" class="_gaps">
+			<div :class="$style.managePanel">
+				<div :class="$style.toolbar">
+					<div :class="$style.statusSummary">
+						<span :class="$style.summaryLabel">{{ i18n.ts.manage }}</span>
+						<span :class="$style.summaryCount">{{ managedChannelEvents.length }}</span>
+					</div>
+					<div :class="$style.filters">
+						<MkSelect v-model="channelManageStatus" :items="channelManageStatusItems">
+							<template #label>{{ i18n.ts.filter }}</template>
+						</MkSelect>
+					</div>
+				</div>
+
+				<div :class="$style.eventsActions">
+					<MkButton primary rounded @click="router.push('/channels/:channelId/events/new', { params: { channelId } })">
+						<i class="ti ti-plus"></i> {{ i18n.ts._events.createEvent }}
+					</MkButton>
+				</div>
+
+				<MkLoading v-if="channelManageLoading"/>
+
+				<div v-else-if="managedChannelEvents.length === 0" class="_fullInfo">
+					<span>{{ i18n.ts._events.noEvents }}</span>
+				</div>
+
+				<div v-else :class="$style.eventList">
+					<div v-for="event in managedChannelEvents" :key="event.id" class="_panel" :class="$style.eventCard">
+						<div :class="$style.headerRow">
+							<div>
+								<div :class="$style.eventDate">
+									<i class="ti ti-calendar"></i>
+									{{ formatEventDate(event.startAt) }}
+									<template v-if="event.endAt">〜 {{ formatEventDate(event.endAt) }}</template>
+								</div>
+								<div :class="$style.eventTitle">{{ event.title }}</div>
+							</div>
+							<span :class="[$style.statusBadge, $style[`status_${event.status}`]]">{{ i18n.ts._events[event.status] }}</span>
+						</div>
+
+						<div v-if="event.color" :class="$style.colorRow">
+							<span :class="$style.colorSwatch" :style="{ backgroundColor: event.color }"></span>
+							<span>{{ event.color }}</span>
+						</div>
+
+						<div v-if="event.description" :class="$style.eventDesc">{{ event.description }}</div>
+
+						<div v-if="event.url" :class="$style.eventUrl">
+							<a :href="event.url" target="_blank" rel="noopener noreferrer">{{ event.url }}</a>
+						</div>
+
+						<div :class="$style.eventMeta">
+							<MkAvatar :user="event.createdBy" :class="$style.avatar"/>
+							<span>{{ event.createdBy.name || event.createdBy.username }}</span>
+						</div>
+
+						<div :class="$style.actions">
+							<MkButton @click="openEvent(event.id)">
+								<i class="ti ti-external-link"></i> {{ i18n.ts.details }}
+							</MkButton>
+							<MkButton v-if="event.status !== 'approved'" primary @click="approveChannelEvent(event.id)">
+								<i class="ti ti-check"></i> {{ i18n.ts._events.approve }}
+							</MkButton>
+							<MkButton v-if="event.status !== 'rejected'" danger @click="rejectChannelEvent(event.id)">
+								<i class="ti ti-x"></i> {{ i18n.ts._events.reject }}
+							</MkButton>
+						</div>
+					</div>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -107,11 +173,14 @@ import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import { favoritedChannelsCache } from '@/cache.js';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
+import type { GetMkSelectValueTypesFromDef, MkSelectItem } from '@/components/MkSelect.vue';
+import MkSelect from '@/components/MkSelect.vue';
 import { prefer } from '@/preferences.js';
 import MkNote from '@/components/MkNote.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import MkEventCalendar from '@/components/MkEventCalendar.vue';
+import MkLoading from '@/components/global/MkLoading.vue';
 import { isSupportShare } from '@/utility/navigator.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { notesSearchAvailable } from '@/utility/check-permissions.js';
@@ -124,6 +193,17 @@ const router = useRouter();
 const props = defineProps<{
 	channelId: string;
 }>();
+
+type EventManageStatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
+
+const channelManageStatusItems = [
+	{ label: i18n.ts._events.pending, value: 'pending' },
+	{ label: i18n.ts._events.approved, value: 'approved' },
+	{ label: i18n.ts._events.rejected, value: 'rejected' },
+	{ label: i18n.ts.all, value: 'all' },
+] as const satisfies MkSelectItem[];
+
+type ChannelManageStatus = GetMkSelectValueTypesFromDef<typeof channelManageStatusItems>;
 
 const tab = ref('overview');
 
@@ -170,8 +250,12 @@ watch(() => props.channelId, async () => {
 }, { immediate: true });
 
 watch(tab, (newTab) => {
-	if (newTab === 'events' && channelEvents.value.length === 0) {
+	if ((newTab === 'events' || newTab === 'manage') && channelEvents.value.length === 0) {
 		fetchChannelEvents();
+	}
+
+	if (newTab === 'manage' && canManageChannelEvents.value) {
+		fetchManagedChannelEvents();
 	}
 });
 
@@ -284,8 +368,17 @@ async function search() {
 // Channel events
 const selectedEventDate = ref<string | null>(null);
 const channelEvents = ref<Misskey.entities.Event[]>([]);
+const managedChannelEvents = ref<Misskey.entities.Event[]>([]);
+const channelManageLoading = ref(false);
+const channelManageStatus = ref<ChannelManageStatus>('pending');
 const channelRangeStart = ref<number>(0);
 const channelRangeEnd = ref<number>(0);
+
+watch(channelManageStatus, () => {
+	if (tab.value === 'manage' && canManageChannelEvents.value) {
+		fetchManagedChannelEvents();
+	}
+});
 
 function onChannelRangeChange(range: { startAt: number; endAt: number; view: 'month' | 'week' | 'schedule' }) {
 	channelRangeStart.value = range.startAt;
@@ -307,6 +400,53 @@ async function fetchChannelEvents() {
 	} catch (error) {
 		console.error(error);
 	}
+}
+
+async function fetchManagedChannelEvents() {
+	if (!hasChannelEventManagePermission(channel.value)) {
+		managedChannelEvents.value = [];
+		return;
+	}
+
+	channelManageLoading.value = true;
+
+	try {
+		managedChannelEvents.value = await misskeyApi('events/pending', {
+			limit: 100,
+			channelId: props.channelId,
+			status: channelManageStatus.value,
+		});
+	} catch (error) {
+		console.error(error);
+		managedChannelEvents.value = [];
+	} finally {
+		channelManageLoading.value = false;
+	}
+}
+
+function formatEventDate(dateStr: string): string {
+	const d = new Date(dateStr);
+	return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function openEvent(eventId: string) {
+	router.push('/events/:eventId', { params: { eventId } });
+}
+
+async function approveChannelEvent(eventId: string) {
+	await misskeyApi('events/approve', { eventId });
+	os.alert({ type: 'success', text: i18n.ts._events.eventApproved });
+	await Promise.all([fetchManagedChannelEvents(), fetchChannelEvents()]);
+}
+
+async function rejectChannelEvent(eventId: string) {
+	await misskeyApi('events/reject', { eventId });
+	os.alert({ type: 'success', text: i18n.ts._events.eventRejected });
+	await Promise.all([fetchManagedChannelEvents(), fetchChannelEvents()]);
+}
+
+async function refreshManagedChannelEvents() {
+	await Promise.all([fetchManagedChannelEvents(), fetchChannelEvents()]);
 }
 
 const channelCalendarEvents = computed(() => {
@@ -405,11 +545,22 @@ const headerTabs = computed(() => [{
 	key: 'events',
 	title: i18n.ts._events.eventCalendar,
 	icon: 'ti ti-calendar-event',
-}, {
+	}, ...(canManageChannelEvents.value ? [{
+		key: 'manage',
+		title: i18n.ts.manage,
+		icon: 'ti ti-settings',
+	}] : []), {
 	key: 'search',
 	title: i18n.ts.search,
 	icon: 'ti ti-search',
 }]);
+
+const spacerStyle = computed(() => {
+	const wide = tab.value === 'events' || tab.value === 'manage';
+	return {
+		'--MI_SPACER-w': wide ? '1040px' : '700px',
+	};
+});
 
 definePage(() => ({
 	title: channel.value ? channel.value.name : i18n.ts.channel,
@@ -492,41 +643,166 @@ definePage(() => ({
 	padding: 16px;
 }
 
+.managePanel {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.toolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.filters {
+	min-width: 220px;
+	max-width: 280px;
+	width: 100%;
+}
+
+.statusSummary {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 14px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--MI_THEME-fg) 6%, transparent);
+}
+
+.summaryLabel {
+	font-weight: 700;
+	color: var(--MI_THEME-fg);
+}
+
+.summaryCount {
+	min-width: 26px;
+	height: 26px;
+	padding: 0 8px;
+	border-radius: 999px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.82rem;
+	font-weight: 800;
+	background: var(--MI_THEME-accent);
+	color: var(--MI_THEME-fgOnAccent);
+}
+
 .eventsActions {
-	margin-bottom: 16px;
 	display: flex;
 	justify-content: flex-end;
 }
 
-.eventsEmpty {
-	text-align: center;
-	padding: 32px 16px;
-	color: var(--MI_THEME-fgTransparent);
+.eventList {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
 }
 
 .eventCard {
 	padding: 16px;
-	margin-top: 8px;
-	cursor: pointer;
+	border-radius: 16px;
 }
 
-.eventCardDate {
+.headerRow {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 12px;
+	margin-bottom: 8px;
+}
+
+.eventDate {
 	font-size: 0.85em;
 	color: var(--MI_THEME-fgTransparent);
 	margin-bottom: 4px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
 }
 
-.eventCardTitle {
+.eventTitle {
 	font-size: 1.1em;
 	font-weight: 700;
+	word-break: break-word;
 }
 
-.eventCardDesc {
+.statusBadge {
+	flex-shrink: 0;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: 0.78rem;
+	font-weight: 800;
+}
+
+.status_pending {
+	background: color-mix(in srgb, #f59e0b 18%, transparent);
+	color: #f59e0b;
+}
+
+.status_approved {
+	background: color-mix(in srgb, #22c55e 18%, transparent);
+	color: #22c55e;
+}
+
+.status_rejected {
+	background: color-mix(in srgb, #ef4444 18%, transparent);
+	color: #ef4444;
+}
+
+.eventDesc {
+	white-space: pre-wrap;
+	word-break: break-word;
+	margin-bottom: 8px;
+}
+
+.colorRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
 	font-size: 0.9em;
 	color: var(--MI_THEME-fgTransparent);
-	margin-top: 4px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	margin-bottom: 8px;
+}
+
+.colorSwatch {
+	width: 12px;
+	height: 12px;
+	border-radius: 999px;
+	box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+
+.eventUrl {
+	margin-bottom: 8px;
+
+	a {
+		color: var(--MI_THEME-link);
+	}
+}
+
+.eventMeta {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 0.9em;
+	color: var(--MI_THEME-fgTransparent);
+	margin-bottom: 12px;
+	flex-wrap: wrap;
+}
+
+.avatar {
+	width: 28px;
+	height: 28px;
+}
+
+.actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
 }
 </style>

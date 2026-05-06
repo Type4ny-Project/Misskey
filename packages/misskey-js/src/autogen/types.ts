@@ -464,6 +464,16 @@ export type paths = {
          */
         post: operations['admin___emoji___update-request-settings'];
     };
+    '/admin/events/list': {
+        /**
+         * admin/events/list
+         * @description No description provided.
+         *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+         *     **Credential required**: *Yes* / **Permission**: *read:admin:show-user*
+         */
+        post: operations['admin___events___list'];
+    };
     '/admin/federation/delete-all-files': {
         /**
          * admin/federation/delete-all-files
@@ -9610,6 +9620,90 @@ export interface operations {
                     'application/json': {
                         autoApproveEmojiRequest: boolean;
                     };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    admin___events___list: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** @default 20 */
+                    limit?: number;
+                    /** Format: misskey:id */
+                    sinceId?: string;
+                    /** Format: misskey:id */
+                    untilId?: string;
+                    sinceDate?: number;
+                    untilDate?: number;
+                    /**
+                     * @default all
+                     * @enum {string}
+                     */
+                    status?: 'all' | 'pending' | 'approved' | 'rejected';
+                    /**
+                     * @default all
+                     * @enum {string}
+                     */
+                    scope?: 'all' | 'channel' | 'server';
+                    /** Format: misskey:id */
+                    channelId?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Event'][];
                 };
             };
             /** @description Client error */
@@ -22634,6 +22728,8 @@ export interface operations {
                     untilId?: string;
                     sinceDate?: number;
                     untilDate?: number;
+                    /** @default false */
+                    includeChannelEvents?: boolean;
                     /** Format: misskey:id */
                     channelId?: string | null;
                 };
@@ -22780,6 +22876,13 @@ export interface operations {
                     sinceId?: string;
                     /** Format: misskey:id */
                     untilId?: string;
+                    /** Format: misskey:id */
+                    channelId?: string | null;
+                    /**
+                     * @default pending
+                     * @enum {string}
+                     */
+                    status?: 'all' | 'pending' | 'approved' | 'rejected';
                 };
             };
         };

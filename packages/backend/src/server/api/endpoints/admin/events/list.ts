@@ -39,6 +39,7 @@ export const paramDef = {
 		sinceDate: { type: 'integer' },
 		untilDate: { type: 'integer' },
 		status: { type: 'string', enum: ['all', 'pending', 'approved', 'rejected'], default: 'all' },
+		scope: { type: 'string', enum: ['all', 'channel', 'server'], default: 'all' },
 		channelId: { type: 'string', format: 'misskey:id', nullable: true },
 	},
 	required: [],
@@ -66,7 +67,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				query.andWhere('event.status = :status', { status: ps.status });
 			}
 
-			if (ps.channelId != null) {
+			if (ps.scope === 'channel') {
+				if (ps.channelId != null) {
+					query.andWhere('event.channelId = :channelId', { channelId: ps.channelId });
+				} else {
+					query.andWhere('event.channelId IS NOT NULL');
+				}
+			} else if (ps.scope === 'server') {
+				query.andWhere('event.channelId IS NULL');
+			} else if (ps.channelId != null) {
 				query.andWhere('event.channelId = :channelId', { channelId: ps.channelId });
 			}
 

@@ -33,7 +33,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<div :class="$style.field">
 				<div :class="$style.channelLabel">{{ i18n.ts._events.channel }}</div>
-				<div :class="$style.channelActions">
+				<div v-if="isChannelLocked" :class="$style.channelLocked">
+					<i class="ti ti-device-tv"></i>
+					{{ selectedChannelName ?? i18n.ts._events.channel }}
+				</div>
+				<div v-else :class="$style.channelActions">
 					<MkButton @click="chooseChannel($event)">
 						<i class="ti ti-device-tv"></i>
 						{{ selectedChannelName ?? i18n.ts._events.channel }}
@@ -73,7 +77,7 @@ import { favoritedChannelsCache, userChannelsCache, userChannelFollowingsCache }
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
-import { useRoute, useRouter } from '@/router.js';
+import { useRouter } from '@/router.js';
 import * as os from '@/os.js';
 
 const props = defineProps<{
@@ -82,7 +86,6 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
-const route = useRoute();
 const isEdit = computed(() => !!props.eventId);
 
 const title = ref('');
@@ -94,6 +97,9 @@ const color = ref('#3b82f6');
 const tagsStr = ref('');
 const selectedChannelId = ref<string | null>(props.channelId ?? null);
 const selectedChannelName = ref<string | null>(null);
+const lockedChannelId = ref<string | null>(props.channelId ?? null);
+
+const isChannelLocked = computed(() => lockedChannelId.value != null);
 
 const canSubmit = computed(() => {
 	return title.value.length > 0 && startAtStr.value.length > 0;
@@ -106,7 +112,7 @@ function toLocalDatetimeInput(date: Date): string {
 
 function initNewEventDates() {
 	if (startAtStr.value || endAtStr.value) return;
-	const initialStartAt = typeof route.query.startAt === 'string' ? route.query.startAt : null;
+	const initialStartAt = new URLSearchParams(window.location.search).get('startAt');
 	if (initialStartAt != null) {
 		const start = new Date(initialStartAt);
 		if (!Number.isNaN(start.getTime())) {
@@ -134,6 +140,7 @@ async function loadEvent() {
 	tagsStr.value = event.tags?.join(', ') ?? '';
 	selectedChannelId.value = event.channelId ?? null;
 	selectedChannelName.value = event.channel?.name ?? null;
+	lockedChannelId.value = event.channelId ?? props.channelId ?? null;
 }
 
 async function loadSelectedChannelName() {
@@ -150,6 +157,8 @@ async function loadSelectedChannelName() {
 }
 
 async function chooseChannel(ev?: Event) {
+	if (isChannelLocked.value) return;
+
 	const [ownedChannels, followedChannels, favoritedChannels] = await Promise.all([
 		userChannelsCache.fetch(),
 		userChannelFollowingsCache.fetch(),
@@ -179,6 +188,8 @@ async function chooseChannel(ev?: Event) {
 }
 
 function clearChannel() {
+	if (isChannelLocked.value) return;
+
 	selectedChannelId.value = null;
 	selectedChannelName.value = null;
 }
@@ -286,6 +297,18 @@ definePage(() => ({
 	display: flex;
 	gap: 8px;
 	flex-wrap: wrap;
+}
+
+.channelLocked {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 40px;
+	padding: 0 14px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--MI_THEME-fg) 6%, transparent);
+	color: var(--MI_THEME-fg);
+	font-weight: 700;
 }
 
 .actions {

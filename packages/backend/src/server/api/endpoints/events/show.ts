@@ -4,11 +4,11 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { EventService } from '@/core/EventService.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { EventsRepository } from '@/models/_.js';
 import { EventEntityService } from '@/core/entities/EventEntityService.js';
 import { DI } from '@/di-symbols.js';
-import { RoleService } from '@/core/RoleService.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -47,8 +47,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.eventsRepository)
 		private eventsRepository: EventsRepository,
 
+		private eventService: EventService,
 		private eventEntityService: EventEntityService,
-		private roleService: RoleService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const event = await this.eventsRepository.findOneBy({
@@ -59,8 +59,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchEvent);
 			}
 
-			// Non-approved events are only visible to the creator or moderators
-			if (event.status !== 'approved' && (me == null || (event.createdById !== me.id && !(await this.roleService.isModerator(me))))) {
+			if (!(await this.eventService.canViewEvent(event, me))) {
 				throw new ApiError(meta.errors.noSuchEvent);
 			}
 

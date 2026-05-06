@@ -631,6 +631,72 @@ type ApShowRequest = operations['ap___show']['requestBody']['content']['applicat
 type ApShowResponse = operations['ap___show']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AudioRoom = components['schemas']['AudioRoom'];
+
+// @public (undocumented)
+type AudioRoomApproveSpeakRequest = operations['audio-room___approve-speak']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomCloseRequest = operations['audio-room___close']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomCreateRequest = operations['audio-room___create']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomCreateResponse = operations['audio-room___create']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomJoinRequest = operations['audio-room___join']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomLeaveRequest = operations['audio-room___leave']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomListRequest = operations['audio-room___list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomListResponse = operations['audio-room___list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomMuteUserRequest = operations['audio-room___mute-user']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomPullTracksRequest = operations['audio-room___pull-tracks']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomPullTracksResponse = operations['audio-room___pull-tracks']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomPushTracksRequest = operations['audio-room___push-tracks']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomPushTracksResponse = operations['audio-room___push-tracks']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomRenegotiateRequest = operations['audio-room___renegotiate']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomRequestSpeakRequest = operations['audio-room___request-speak']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomSessionCloseRequest = operations['audio-room___session-close']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomSessionCloseResponse = operations['audio-room___session-close']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomSessionRequest = operations['audio-room___session']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomSessionResponse = operations['audio-room___session']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomShowRequest = operations['audio-room___show']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AudioRoomShowResponse = operations['audio-room___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AuthAcceptRequest = operations['auth___accept']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -996,6 +1062,40 @@ export type Channels = {
                 id: ChatMessageLite['id'];
             };
         };
+    };
+    audioRoom: {
+        params: {
+            roomId: string;
+        };
+        events: {
+            userJoined: (payload: {
+                userId: string;
+                isSpeaker: boolean;
+            }) => void;
+            userLeft: (payload: {
+                userId: string;
+            }) => void;
+            userMuted: (payload: {
+                userId: string;
+            }) => void;
+            speakRequest: (payload: {
+                userId: string;
+            }) => void;
+            speakApproved: (payload: {
+                userId: string;
+            }) => void;
+            closed: (payload: Record<string, never>) => void;
+            trackPublished: (payload: {
+                userId: string;
+                cfSessionId: string;
+                trackNames: string[];
+            }) => void;
+            connected: (payload: {
+                connectionId: string;
+            }) => void;
+            deviceSwitched: (payload: Record<string, never>) => void;
+        };
+        receives: null;
     };
 };
 
@@ -1829,6 +1929,27 @@ declare namespace entities {
         AppCreateResponse,
         AppShowRequest,
         AppShowResponse,
+        AudioRoomApproveSpeakRequest,
+        AudioRoomCloseRequest,
+        AudioRoomCreateRequest,
+        AudioRoomCreateResponse,
+        AudioRoomJoinRequest,
+        AudioRoomLeaveRequest,
+        AudioRoomListRequest,
+        AudioRoomListResponse,
+        AudioRoomMuteUserRequest,
+        AudioRoomPullTracksRequest,
+        AudioRoomPullTracksResponse,
+        AudioRoomPushTracksRequest,
+        AudioRoomPushTracksResponse,
+        AudioRoomRenegotiateRequest,
+        AudioRoomRequestSpeakRequest,
+        AudioRoomSessionRequest,
+        AudioRoomSessionResponse,
+        AudioRoomSessionCloseRequest,
+        AudioRoomSessionCloseResponse,
+        AudioRoomShowRequest,
+        AudioRoomShowResponse,
         AuthAcceptRequest,
         AuthSessionGenerateRequest,
         AuthSessionGenerateResponse,
@@ -2000,6 +2121,23 @@ declare namespace entities {
         EndpointRequest,
         EndpointResponse,
         EndpointsResponse,
+        EventsApproveRequest,
+        EventsApproveResponse,
+        EventsCreateRequest,
+        EventsCreateResponse,
+        EventsDeleteRequest,
+        EventsListRequest,
+        EventsListResponse,
+        EventsMySubmissionsRequest,
+        EventsMySubmissionsResponse,
+        EventsPendingRequest,
+        EventsPendingResponse,
+        EventsRejectRequest,
+        EventsRejectResponse,
+        EventsShowRequest,
+        EventsShowResponse,
+        EventsUpdateRequest,
+        EventsUpdateResponse,
         FederationFollowersRequest,
         FederationFollowersResponse,
         FederationFollowingRequest,
@@ -2417,13 +2555,69 @@ declare namespace entities {
         ChatMessageLiteForRoom,
         ChatRoom,
         ChatRoomInvitation,
-        ChatRoomMembership
+        ChatRoomMembership,
+        Event_2 as Event,
+        AudioRoom
     }
 }
 export { entities }
 
 // @public (undocumented)
 type Error_2 = components['schemas']['Error'];
+
+// @public (undocumented)
+type Event_2 = components['schemas']['Event'];
+
+// @public (undocumented)
+type EventsApproveRequest = operations['events___approve']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type EventsApproveResponse = operations['events___approve']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type EventsCreateRequest = operations['events___create']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type EventsCreateResponse = operations['events___create']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type EventsDeleteRequest = operations['events___delete']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type EventsListRequest = operations['events___list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type EventsListResponse = operations['events___list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type EventsMySubmissionsRequest = operations['events___my-submissions']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type EventsMySubmissionsResponse = operations['events___my-submissions']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type EventsPendingRequest = operations['events___pending']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type EventsPendingResponse = operations['events___pending']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type EventsRejectRequest = operations['events___reject']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type EventsRejectResponse = operations['events___reject']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type EventsShowRequest = operations['events___show']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type EventsShowResponse = operations['events___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type EventsUpdateRequest = operations['events___update']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type EventsUpdateResponse = operations['events___update']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type FederationFollowersRequest = operations['federation___followers']['requestBody']['content']['application/json'];

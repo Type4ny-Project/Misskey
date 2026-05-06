@@ -24,7 +24,7 @@ export class ChannelService {
 	@bindThis
 	public async canEditChannel(
 		channel: MiChannel,
-		user: MiUser,
+		user: Pick<MiUser, 'id'>,
 		isModerator: boolean,
 	): Promise<boolean> {
 		if (channel.userId === user.id) {

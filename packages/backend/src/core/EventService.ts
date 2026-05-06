@@ -10,6 +10,7 @@ import type { EventsRepository, ChannelsRepository } from '@/models/_.js';
 import type { MiEvent } from '@/models/Event.js';
 import type { MiLocalUser, MiUser } from '@/models/User.js';
 import { bindThis } from '@/decorators.js';
+import { ChannelService } from '@/core/ChannelService.js';
 import { IdService } from '@/core/IdService.js';
 import { RoleService } from '@/core/RoleService.js';
 
@@ -27,9 +28,53 @@ export class EventService {
 		@Inject(DI.channelsRepository)
 		private channelsRepository: ChannelsRepository,
 
+		private channelService: ChannelService,
 		private idService: IdService,
 		private roleService: RoleService,
 	) {
+	}
+
+	@bindThis
+	public async canManageEvent(
+		event: MiEvent,
+		me: Pick<MiUser, 'id'> | null,
+	): Promise<boolean> {
+		if (me == null) {
+			return false;
+		}
+
+		const isModerator = await this.roleService.isModerator(me);
+
+		if (event.channelId == null) {
+			return isModerator;
+		}
+
+		const channel = await this.channelsRepository.findOneBy({ id: event.channelId });
+		if (channel == null) {
+			return isModerator;
+		}
+
+		return await this.channelService.canEditChannel(channel, me, isModerator);
+	}
+
+	@bindThis
+	public async canViewEvent(
+		event: MiEvent,
+		me: Pick<MiUser, 'id'> | null,
+	): Promise<boolean> {
+		if (event.status === 'approved') {
+			return true;
+		}
+
+		if (me == null) {
+			return false;
+		}
+
+		if (event.createdById === me.id) {
+			return true;
+		}
+
+		return await this.canManageEvent(event, me);
 	}
 
 	@bindThis
@@ -152,14 +197,13 @@ export class EventService {
 
 	@bindThis
 	public async approve(me: MiLocalUser, eventId: MiEvent['id']): Promise<MiEvent> {
-		const isModerator = await this.roleService.isModerator(me);
-		if (!isModerator) {
-			throw new EventService.AccessDeniedError();
-		}
-
 		const event = await this.eventsRepository.findOneBy({ id: eventId });
 		if (!event) {
 			throw new EventService.NoSuchEventError();
+		}
+
+		if (!(await this.canManageEvent(event, me))) {
+			throw new EventService.AccessDeniedError();
 		}
 
 		await this.eventsRepository.update(eventId, {
@@ -173,14 +217,13 @@ export class EventService {
 
 	@bindThis
 	public async reject(me: MiLocalUser, eventId: MiEvent['id']): Promise<MiEvent> {
-		const isModerator = await this.roleService.isModerator(me);
-		if (!isModerator) {
-			throw new EventService.AccessDeniedError();
-		}
-
 		const event = await this.eventsRepository.findOneBy({ id: eventId });
 		if (!event) {
 			throw new EventService.NoSuchEventError();
+		}
+
+		if (!(await this.canManageEvent(event, me))) {
+			throw new EventService.AccessDeniedError();
 		}
 
 		await this.eventsRepository.update(eventId, {

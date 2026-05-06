@@ -36,6 +36,7 @@ export const paramDef = {
 		untilId: { type: 'string', format: 'misskey:id' },
 		sinceDate: { type: 'integer' },
 		untilDate: { type: 'integer' },
+		includeChannelEvents: { type: 'boolean', default: false },
 		channelId: { type: 'string', format: 'misskey:id', nullable: true },
 	},
 	required: [],
@@ -73,6 +74,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.channelId != null) {
 				query.andWhere('event.channelId = :channelId', { channelId: ps.channelId });
+			} else if (ps.includeChannelEvents !== true) {
+				query.andWhere('event.channelId IS NULL');
 			}
 
 			const events = await query

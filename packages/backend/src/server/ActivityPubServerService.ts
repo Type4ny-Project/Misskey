@@ -31,6 +31,7 @@ import { IActivity } from '@/core/activitypub/type.js';
 import { isQuote, isRenote } from '@/misc/is-renote.js';
 import * as Acct from '@/misc/acct.js';
 import { FanoutTimelineEndpointService } from '@/core/FanoutTimelineEndpointService.js';
+import { TenantRuntimeService } from '@/core/TenantRuntimeService.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginOptions, FastifyBodyParser } from 'fastify';
 import type { FindOptionsWhere } from 'typeorm';
 
@@ -77,6 +78,7 @@ export class ActivityPubServerService {
 		private userKeypairService: UserKeypairService,
 		private queryService: QueryService,
 		private fanoutTimelineEndpointService: FanoutTimelineEndpointService,
+		private tenantRuntimeService: TenantRuntimeService,
 	) {
 		//this.createServer = this.createServer.bind(this);
 	}
@@ -121,9 +123,16 @@ export class ActivityPubServerService {
 			return;
 		}
 
-		if (signature.params.headers.indexOf('host') === -1
-			|| request.headers.host !== this.config.host) {
+		if (signature.params.headers.indexOf('host') === -1) {
 			// Host not specified or not match.
+			reply.code(401);
+			return;
+		}
+
+		try {
+			this.tenantRuntimeService.resolveHost(request.headers.host);
+		} catch {
+			// Host not match.
 			reply.code(401);
 			return;
 		}

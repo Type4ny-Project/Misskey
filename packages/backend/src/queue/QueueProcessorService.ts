@@ -106,12 +106,36 @@ function collectRecipientValues(value: unknown, values: unknown[], seen = new We
 	}
 }
 
-function inferInboxTenantHost(job: Bull.Job, knownHosts: string[]): string | null {
-	if (typeof job.data !== 'object' || job.data == null || !('activity' in job.data)) return null;
+function collectStringValues(value: unknown, values: string[], seen = new WeakSet<object>()): void {
+	if (typeof value === 'string') {
+		values.push(value);
 
+		const trimmed = value.trim();
+		if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+			try {
+				collectStringValues(JSON.parse(trimmed), values, seen);
+			} catch {
+				// Not a JSON string.
+			}
+		}
+
+		return;
+	}
+
+	if (value == null || typeof value !== 'object') return;
+	if (seen.has(value)) return;
+	seen.add(value);
+
+	if (Array.isArray(value)) {
+		for (const item of value) collectStringValues(item, values, seen);
+		return;
+	}
+
+	for (const item of Object.values(value)) collectStringValues(item, values, seen);
+}
+
+function pickSingleKnownHost(values: unknown[], knownHosts: string[]): string | null {
 	const normalizedHosts = new Map(knownHosts.map(host => [host.toLowerCase(), host]));
-	const values: unknown[] = [];
-	collectRecipientValues(job.data.activity, values);
 
 	const matchedHosts = new Set<string>();
 	for (const value of values) {
@@ -129,6 +153,26 @@ function inferInboxTenantHost(job: Bull.Job, knownHosts: string[]): string | nul
 	}
 
 	return matchedHosts.size === 1 ? [...matchedHosts][0] : null;
+}
+
+function inferInboxTenantHost(job: Bull.Job, knownHosts: string[]): string | null {
+	if (typeof job.data !== 'object' || job.data == null || !('activity' in job.data)) return null;
+
+	const recipientValues: unknown[] = [];
+	collectRecipientValues(job.data.activity, recipientValues);
+
+	const recipientHost = pickSingleKnownHost(recipientValues, knownHosts);
+	if (recipientHost != null) return recipientHost;
+
+	const allValues: string[] = [];
+	collectStringValues(job.data.activity, allValues);
+	return pickSingleKnownHost(allValues, knownHosts);
+}
+
+function inferJobTenantHost(job: Bull.Job, knownHosts: string[]): string | null {
+	const values: string[] = [];
+	collectStringValues(job.data, values);
+	return pickSingleKnownHost(values, knownHosts);
 }
 
 @Injectable()
@@ -196,6 +240,10 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 			if (tenantHost == null && queueName === 'inbox') {
 				tenantHost = inferInboxTenantHost(job, this.tenantRuntimeService.getKnownHosts());
+			}
+
+			if (tenantHost == null && queueName === 'deliver') {
+				tenantHost = inferJobTenantHost(job, this.tenantRuntimeService.getKnownHosts());
 			}
 
 			if (tenantHost == null) {

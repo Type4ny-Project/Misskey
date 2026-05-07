@@ -244,11 +244,12 @@ export class QueueService {
 	}
 
 	@bindThis
-	public inbox(activity: IActivity, signature: httpSignature.IParsedSignature) {
-		const data: InboxJobData = this.withTenant({
+	public inbox(activity: IActivity, signature: httpSignature.IParsedSignature, tenantHost?: string) {
+		const data: InboxJobData = {
 			activity: activity,
 			signature,
-		});
+			tenantHost: tenantHost ?? this.tenantRuntimeService.getCurrentHost(),
+		};
 
 		const label = (activity.id ?? '').replace('https://', '').replace('/activity', '');
 

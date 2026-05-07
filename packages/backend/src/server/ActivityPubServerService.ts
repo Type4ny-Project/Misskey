@@ -129,8 +129,9 @@ export class ActivityPubServerService {
 			return;
 		}
 
+		let tenantHost: string;
 		try {
-			this.tenantRuntimeService.resolveHost(request.headers.host);
+			tenantHost = this.tenantRuntimeService.resolveHost(request.headers.host);
 		} catch {
 			// Host not match.
 			reply.code(401);
@@ -183,7 +184,7 @@ export class ActivityPubServerService {
 			}
 		}
 
-		this.queueService.inbox(request.body as IActivity, signature);
+		this.queueService.inbox(request.body as IActivity, signature, tenantHost);
 
 		reply.code(202);
 	}

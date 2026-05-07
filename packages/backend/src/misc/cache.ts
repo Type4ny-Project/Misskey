@@ -225,7 +225,9 @@ export class MemoryKVCache<T> {
 	 * @deprecated これを直接呼び出すべきではない。InternalEventなどで変更を全てのプロセス/マシンに通知するべき
 	 */
 	public set(key: string, value: T): void {
-		this.cache.set(`${getTenantNamespace()}:${key}`, {
+		const namespacedKey = `${getTenantNamespace()}:${key}`;
+		this.cache.delete(namespacedKey);
+		this.cache.set(namespacedKey, {
 			date: Date.now(),
 			value,
 		});
@@ -245,6 +247,27 @@ export class MemoryKVCache<T> {
 	@bindThis
 	public delete(key: string): void {
 		this.cache.delete(`${getTenantNamespace()}:${key}`);
+	}
+
+	@bindThis
+	public deleteByValue(predicate: (value: T) => boolean): void {
+		for (const [key, { value }] of Array.from(this.cache.entries())) {
+			if (predicate(value)) {
+				this.cache.delete(key);
+			}
+		}
+	}
+
+	@bindThis
+	public updateByValue(predicate: (value: T) => boolean, value: T): void {
+		const now = Date.now();
+
+		for (const cached of Array.from(this.cache.values())) {
+			if (predicate(cached.value)) {
+				cached.date = now;
+				cached.value = value;
+			}
+		}
 	}
 
 	/**

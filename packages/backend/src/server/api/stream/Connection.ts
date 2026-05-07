@@ -10,6 +10,7 @@ import { isJsonObject } from '@/misc/json-value.js';
 import type { JsonObject, JsonValue } from '@/misc/json-value.js';
 import { ChannelMutingService } from '@/core/ChannelMutingService.js';
 import { ChannelFollowingService } from '@/core/ChannelFollowingService.js';
+import { TenantRuntimeService } from '@/core/TenantRuntimeService.js';
 import type { GlobalEvents, StreamEventEmitter } from '@/core/GlobalEventService.js';
 import { MiFollowing, MiUserProfile } from '@/models/_.js';
 import { CacheService } from '@/core/CacheService.js';
@@ -52,6 +53,7 @@ export default class Connection {
 	public user?: MiUser;
 	public token?: MiAccessToken;
 	private wsConnection: WebSocket.WebSocket;
+	private tenantHost: string;
 	public subscriber: StreamEventEmitter;
 	private channels: Map<string, Channel> = new Map();
 	private subscribingNotes: Partial<Record<string, number>> = {};
@@ -71,11 +73,13 @@ export default class Connection {
 		private cacheService: CacheService,
 		private channelFollowingService: ChannelFollowingService,
 		private channelMutingService: ChannelMutingService,
+		private tenantRuntimeService: TenantRuntimeService,
 		@Inject(REQUEST)
 		request: ConnectionRequest,
 	) {
 		if (request.user) this.user = request.user;
 		if (request.token) this.token = request.token;
+		this.tenantHost = request.tenantHost;
 	}
 
 	@bindThis
@@ -114,7 +118,11 @@ export default class Connection {
 			await this.fetch();
 
 			if (!this.fetchIntervalId) {
-				this.fetchIntervalId = setInterval(this.fetch, 1000 * 10);
+				this.fetchIntervalId = setInterval(() => {
+					this.tenantRuntimeService.runWithHost(this.tenantHost, () => {
+						void this.fetch();
+					});
+				}, 1000 * 10);
 			}
 		}
 	}
@@ -124,10 +132,16 @@ export default class Connection {
 		this.subscriber = subscriber;
 
 		this.wsConnection = wsConnection;
-		this.wsConnection.on('message', this.onWsConnectionMessage);
+		this.wsConnection.on('message', data => {
+			this.tenantRuntimeService.runWithHost(this.tenantHost, () => {
+				void this.onWsConnectionMessage(data);
+			});
+		});
 
 		this.subscriber.on('broadcast', data => {
-			this.onBroadcastMessage(data);
+			this.tenantRuntimeService.runWithHost(this.tenantHost, () => {
+				this.onBroadcastMessage(data);
+			});
 		});
 	}
 
@@ -392,4 +406,5 @@ export default class Connection {
 export interface ConnectionRequest {
 	user: MiUser | null | undefined,
 	token: MiAccessToken | null | undefined,
+	tenantHost: string,
 }

@@ -12,6 +12,8 @@ import type { MiAccessToken } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
 import { MiLocalUser } from '@/models/User.js';
 import { UserService } from '@/core/UserService.js';
+import { TenantRuntimeService } from '@/core/TenantRuntimeService.js';
+import { getTenantHost } from '@/core/tenant-context.js';
 import { AuthenticateService, AuthenticationError } from './AuthenticateService.js';
 import MainStreamConnection, { ConnectionRequest } from './stream/Connection.js';
 import type * as http from 'node:http';
@@ -30,6 +32,7 @@ export class StreamingApiServerService {
 		private moduleRef: ModuleRef,
 		private authenticateService: AuthenticateService,
 		private usersService: UserService,
+		private tenantRuntimeService: TenantRuntimeService,
 	) {
 	}
 
@@ -42,6 +45,15 @@ export class StreamingApiServerService {
 		server.on('upgrade', async (request, socket, head) => {
 			if (request.url == null) {
 				socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+				socket.destroy();
+				return;
+			}
+
+			let tenantHost: string;
+			try {
+				tenantHost = this.tenantRuntimeService.resolveHost(request.headers.host);
+			} catch {
+				socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
 				socket.destroy();
 				return;
 			}
@@ -59,7 +71,7 @@ export class StreamingApiServerService {
 				: q.get('i');
 
 			try {
-				[user, app] = await this.authenticateService.authenticate(token);
+				[user, app] = await this.tenantRuntimeService.runWithHost(tenantHost, () => this.authenticateService.authenticate(token));
 
 				if (app !== null && !app.permission.some(p => p === 'read:account')) {
 					throw new AuthenticationError('Your app does not have necessary permissions to use websocket API.');
@@ -87,14 +99,15 @@ export class StreamingApiServerService {
 			this.moduleRef.registerRequestByContextId<ConnectionRequest>({
 				user,
 				token: app,
+				tenantHost,
 			}, contextId);
-			const stream = await this.moduleRef.create(MainStreamConnection, contextId);
+			const stream = await this.tenantRuntimeService.runWithHost(tenantHost, () => this.moduleRef.create(MainStreamConnection, contextId));
 
-			await stream.init();
+			await this.tenantRuntimeService.runWithHost(tenantHost, () => stream.init());
 
 			this.#wss.handleUpgrade(request, socket, head, (ws) => {
 				this.#wss.emit('connection', ws, request, {
-					stream, user, app,
+					stream, user, app, tenantHost,
 				});
 			});
 		});
@@ -103,33 +116,46 @@ export class StreamingApiServerService {
 
 		this.redisForSub.on('message', (_: string, data: string) => {
 			const parsed = JSON.parse(data);
-			globalEv.emit('message', parsed);
+			globalEv.emit('message', {
+				tenantHost: getTenantHost(),
+				data: parsed,
+			});
 		});
 
 		this.#wss.on('connection', async (connection: WebSocket.WebSocket, request: http.IncomingMessage, ctx: {
 			stream: MainStreamConnection,
 			user: MiLocalUser | null;
 			app: MiAccessToken | null
+			tenantHost: string;
 		}) => {
 			const { stream, user } = ctx;
+			const { tenantHost } = ctx;
 
 			const ev = new EventEmitter();
 
-			function onRedisMessage(data: any): void {
-				ev.emit(data.channel, data.message);
-			}
+			const onRedisMessage = (message: { tenantHost?: string; data: any }): void => {
+				if (message.tenantHost !== tenantHost) return;
+
+				this.tenantRuntimeService.runWithHost(tenantHost, () => {
+					ev.emit(message.data.channel, message.data.message);
+				});
+			};
 
 			globalEv.on('message', onRedisMessage);
 
-			await stream.listen(ev, connection);
+			await this.tenantRuntimeService.runWithHost(tenantHost, () => stream.listen(ev, connection));
 
 			this.#connections.set(connection, Date.now());
 
 			const userUpdateIntervalId = user ? setInterval(() => {
-				this.usersService.updateLastActiveDate(user);
+				this.tenantRuntimeService.runWithHost(tenantHost, () => {
+					this.usersService.updateLastActiveDate(user);
+				});
 			}, 1000 * 60 * 5) : null;
 			if (user) {
-				this.usersService.updateLastActiveDate(user);
+				this.tenantRuntimeService.runWithHost(tenantHost, () => {
+					this.usersService.updateLastActiveDate(user);
+				});
 			}
 
 			connection.once('close', () => {

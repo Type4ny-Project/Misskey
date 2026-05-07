@@ -10,6 +10,7 @@ import { DI } from '@/di-symbols.js';
 import type Logger from '@/logger.js';
 import { bindThis } from '@/decorators.js';
 import { CheckModeratorsActivityProcessorService } from '@/queue/processors/CheckModeratorsActivityProcessorService.js';
+import { TenantRuntimeService } from '@/core/TenantRuntimeService.js';
 import { UserWebhookDeliverProcessorService } from './processors/UserWebhookDeliverProcessorService.js';
 import { SystemWebhookDeliverProcessorService } from './processors/SystemWebhookDeliverProcessorService.js';
 import { EndedPollNotificationProcessorService } from './processors/EndedPollNotificationProcessorService.js';
@@ -46,7 +47,6 @@ import { AggregateRetentionProcessorService } from './processors/AggregateRetent
 import { CleanRemoteNotesProcessorService } from './processors/CleanRemoteNotesProcessorService.js';
 import { QueueLoggerService } from './QueueLoggerService.js';
 import { QUEUE, baseWorkerOptions } from './const.js';
-import { TenantRuntimeService } from '@/core/TenantRuntimeService.js';
 
 // ref. https://github.com/misskey-dev/misskey/pull/7635#issue-971097019
 function httpRelatedBackoff(attemptsMade: number) {
@@ -72,6 +72,63 @@ function getJobInfo(job: Bull.Job | undefined, increment = false): string {
 	const maxAttempts = job.opts.attempts ?? 0;
 
 	return `id=${job.id} attempts=${currentAttempts}/${maxAttempts} age=${formated}`;
+}
+
+const INBOX_RECIPIENT_FIELDS = ['to', 'cc', 'audience', 'bto', 'bcc', 'recipient'] as const;
+const INBOX_RECURSIVE_FIELDS = ['object', 'target'] as const;
+
+function collectRecipientValues(value: unknown, values: unknown[], seen = new WeakSet<object>()): void {
+	if (value == null) return;
+
+	if (typeof value === 'string') {
+		values.push(value);
+		return;
+	}
+
+	if (typeof value !== 'object') return;
+	if (seen.has(value)) return;
+	seen.add(value);
+
+	if (Array.isArray(value)) {
+		for (const item of value) collectRecipientValues(item, values, seen);
+		return;
+	}
+
+	if ('id' in value && typeof value.id === 'string') values.push(value.id);
+	if ('href' in value && typeof value.href === 'string') values.push(value.href);
+
+	for (const field of INBOX_RECIPIENT_FIELDS) {
+		if (field in value) collectRecipientValues(value[field], values, seen);
+	}
+
+	for (const field of INBOX_RECURSIVE_FIELDS) {
+		if (field in value) collectRecipientValues(value[field], values, seen);
+	}
+}
+
+function inferInboxTenantHost(job: Bull.Job, knownHosts: string[]): string | null {
+	if (typeof job.data !== 'object' || job.data == null || !('activity' in job.data)) return null;
+
+	const normalizedHosts = new Map(knownHosts.map(host => [host.toLowerCase(), host]));
+	const values: unknown[] = [];
+	collectRecipientValues(job.data.activity, values);
+
+	const matchedHosts = new Set<string>();
+	for (const value of values) {
+		if (typeof value !== 'string') continue;
+
+		let url: URL;
+		try {
+			url = new URL(value);
+		} catch {
+			continue;
+		}
+
+		const matchedHost = normalizedHosts.get(url.hostname.toLowerCase());
+		if (matchedHost != null) matchedHosts.add(matchedHost);
+	}
+
+	return matchedHosts.size === 1 ? [...matchedHosts][0] : null;
 }
 
 @Injectable()
@@ -132,10 +189,22 @@ export class QueueProcessorService implements OnApplicationShutdown {
 	) {
 		this.logger = this.queueLoggerService.logger;
 
-		const runInTenant = <T>(job: Bull.Job, fn: () => T): T => {
-			const tenantHost = typeof job.data === 'object' && job.data !== null && 'tenantHost' in job.data && typeof job.data.tenantHost === 'string'
+		const runInTenant = <T>(job: Bull.Job, queueName: string, fn: () => T): T | Promise<T[]> => {
+			let tenantHost = typeof job.data === 'object' && job.data !== null && 'tenantHost' in job.data && typeof job.data.tenantHost === 'string'
 				? job.data.tenantHost
-				: this.tenantRuntimeService.getSingleTenantHost();
+				: null;
+
+			if (tenantHost == null && queueName === 'inbox') {
+				tenantHost = inferInboxTenantHost(job, this.tenantRuntimeService.getKnownHosts());
+			}
+
+			if (tenantHost == null) {
+				if (queueName === 'system') {
+					return Promise.all(this.tenantRuntimeService.getKnownHosts().map(host => this.tenantRuntimeService.runWithHost(host, fn)));
+				}
+
+				throw new Error(`Cannot infer tenantHost for ${queueName} job in multitenant mode`);
+			}
 
 			return this.tenantRuntimeService.runWithHost(tenantHost, () => {
 				return fn();
@@ -192,7 +261,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 				}
 			};
 
-			this.systemQueueWorker = new Bull.Worker(QUEUE.SYSTEM, (job) => runInTenant(job, () => {
+			this.systemQueueWorker = new Bull.Worker(QUEUE.SYSTEM, (job) => runInTenant(job, 'system', () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: System: ' + job.name }, () => processer(job));
 				} else {
@@ -249,7 +318,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 				}
 			};
 
-			this.dbQueueWorker = new Bull.Worker(QUEUE.DB, (job) => runInTenant(job, () => {
+			this.dbQueueWorker = new Bull.Worker(QUEUE.DB, (job) => runInTenant(job, 'db', () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: DB: ' + job.name }, () => processer(job));
 				} else {
@@ -281,7 +350,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 		//#region deliver
 		{
-			this.deliverQueueWorker = new Bull.Worker(QUEUE.DELIVER, (job) => runInTenant(job, () => {
+			this.deliverQueueWorker = new Bull.Worker(QUEUE.DELIVER, (job) => runInTenant(job, 'deliver', () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: Deliver' }, () => this.deliverProcessorService.process(job));
 				} else {
@@ -321,7 +390,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 		//#region inbox
 		{
-			this.inboxQueueWorker = new Bull.Worker(QUEUE.INBOX, (job) => runInTenant(job, () => {
+			this.inboxQueueWorker = new Bull.Worker(QUEUE.INBOX, (job) => runInTenant(job, 'inbox', () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: Inbox' }, () => this.inboxProcessorService.process(job));
 				} else {
@@ -361,7 +430,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 		//#region user-webhook deliver
 		{
-			this.userWebhookDeliverQueueWorker = new Bull.Worker(QUEUE.USER_WEBHOOK_DELIVER, (job) => runInTenant(job, () => {
+			this.userWebhookDeliverQueueWorker = new Bull.Worker(QUEUE.USER_WEBHOOK_DELIVER, (job) => runInTenant(job, 'userWebhookDeliver', () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: UserWebhookDeliver' }, () => this.userWebhookDeliverProcessorService.process(job));
 				} else {
@@ -401,7 +470,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 		//#region system-webhook deliver
 		{
-			this.systemWebhookDeliverQueueWorker = new Bull.Worker(QUEUE.SYSTEM_WEBHOOK_DELIVER, (job) => runInTenant(job, () => {
+			this.systemWebhookDeliverQueueWorker = new Bull.Worker(QUEUE.SYSTEM_WEBHOOK_DELIVER, (job) => runInTenant(job, 'systemWebhookDeliver', () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: SystemWebhookDeliver' }, () => this.systemWebhookDeliverProcessorService.process(job));
 				} else {
@@ -451,7 +520,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 				}
 			};
 
-			this.relationshipQueueWorker = new Bull.Worker(QUEUE.RELATIONSHIP, (job) => runInTenant(job, () => {
+			this.relationshipQueueWorker = new Bull.Worker(QUEUE.RELATIONSHIP, (job) => runInTenant(job, 'relationship', () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: Relationship: ' + job.name }, () => processer(job));
 				} else {
@@ -496,7 +565,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 				}
 			};
 
-			this.objectStorageQueueWorker = new Bull.Worker(QUEUE.OBJECT_STORAGE, (job) => runInTenant(job, () => {
+			this.objectStorageQueueWorker = new Bull.Worker(QUEUE.OBJECT_STORAGE, (job) => runInTenant(job, 'objectStorage', () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: ObjectStorage: ' + job.name }, () => processer(job));
 				} else {
@@ -529,7 +598,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 		//#region ended poll notification
 		{
-			this.endedPollNotificationQueueWorker = new Bull.Worker(QUEUE.ENDED_POLL_NOTIFICATION, (job) => runInTenant(job, () => {
+			this.endedPollNotificationQueueWorker = new Bull.Worker(QUEUE.ENDED_POLL_NOTIFICATION, (job) => runInTenant(job, 'endedPollNotification', () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: EndedPollNotification' }, () => this.endedPollNotificationProcessorService.process(job));
 				} else {
@@ -544,7 +613,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 
 		//#region post scheduled note
 		{
-			this.postScheduledNoteQueueWorker = new Bull.Worker(QUEUE.POST_SCHEDULED_NOTE, async (job) => runInTenant(job, () => {
+			this.postScheduledNoteQueueWorker = new Bull.Worker(QUEUE.POST_SCHEDULED_NOTE, async (job) => runInTenant(job, 'postScheduledNote', () => {
 				if (Sentry != null) {
 					return Sentry.startSpan({ name: 'Queue: PostScheduledNote' }, () => this.postScheduledNoteProcessorService.process(job));
 				} else {

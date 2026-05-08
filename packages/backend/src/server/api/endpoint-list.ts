@@ -315,6 +315,7 @@ export * as 'i/signin-history' from './endpoints/i/signin-history.js';
 export * as 'i/unpin' from './endpoints/i/unpin.js';
 export * as 'i/update' from './endpoints/i/update.js';
 export * as 'i/update-email' from './endpoints/i/update-email.js';
+export * as 'i/weekly-stats' from './endpoints/i/weekly-stats.js';
 export * as 'i/webhooks/create' from './endpoints/i/webhooks/create.js';
 export * as 'i/webhooks/delete' from './endpoints/i/webhooks/delete.js';
 export * as 'i/webhooks/list' from './endpoints/i/webhooks/list.js';

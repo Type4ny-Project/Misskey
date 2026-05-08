@@ -30,6 +30,7 @@ const additionalAllowedHosts = process.env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOST
 	: [];
 const allowedHosts = [...new Set([...(host ? [host] : []), ...additionalAllowedHosts])];
 const vitePort = Number(process.env.VITE_PORT ?? 5173);
+const portlessUrl = process.env.PORTLESS_URL ? new URL(process.env.PORTLESS_URL) : null;
 const commitHash = (() => {
 	try {
 		return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
@@ -119,12 +120,18 @@ export function getConfig(): UserConfig {
 			allowedHosts: allowedHosts.length > 0 ? allowedHosts : undefined,
 			port: vitePort,
 			strictPort: true,
-			hmr: {
-				// バックエンド経由での起動時、Viteは5173経由でアセットを参照していると思い込んでいるが実際は3000から配信される
-				// そのため、バックエンドのWSサーバーにHMRのWSリクエストが吸収されてしまい、正しくHMRが機能しない
-				// クライアント側のWSポートをViteサーバーのポートに強制させることで、正しくHMRが機能するようになる
-				clientPort: vitePort,
-			},
+			hmr: portlessUrl
+				? {
+					protocol: 'wss',
+					host: portlessUrl.hostname,
+					clientPort: portlessUrl.port ? Number(portlessUrl.port) : 443,
+				}
+				: {
+					// バックエンド経由での起動時、Viteは5173経由でアセットを参照していると思い込んでいるが実際は3000から配信される
+					// そのため、バックエンドのWSサーバーにHMRのWSリクエストが吸収されてしまい、正しくHMRが機能しない
+					// クライアント側のWSポートをViteサーバーのポートに強制させることで、正しくHMRが機能するようになる
+					clientPort: vitePort,
+				},
 			headers: { // なんか効かない
 				'X-Frame-Options': 'DENY',
 			},

@@ -19,6 +19,7 @@ const devConfig = process.env.NODE_ENV === 'development'
 const url = process.env.NODE_ENV === 'development' ? devConfig.url : null;
 const host = url ? (new URL(url)).hostname : undefined;
 const embedVitePort = Number(process.env.EMBED_VITE_PORT ?? 5174);
+const portlessUrl = process.env.PORTLESS_URL ? new URL(process.env.PORTLESS_URL) : null;
 const additionalAllowedHosts = process.env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
 	? process.env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS.split(',').map(value => value.trim()).filter(value => value.length > 0)
 	: [];
@@ -97,12 +98,18 @@ export function getConfig(): UserConfig {
 			allowedHosts: allowedHosts.length > 0 ? allowedHosts : undefined,
 			port: embedVitePort,
 			strictPort: true,
-			hmr: {
-				// バックエンド経由での起動時、Viteは5174経由でアセットを参照していると思い込んでいるが実際は3000から配信される
-				// そのため、バックエンドのWSサーバーにHMRのWSリクエストが吸収されてしまい、正しくHMRが機能しない
-				// クライアント側のWSポートをViteサーバーのポートに強制させることで、正しくHMRが機能するようになる
-				clientPort: embedVitePort,
-			},
+			hmr: portlessUrl
+				? {
+					protocol: 'wss',
+					host: portlessUrl.hostname,
+					clientPort: portlessUrl.port ? Number(portlessUrl.port) : 443,
+				}
+				: {
+					// バックエンド経由での起動時、Viteは5174経由でアセットを参照していると思い込んでいるが実際は3000から配信される
+					// そのため、バックエンドのWSサーバーにHMRのWSリクエストが吸収されてしまい、正しくHMRが機能しない
+					// クライアント側のWSポートをViteサーバーのポートに強制させることで、正しくHMRが機能するようになる
+					clientPort: embedVitePort,
+				},
 		},
 
 		plugins: [

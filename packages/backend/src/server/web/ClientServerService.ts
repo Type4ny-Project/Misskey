@@ -28,6 +28,7 @@ import type {
 	FlashsRepository,
 	GalleryPostsRepository,
 	MiMeta,
+	NoteReactionsRepository,
 	NotesRepository,
 	PagesRepository,
 	ReversiGamesRepository,
@@ -38,6 +39,7 @@ import type Logger from '@/logger.js';
 import { handleRequestRedirectToOmitSearch } from '@/misc/fastify-hook-handlers.js';
 import { htmlSafeJsonStringify } from '@/misc/json-stringify-html-safe.js';
 import { bindThis } from '@/decorators.js';
+import { IdService } from '@/core/IdService.js';
 import { FlashEntityService } from '@/core/entities/FlashEntityService.js';
 import { ReversiGameEntityService } from '@/core/entities/ReversiGameEntityService.js';
 import { AnnouncementEntityService } from '@/core/entities/AnnouncementEntityService.js';
@@ -48,6 +50,7 @@ import { HtmlTemplateService } from './HtmlTemplateService.js';
 
 import { BasePage } from './views/base.js';
 import { UserPage } from './views/user.js';
+import { UserStatsPage } from './views/user-stats.js';
 import { NotePage } from './views/note.js';
 import { PagePage } from './views/page.js';
 import { ClipPage } from './views/clip.js';
@@ -62,6 +65,7 @@ import { BiosPage } from './views/bios.js';
 import { CliPage } from './views/cli.js';
 import { FlushPage } from './views/flush.js';
 import { ErrorPage } from './views/error.js';
+import { renderUserStatsImage, type UserStatsImageData } from './render-user-stats-image.js';
 
 import type { FastifyError, FastifyInstance, FastifyPluginOptions, FastifyReply } from 'fastify';
 
@@ -93,6 +97,9 @@ export class ClientServerService {
 		@Inject(DI.notesRepository)
 		private notesRepository: NotesRepository,
 
+		@Inject(DI.noteReactionsRepository)
+		private noteReactionsRepository: NoteReactionsRepository,
+
 		@Inject(DI.galleryPostsRepository)
 		private galleryPostsRepository: GalleryPostsRepository,
 
@@ -115,6 +122,7 @@ export class ClientServerService {
 		private announcementsRepository: AnnouncementsRepository,
 
 		private flashEntityService: FlashEntityService,
+		private idService: IdService,
 		private userEntityService: UserEntityService,
 		private noteEntityService: NoteEntityService,
 		private pageEntityService: PageEntityService,
@@ -140,6 +148,79 @@ export class ClientServerService {
 		this.frontendViteOut = resolve(this.config.rootDir, 'built/_frontend_vite_');
 		this.frontendEmbedViteOut = resolve(this.config.rootDir, 'built/_frontend_embed_vite_');
 		this.tarball = resolve(this.config.rootDir, 'built/tarball');
+	}
+
+	@bindThis
+	private async getWeeklyStatsImageData(userId: string, username: string): Promise<UserStatsImageData> {
+		const sinceDate = getStartOfWeek();
+		const sinceId = this.idService.gen(sinceDate.getTime());
+
+		const notesCountPromise = this.notesRepository.createQueryBuilder('note')
+			.where('note.userId = :userId', { userId })
+			.andWhere('note.id > :sinceId', { sinceId })
+			.getCount();
+
+		const reactionsCountPromise = this.noteReactionsRepository.createQueryBuilder('reaction')
+			.where('reaction.userId = :userId', { userId })
+			.andWhere('reaction.id > :sinceId', { sinceId })
+			.getCount();
+
+		const receivedReactionsCountPromise = this.noteReactionsRepository.createQueryBuilder('reaction')
+			.innerJoin('reaction.note', 'note')
+			.where('note.userId = :userId', { userId })
+			.andWhere('reaction.id > :sinceId', { sinceId })
+			.getCount();
+
+		const noteIdsPromise = this.notesRepository.createQueryBuilder('note')
+			.select('note.id', 'id')
+			.where('note.userId = :userId', { userId })
+			.andWhere('note.id > :sinceId', { sinceId })
+			.getRawMany<{ id: string }>();
+
+		const topReactionsPromise = this.noteReactionsRepository.createQueryBuilder('reaction')
+			.select('reaction.reaction', 'reaction')
+			.addSelect('COUNT(*)', 'count')
+			.where('reaction.userId = :userId', { userId })
+			.andWhere('reaction.id > :sinceId', { sinceId })
+			.groupBy('reaction.reaction')
+			.orderBy('COUNT(*)', 'DESC')
+			.addOrderBy('reaction.reaction', 'ASC')
+			.limit(3)
+			.getRawMany<{ reaction: string; count: string }>();
+
+		const topReceivedReactionsPromise = this.noteReactionsRepository.createQueryBuilder('reaction')
+			.select('reaction.reaction', 'reaction')
+			.addSelect('COUNT(*)', 'count')
+			.innerJoin('reaction.note', 'note')
+			.where('note.userId = :userId', { userId })
+			.andWhere('reaction.id > :sinceId', { sinceId })
+			.groupBy('reaction.reaction')
+			.orderBy('COUNT(*)', 'DESC')
+			.addOrderBy('reaction.reaction', 'ASC')
+			.limit(3)
+			.getRawMany<{ reaction: string; count: string }>();
+
+		const [notesCount, reactionsCount, receivedReactionsCount, noteIds, topReactions, topReceivedReactions] = await Promise.all([
+			notesCountPromise,
+			reactionsCountPromise,
+			receivedReactionsCountPromise,
+			noteIdsPromise,
+			topReactionsPromise,
+			topReceivedReactionsPromise,
+		]);
+
+		const postingDays = new Set(noteIds.map(item => formatDateKey(this.idService.parse(item.id).date)));
+
+		return {
+			username,
+			sinceDate,
+			notesCount,
+			reactionsCount,
+			receivedReactionsCount,
+			postingDaysCount: postingDays.size,
+			topReactions: toReactionRanking(topReactions),
+			topReceivedReactions: toReactionRanking(topReceivedReactions),
+		};
 	}
 
 	@bindThis
@@ -509,6 +590,32 @@ export class ClientServerService {
 		});
 
 		//#region SSR
+		fastify.get<{ Params: { user: string; } }>('/@:user/stats.png', async (request, reply) => {
+			const { username, host } = Acct.parse(request.params.user);
+			const user = await this.usersRepository.findOneBy({
+				usernameLower: username.toLowerCase(),
+				host: host ?? IsNull(),
+				isSuspended: false,
+				requireSigninToViewContents: false,
+			});
+
+			if (user == null || user.host != null || this.meta.ugcVisibilityForVisitor === 'none') {
+				reply.code(404);
+				return;
+			}
+
+			const profile = await this.userProfilesRepository.findOneByOrFail({ userId: user.id });
+			if (profile.noCrawle) {
+				reply.code(404);
+				return;
+			}
+
+			const image = await renderUserStatsImage(await this.getWeeklyStatsImageData(user.id, user.username));
+			reply.header('Cache-Control', 'public, max-age=3600');
+			reply.header('Content-Type', 'image/png');
+			return image;
+		});
+
 		// User
 		fastify.get<{ Params: { user: string; sub?: string; } }>('/@:user/:sub?', async (request, reply) => {
 			const { username, host } = Acct.parse(request.params.user);
@@ -539,10 +646,13 @@ export class ClientServerService {
 					userProfile: profile,
 				});
 
-				return await HtmlTemplateService.replyHtml(reply, UserPage({
+				const page = request.params.sub === 'stats' ? UserStatsPage : UserPage;
+
+				return await HtmlTemplateService.replyHtml(reply, page({
 					user: _user,
 					profile,
 					sub: request.params.sub,
+					weekKey: formatDateKey(getStartOfWeek()),
 					...await this.htmlTemplateService.getCommonData(),
 					clientCtxJson: htmlSafeJsonStringify({
 						user: _user,
@@ -943,4 +1053,23 @@ export class ClientServerService {
 
 		done();
 	}
+}
+
+function getStartOfWeek(): Date {
+	const date = new Date();
+	const daysSinceMonday = (date.getDay() + 6) % 7;
+	date.setHours(0, 0, 0, 0);
+	date.setDate(date.getDate() - daysSinceMonday);
+	return date;
+}
+
+function toReactionRanking(items: { reaction: string; count: string }[]): { reaction: string; count: number }[] {
+	return items.map(item => ({
+		reaction: item.reaction,
+		count: parseInt(item.count, 10),
+	}));
+}
+
+function formatDateKey(date: Date): string {
+	return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }

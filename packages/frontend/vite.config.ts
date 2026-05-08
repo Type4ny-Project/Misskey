@@ -18,8 +18,18 @@ import pluginCreateSearchIndex from './lib/vite-plugin-create-search-index.js';
 import pluginWatchLocales from './lib/vite-plugin-watch-locales.js';
 import { pluginRemoveUnrefI18n } from '../frontend-builder/rollup-plugin-remove-unref-i18n.js';
 
-const url = process.env.NODE_ENV === 'development' ? (yaml.load(await fsp.readFile('../../.config/default.yml', 'utf-8')) as any).url : null;
+const configFileName = process.env.MISSKEY_CONFIG_YML ?? 'default.yml';
+const configFilePath = path.resolve(__dirname, '../../.config', configFileName);
+const devConfig = process.env.NODE_ENV === 'development'
+	? (yaml.load(await fsp.readFile(configFilePath, 'utf-8')) ?? {}) as { url?: string }
+	: {};
+const url = process.env.NODE_ENV === 'development' ? devConfig.url : null;
 const host = url ? (new URL(url)).hostname : undefined;
+const additionalAllowedHosts = process.env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
+	? process.env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS.split(',').map(value => value.trim()).filter(value => value.length > 0)
+	: [];
+const allowedHosts = [...new Set([...(host ? [host] : []), ...additionalAllowedHosts])];
+const vitePort = Number(process.env.VITE_PORT ?? 5173);
 const commitHash = (() => {
 	try {
 		return execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
@@ -106,14 +116,14 @@ export function getConfig(): UserConfig {
 		server: {
 			// The backend allows access from any addresses, so vite also allows access from any addresses.
 			host: '0.0.0.0',
-			allowedHosts: host ? [host] : undefined,
-			port: 5173,
+			allowedHosts: allowedHosts.length > 0 ? allowedHosts : undefined,
+			port: vitePort,
 			strictPort: true,
 			hmr: {
 				// バックエンド経由での起動時、Viteは5173経由でアセットを参照していると思い込んでいるが実際は3000から配信される
 				// そのため、バックエンドのWSサーバーにHMRのWSリクエストが吸収されてしまい、正しくHMRが機能しない
 				// クライアント側のWSポートをViteサーバーのポートに強制させることで、正しくHMRが機能するようになる
-				clientPort: 5173,
+				clientPort: vitePort,
 			},
 			headers: { // なんか効かない
 				'X-Frame-Options': 'DENY',

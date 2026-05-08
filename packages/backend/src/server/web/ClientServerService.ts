@@ -236,17 +236,19 @@ export class ClientServerService {
 		} else {
 			console.log('[ClientServerService] Proxying to Vite dev server.');
 			const urlOriginWithoutPort = configUrl.origin.replace(/:\d+$/, '');
+			const viteUpstreamOrigin = process.env.VITE_URL_ORIGIN ? new URL(process.env.VITE_URL_ORIGIN).origin : urlOriginWithoutPort;
+			const embedViteUpstreamOrigin = process.env.EMBED_VITE_URL_ORIGIN ? new URL(process.env.EMBED_VITE_URL_ORIGIN).origin : urlOriginWithoutPort;
 
 			const port = (process.env.VITE_PORT ?? '5173');
 			fastify.register(fastifyProxy, {
-				upstream: urlOriginWithoutPort + ':' + port,
+				upstream: viteUpstreamOrigin + ':' + port,
 				prefix: '/vite',
 				rewritePrefix: '/vite',
 			});
 
 			const embedPort = (process.env.EMBED_VITE_PORT ?? '5174');
 			fastify.register(fastifyProxy, {
-				upstream: urlOriginWithoutPort + ':' + embedPort,
+				upstream: embedViteUpstreamOrigin + ':' + embedPort,
 				prefix: '/embed_vite',
 				rewritePrefix: '/embed_vite',
 			});

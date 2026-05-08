@@ -80,6 +80,10 @@ const REPEATABLE_SYSTEM_JOB_DEF = [{
 	// 毎時30分に起動
 	pattern: '30 * * * *',
 }, {
+	name: 'notifyWeeklyStatsReady',
+	// 毎週日曜の12:00に起動
+	pattern: '0 12 * * 0',
+}, {
 	name: 'cleanRemoteNotes',
 	// 毎日午前4時に起動(最も人の少ない時間帯)
 	pattern: '0 4 * * *',

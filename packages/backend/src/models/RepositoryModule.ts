@@ -36,6 +36,7 @@ import {
 	MiGalleryLike,
 	MiGalleryPost,
 	MiHashtag,
+	MiHashtagFollowing,
 	MiInstance,
 	MiMeta,
 	MiModerationLog,
@@ -452,6 +453,12 @@ const $channelMutingRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $hashtagFollowingsRepository: Provider = {
+	provide: DI.hashtagFollowingsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiHashtagFollowing).extend(miRepository as MiRepository<MiHashtagFollowing>),
+	inject: [DI.db],
+};
+
 const $registryItemsRepository: Provider = {
 	provide: DI.registryItemsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiRegistryItem).extend(miRepository as MiRepository<MiRegistryItem>),
@@ -607,6 +614,7 @@ const $eventsRepository: Provider = {
 		$swSubscriptionsRepository,
 		$systemAccountsRepository,
 		$hashtagsRepository,
+		$hashtagFollowingsRepository,
 		$abuseUserReportsRepository,
 		$abuseReportNotificationRecipientRepository,
 		$registrationTicketsRepository,
@@ -688,6 +696,7 @@ const $eventsRepository: Provider = {
 		$swSubscriptionsRepository,
 		$systemAccountsRepository,
 		$hashtagsRepository,
+		$hashtagFollowingsRepository,
 		$abuseUserReportsRepository,
 		$abuseReportNotificationRecipientRepository,
 		$registrationTicketsRepository,

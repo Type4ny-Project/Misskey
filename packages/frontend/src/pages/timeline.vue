@@ -14,10 +14,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 			ref="tlComponent"
 			:key="src + withRenotes + withReplies + onlyFiles + withSensitive"
 			:class="$style.tl"
-			:src="(src.split(':')[0] as (BasicTimelineType | 'list' | 'channel' | 'antenna'))"
+			:src="(src.split(':')[0] as (BasicTimelineType | 'list' | 'channel' | 'antenna' | 'hashtag'))"
 			:list="src.startsWith('list:') ? srcId : undefined"
 			:channel="src.startsWith('channel:') ? srcId : undefined"
 			:antenna="src.startsWith('antenna:') ? srcId : undefined"
+			:hashtag="src.startsWith('hashtag:') ? srcId : undefined"
 			:withRenotes="withRenotes"
 			:withReplies="withReplies"
 			:withSensitive="withSensitive"
@@ -29,7 +30,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, provide, useTemplateRef, ref, shallowRef, onMounted, onActivated } from 'vue';
+import { computed, watch, provide, useTemplateRef, ref, shallowRef, onMounted, onActivated, onUnmounted } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { Tab } from '@/components/global/MkPageHeader.tabs.vue';
 import type { MenuItem } from '@/types/menu.js';
@@ -50,12 +51,12 @@ import { deepMerge } from '@/utility/merge.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { availableBasicTimelines, hasWithReplies, isAvailableBasicTimeline, isBasicTimeline, basicTimelineIconClass } from '@/timelines.js';
 import { prefer } from '@/preferences.js';
-import { timelineHeaderItemDef } from '@/timeline-header.js';
+import { getTimelineHeaderItemDef } from '@/timeline-header.js';
 import { isLocalTimelineAvailable, isGlobalTimelineAvailable } from '@/scripts/get-timeline-available.js';
 
 const tlComponent = useTemplateRef('tlComponent');
 
-type TimelinePageSrc = BasicTimelineType | `list:${string}` | `channel:${string}` | `antenna:${string}`;
+type TimelinePageSrc = BasicTimelineType | `list:${string}` | `channel:${string}` | `antenna:${string}` | `hashtag:${string}`;
 
 const srcWhenNotSignin = ref<'local' | 'global'>(isAvailableBasicTimeline('local') ? 'local' : 'global');
 const src = computed<TimelinePageSrc>({
@@ -65,6 +66,7 @@ const src = computed<TimelinePageSrc>({
 const srcId = computed<string | undefined>(() => src.value.includes(':') ? src.value.split(':')[1] : undefined);
 
 const currentChannel = shallowRef<Misskey.entities.Channel | undefined>(undefined);
+const timelineHashtagContext = ref<string | null>(null);
 
 watch(src, async (newSrc) => {
 	if (newSrc.startsWith('channel:')) {
@@ -76,6 +78,19 @@ watch(src, async (newSrc) => {
 		}
 	} else {
 		currentChannel.value = undefined;
+	}
+}, { immediate: true });
+
+watch(src, (newSrc) => {
+	if (newSrc.startsWith('hashtag:')) {
+		const tag = newSrc.substring('hashtag:'.length);
+		timelineHashtagContext.value = tag;
+		store.set('postFormHashtags', tag);
+		store.set('postFormWithHashtags', true);
+	} else if (timelineHashtagContext.value != null && store.s.postFormHashtags === timelineHashtagContext.value) {
+		store.set('postFormHashtags', '');
+		store.set('postFormWithHashtags', false);
+		timelineHashtagContext.value = null;
 	}
 }, { immediate: true });
 
@@ -228,6 +243,12 @@ onMounted(() => {
 onActivated(() => {
 	switchTlIfNeeded();
 });
+onUnmounted(() => {
+	if (timelineHashtagContext.value != null && store.s.postFormHashtags === timelineHashtagContext.value) {
+		store.set('postFormHashtags', '');
+		store.set('postFormWithHashtags', false);
+	}
+});
 
 const headerActions = computed<PageHeaderItem[]>(() => {
 	const items: PageHeaderItem[] = [{
@@ -296,7 +317,7 @@ const headerTabs = computed(() => store.r.timelineHeader.value.map((tab: Timelin
 		return {};
 	}
 
-	const tabDef = timelineHeaderItemDef[tab];
+	const tabDef = getTimelineHeaderItemDef(tab);
 	if (!tabDef) {
 		return {};
 	}
@@ -329,7 +350,7 @@ const headerTabsWhenNotLogin = computed(() => [...availableBasicTimelines().map(
 
 definePage(() => ({
 	title: i18n.ts.timeline,
-	icon: isBasicTimeline(src.value) ? basicTimelineIconClass(src.value) : 'ti ti-home',
+	icon: src.value.startsWith('hashtag:') ? 'ti ti-hash' : isBasicTimeline(src.value) ? basicTimelineIconClass(src.value) : 'ti ti-home',
 }));
 </script>
 

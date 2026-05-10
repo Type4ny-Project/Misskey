@@ -44,6 +44,7 @@ import { MiFollowRequest } from '@/models/FollowRequest.js';
 import { MiGalleryLike } from '@/models/GalleryLike.js';
 import { MiGalleryPost } from '@/models/GalleryPost.js';
 import { MiHashtag } from '@/models/Hashtag.js';
+import { MiHashtagFollowing } from '@/models/HashtagFollowing.js';
 import { MiInstance } from '@/models/Instance.js';
 import { MiMeta } from '@/models/Meta.js';
 import { MiModerationLog } from '@/models/ModerationLog.js';
@@ -126,6 +127,7 @@ export {
 	MiGalleryLike,
 	MiGalleryPost,
 	MiHashtag,
+	MiHashtagFollowing,
 	MiInstance,
 	MiMeta,
 	MiModerationLog,
@@ -209,6 +211,7 @@ export type FollowRequestsRepository = Repository<MiFollowRequest> & MiRepositor
 export type GalleryLikesRepository = Repository<MiGalleryLike> & MiRepository<MiGalleryLike>;
 export type GalleryPostsRepository = Repository<MiGalleryPost> & MiRepository<MiGalleryPost>;
 export type HashtagsRepository = Repository<MiHashtag> & MiRepository<MiHashtag>;
+export type HashtagFollowingsRepository = Repository<MiHashtagFollowing> & MiRepository<MiHashtagFollowing>;
 export type InstancesRepository = Repository<MiInstance> & MiRepository<MiInstance>;
 export type MetasRepository = Repository<MiMeta> & MiRepository<MiMeta>;
 export type ModerationLogsRepository = Repository<MiModerationLog> & MiRepository<MiModerationLog>;

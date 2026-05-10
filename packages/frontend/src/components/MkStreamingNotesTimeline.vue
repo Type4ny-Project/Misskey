@@ -80,10 +80,11 @@ import { isSeparatorNeeded, getSeparatorInfo } from '@/utility/timeline-date-sep
 import { Paginator } from '@/utility/paginator.js';
 
 const props = withDefaults(defineProps<{
-	src: BasicTimelineType | 'mentions' | 'directs' | 'list' | 'antenna' | 'channel' | 'role';
+	src: BasicTimelineType | 'mentions' | 'directs' | 'list' | 'antenna' | 'channel' | 'role' | 'hashtag';
 	list?: string;
 	antenna?: string;
 	channel?: string;
+	hashtag?: string;
 	role?: string;
 	sound?: boolean;
 	customSound?: SoundStore | null;
@@ -178,6 +179,14 @@ if (props.src === 'antenna') {
 	paginator = markRaw(new Paginator('channels/timeline', {
 		computedParams: computed(() => ({
 			channelId: props.channel!,
+		})),
+		useShallowRef: true,
+	}));
+} else if (props.src === 'hashtag') {
+	paginator = markRaw(new Paginator('notes/search-by-tag', {
+		computedParams: computed(() => ({
+			tag: props.hashtag!,
+			withFiles: props.onlyFiles ? true : undefined,
 		})),
 		useShallowRef: true,
 	}));
@@ -320,6 +329,7 @@ const connections = {
 	main: null as Misskey.IChannelConnection<Misskey.Channels['main']> | null,
 	userList: null as Misskey.IChannelConnection<Misskey.Channels['userList']> | null,
 	channel: null as Misskey.IChannelConnection<Misskey.Channels['channel']> | null,
+	hashtag: null as Misskey.IChannelConnection<Misskey.Channels['hashtag']> | null,
 	roleTimeline: null as Misskey.IChannelConnection<Misskey.Channels['roleTimeline']> | null,
 	mediaTimeline: null as Misskey.IChannelConnection<Misskey.Channels['mediaTimeline']> | null,
 };
@@ -353,7 +363,7 @@ function connectChannel() {
 			withFiles: props.onlyFiles ? true : undefined,
 		});
 		connections.hybridTimeline.on('note', prepend);
-} else if (props.src === 'global') {
+	} else if (props.src === 'global') {
 		connections.globalTimeline = stream.useChannel('globalTimeline', {
 			withRenotes: props.withRenotes,
 			withFiles: props.onlyFiles ? true : undefined,
@@ -388,6 +398,15 @@ function connectChannel() {
 			channelId: props.channel,
 		});
 		connections.channel.on('note', prepend);
+	} else if (props.src === 'hashtag') {
+		if (props.hashtag == null) return;
+		connections.hashtag = stream.useChannel('hashtag', {
+			q: [[props.hashtag]],
+		});
+		connections.hashtag.on('note', note => {
+			if (props.onlyFiles && (note.fileIds == null || note.fileIds.length === 0)) return;
+			prepend(note);
+		});
 	} else if (props.src === 'role') {
 		if (props.role == null) return;
 		connections.roleTimeline = stream.useChannel('roleTimeline', {
@@ -411,7 +430,7 @@ if (store.s.realtimeMode) {
 	connectChannel();
 }
 
-watch(() => [props.list, props.antenna, props.channel, props.role, props.withRenotes], () => {
+watch(() => [props.list, props.antenna, props.channel, props.hashtag, props.role, props.withRenotes, props.onlyFiles], () => {
 	if (store.s.realtimeMode) {
 		disconnectChannel();
 		connectChannel();

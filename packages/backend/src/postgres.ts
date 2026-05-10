@@ -37,6 +37,7 @@ import { MiFollowRequest } from '@/models/FollowRequest.js';
 import { MiGalleryLike } from '@/models/GalleryLike.js';
 import { MiGalleryPost } from '@/models/GalleryPost.js';
 import { MiHashtag } from '@/models/Hashtag.js';
+import { MiHashtagFollowing } from '@/models/HashtagFollowing.js';
 import { MiInstance } from '@/models/Instance.js';
 import { MiMeta } from '@/models/Meta.js';
 import { MiModerationLog } from '@/models/ModerationLog.js';
@@ -221,6 +222,7 @@ export const entities = [
 	MiEmoji,
 	MiEmojiRequest,
 	MiHashtag,
+	MiHashtagFollowing,
 	MiSwSubscription,
 	MiSystemAccount,
 	MiAbuseUserReport,

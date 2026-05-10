@@ -440,6 +440,11 @@ import type {
 	GalleryPostsUpdateResponse,
 	GetAvatarDecorationsResponse,
 	GetOnlineUsersCountResponse,
+	HashtagsFollowRequest,
+	HashtagsFollowedRequest,
+	HashtagsFollowedResponse,
+	HashtagsIsFollowingRequest,
+	HashtagsIsFollowingResponse,
 	HashtagsListRequest,
 	HashtagsListResponse,
 	HashtagsSearchRequest,
@@ -447,6 +452,7 @@ import type {
 	HashtagsShowRequest,
 	HashtagsShowResponse,
 	HashtagsTrendResponse,
+	HashtagsUnfollowRequest,
 	HashtagsUsersRequest,
 	HashtagsUsersResponse,
 	IResponse,
@@ -525,6 +531,7 @@ import type {
 	IWebhooksShowResponse,
 	IWebhooksTestRequest,
 	IWebhooksUpdateRequest,
+	IWeeklyStatsResponse,
 	InviteCreateResponse,
 	InviteDeleteRequest,
 	InviteLimitResponse,
@@ -1003,10 +1010,14 @@ export type Endpoints = {
 	'gallery/posts/update': { req: GalleryPostsUpdateRequest; res: GalleryPostsUpdateResponse };
 	'get-avatar-decorations': { req: EmptyRequest; res: GetAvatarDecorationsResponse };
 	'get-online-users-count': { req: EmptyRequest; res: GetOnlineUsersCountResponse };
+	'hashtags/follow': { req: HashtagsFollowRequest; res: EmptyResponse };
+	'hashtags/followed': { req: HashtagsFollowedRequest; res: HashtagsFollowedResponse };
+	'hashtags/is-following': { req: HashtagsIsFollowingRequest; res: HashtagsIsFollowingResponse };
 	'hashtags/list': { req: HashtagsListRequest; res: HashtagsListResponse };
 	'hashtags/search': { req: HashtagsSearchRequest; res: HashtagsSearchResponse };
 	'hashtags/show': { req: HashtagsShowRequest; res: HashtagsShowResponse };
 	'hashtags/trend': { req: EmptyRequest; res: HashtagsTrendResponse };
+	'hashtags/unfollow': { req: HashtagsUnfollowRequest; res: EmptyResponse };
 	'hashtags/users': { req: HashtagsUsersRequest; res: HashtagsUsersResponse };
 	'i': { req: EmptyRequest; res: IResponse };
 	'i/2fa/done': { req: I2faDoneRequest; res: I2faDoneResponse };
@@ -1065,6 +1076,7 @@ export type Endpoints = {
 	'i/webhooks/show': { req: IWebhooksShowRequest; res: IWebhooksShowResponse };
 	'i/webhooks/test': { req: IWebhooksTestRequest; res: EmptyResponse };
 	'i/webhooks/update': { req: IWebhooksUpdateRequest; res: EmptyResponse };
+	'i/weekly-stats': { req: EmptyRequest; res: IWeeklyStatsResponse };
 	'invite/create': { req: EmptyRequest; res: InviteCreateResponse };
 	'invite/delete': { req: InviteDeleteRequest; res: EmptyResponse };
 	'invite/limit': { req: EmptyRequest; res: InviteLimitResponse };

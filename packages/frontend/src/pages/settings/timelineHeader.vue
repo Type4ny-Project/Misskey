@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #default="{ item, index }">
 						<div :class="$style.item">
 							<button class="_button" :class="$style.itemHandle"><i class="ti ti-menu"></i></button>
-							<i class="ti-fw" :class="[$style.itemIcon, timelineHeaderItemDef?.[item.type]?.icon]"></i><span :class="$style.itemText">{{ timelineHeaderItemDef?.[item.type]?.title }}</span>
+							<i class="ti-fw" :class="[$style.itemIcon, getTimelineHeaderItemDef(item.type)?.icon]"></i><span :class="$style.itemText">{{ getTimelineHeaderItemDef(item.type)?.title }}</span>
 							<button class="_button" :class="$style.itemRemove" @click="removeItem(index)"><i class="ti ti-x"></i></button>
 						</div>
 					</template>
@@ -37,7 +37,7 @@ import * as os from '@/os.js';
 import { store } from '@/store.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 import { i18n } from '@/i18n.js';
-import { timelineHeaderItemDef } from '@/timeline-header.js';
+import { getTimelineHeaderItemDef, timelineHeaderItemDef } from '@/timeline-header.js';
 import MkDraggable from '@/components/MkDraggable.vue';
 
 const items = ref(store.s.timelineHeader.map(x => ({
@@ -66,7 +66,7 @@ async function addItem() {
 	const { canceled, result: item } = await os.select({
 		title: i18n.ts.addItem,
 		items: [...menuItems.value.map(k => ({
-			value: k, label: timelineHeaderItemDef[k]?.title,
+			value: k, label: getTimelineHeaderItemDef(k)?.title,
 		}))],
 	});
 	if (canceled) return;

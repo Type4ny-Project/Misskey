@@ -7,6 +7,7 @@ import { computed, reactive, ref } from 'vue';
 import { i18n } from '@/i18n.js';
 import {
 	antennasCache,
+	followedHashtagsCache,
 	userChannelFollowingsCache,
 	userChannelsCache,
 	userFavoriteListsCache,
@@ -27,6 +28,7 @@ export type TimelineHeaderItem =
 	`list:${string}` |
 	`channel:${string}` |
 	`antenna:${string}` |
+	`hashtag:${string}` |
 	'media' |
 	`customTimeline:${string}`;
 
@@ -41,6 +43,7 @@ const userChannels = $i ? await userChannelsCache.fetch() : [];
 const userChannelFollowings = $i ? await userChannelFollowingsCache.fetch() : [];
 const userFavoriteLists = $i ? await userFavoriteListsCache.fetch() : [];
 const antenna = $i ? await antennasCache.fetch() : [];
+const followedHashtags = $i ? await followedHashtagsCache.fetch() : [];
 
 const listItems = lists.reduce((acc, l) => {
 	acc['list:' + l.id] = {
@@ -82,6 +85,15 @@ const antennaItems = antenna.reduce((acc, l) => {
 	acc['antenna:' + l.id] = {
 		title: i18n.ts.antennas + ':' + l.name,
 		icon: 'ti ti-star',
+		iconOnly: true,
+	};
+	return acc;
+}, {});
+
+const hashtagItems = followedHashtags.reduce((acc, l) => {
+	acc['hashtag:' + l.tag] = {
+		title: '#' + l.tag,
+		icon: 'ti ti-hash',
 		iconOnly: true,
 	};
 	return acc;
@@ -143,5 +155,18 @@ export const timelineHeaderItemDef = reactive<Partial<Record<TimelineHeaderItem,
 	...channelFollowingItems,
 	...favoriteListItems,
 	...antennaItems,
+	...hashtagItems,
 	...remoteLocalTimelineItems,
 });
+
+export function getTimelineHeaderItemDef(item: TimelineHeaderItem): TimelineHeaderItemsDef | undefined {
+	if (item.startsWith('hashtag:')) {
+		return timelineHeaderItemDef[item] ?? {
+			title: '#' + item.substring('hashtag:'.length),
+			icon: 'ti ti-hash',
+			iconOnly: true,
+		};
+	}
+
+	return timelineHeaderItemDef[item];
+}

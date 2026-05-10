@@ -2105,6 +2105,11 @@ declare namespace entities {
         GalleryPostsUpdateResponse,
         GetAvatarDecorationsResponse,
         GetOnlineUsersCountResponse,
+        HashtagsFollowRequest,
+        HashtagsFollowedRequest,
+        HashtagsFollowedResponse,
+        HashtagsIsFollowingRequest,
+        HashtagsIsFollowingResponse,
         HashtagsListRequest,
         HashtagsListResponse,
         HashtagsSearchRequest,
@@ -2112,6 +2117,7 @@ declare namespace entities {
         HashtagsShowRequest,
         HashtagsShowResponse,
         HashtagsTrendResponse,
+        HashtagsUnfollowRequest,
         HashtagsUsersRequest,
         HashtagsUsersResponse,
         IResponse,
@@ -2188,6 +2194,7 @@ declare namespace entities {
         IWebhooksShowResponse,
         IWebhooksTestRequest,
         IWebhooksUpdateRequest,
+        IWeeklyStatsResponse,
         InviteCreateResponse,
         InviteDeleteRequest,
         InviteLimitResponse,
@@ -2757,6 +2764,21 @@ type GetOnlineUsersCountResponse = operations['get-online-users-count']['respons
 type Hashtag = components['schemas']['Hashtag'];
 
 // @public (undocumented)
+type HashtagsFollowedRequest = operations['hashtags___followed']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type HashtagsFollowedResponse = operations['hashtags___followed']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type HashtagsFollowRequest = operations['hashtags___follow']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type HashtagsIsFollowingRequest = operations['hashtags___is-following']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type HashtagsIsFollowingResponse = operations['hashtags___is-following']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type HashtagsListRequest = operations['hashtags___list']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -2776,6 +2798,9 @@ type HashtagsShowResponse = operations['hashtags___show']['responses']['200']['c
 
 // @public (undocumented)
 type HashtagsTrendResponse = operations['hashtags___trend']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type HashtagsUnfollowRequest = operations['hashtags___unfollow']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type HashtagsUsersRequest = operations['hashtags___users']['requestBody']['content']['application/json'];
@@ -3094,6 +3119,9 @@ type IWebhooksTestRequest = operations['i___webhooks___test']['requestBody']['co
 
 // @public (undocumented)
 type IWebhooksUpdateRequest = operations['i___webhooks___update']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type IWeeklyStatsResponse = operations['i___weekly-stats']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type MeDetailed = components['schemas']['MeDetailed'];

@@ -37,6 +37,7 @@
 		"cli": "cd packages/backend && pnpm cli",
 		"init": "pnpm migrate",
 		"migrate": "cd packages/backend && pnpm migrate",
+		"migration:status": "cd packages/backend && pnpm migration:status",
 		"revert": "cd packages/backend && pnpm revert",
 		"check:connect": "cd packages/backend && pnpm check:connect",
 		"migrateandstart": "pnpm migrate && pnpm start",

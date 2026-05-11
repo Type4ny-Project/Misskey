@@ -603,6 +603,10 @@ export interface Locale extends ILocale {
      */
     "emojiPickerDisplay": string;
     /**
+     * 絵文字ピッカーで横長のカスタム絵文字を広げて表示する
+     */
+    "allowWideCustomEmojisInPicker": string;
+    /**
      * リアクション設定から上書きする
      */
     "overwriteFromPinnedEmojisForReaction": string;

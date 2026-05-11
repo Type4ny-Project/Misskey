@@ -18,7 +18,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			class="_button item"
 			:disabled="disabledEmojis?.value.includes(emoji)"
 			@pointerenter="(ev) => { emit('previewEnter', emoji, ev); computeButtonTitle(ev); }"
-			@pointerleave="emit('previewLeave')"
+			@pointerleave="previewLeave"
+			@pointerdown="(ev) => emit('previewTouchStart', emoji, ev)"
+			@pointerup="(ev) => emit('previewTouchEnd', ev)"
+			@pointercancel="(ev) => emit('previewTouchCancel', ev)"
 			@click="emit('chosen', emoji, $event)"
 		>
 			<MkCustomEmoji v-if="emoji[0] === ':'" class="emoji" :name="emoji" :normal="true" :fallbackToImage="true"/>
@@ -41,7 +44,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:customEmojiTree="child.children"
 			@chosen="nestedChosen"
 			@previewEnter="nestedPreviewEnter"
+			@previewTouchStart="nestedPreviewTouchStart"
 			@previewLeave="emit('previewLeave')"
+			@previewTouchEnd="nestedPreviewTouchEnd"
+			@previewTouchCancel="nestedPreviewTouchCancel"
 		>
 			{{ child.value || i18n.ts.other }}
 		</MkEmojiPickerSection>
@@ -54,7 +60,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			class="_button item"
 			:disabled="disabledEmojis?.value.includes(emoji)"
 			@pointerenter="(ev) => { emit('previewEnter', emoji, ev); computeButtonTitle(ev); }"
-			@pointerleave="emit('previewLeave')"
+			@pointerleave="previewLeave"
+			@pointerdown="(ev) => emit('previewTouchStart', emoji, ev)"
+			@pointerup="(ev) => emit('previewTouchEnd', ev)"
+			@pointercancel="(ev) => emit('previewTouchCancel', ev)"
 			@click="emit('chosen', emoji, $event)"
 		>
 			<MkCustomEmoji v-if="emoji[0] === ':'" class="emoji" :name="emoji" :normal="true"/>
@@ -84,7 +93,10 @@ const props = defineProps<{
 const emit = defineEmits<{
 	(ev: 'chosen', v: string, event: PointerEvent): void;
 	(ev: 'previewEnter', v: string, event: PointerEvent): void;
+	(ev: 'previewTouchStart', v: string, event: PointerEvent): void;
 	(ev: 'previewLeave'): void;
+	(ev: 'previewTouchEnd', event: PointerEvent): void;
+	(ev: 'previewTouchCancel', event: PointerEvent): void;
 }>();
 
 const emojis = computed(() => Array.isArray(props.emojis) ? props.emojis : props.emojis.value);
@@ -104,5 +116,26 @@ function nestedChosen(emoji: string, ev: PointerEvent) {
 
 function nestedPreviewEnter(emoji: string, ev: PointerEvent) {
 	emit('previewEnter', emoji, ev);
+}
+
+function previewLeave(ev: PointerEvent) {
+	if (ev.pointerType === 'touch') {
+		emit('previewTouchCancel', ev);
+		return;
+	}
+
+	emit('previewLeave');
+}
+
+function nestedPreviewTouchStart(emoji: string, ev: PointerEvent) {
+	emit('previewTouchStart', emoji, ev);
+}
+
+function nestedPreviewTouchEnd(ev: PointerEvent) {
+	emit('previewTouchEnd', ev);
+}
+
+function nestedPreviewTouchCancel(ev: PointerEvent) {
+	emit('previewTouchCancel', ev);
 }
 </script>

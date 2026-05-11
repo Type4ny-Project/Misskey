@@ -285,6 +285,9 @@ export const PREF_DEF = definePreferences({
 	emojiPickerStyle: {
 		default: 'auto' as 'auto' | 'popup' | 'drawer',
 	},
+	allowWideCustomEmojisInPicker: {
+		default: false,
+	},
 	squareAvatars: {
 		default: false,
 	},

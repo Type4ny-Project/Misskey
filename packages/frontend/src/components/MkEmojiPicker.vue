@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div class="omfetrab _popup" :class="['s' + size, 'w' + width, 'h' + height, { asDrawer, asWindow }]" :style="{ maxHeight: maxHeight ? maxHeight + 'px' : undefined }">
+<div class="omfetrab _popup" :class="['s' + size, 'w' + width, 'h' + height, { asDrawer, asWindow, allowWideCustomEmojis: prefer.s.allowWideCustomEmojisInPicker }]" :style="{ maxHeight: maxHeight ? maxHeight + 'px' : undefined }">
 	<input
 		ref="searchEl"
 		:value="q"
@@ -30,7 +30,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:title="emoji.name"
 					tabindex="0"
 					@pointerenter="(ev) => startPreview(`:${emoji.name}:`, ev)"
-					@pointerleave="endPreview"
+					@pointerleave="leavePreview"
+					@pointerdown="(ev) => startTouchPreview(`:${emoji.name}:`, ev)"
+					@pointerup="endTouchPreview"
+					@pointercancel="cancelTouchPreview"
 					@click="chosen(emoji, $event)"
 				>
 					<MkCustomEmoji class="emoji" :name="emoji.name" :fallbackToImage="true"/>
@@ -44,7 +47,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:title="emoji.name"
 					tabindex="0"
 					@pointerenter="(ev) => startPreview(emoji.char, ev)"
-					@pointerleave="endPreview"
+					@pointerleave="leavePreview"
+					@pointerdown="(ev) => startTouchPreview(emoji.char, ev)"
+					@pointerup="endTouchPreview"
+					@pointercancel="cancelTouchPreview"
 					@click="chosen(emoji, $event)"
 				>
 					<MkEmoji class="emoji" :emoji="emoji.char"/>
@@ -64,7 +70,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:title="emoji.name"
 					tabindex="0"
 					@pointerenter="(ev) => startPreview(`:${emoji.name}:`, ev)"
-					@pointerleave="endPreview"
+					@pointerleave="leavePreview"
+					@pointerdown="(ev) => startTouchPreview(`:${emoji.name}:`, ev)"
+					@pointerup="endTouchPreview"
+					@pointercancel="cancelTouchPreview"
 					@click="chosen(emoji, $event)"
 				>
 					<MkCustomEmoji class="emoji" :name="emoji.name" :normal="true"/>
@@ -83,7 +92,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						:disabled="!canReact(emoji)"
 						tabindex="0"
 						@pointerenter="(ev) => { startPreview(getKey(emoji), ev); computeButtonTitle(ev); }"
-						@pointerleave="endPreview"
+						@pointerleave="leavePreview"
+						@pointerdown="(ev) => startTouchPreview(getKey(emoji), ev)"
+						@pointerup="endTouchPreview"
+						@pointercancel="cancelTouchPreview"
 						@click="chosen(emoji, $event)"
 					>
 						<MkCustomEmoji v-if="!emoji.hasOwnProperty('char')" class="emoji" :name="getKey(emoji)" :normal="true"/>
@@ -103,7 +115,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						:disabled="!canReact(emoji)"
 						:data-emoji="getKey(emoji)"
 						@pointerenter="(ev) => { startPreview(getKey(emoji), ev); computeButtonTitle(ev); }"
-						@pointerleave="endPreview"
+						@pointerleave="leavePreview"
+						@pointerdown="(ev) => startTouchPreview(getKey(emoji), ev)"
+						@pointerup="endTouchPreview"
+						@pointercancel="cancelTouchPreview"
 						@click="chosen(emoji, $event)"
 					>
 						<MkCustomEmoji v-if="!emoji.hasOwnProperty('char')" class="emoji" :name="getKey(emoji)" :normal="true"/>
@@ -124,14 +139,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:customEmojiTree="child.children"
 				@chosen="chosen"
 				@previewEnter="(emoji: string, ev: PointerEvent) => startPreview(emoji, ev)"
+				@previewTouchStart="(emoji: string, ev: PointerEvent) => startTouchPreview(emoji, ev)"
 				@previewLeave="endPreview"
+				@previewTouchEnd="endTouchPreview"
+				@previewTouchCancel="cancelTouchPreview"
 			>
 				{{ child.value || i18n.ts.other }}
 			</XSection>
 		</div>
 		<div v-once class="group">
 			<header class="_acrylic">{{ i18n.ts.emoji }}</header>
-			<XSection v-for="category in categories" :key="category" :emojis="emojiCharByCategory.get(category) ?? []" :hasChildSection="false" @chosen="chosen" @previewEnter="(emoji: string, ev: PointerEvent) => startPreview(emoji, ev)" @previewLeave="endPreview">{{ category }}</XSection>
+			<XSection v-for="category in categories" :key="category" :emojis="emojiCharByCategory.get(category) ?? []" :hasChildSection="false" @chosen="chosen" @previewEnter="(emoji: string, ev: PointerEvent) => startPreview(emoji, ev)" @previewTouchStart="(emoji: string, ev: PointerEvent) => startTouchPreview(emoji, ev)" @previewLeave="endPreview" @previewTouchEnd="endTouchPreview" @previewTouchCancel="cancelTouchPreview">{{ category }}</XSection>
 		</div>
 	</div>
 	<div class="tabs">
@@ -213,6 +231,7 @@ const emit = defineEmits<{
 let previewTimer: number | null = null;
 let previewPopupDispose: (() => void) | null = null;
 let closePreviewPopup: (() => void) | null = null;
+let suppressNextClick = false;
 
 function clearPreviewTimer(): void {
 	if (previewTimer !== null) {
@@ -253,23 +272,58 @@ function showPreviewPopup(emoji: string, anchorElement: HTMLElement): void {
 	};
 }
 
+function schedulePreview(emoji: string, target: HTMLElement, options: { suppressClickOnOpen?: boolean } = {}): void {
+	clearPreviewTimer();
+	hidePreviewPopup();
+
+	previewTimer = window.setTimeout(() => {
+		showPreviewPopup(emoji, target);
+		if (options.suppressClickOnOpen) suppressNextClick = true;
+	}, PREVIEW_DELAY);
+}
+
 function startPreview(emoji: string, ev: PointerEvent): void {
 	if (ev.pointerType === 'touch') return;
 
 	const target = ev.currentTarget as HTMLElement | null;
 	if (target == null) return;
 
-	clearPreviewTimer();
-	hidePreviewPopup();
+	schedulePreview(emoji, target);
+}
 
-	previewTimer = window.setTimeout(() => {
-		showPreviewPopup(emoji, target);
-	}, PREVIEW_DELAY);
+function startTouchPreview(emoji: string, ev: PointerEvent): void {
+	if (ev.pointerType !== 'touch') return;
+
+	const target = ev.currentTarget as HTMLElement | null;
+	if (target == null) return;
+
+	suppressNextClick = false;
+	schedulePreview(emoji, target, { suppressClickOnOpen: true });
 }
 
 function endPreview(): void {
 	clearPreviewTimer();
 	hidePreviewPopup();
+}
+
+function endTouchPreview(ev: PointerEvent): void {
+	if (ev.pointerType !== 'touch') return;
+	endPreview();
+}
+
+function cancelTouchPreview(ev: PointerEvent): void {
+	if (ev.pointerType !== 'touch') return;
+	suppressNextClick = false;
+	endPreview();
+}
+
+function leavePreview(ev: PointerEvent): void {
+	if (ev.pointerType === 'touch') {
+		cancelTouchPreview(ev);
+		return;
+	}
+
+	endPreview();
 }
 
 const searchEl = useTemplateRef('searchEl');
@@ -640,6 +694,14 @@ function computeButtonTitle(ev: PointerEvent): void {
 }
 
 function chosen(emoji: string | Misskey.entities.EmojiSimple | UnicodeEmojiDef, ev?: PointerEvent) {
+	if (suppressNextClick) {
+		ev?.preventDefault();
+		ev?.stopPropagation();
+		suppressNextClick = false;
+		endPreview();
+		return;
+	}
+
 	endPreview();
 
 	const el = ev && (ev.currentTarget ?? ev.target) as HTMLElement | null | undefined;
@@ -899,6 +961,32 @@ defineExpose({
 								mix-blend-mode: exclusion;
 								opacity: 0.8;
 							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	&.allowWideCustomEmojis {
+		> .emojis {
+			::v-deep(section) {
+				> .body {
+					display: flex;
+					flex-wrap: wrap;
+					align-content: flex-start;
+
+					> .item {
+						aspect-ratio: auto;
+						width: fit-content;
+						height: var(--eachSize);
+						min-width: var(--eachSize);
+						contain: layout style;
+						box-sizing: border-box;
+
+						> .emoji {
+							width: auto;
+							object-fit: unset;
 						}
 					}
 				}

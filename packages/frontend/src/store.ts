@@ -321,6 +321,10 @@ export const store = markRaw(new Pizzax('base', {
 		where: 'device',
 		default: 'auto' as 'auto' | 'popup' | 'drawer',
 	},
+	allowWideCustomEmojisInPicker: {
+		where: 'device',
+		default: false,
+	},
 	reportError: {
 		where: 'device',
 		default: false,

@@ -109,6 +109,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</MkPreferenceContainer>
 					</SearchMarker>
 
+					<SearchMarker :keywords="['emoji', 'picker', 'wide', 'width', 'custom']">
+						<MkPreferenceContainer k="allowWideCustomEmojisInPicker">
+							<MkSwitch v-model="allowWideCustomEmojisInPicker">
+								<template #label><SearchLabel>{{ i18n.ts.allowWideCustomEmojisInPicker }}</SearchLabel></template>
+							</MkSwitch>
+						</MkPreferenceContainer>
+					</SearchMarker>
+
 					<MkButton @click="previewPicker"><i class="ti ti-eye"></i> {{ i18n.ts.preview }}</MkButton>
 				</div>
 			</FormSection>
@@ -180,6 +188,7 @@ const emojiPickerHeightDef = [
 ] as MkRadiosOption<number>[];
 
 const emojiPickerStyle = prefer.model('emojiPickerStyle');
+const allowWideCustomEmojisInPicker = prefer.model('allowWideCustomEmojisInPicker');
 
 const palettesSyncEnabled = ref(prefer.isSyncEnabled('emojiPalettes'));
 

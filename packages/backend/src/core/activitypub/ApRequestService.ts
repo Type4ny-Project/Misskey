@@ -5,8 +5,10 @@
 
 import * as crypto from 'node:crypto';
 import { URL } from 'node:url';
+import { promisify } from 'node:util';
 import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import * as htmlParser from 'node-html-parser';
+import { RsaKeyPair } from 'slacc';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
 import type { MiUser } from '@/models/User.js';
@@ -46,7 +48,7 @@ type CachedPrivateKey = {
 };
 
 export class ApRequestCreator {
-	static createSignedPost(args: { key: PrivateKey, url: string, body: string, digest?: string, additionalHeaders: Record<string, string> }): Signed {
+	static async createSignedPost(args: { key: PrivateKey, url: string, body: string, digest?: string, additionalHeaders: Record<string, string> }): Promise<Signed> {
 		const u = new URL(args.url);
 		const digestHeader = args.digest ?? this.createDigest(args.body);
 
@@ -61,7 +63,7 @@ export class ApRequestCreator {
 			}, args.additionalHeaders),
 		};
 
-		const result = this.#signToRequest(request, args.key, ['(request-target)', 'date', 'host', 'digest']);
+		const result = await this.#signToRequest(request, args.key, ['(request-target)', 'date', 'host', 'digest']);
 
 		return {
 			request,
@@ -75,7 +77,7 @@ export class ApRequestCreator {
 		return `SHA-256=${crypto.createHash('sha256').update(body).digest('base64')}`;
 	}
 
-	static createSignedGet(args: { key: PrivateKey, url: string, additionalHeaders: Record<string, string> }): Signed {
+	static async createSignedGet(args: { key: PrivateKey, url: string, additionalHeaders: Record<string, string> }): Promise<Signed> {
 		const u = new URL(args.url);
 
 		const request: Request = {
@@ -88,7 +90,7 @@ export class ApRequestCreator {
 			}, args.additionalHeaders),
 		};
 
-		const result = this.#signToRequest(request, args.key, ['(request-target)', 'date', 'host']);
+		const result = await this.#signToRequest(request, args.key, ['(request-target)', 'date', 'host']);
 
 		return {
 			request,
@@ -98,11 +100,10 @@ export class ApRequestCreator {
 		};
 	}
 
-	static #signToRequest(request: Request, key: PrivateKey, includeHeaders: string[]): Signed {
+	static async #signToRequest(request: Request, key: PrivateKey, includeHeaders: string[]): Promise<Signed> {
 		const signingString = this.#genSigningString(request, includeHeaders);
-		const privateKey = key.privateKey ?? key.privateKeyPem;
-		if (privateKey == null) throw new Error('privateKey is required');
-		const signature = crypto.sign('sha256', Buffer.from(signingString), privateKey).toString('base64');
+		const sign = promisify(RsaKeyPair.prototype.sign).bind(RsaKeyPair.fromPem(key.privateKeyPem));
+		const signature = (await sign(Buffer.from(signingString))).toString('base64');
 		const signatureHeader = `keyId="${key.keyId}",algorithm="rsa-sha256",headers="${includeHeaders.join(' ')}",signature="${signature}"`;
 
 		request.headers = this.#objectAssignWithLcKey(request.headers, {
@@ -168,30 +169,12 @@ export class ApRequestService implements OnApplicationShutdown {
 	@bindThis
 	private async getPrivateKey(user: { id: MiUser['id'] }): Promise<PrivateKey> {
 		const keypair = await this.userKeypairService.getUserKeypair(user.id);
-		const cached = await this.privateKeyCache.fetch(user.id, async () => ({
-			privateKeyPem: keypair.privateKey,
-			privateKey: crypto.createPrivateKey(keypair.privateKey),
-		}), cachedValue => cachedValue.privateKeyPem === keypair.privateKey);
 
-		return {
-			privateKey: cached.privateKey,
-			keyId: `${this.config.url}/users/${user.id}#main-key`,
-		};
-	}
-
-	@bindThis
-	public onApplicationShutdown(signal?: string | undefined): void {
-		this.privateKeyCache.dispose();
-	}
-
-	@bindThis
-	public async signedPost(user: { id: MiUser['id'] }, url: string, object: unknown, digest?: string): Promise<void> {
-		const body = typeof object === 'string' ? object : JSON.stringify(object);
-
-		const key = await this.getPrivateKey(user);
-
-		const req = ApRequestCreator.createSignedPost({
-			key,
+		const req = await ApRequestCreator.createSignedPost({
+			key: {
+				privateKeyPem: keypair.privateKey,
+				keyId: `${this.config.url}/users/${user.id}#main-key`,
+			},
 			url,
 			body,
 			digest,
@@ -216,7 +199,7 @@ export class ApRequestService implements OnApplicationShutdown {
 		const _followAlternate = followAlternate ?? true;
 		const key = await this.getPrivateKey(user);
 
-		const req = ApRequestCreator.createSignedGet({
+		const req = await ApRequestCreator.createSignedGet({
 			key,
 			url,
 			additionalHeaders: {

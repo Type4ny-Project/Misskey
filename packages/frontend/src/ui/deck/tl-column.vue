@@ -6,11 +6,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <XColumn :menu="menu" :column="column" :isStacked="isStacked" :refresher="async () => { await timeline?.reloadTimeline() }">
 	<template #header>
-		<i v-if="column.tl != null" :class="basicTimelineIconClass(column.tl)"></i>
-		<span style="margin-left: 8px;">{{ column.name || (column.tl ? i18n.ts._timelines[column.tl] : null) || i18n.ts._deck._columns.tl }}</span>
+		<i v-if="column.tl != null" :class="timelineIconClass"></i>
+		<span style="margin-left: 8px;">{{ column.name || timelineTitle || i18n.ts._deck._columns.tl }}</span>
 	</template>
 
-	<div v-if="!isAvailableBasicTimeline(column.tl)" :class="$style.disabled">
+	<div v-if="!isAvailableTimeline" :class="$style.disabled">
 		<p :class="$style.disabledTitle">
 			<i class="ti ti-circle-minus"></i>
 			{{ i18n.ts._disabledTimeline.title }}
@@ -21,7 +21,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 		v-else-if="column.tl"
 		ref="timeline"
 		:key="column.tl + withRenotes + withReplies + onlyFiles"
-		:src="column.tl"
+		:src="timelineSrc"
+		:hashtag="timelineHashtag"
 		:withRenotes="withRenotes"
 		:withReplies="withReplies"
 		:withSensitive="withSensitive"
@@ -42,7 +43,7 @@ import { removeColumn, updateColumn } from '@/deck.js';
 import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
-import { hasWithReplies, isAvailableBasicTimeline, basicTimelineIconClass } from '@/timelines.js';
+import { hasWithReplies, isAvailableBasicTimeline, isBasicTimeline, basicTimelineIconClass } from '@/timelines.js';
 import { soundSettingsButton } from '@/ui/deck/tl-note-notification.js';
 
 const props = defineProps<{
@@ -57,6 +58,17 @@ const withRenotes = ref(props.column.withRenotes ?? true);
 const withReplies = ref(props.column.withReplies ?? false);
 const withSensitive = ref(props.column.withSensitive ?? true);
 const onlyFiles = ref(props.column.onlyFiles ?? false);
+
+function isHashtagTimeline(timeline: Column['tl']): timeline is `hashtag:${string}` {
+	return timeline?.startsWith('hashtag:') ?? false;
+}
+
+const timelineHashtag = computed(() => isHashtagTimeline(props.column.tl) ? props.column.tl.substring('hashtag:'.length) : undefined);
+const timelineSrc = computed(() => isHashtagTimeline(props.column.tl) ? 'hashtag' : props.column.tl);
+const isAvailableTimeline = computed(() => isHashtagTimeline(props.column.tl) ? timelineHashtag.value !== '' : isAvailableBasicTimeline(props.column.tl));
+const timelineIconClass = computed(() => isHashtagTimeline(props.column.tl) ? 'ti ti-hash' : props.column.tl != null ? basicTimelineIconClass(props.column.tl) : undefined);
+const timelineTitle = computed(() => isHashtagTimeline(props.column.tl) ? `#${timelineHashtag.value}` : props.column.tl != null ? i18n.ts._timelines[props.column.tl] : null);
+const canShowReplies = computed(() => props.column.tl != null && isBasicTimeline(props.column.tl) && hasWithReplies(props.column.tl));
 
 watch(withRenotes, v => {
 	updateColumn(props.column.id, {
@@ -93,6 +105,7 @@ onMounted(() => {
 });
 
 async function setType() {
+	const wasUnset = props.column.tl == null;
 	const { canceled, result: src } = await os.select({
 		title: i18n.ts.timeline,
 		items: [{
@@ -103,18 +116,49 @@ async function setType() {
 			value: 'social', label: i18n.ts._timelines.social,
 		}, {
 			value: 'global', label: i18n.ts._timelines.global,
+		}, {
+			value: 'media', label: i18n.ts._timelines.media,
+		}, {
+			value: 'hashtag', label: i18n.ts.hashtags,
 		}],
-		default: props.column.tl,
+		default: timelineSrc.value,
 	});
 	if (canceled) {
-		if (props.column.tl == null) {
+		if (wasUnset) {
 			removeColumn(props.column.id);
 		}
 		return;
 	}
 	if (src == null) return;
+	if (src === 'hashtag') {
+		const { canceled: hashtagCanceled, result: hashtag } = await os.inputText({
+			title: i18n.ts.hashtags,
+			default: timelineHashtag.value ?? '',
+			minLength: 1,
+		});
+		if (hashtagCanceled) {
+			if (wasUnset) {
+				removeColumn(props.column.id);
+			}
+			return;
+		}
+
+		const normalizedHashtag = hashtag.trim().replace(/^#/, '');
+		if (normalizedHashtag === '') {
+			if (wasUnset) {
+				removeColumn(props.column.id);
+			}
+			return;
+		}
+
+		updateColumn(props.column.id, {
+			tl: `hashtag:${normalizedHashtag}`,
+		});
+		return;
+	}
+	if (!isBasicTimeline(src)) return;
 	updateColumn(props.column.id, {
-		tl: src ?? undefined,
+		tl: src,
 	});
 }
 
@@ -135,7 +179,7 @@ const menu = computed<MenuItem[]>(() => {
 		ref: withRenotes,
 	});
 
-	if (hasWithReplies(props.column.tl)) {
+	if (canShowReplies.value) {
 		menuItems.push({
 			type: 'switch',
 			text: i18n.ts.showRepliesToOthersInTimeline,
@@ -148,7 +192,7 @@ const menu = computed<MenuItem[]>(() => {
 		type: 'switch',
 		text: i18n.ts.fileAttachedOnly,
 		ref: onlyFiles,
-		disabled: hasWithReplies(props.column.tl) ? withReplies : false,
+		disabled: canShowReplies.value ? withReplies : false,
 	}, {
 		type: 'switch',
 		text: i18n.ts.withSensitive,

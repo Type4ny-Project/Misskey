@@ -51,6 +51,8 @@ export const columnTypes = [
 
 export type ColumnType = typeof columnTypes[number];
 
+export type DeckTimelineType = BasicTimelineType | `hashtag:${string}`;
+
 export type Column = {
 	id: string;
 	type: ColumnType;
@@ -64,7 +66,7 @@ export type Column = {
 	channelId?: string;
 	roleId?: string;
 	excludeTypes?: typeof notificationTypes[number][];
-	tl?: BasicTimelineType;
+	tl?: DeckTimelineType;
 	withRenotes?: boolean;
 	withReplies?: boolean;
 	withSensitive?: boolean;

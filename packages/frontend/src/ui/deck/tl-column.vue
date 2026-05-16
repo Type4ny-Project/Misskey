@@ -45,6 +45,7 @@ import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { hasWithReplies, isAvailableBasicTimeline, isBasicTimeline, basicTimelineIconClass } from '@/timelines.js';
 import { soundSettingsButton } from '@/ui/deck/tl-note-notification.js';
+import { followedHashtagsCache } from '@/cache.js';
 
 const props = defineProps<{
 	column: Column;
@@ -131,10 +132,26 @@ async function setType() {
 	}
 	if (src == null) return;
 	if (src === 'hashtag') {
-		const { canceled: hashtagCanceled, result: hashtag } = await os.inputText({
+		const followedHashtags = await followedHashtagsCache.fetch();
+		if (followedHashtags.length === 0) {
+			await os.alert({
+				type: 'info',
+				title: i18n.ts.hashtags,
+				text: i18n.ts.nothing,
+			});
+			if (wasUnset) {
+				removeColumn(props.column.id);
+			}
+			return;
+		}
+
+		const { canceled: hashtagCanceled, result: hashtag } = await os.select({
 			title: i18n.ts.hashtags,
-			default: timelineHashtag.value ?? '',
-			minLength: 1,
+			items: followedHashtags.map(x => ({
+				value: x.tag,
+				label: `#${x.tag}`,
+			})),
+			default: timelineHashtag.value,
 		});
 		if (hashtagCanceled) {
 			if (wasUnset) {
@@ -142,17 +159,10 @@ async function setType() {
 			}
 			return;
 		}
-
-		const normalizedHashtag = hashtag.trim().replace(/^#/, '');
-		if (normalizedHashtag === '') {
-			if (wasUnset) {
-				removeColumn(props.column.id);
-			}
-			return;
-		}
+		if (hashtag == null) return;
 
 		updateColumn(props.column.id, {
-			tl: `hashtag:${normalizedHashtag}`,
+			tl: `hashtag:${hashtag}`,
 		});
 		return;
 	}

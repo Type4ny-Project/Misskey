@@ -1,3 +1,13 @@
+## Unreleased
+
+### General
+
+### Client
+- Enhance: デッキでハッシュタグタイムラインを登録できるように
+
+### Server
+
+
 ## 2026.5.2
 
 ### Note

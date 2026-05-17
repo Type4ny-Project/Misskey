@@ -196,10 +196,14 @@ async function updateManagePermission() {
 
 	try {
 		const channel = await misskeyApi('channels/show', { channelId: event.value.channelId });
-		canManagePendingEvent.value = channel.userId === $i.id || channel.collaboratorIds?.includes($i.id) === true;
+		canManagePendingEvent.value = channel.userId === $i.id || isChannelCollaborator(channel, $i.id);
 	} catch {
 		canManagePendingEvent.value = false;
 	}
+}
+
+function isChannelCollaborator(channel: Misskey.entities.Channel, userId: string): boolean {
+	return Array.isArray(channel.collaboratorIds) && channel.collaboratorIds.includes(userId);
 }
 
 function noteIt() {

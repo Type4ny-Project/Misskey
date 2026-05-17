@@ -370,7 +370,11 @@ function hasChannelEventManagePermission(targetChannel: Misskey.entities.Channel
 	if (!$i || targetChannel == null) return false;
 	if (iAmModerator) return true;
 
-	return $i.id === targetChannel.userId || targetChannel.collaboratorIds?.includes($i.id) === true;
+	return $i.id === targetChannel.userId || isChannelCollaborator(targetChannel, $i.id);
+}
+
+function isChannelCollaborator(targetChannel: Misskey.entities.Channel, userId: string): boolean {
+	return Array.isArray(targetChannel.collaboratorIds) && targetChannel.collaboratorIds.includes(userId);
 }
 
 // Channel events
@@ -523,7 +527,7 @@ const headerActions = computed(() => {
 			});
 		}
 
-		if (($i && $i.id === channel.value.userId) || iAmModerator || ($i && channel.value.collaboratorIds?.includes($i.id))) {
+		if (($i && $i.id === channel.value.userId) || iAmModerator || ($i && isChannelCollaborator(channel.value, $i.id))) {
 			headerItems.push({
 				icon: 'ti ti-settings',
 				text: i18n.ts.edit,

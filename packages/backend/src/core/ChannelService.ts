@@ -33,7 +33,7 @@ export class ChannelService {
 		if (isModerator) {
 			return true;
 		}
-		if (channel.collaboratorIds && channel.collaboratorIds.includes(user.id)) {
+		if (getCollaboratorIds(channel).includes(user.id)) {
 			return true;
 		}
 		return false;
@@ -52,7 +52,7 @@ export class ChannelService {
 		channel: MiChannel,
 		userId: MiUser['id'],
 	): Promise<void> {
-		const collaboratorIds = channel.collaboratorIds ?? [];
+		const collaboratorIds = getCollaboratorIds(channel);
 		if (!collaboratorIds.includes(userId)) {
 			await this.channelsRepository.update(channel.id, {
 				collaboratorIds: [...collaboratorIds, userId],
@@ -65,7 +65,7 @@ export class ChannelService {
 		channel: MiChannel,
 		userId: MiUser['id'],
 	): Promise<void> {
-		const collaboratorIds = channel.collaboratorIds ?? [];
+		const collaboratorIds = getCollaboratorIds(channel);
 		await this.channelsRepository.update(channel.id, {
 			collaboratorIds: collaboratorIds.filter(id => id !== userId),
 		});
@@ -86,7 +86,7 @@ export class ChannelService {
 		channel: MiChannel,
 		newOwnerId: MiUser['id'],
 	): Promise<void> {
-		const collaboratorIds = channel.collaboratorIds ?? [];
+		const collaboratorIds = getCollaboratorIds(channel);
 		const newCollaboratorIds = collaboratorIds.filter(id => id !== newOwnerId);
 		if (channel.userId && !newCollaboratorIds.includes(channel.userId)) {
 			newCollaboratorIds.push(channel.userId);
@@ -97,4 +97,8 @@ export class ChannelService {
 			collaboratorIds: newCollaboratorIds,
 		});
 	}
+}
+
+function getCollaboratorIds(channel: MiChannel): MiUser['id'][] {
+	return Array.isArray(channel.collaboratorIds) ? channel.collaboratorIds : [];
 }

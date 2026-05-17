@@ -103,6 +103,8 @@ export class ChannelEntityService {
 			);
 		}
 
+		const collaboratorIds = Array.isArray(channel.collaboratorIds) ? channel.collaboratorIds : [];
+
 		return {
 			id: channel.id,
 			createdAt: this.idService.parse(channel.id).date.toISOString(),
@@ -120,7 +122,7 @@ export class ChannelEntityService {
 			isSensitive: channel.isSensitive,
 			allowRenoteToExternal: channel.allowRenoteToExternal,
 			isLocalOnly: channel.isLocalOnly,
-			collaboratorIds: channel.collaboratorIds,
+			collaboratorIds,
 
 			...(me ? {
 				isFollowing,
@@ -202,4 +204,3 @@ export class ChannelEntityService {
 		})));
 	}
 }
-

@@ -170,15 +170,23 @@ export class ApRequestService implements OnApplicationShutdown {
 	private async getPrivateKey(user: { id: MiUser['id'] }): Promise<PrivateKey> {
 		const keypair = await this.userKeypairService.getUserKeypair(user.id);
 
+		return {
+			privateKeyPem: keypair.privateKey,
+			keyId: `${this.config.url}/users/${user.id}#main-key`,
+		};
+	}
+
+	@bindThis
+	public async signedPost(user: { id: MiUser['id'] }, url: string, body: string, digest?: string): Promise<void> {
+		const key = await this.getPrivateKey(user);
+
 		const req = await ApRequestCreator.createSignedPost({
-			key: {
-				privateKeyPem: keypair.privateKey,
-				keyId: `${this.config.url}/users/${user.id}#main-key`,
-			},
+			key,
 			url,
 			body,
 			digest,
 			additionalHeaders: {
+				'User-Agent': this.config.userAgent,
 			},
 		});
 

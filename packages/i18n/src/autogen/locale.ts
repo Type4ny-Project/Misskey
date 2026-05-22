@@ -1615,6 +1615,10 @@ export interface Locale extends ILocale {
      */
     "displayOfSensitiveMedia": string;
     /**
+     * タップ中だけセンシティブなメディアを表示
+     */
+    "revealSensitiveMediaByTapHold": string;
+    /**
      * サーバーとの接続が失われたとき
      */
     "whenServerDisconnected": string;

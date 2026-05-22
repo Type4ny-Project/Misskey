@@ -5,10 +5,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <template v-for="file in note.files">
-	<div
-		v-if="isHiding(file)"
-		:class="[$style.filePreview, { [$style.square]: square }]"
-		@click="reveal(file)"
+		<div
+			v-if="isHiding(file)"
+			:class="[$style.filePreview, { [$style.square]: square }]"
+			@click="reveal(file)"
+		@mousedown="onPointerDown(file)"
+		@touchstart="onPointerDown(file)"
+		@mouseup="onPointerUp(file)"
+		@mouseleave="onPointerUp(file)"
+		@touchend="onPointerUp(file)"
+		@touchcancel="onPointerUp(file)"
 	>
 		<MkDriveFileThumbnail
 			:file="file"
@@ -26,7 +32,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 	</div>
-	<MkA v-else :class="[$style.filePreview, { [$style.square]: square }]" :to="notePage(note)">
+	<MkA
+		v-else
+		:class="[$style.filePreview, { [$style.square]: square }]"
+		:to="notePage(note)"
+		@mouseup="onPointerUp(file)"
+		@mouseleave="onPointerUp(file)"
+		@touchend="onPointerUp(file)"
+		@touchcancel="onPointerUp(file)"
+	>
 		<MkDriveFileThumbnail
 			:file="file"
 			fit="cover"
@@ -57,6 +71,10 @@ defineProps<{
 const showingFiles = ref<Set<string>>(new Set());
 
 function isHiding(file: Misskey.entities.DriveFile) {
+	if (prefer.s.revealSensitiveMediaByTapHold && showingFiles.value.has(file.id)) {
+		return false;
+	}
+
 	if (shouldHideFileByDefault(file) && !showingFiles.value.has(file.id)) {
 		if (!file.isSensitive && !file.type.startsWith('image/')) {
 			return false;
@@ -67,11 +85,26 @@ function isHiding(file: Misskey.entities.DriveFile) {
 }
 
 async function reveal(file: Misskey.entities.DriveFile) {
+	if (prefer.s.revealSensitiveMediaByTapHold) {
+		return;
+	}
+
 	if (!(await canRevealFile(file))) {
 		return;
 	}
 
 	showingFiles.value.add(file.id);
+}
+
+function onPointerDown(file: Misskey.entities.DriveFile) {
+	if (!prefer.s.revealSensitiveMediaByTapHold) return;
+	if (!isHiding(file)) return;
+	showingFiles.value.add(file.id);
+}
+
+function onPointerUp(file: Misskey.entities.DriveFile) {
+	if (!prefer.s.revealSensitiveMediaByTapHold) return;
+	showingFiles.value.delete(file.id);
 }
 </script>
 

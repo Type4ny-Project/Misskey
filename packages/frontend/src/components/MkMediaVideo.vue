@@ -16,10 +16,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 	@mouseover.passive="onMouseOver"
 	@mousemove.passive="onMouseMove"
 	@mouseleave.passive="onMouseLeave"
+	@mousedown="onPointerDown"
+	@touchstart="onPointerDown"
+	@mouseup="onPointerUp"
+	@touchend="onPointerUp"
+	@touchcancel="onPointerUp"
 	@contextmenu.stop
 	@keydown.stop
 >
-	<button v-if="hide" :class="$style.hidden" @click="reveal">
+	<button v-if="isActuallyHidden" :class="$style.hidden" @click="reveal">
 		<div :class="$style.hiddenTextWrapper">
 			<b v-if="video.isSensitive" style="display: block;"><i class="ti ti-eye-exclamation"></i> {{ i18n.ts.sensitive }}{{ prefer.s.dataSaver.media ? ` (${i18n.ts.video}${video.size ? ' ' + bytes(video.size) : ''})` : '' }}</b>
 			<b v-else style="display: block;"><i class="ti ti-movie"></i> {{ prefer.s.dataSaver.media && video.size ? bytes(video.size) : i18n.ts.video }}</b>
@@ -178,13 +183,30 @@ function hasFocus() {
 
 // eslint-disable-next-line vue/no-setup-props-reactivity-loss
 const hide = ref(shouldHideFileByDefault(props.video));
+const isRevealingByTap = ref(false);
+const isActuallyHidden = computed(() => hide.value && !isRevealingByTap.value);
 
 async function reveal() {
+	if (prefer.s.revealSensitiveMediaByTapHold) {
+		return;
+	}
+
 	if (!(await canRevealFile(props.video))) {
 		return;
 	}
 
 	hide.value = false;
+}
+
+function onPointerDown() {
+	if (!prefer.s.revealSensitiveMediaByTapHold) return;
+	if (!hide.value) return;
+	isRevealingByTap.value = true;
+}
+
+function onPointerUp() {
+	if (!prefer.s.revealSensitiveMediaByTapHold) return;
+	isRevealingByTap.value = false;
 }
 
 // Menu
@@ -370,6 +392,8 @@ function onMouseMove() {
 }
 
 function onMouseLeave() {
+	onPointerUp();
+
 	if (controlStateTimer) {
 		window.clearTimeout(controlStateTimer);
 	}

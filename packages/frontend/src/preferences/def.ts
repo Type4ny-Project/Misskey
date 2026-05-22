@@ -213,6 +213,9 @@ export const PREF_DEF = definePreferences({
 	nsfw: {
 		default: 'respect' as 'respect' | 'force' | 'ignore',
 	},
+	revealSensitiveMediaByTapHold: {
+		default: false,
+	},
 	highlightSensitiveMedia: {
 		default: false,
 	},

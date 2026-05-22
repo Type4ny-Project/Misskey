@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="[hide ? $style.hidden : $style.visible, (image.isSensitive && prefer.s.highlightSensitiveMedia) && $style.sensitive]" @click="reveal" @contextmenu.stop="onContextmenu">
+<div :class="[isActuallyHidden ? $style.hidden : $style.visible, (image.isSensitive && prefer.s.highlightSensitiveMedia) && $style.sensitive]" @click="reveal" @contextmenu.stop="onContextmenu" @mousedown="onPointerDown" @touchstart="onPointerDown" @mouseup="onPointerUp" @mouseleave="onPointerUp" @touchend="onPointerUp" @touchcancel="onPointerUp">
 	<component
 		:is="disableImageLink ? 'div' : 'a'"
 		v-bind="disableImageLink ? {
@@ -20,20 +20,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkImgWithBlurhash
 			v-if="prefer.s.enableHighQualityImagePlaceholders"
 			:hash="image.blurhash"
-			:src="(prefer.s.dataSaver.media && hide) ? null : url"
-			:forceBlurhash="hide"
-			:cover="hide || cover"
+			:src="(prefer.s.dataSaver.media && isActuallyHidden) ? null : url"
+			:forceBlurhash="isActuallyHidden"
+			:cover="cover"
 			:alt="image.comment || image.name"
 			:title="image.comment || image.name"
 			:width="image.properties.width"
 			:height="image.properties.height"
-			:style="hide ? 'filter: brightness(0.7);' : null"
+			:style="isActuallyHidden ? 'filter: brightness(0.7);' : null"
 			:class="$style.image"
 		/>
 		<div
-			v-else-if="prefer.s.dataSaver.media || hide"
+			v-else-if="prefer.s.dataSaver.media || isActuallyHidden"
 			:title="image.comment || image.name"
-			:style="hide ? 'background: #888;' : null"
+			:style="isActuallyHidden ? 'background: #888;' : null"
 			:class="$style.image"
 		></div>
 		<img
@@ -44,7 +44,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:class="$style.image"
 		/>
 	</component>
-	<template v-if="hide">
+	<template v-if="isActuallyHidden">
 		<div :class="$style.hiddenText">
 			<div :class="$style.hiddenTextWrapper">
 				<b v-if="image.isSensitive" style="display: block;"><i class="ti ti-eye-exclamation"></i> {{ i18n.ts.sensitive }}{{ prefer.s.dataSaver.media ? ` (${i18n.ts.image}${image.size ? ' ' + bytes(image.size) : ''})` : '' }}</b>
@@ -93,6 +93,9 @@ const props = withDefaults(defineProps<{
 
 const hide = ref(true);
 
+const isRevealingByTap = ref(false);
+const isActuallyHidden = computed(() => hide.value && !isRevealingByTap.value);
+
 const url = computed(() => (props.raw || prefer.s.loadRawImages)
 	? props.image.url
 	: prefer.s.disableShowingAnimatedImages
@@ -107,12 +110,26 @@ async function reveal(ev: PointerEvent) {
 
 	if (hide.value) {
 		ev.stopPropagation();
+		if (prefer.s.revealSensitiveMediaByTapHold) {
+			return;
+		}
 		if (!(await canRevealFile(props.image))) {
 			return;
 		}
 
 		hide.value = false;
 	}
+}
+
+function onPointerDown() {
+	if (!prefer.s.revealSensitiveMediaByTapHold) return;
+	if (!hide.value) return;
+	isRevealingByTap.value = true;
+}
+
+function onPointerUp() {
+	if (!prefer.s.revealSensitiveMediaByTapHold) return;
+	isRevealingByTap.value = false;
 }
 
 // Plugin:register_note_view_interruptor を使って書き換えられる可能性があるためwatchする

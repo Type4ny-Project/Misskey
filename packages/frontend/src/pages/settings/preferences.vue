@@ -350,6 +350,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</SearchMarker>
 							</template>
 
+							<SearchMarker :keywords="['sensitive', 'nsfw', 'media', 'image', 'photo', 'picture', 'attachment', 'tap', 'hold', 'press']">
+								<MkPreferenceContainer k="revealSensitiveMediaByTapHold">
+									<MkSwitch v-model="revealSensitiveMediaByTapHold">
+										<template #label><SearchLabel>{{ i18n.ts.revealSensitiveMediaByTapHold }}</SearchLabel></template>
+									</MkSwitch>
+								</MkPreferenceContainer>
+							</SearchMarker>
+
 							<SearchMarker :keywords="['attachment', 'image', 'photo', 'picture', 'media', 'thumbnail', 'nsfw', 'sensitive', 'display', 'show', 'hide', 'visibility']">
 								<MkPreferenceContainer k="nsfw">
 									<MkSelect
@@ -997,6 +1005,7 @@ const showAvailableReactionsFirstInNote = prefer.model('showAvailableReactionsFi
 const useGroupedNotifications = prefer.model('useGroupedNotifications');
 const alwaysConfirmFollow = prefer.model('alwaysConfirmFollow');
 const confirmWhenRevealingSensitiveMedia = prefer.model('confirmWhenRevealingSensitiveMedia');
+const revealSensitiveMediaByTapHold = prefer.model('revealSensitiveMediaByTapHold');
 const confirmOnReact = prefer.model('confirmOnReact');
 const defaultNoteVisibility = prefer.model('defaultNoteVisibility');
 const defaultNoteLocalOnly = prefer.model('defaultNoteLocalOnly');

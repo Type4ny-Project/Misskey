@@ -12,10 +12,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 		$style.audioContainer,
 		(audio.isSensitive && prefer.s.highlightSensitiveMedia) && $style.sensitive,
 	]"
+	@mousedown="onPointerDown"
+	@touchstart="onPointerDown"
+	@mouseup="onPointerUp"
+	@mouseleave="onPointerUp"
+	@touchend="onPointerUp"
+	@touchcancel="onPointerUp"
 	@contextmenu.stop
 	@keydown.stop
 >
-	<button v-if="hide" :class="$style.hidden" @click="reveal">
+	<button v-if="isActuallyHidden" :class="$style.hidden" @click="reveal">
 		<div :class="$style.hiddenTextWrapper">
 			<b v-if="audio.isSensitive" style="display: block;"><i class="ti ti-eye-exclamation"></i> {{ i18n.ts.sensitive }}{{ prefer.s.dataSaver.media ? ` (${i18n.ts.audio}${audio.size ? ' ' + bytes(audio.size) : ''})` : '' }}</b>
 			<b v-else style="display: block;"><i class="ti ti-music"></i> {{ prefer.s.dataSaver.media && audio.size ? bytes(audio.size) : i18n.ts.audio }}</b>
@@ -156,13 +162,30 @@ const playerEl = useTemplateRef('playerEl');
 const audioEl = useTemplateRef('audioEl');
 
 const hide = ref(shouldHideFileByDefault(props.audio));
+const isRevealingByTap = ref(false);
+const isActuallyHidden = computed(() => hide.value && !isRevealingByTap.value);
 
 async function reveal() {
+	if (prefer.s.revealSensitiveMediaByTapHold) {
+		return;
+	}
+
 	if (!(await canRevealFile(props.audio))) {
 		return;
 	}
 
 	hide.value = false;
+}
+
+function onPointerDown() {
+	if (!prefer.s.revealSensitiveMediaByTapHold) return;
+	if (!hide.value) return;
+	isRevealingByTap.value = true;
+}
+
+function onPointerUp() {
+	if (!prefer.s.revealSensitiveMediaByTapHold) return;
+	isRevealingByTap.value = false;
 }
 
 // Menu

@@ -2078,6 +2078,8 @@ declare namespace entities {
         FollowingDeleteResponse,
         FollowingInvalidateRequest,
         FollowingInvalidateResponse,
+        FollowingListRequest,
+        FollowingListResponse,
         FollowingRequestsAcceptRequest,
         FollowingRequestsCancelRequest,
         FollowingRequestsCancelResponse,
@@ -2373,8 +2375,6 @@ declare namespace entities {
         UsersListsUpdateMembershipRequest,
         UsersNotesRequest,
         UsersNotesResponse,
-        UsersNotifyListRequest,
-        UsersNotifyListResponse,
         UsersPagesRequest,
         UsersPagesResponse,
         UsersReactionsRequest,
@@ -2674,6 +2674,12 @@ type FollowingInvalidateRequest = operations['following___invalidate']['requestB
 
 // @public (undocumented)
 type FollowingInvalidateResponse = operations['following___invalidate']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type FollowingListRequest = operations['following___list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type FollowingListResponse = operations['following___list']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type FollowingRequestsAcceptRequest = operations['following___requests___accept']['requestBody']['content']['application/json'];
@@ -4151,12 +4157,6 @@ type UsersNotesRequest = operations['users___notes']['requestBody']['content']['
 
 // @public (undocumented)
 type UsersNotesResponse = operations['users___notes']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
-type UsersNotifyListRequest = operations['users___notify___list']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type UsersNotifyListResponse = operations['users___notify___list']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type UsersPagesRequest = operations['users___pages']['requestBody']['content']['application/json'];

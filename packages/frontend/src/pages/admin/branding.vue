@@ -156,15 +156,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkTextarea>
 				</SearchMarker>
 			</div>
-			<template #footer>
-				<div :class="$style.footer">
-					<div class="_spacer" style="--MI_SPACER-w: 700px; --MI_SPACER-min: 16px; --MI_SPACER-max: 16px;">
-						<MkButton primary rounded @click="save"><i class="ti ti-check"></i> {{ i18n.ts.save }}</MkButton>
-					</div>
-				</div>
-			</template>
 		</SearchMarker>
 	</div>
+	<template #footer>
+		<div :class="$style.footer">
+			<div class="_spacer" style="--MI_SPACER-w: 700px; --MI_SPACER-min: 16px; --MI_SPACER-max: 16px;">
+				<MkButton primary rounded @click="save"><i class="ti ti-check"></i> {{ i18n.ts.save }}</MkButton>
+			</div>
+		</div>
+	</template>
 </PageWithHeader>
 </template>
 

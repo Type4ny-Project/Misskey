@@ -21,15 +21,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 	@contextmenu.stop
 	@keydown.stop
 >
-	<button v-if="isActuallyHidden" :class="$style.hidden" @click="reveal">
-		<div :class="$style.hiddenTextWrapper">
-			<b v-if="audio.isSensitive" style="display: block;"><i class="ti ti-eye-exclamation"></i> {{ i18n.ts.sensitive }}{{ prefer.s.dataSaver.media ? ` (${i18n.ts.audio}${audio.size ? ' ' + bytes(audio.size) : ''})` : '' }}</b>
-			<b v-else style="display: block;"><i class="ti ti-music"></i> {{ prefer.s.dataSaver.media && audio.size ? bytes(audio.size) : i18n.ts.audio }}</b>
-			<span style="display: block;">{{ i18n.ts.clickToShow }}</span>
-		</div>
-	</button>
+	<Transition name="fade">
+		<button v-if="isActuallyHidden" :class="$style.hidden" @click="reveal">
+			<div :class="$style.hiddenTextWrapper">
+				<b v-if="audio.isSensitive" style="display: block;"><i class="ti ti-eye-exclamation"></i> {{ i18n.ts.sensitive }}{{ prefer.s.dataSaver.media ? ` (${i18n.ts.audio}${audio.size ? ' ' + bytes(audio.size) : ''})` : '' }}</b>
+				<b v-else style="display: block;"><i class="ti ti-music"></i> {{ prefer.s.dataSaver.media && audio.size ? bytes(audio.size) : i18n.ts.audio }}</b>
+				<span style="display: block;">{{ i18n.ts.clickToShow }}</span>
+			</div>
+		</button>
+	</Transition>
 
-	<div v-else-if="prefer.s.useNativeUiForVideoAudioPlayer" :class="$style.nativeAudioContainer">
+	<div v-if="!isActuallyHidden && prefer.s.useNativeUiForVideoAudioPlayer" :class="$style.nativeAudioContainer">
 		<audio
 			ref="audioEl"
 			preload="metadata"
@@ -41,7 +43,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</audio>
 	</div>
 
-	<div v-else :class="$style.audioControls">
+	<div v-if="!isActuallyHidden && !prefer.s.useNativeUiForVideoAudioPlayer" :class="$style.audioControls">
 		<audio
 			ref="audioEl"
 			preload="metadata"

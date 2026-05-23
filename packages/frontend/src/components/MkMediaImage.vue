@@ -44,16 +44,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:class="$style.image"
 		/>
 	</component>
-	<template v-if="isActuallyHidden">
-		<div :class="$style.hiddenText">
+	<Transition
+		:duration="prefer.s.animation ? 220 : 0"
+		:enterActiveClass="$style.transition_fade_enterActive"
+		:leaveActiveClass="$style.transition_fade_leaveActive"
+		:enterFromClass="$style.transition_fade_enterFrom"
+		:leaveToClass="$style.transition_fade_leaveTo"
+	>
+		<div v-if="isActuallyHidden" :class="$style.hiddenText">
 			<div :class="$style.hiddenTextWrapper">
 				<b v-if="image.isSensitive" style="display: block;"><i class="ti ti-eye-exclamation"></i> {{ i18n.ts.sensitive }}{{ prefer.s.dataSaver.media ? ` (${i18n.ts.image}${image.size ? ' ' + bytes(image.size) : ''})` : '' }}</b>
 				<b v-else style="display: block;"><i class="ti ti-photo"></i> {{ prefer.s.dataSaver.media && image.size ? bytes(image.size) : i18n.ts.image }}</b>
 				<span v-if="controls" style="display: block;">{{ i18n.ts.clickToShow }}</span>
 			</div>
 		</div>
-	</template>
-	<template v-else-if="controls">
+	</Transition>
+	<template v-if="!isActuallyHidden && controls">
 		<div :class="$style.indicators">
 			<div v-if="['image/gif', 'image/apng'].includes(image.type)" :class="$style.indicator">GIF</div>
 			<div v-if="image.comment" :class="$style.indicator">ALT</div>
@@ -275,6 +281,16 @@ function onContextmenu(ev: PointerEvent) {
 	color: #fff;
 }
 
+.transition_fade_enterActive,
+.transition_fade_leaveActive {
+	transition: opacity 0.5s ease;
+}
+
+.transition_fade_enterFrom,
+.transition_fade_leaveTo {
+	opacity: 0;
+}
+
 .visible {
 	position: relative;
 	//box-shadow: 0 0 0 1px var(--MI_THEME-divider) inset;
@@ -345,5 +361,16 @@ html[data-color-scheme=light] .visible {
 	height: 100%;
 	object-fit: contain;
 	object-position: center;
+}
+</style>
+
+<style lang="scss">
+.fade-enter-active,
+.fade-leave-active {
+	transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+	opacity: 0;
 }
 </style>

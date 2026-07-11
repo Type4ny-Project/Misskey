@@ -12,7 +12,7 @@ import { $i } from '@/i.js';
 type Snapshot = Misskey.entities.CallsRoomsShowResponse;
 type EventBase = { sequence: number; roomRevision: number };
 
-export function useCallsRoom(roomId: string) {
+export function createCallsRoomConnection(roomId: string) {
 	const room = shallowRef<Snapshot['room'] | null>(null);
 	const participants = ref<Snapshot['participants']>([]);
 	const connected = ref(false);
@@ -88,11 +88,11 @@ export function useCallsRoom(roomId: string) {
 	stream.on('_disconnected_', onStreamDisconnected);
 	stream.on('_connected_', onStreamConnected);
 
-	onUnmounted(() => {
+	function dispose() {
 		stream.off('_disconnected_', onStreamDisconnected);
 		stream.off('_connected_', onStreamConnected);
 		channel.dispose();
-	});
+	}
 
 	return {
 		room, participants, connected, speakingParticipantIds, refresh,
@@ -101,5 +101,12 @@ export function useCallsRoom(roomId: string) {
 		heartbeat(connectionId: string, generation: number) { channel.send('heartbeat', { connectionId, generation }); },
 		onTrackChange(listener: () => void) { trackListeners.add(listener); return () => trackListeners.delete(listener); },
 		onRevoked(listener: (reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation') => void) { revocationListeners.add(listener); return () => revocationListeners.delete(listener); },
+		dispose,
 	};
+}
+
+export function useCallsRoom(roomId: string) {
+	const connection = createCallsRoomConnection(roomId);
+	onUnmounted(connection.dispose);
+	return connection;
 }

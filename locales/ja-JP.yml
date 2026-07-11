@@ -2671,6 +2671,7 @@ _permissions:
 
 _calls:
   title: "Misskey Calls"
+  live: "LIVE"
   createRoom: "通話ルームを作成"
   roomTitle: "ルーム名"
   roomDescription: "説明"

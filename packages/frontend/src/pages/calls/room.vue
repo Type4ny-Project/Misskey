@@ -6,285 +6,232 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <MkStickyContainer>
 	<template #header><MkPageHeader/></template>
-	<div class="_spacer" style="--MI_SPACER-w: 800px;">
+	<div class="_spacer" style="--MI_SPACER-w: 760px;">
 		<MkLoading v-if="room == null && !loadFailed"/>
 		<div v-else-if="room == null" class="_panel" :class="$style.notFound">
 			<i class="ti ti-alert-circle"></i>
 			<strong>{{ i18n.ts.notFound }}</strong>
 			<MkButton rounded @click="router.push('/calls')">{{ i18n.ts.goBack }}</MkButton>
 		</div>
-		<div v-else class="_gaps" :class="$style.roomContent">
-			<section class="_panel" :class="$style.hero">
-				<div>
-					<strong>{{ room.title }}</strong>
-					<p>{{ room.description }}</p>
-					<small>{{ i18n.ts._calls[room.attachment.type === 'personal' ? 'personalRoom' : 'chatRoom'] }} · {{ i18n.ts._calls[room.visibility] }}</small>
-					<small v-if="room.scheduledAt != null"> · {{ new Date(room.scheduledAt).toLocaleString() }}</small>
+		<div v-else class="_gaps">
+			<section class="_panel" :class="$style.roomHeader">
+				<div :class="$style.titleRow">
+					<div>
+						<div :class="$style.roomTitle"><i class="ti ti-broadcast"></i> {{ room.title }}</div>
+						<div :class="$style.roomMeta">
+							<span v-if="room.state === 'open'" :class="$style.liveIndicator">● {{ i18n.ts._calls.live }}</span>
+							<span>{{ i18n.ts._calls[room.attachment.type === 'personal' ? 'personalRoom' : 'chatRoom'] }}</span>
+							<span>{{ i18n.ts._calls[room.visibility] }}</span>
+						</div>
+					</div>
+					<span :class="$style.stateBadge">{{ i18n.ts._calls[room.state] }}</span>
 				</div>
-				<span>{{ i18n.ts._calls[room.state] }}</span>
+				<p v-if="room.description" :class="$style.description">{{ room.description }}</p>
+				<small v-if="room.scheduledAt != null">{{ new Date(room.scheduledAt).toLocaleString() }}</small>
 			</section>
-			<MkInfo v-if="!connected" warn>{{ i18n.ts._calls.websocketDisconnected }}</MkInfo>
-			<MkInfo v-if="mediaState === 'creating-session' || mediaState === 'negotiating'">{{ i18n.ts._calls.roomConnectedMediaConnecting }}</MkInfo>
-			<MkInfo v-if="mediaState === 'reconnecting'" warn>{{ i18n.ts._calls.reconnecting }}</MkInfo>
-			<MkInfo v-if="mediaFailure != null" warn>{{ failureText }}</MkInfo>
-			<MkInfo v-if="myParticipant?.role === 'listener'">{{ i18n.ts._calls.listenerDoesNotNeedMicrophone }}</MkInfo>
 
-			<div :class="$style.actions">
+			<MkInfo v-if="!connected" warn>{{ i18n.ts._calls.websocketDisconnected }}</MkInfo>
+			<MkInfo v-if="sessionIsCurrent && (session.mediaState.value === 'creating-session' || session.mediaState.value === 'negotiating')">{{ i18n.ts._calls.roomConnectedMediaConnecting }}</MkInfo>
+			<MkInfo v-if="sessionIsCurrent && session.mediaState.value === 'reconnecting'" warn>{{ i18n.ts._calls.reconnecting }}</MkInfo>
+			<MkInfo v-if="sessionIsCurrent && session.mediaFailure.value != null" warn>{{ failureText }}</MkInfo>
+
+			<section v-if="room.state === 'open' && !sessionIsCurrent" class="_panel" :class="$style.lobby">
+				<div>
+					<strong><i class="ti ti-door-enter"></i> {{ i18n.ts._calls.joinRoom }}</strong>
+					<p>{{ myParticipant?.role === 'listener' || myParticipant == null ? i18n.ts._calls.listenerDoesNotNeedMicrophone : i18n.ts._calls.microphone }}</p>
+				</div>
+				<MkButton primary large rounded :disabled="session.joining.value" @click="joinRoom"><i class="ti ti-broadcast"></i> {{ i18n.ts._calls.joinRoom }}</MkButton>
+			</section>
+
+			<div :class="$style.roomActions">
 				<MkButton v-if="isHost && room.state === 'scheduled'" primary @click="openRoom">{{ i18n.ts._calls.openRoom }}</MkButton>
 				<MkButton v-if="isHost && room.state === 'scheduled'" danger @click="cancelRoom">{{ i18n.ts._calls.cancelRoom }}</MkButton>
 				<MkButton v-if="isHost && room.state === 'open'" danger @click="endRoom">{{ i18n.ts._calls.endRoom }}</MkButton>
-				<MkButton v-if="myParticipant == null && room.state === 'open'" primary :disabled="joining" @click="joinRoom"><i class="ti ti-phone-call"></i> {{ i18n.ts._calls.joinRoom }}</MkButton>
-				<MkButton v-if="mediaState === 'acquiring-media'" @click="media?.cancelMicrophoneRequest()">{{ i18n.ts.cancel }}</MkButton>
-				<MkButton v-if="needsAudioResume" @click="resumeAudio">{{ i18n.ts._calls.resumeAudio }}</MkButton>
+				<MkButton v-if="sessionIsCurrent && session.needsAudioResume.value" @click="session.resumeAudio()">{{ i18n.ts._calls.resumeAudio }}</MkButton>
 			</div>
 
-			<MkSelect v-if="microphones.length > 0 && myParticipant?.role !== 'listener'" v-model="selectedMicrophone" :items="microphoneItems" @update:modelValue="switchMicrophone">
+			<MkSelect v-if="sessionIsCurrent && session.isSpeaker.value && session.microphones.value.length > 0" :modelValue="session.selectedMicrophone.value" :items="microphoneItems" @update:modelValue="session.switchMicrophone">
 				<template #label>{{ i18n.ts._calls.microphone }}</template>
 			</MkSelect>
 
-			<section class="_panel" :class="$style.participants">
-				<header :class="$style.sectionHeader">
-					<strong>{{ i18n.ts.users }}</strong>
-					<span>{{ participants.length }}</span>
-				</header>
-				<div v-for="participant in participants" :key="participant.id" :class="[$style.participant, { [$style.speaking]: speakingParticipantIds.has(participant.id) }]">
-					<div :class="$style.participantIdentity">
-						<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.avatar" indicator link preview/>
-						<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
-						<div :class="$style.participantDetails">
-							<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
-							<div :class="$style.badges">
-								<span :class="[$style.roleBadge, $style[participant.role]]">{{ i18n.ts._calls[participant.role] }}</span>
-								<span v-if="participant.role !== 'listener'" :class="$style.mediaState"><i v-if="speakingParticipantIds.has(participant.id)" class="ti ti-volume"></i><i v-else :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i> {{ participant.isMuted ? i18n.ts._calls.mute : i18n.ts._calls.unmute }}</span>
-								<span v-else :class="$style.mediaState"><i class="ti ti-headphones"></i> {{ i18n.ts.online }}</span>
-								<span v-if="participant.speakerRequestedAt != null" :class="$style.requestBadge"><i class="ti ti-hourglass-empty"></i> {{ i18n.ts._calls.requestSpeaker }}</span>
+			<section class="_panel" :class="$style.participantsPanel">
+				<header :class="$style.sectionHeader"><strong><i class="ti ti-users"></i> {{ i18n.ts.users }}</strong><span>{{ participants.length }}</span></header>
+
+				<div v-if="speakers.length > 0" :class="$style.participantGroup">
+					<div :class="$style.groupLabel">{{ i18n.ts._calls.speaker }}</div>
+					<div :class="$style.participantGrid">
+						<article v-for="participant in speakers" :key="participant.id" :class="[$style.participantCard, speakingParticipantIds.has(participant.id) && $style.speaking]">
+							<div :class="$style.participantIdentity">
+								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.avatar" indicator link preview/>
+								<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
+								<div :class="$style.participantDetails">
+									<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
+									<div :class="$style.participantStatus">
+										<span v-if="participant.role === 'host'" :class="$style.hostBadge">HOST</span>
+										<span><i v-if="speakingParticipantIds.has(participant.id)" class="ti ti-volume"></i><i v-else :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i> {{ participant.isMuted ? i18n.ts._calls.mute : speakingParticipantIds.has(participant.id) ? i18n.ts._calls.live : i18n.ts._calls.unmute }}</span>
+									</div>
+								</div>
 							</div>
-						</div>
+							<div v-if="isHost && participant.role !== 'host'" :class="$style.moderationActions">
+								<MkButton small @click="setRole(participant.id, 'listener')">{{ i18n.ts._calls.demoteListener }}</MkButton>
+								<MkButton small danger @click="removeParticipant(participant.id)">{{ i18n.ts._calls.removeParticipant }}</MkButton>
+							</div>
+						</article>
 					</div>
-					<div v-if="isHost && participant.role !== 'host'" :class="$style.actions">
-						<MkButton v-if="participant.role === 'listener'" small @click="setRole(participant.id, 'speaker')">{{ participant.speakerRequestedAt != null ? i18n.ts.approve : i18n.ts._calls.promoteSpeaker }}</MkButton>
-						<MkButton v-else small @click="setRole(participant.id, 'listener')">{{ i18n.ts._calls.demoteListener }}</MkButton>
-						<MkButton small danger @click="removeParticipant(participant.id)">{{ i18n.ts._calls.removeParticipant }}</MkButton>
+				</div>
+
+				<div v-if="listeners.length > 0" :class="$style.participantGroup">
+					<div :class="$style.groupLabel">{{ i18n.ts._calls.listener }}</div>
+					<div :class="$style.participantGrid">
+						<article v-for="participant in listeners" :key="participant.id" :class="$style.participantCard">
+							<div :class="$style.participantIdentity">
+								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.avatar" indicator link preview/>
+								<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
+								<div :class="$style.participantDetails">
+									<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
+									<div :class="$style.participantStatus"><span><i class="ti ti-headphones"></i> {{ i18n.ts.online }}</span><span v-if="participant.speakerRequestedAt != null" :class="$style.requestBadge">{{ i18n.ts._calls.requestSpeaker }}</span></div>
+								</div>
+							</div>
+							<div v-if="isHost" :class="$style.moderationActions">
+								<MkButton small primary @click="setRole(participant.id, 'speaker')">{{ participant.speakerRequestedAt != null ? i18n.ts.approve : i18n.ts._calls.promoteSpeaker }}</MkButton>
+								<MkButton small danger @click="removeParticipant(participant.id)">{{ i18n.ts._calls.removeParticipant }}</MkButton>
+							</div>
+						</article>
 					</div>
 				</div>
 			</section>
-			<div ref="audioContainer" hidden></div>
-			<footer v-if="myParticipant != null && room.state === 'open'" class="_panel _acrylic" :class="$style.callDock">
-				<div :class="$style.callIndicator">
-					<span :class="[$style.statusDot, { [$style.active]: mediaState === 'connected', [$style.busy]: mediaBusy }]" aria-hidden="true"></span>
-					<div><strong>{{ room.title }}</strong><small>{{ mediaStatusText }} · {{ i18n.ts._calls[myParticipant.role] }}</small></div>
-				</div>
-				<div :class="$style.dockActions">
-					<MkButton v-if="mediaState === 'idle' || mediaState === 'failed' || mediaState === 'closed'" primary small @click="connectAudio"><i class="ti ti-headphones"></i> {{ i18n.ts._calls.connectAudio }}</MkButton>
-					<MkButton v-if="mediaState === 'connected' && myParticipant.role !== 'listener'" small @click="toggleMute"><i :class="muted ? 'ti ti-microphone' : 'ti ti-microphone-off'"></i> {{ muted ? i18n.ts._calls.unmute : i18n.ts._calls.mute }}</MkButton>
-					<MkButton v-if="mediaState === 'connected' || mediaState === 'reconnecting'" small @click="disconnectAudio"><i class="ti ti-headphones-off"></i> {{ i18n.ts._calls.disconnectAudio }}</MkButton>
-					<MkButton v-if="myParticipant.role === 'listener'" small :disabled="myParticipant.speakerRequestedAt != null" @click="requestSpeaker"><i :class="myParticipant.speakerRequestedAt != null ? 'ti ti-hourglass-empty' : 'ti ti-hand-click'"></i> {{ i18n.ts._calls.requestSpeaker }}</MkButton>
-					<MkButton v-if="!isHost" danger small @click="leaveRoom"><i class="ti ti-phone-off"></i> {{ i18n.ts._calls.leaveRoom }}</MkButton>
-				</div>
-			</footer>
 		</div>
 	</div>
 </MkStickyContainer>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
+import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
-import type { CallsMediaFailure, CallsMediaState } from '@/utility/calls-media.js';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkSelect from '@/components/MkSelect.vue';
-import { useCallsRoom } from '@/composables/use-calls-room.js';
+import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { definePage } from '@/page.js';
 import { useRouter } from '@/router.js';
-import { CallsMediaController } from '@/utility/calls-media.js';
-import { detectCallsMediaCapabilities } from '@/utility/calls-media-core.js';
+import { useCallsSession } from '@/utility/calls-session.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 
 const props = defineProps<{ roomId: string }>();
 const router = useRouter();
-const { room, participants, connected, speakingParticipantIds, refresh, setMuted, setSpeaking, heartbeat, onTrackChange, onRevoked } = useCallsRoom(props.roomId);
-const media = shallowRef<CallsMediaController | null>(null);
-const mediaState = ref<CallsMediaState>('idle');
-const mediaFailure = ref<CallsMediaFailure | null>(null);
-const muted = ref(false);
-const microphones = ref<MediaDeviceInfo[]>([]);
-const selectedMicrophone = ref('');
-const microphoneItems = computed(() => microphones.value.map(device => ({ label: device.label || device.deviceId, value: device.deviceId })));
-const audioContainer = ref<HTMLElement | null>(null);
-const remoteAudio = new Set<HTMLAudioElement>();
-const needsAudioResume = ref(false);
-const loadFailed = ref(false);
-const joining = ref(false);
+const session = useCallsSession();
+const isSessionRoom = computed(() => session.currentRoomId.value === props.roomId);
+const pageConnection = shallowRef<ReturnType<typeof createCallsRoomConnection> | null>(isSessionRoom.value ? null : createCallsRoomConnection(props.roomId));
+const room = computed(() => isSessionRoom.value ? session.room.value : pageConnection.value?.room.value ?? null);
+const participants = computed(() => isSessionRoom.value ? session.participants.value : pageConnection.value?.participants.value ?? []);
+const connected = computed(() => isSessionRoom.value ? session.connected.value : pageConnection.value?.connected.value ?? false);
+const speakingParticipantIds = computed(() => isSessionRoom.value ? session.speakingParticipantIds.value : pageConnection.value?.speakingParticipantIds.value ?? new Set<string>());
+const loadFailed = shallowRef(false);
 const usersById = shallowRef(new Map<string, Misskey.entities.UserLite>());
 const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? null);
 const isHost = computed(() => myParticipant.value?.role === 'host');
-const failureText = computed(() => mediaFailure.value === 'unsupported' ? i18n.ts._calls.unsupportedBrowser : mediaFailure.value === 'permission-denied' ? i18n.ts._calls.permissionDenied : mediaFailure.value === 'device-not-found' ? i18n.ts._calls.deviceNotFound : mediaFailure.value === 'permission-pending' ? i18n.ts._calls.permissionPending : i18n.ts._calls.mediaFailed);
-const mediaBusy = computed(() => ['acquiring-media', 'creating-session', 'negotiating', 'reconnecting', 'leaving'].includes(mediaState.value));
-const mediaStatusText = computed(() => mediaState.value === 'connected' ? i18n.ts.online : mediaState.value === 'reconnecting' ? i18n.ts._calls.reconnecting : mediaBusy.value ? i18n.ts._calls.roomConnectedMediaConnecting : mediaState.value === 'failed' ? failureText.value : i18n.ts.offline);
+const speakers = computed(() => participants.value.filter(participant => participant.role !== 'listener'));
+const listeners = computed(() => participants.value.filter(participant => participant.role === 'listener'));
+const sessionIsCurrent = computed(() => isSessionRoom.value && session.isActive.value);
+const microphoneItems = computed(() => session.microphones.value.map(device => ({ label: device.label || device.deviceId, value: device.deviceId })));
+const failureText = computed(() => session.mediaFailure.value === 'unsupported' ? i18n.ts._calls.unsupportedBrowser : session.mediaFailure.value === 'permission-denied' ? i18n.ts._calls.permissionDenied : session.mediaFailure.value === 'device-not-found' ? i18n.ts._calls.deviceNotFound : session.mediaFailure.value === 'permission-pending' ? i18n.ts._calls.permissionPending : i18n.ts._calls.mediaFailed);
 
-async function openRoom() { if (room.value != null) room.value = await misskeyApi('calls/rooms/open', { roomId: props.roomId, expectedRevision: room.value.revision }); }
+async function openRoom(): Promise<void> { if (room.value != null) { await misskeyApi('calls/rooms/open', { roomId: props.roomId, expectedRevision: room.value.revision }); await refreshRoom(); } }
 
-async function cancelRoom() { if (room.value != null) room.value = await misskeyApi('calls/rooms/cancel', { roomId: props.roomId, expectedRevision: room.value.revision }); }
+async function cancelRoom(): Promise<void> { if (room.value != null) { await misskeyApi('calls/rooms/cancel', { roomId: props.roomId, expectedRevision: room.value.revision }); await refreshRoom(); } }
 
-async function endRoom() { if (room.value != null) room.value = await misskeyApi('calls/rooms/end', { roomId: props.roomId, expectedRevision: room.value.revision }); }
+async function endRoom(): Promise<void> { if (room.value != null) { await misskeyApi('calls/rooms/end', { roomId: props.roomId, expectedRevision: room.value.revision }); await refreshRoom(); } }
 
-async function joinRoom() {
-	if (joining.value) return;
-	const capabilities = detectCallsMediaCapabilities();
-	if (!capabilities.secureContext || !capabilities.peerConnection || !capabilities.transceiver) {
-		mediaState.value = 'failed';
-		mediaFailure.value = 'unsupported';
-		return;
-	}
-	joining.value = true;
-	let joined = false;
+async function joinRoom(): Promise<void> {
 	try {
-		await misskeyApi('calls/rooms/join', { roomId: props.roomId });
-		joined = true;
-		await refresh();
-		await connectAudio();
+		await session.join(props.roomId, myParticipant.value != null);
+		await refreshRoom();
 	} catch (error) {
-		await media.value?.close().catch(() => undefined);
-		media.value = null;
-		if (joined) await misskeyApi('calls/rooms/leave', { roomId: props.roomId }).catch(() => undefined);
-		await refresh().catch(() => undefined);
 		await os.alert({ type: 'error', text: error instanceof Error ? error.message : i18n.ts.somethingHappened });
-	} finally {
-		joining.value = false;
 	}
 }
 
-async function leaveRoom() { await media.value?.close(); await misskeyApi('calls/rooms/leave', { roomId: props.roomId }); router.push('/calls'); }
-
-async function requestSpeaker() { await misskeyApi('calls/rooms/request-speaker', { roomId: props.roomId }); }
-
-async function setRole(participantId: string, role: 'speaker' | 'listener') { if (room.value != null) { await misskeyApi('calls/rooms/set-role', { roomId: props.roomId, participantId, role, expectedRevision: room.value.revision }); await refresh(); } }
-
-async function removeParticipant(participantId: string) { if (room.value != null) { await misskeyApi('calls/rooms/remove-participant', { roomId: props.roomId, participantId, expectedRevision: room.value.revision }); await refresh(); } }
-
-async function connectAudio() {
-	if (myParticipant.value == null) return;
-	await media.value?.close().catch(() => undefined);
-	media.value = new CallsMediaController(props.roomId, myParticipant.value.role, (state, failure) => { mediaState.value = state; mediaFailure.value = failure; }, addRemoteTrack, (_stats, speaking) => setSpeaking(speaking));
-	try {
-		await media.value.connect(selectedMicrophone.value || undefined);
-	} catch {
-		// CallsMediaController reports a normalized, user-facing failure through onState.
-		return;
-	}
-	if (myParticipant.value.role !== 'listener') await loadMicrophones();
+async function setRole(participantId: string, role: 'speaker' | 'listener'): Promise<void> {
+	if (room.value == null) return;
+	await misskeyApi('calls/rooms/set-role', { roomId: props.roomId, participantId, role, expectedRevision: room.value.revision });
+	await refreshRoom();
 }
 
-async function disconnectAudio() {
-	await media.value?.close();
-	media.value = null;
-	muted.value = false;
+async function removeParticipant(participantId: string): Promise<void> {
+	if (room.value == null) return;
+	await misskeyApi('calls/rooms/remove-participant', { roomId: props.roomId, participantId, expectedRevision: room.value.revision });
+	await refreshRoom();
 }
 
-function addRemoteTrack(track: MediaStreamTrack) {
-	if ([...remoteAudio].some(audio => (audio.srcObject as MediaStream | null)?.getTracks().some(current => current.id === track.id))) return;
-	const audio = new Audio();
-	audio.autoplay = true;
-	audio.srcObject = new MediaStream([track]);
-	remoteAudio.add(audio);
-	audioContainer.value?.append(audio);
-	void audio.play().catch(() => { needsAudioResume.value = true; });
-	track.addEventListener('ended', () => { remoteAudio.delete(audio); audio.remove(); });
+async function refreshRoom(): Promise<void> {
+	if (isSessionRoom.value) await session.refresh();
+	else await pageConnection.value?.refresh();
 }
 
-async function resumeAudio() { await Promise.all([...remoteAudio].map(audio => audio.play())); needsAudioResume.value = false; }
+function participantUser(userId: string): Misskey.entities.UserLite | null { return usersById.value.get(userId) ?? null; }
 
-function toggleMute() { muted.value = !muted.value; media.value?.setMuted(muted.value); setMuted(muted.value); }
-
-async function switchMicrophone(deviceId: string) { await media.value?.switchMicrophone(deviceId); }
-
-async function loadMicrophones() { microphones.value = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'audioinput'); selectedMicrophone.value ||= microphones.value[0]?.deviceId ?? ''; }
-
-function participantUser(userId: string) { return usersById.value.get(userId) ?? null; }
-
-async function loadParticipantUsers(userIds: string[]) {
-	const missingUserIds = [...new Set(userIds)].filter(userId => !usersById.value.has(userId));
-	if (missingUserIds.length === 0) return;
-	try {
-		const users = await misskeyApi('users/show', { userIds: missingUserIds });
-		usersById.value = new Map([...usersById.value, ...users.map(user => [user.id, user] as const)]);
-	} catch {
-		// Keep the participant card usable with its user ID and retry on the next room snapshot.
-	}
+async function loadParticipantUsers(userIds: string[]): Promise<void> {
+	const missingIds = [...new Set(userIds)].filter(userId => !usersById.value.has(userId));
+	if (missingIds.length === 0) return;
+	const fetched = await Promise.all(missingIds.map(userId => misskeyApi('users/show', { userId }).catch(() => null)));
+	const next = new Map(usersById.value);
+	for (const user of fetched) if (user != null) next.set(user.id, user);
+	usersById.value = next;
 }
 
-async function handleDeviceChange() {
-	const previous = selectedMicrophone.value;
-	await loadMicrophones();
-	if (previous !== '' && !microphones.value.some(device => device.deviceId === previous)) {
-		selectedMicrophone.value = microphones.value[0]?.deviceId ?? '';
-		if (selectedMicrophone.value !== '' && mediaState.value === 'connected') await switchMicrophone(selectedMicrophone.value);
-	}
-}
-
-const removeTrackListener = onTrackChange(() => void media.value?.reconcile());
-const removeRevokedListener = onRevoked(reason => {
-	if (reason === 'stale-generation') void disconnectAudio().then(connectAudio);
-	else if (reason === 'moderation' && myParticipant.value?.role === 'listener' && room.value?.state === 'open') void disconnectAudio().then(connectAudio);
-	else void media.value?.close();
-});
-watch(() => myParticipant.value?.isMuted, value => { if (value != null) muted.value = value; });
-watch(() => myParticipant.value?.role, (role, previousRole) => {
-	if (previousRole === 'listener' && role === 'speaker' && room.value?.state === 'open') void (media.value == null ? connectAudio() : disconnectAudio().then(connectAudio));
-});
-watch(() => room.value?.state, state => { if (state === 'ended' || state === 'cancelled') void disconnectAudio(); });
 watch(() => participants.value.map(participant => participant.userId), userIds => { void loadParticipantUsers(userIds); }, { immediate: true });
-const heartbeatTimer = window.setInterval(() => { const identity = media.value?.connectionIdentity; if (identity != null) heartbeat(identity.connectionId, identity.generation); }, 30_000);
-onMounted(() => { void refresh().catch(() => { loadFailed.value = true; }); navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange); });
-onUnmounted(() => { window.clearInterval(heartbeatTimer); navigator.mediaDevices?.removeEventListener('devicechange', handleDeviceChange); removeTrackListener(); removeRevokedListener(); void media.value?.close(); for (const audio of remoteAudio) audio.remove(); });
+watch(isSessionRoom, active => {
+	if (active) {
+		pageConnection.value?.dispose();
+		pageConnection.value = null;
+	} else if (pageConnection.value == null) {
+		pageConnection.value = createCallsRoomConnection(props.roomId);
+		void pageConnection.value.refresh().catch(() => { loadFailed.value = true; });
+	}
+}, { immediate: true });
+onMounted(() => { void refreshRoom().catch(() => { loadFailed.value = true; }); });
+onUnmounted(() => pageConnection.value?.dispose());
 
 definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti ti-phone' }));
 </script>
 
 <style lang="scss" module>
-.hero { display: flex; justify-content: space-between; gap: 16px; padding: 24px; }
-.hero p { margin-bottom: 0; opacity: 0.7; }
-.actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.roomContent { min-height: calc(100dvh - 90px); padding-bottom: 96px; }
+.roomHeader { padding: 24px; }
+.titleRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.roomTitle { font-size: 1.3rem; font-weight: 800; }
+.roomMeta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; font-size: 0.86rem; opacity: 0.75; }
+.liveIndicator { color: var(--MI_THEME-error); font-weight: 800; letter-spacing: 0.08em; }
+.stateBadge { padding: 5px 10px; border-radius: 999px; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); font-size: 0.82rem; font-weight: 700; }
+.description { margin: 16px 0 0; opacity: 0.78; white-space: pre-wrap; }
+.lobby { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px; }
+.lobby p { margin: 6px 0 0; opacity: 0.68; }
+.roomActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .notFound { display: grid; justify-items: center; gap: 12px; padding: 40px; text-align: center; }
 .notFound > i { font-size: 2rem; }
-.participants { padding: 0 20px 8px; }
-.sectionHeader { display: flex; justify-content: space-between; align-items: center; padding: 16px 0 8px; border-bottom: solid 1px var(--MI_THEME-divider); }
-.sectionHeader span { min-width: 28px; padding: 2px 8px; text-align: center; border-radius: var(--MI-radius); background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); }
-.participant { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 0; border-bottom: solid 1px var(--MI_THEME-divider); }
-.participant:last-child { border-bottom: 0; }
-.participantIdentity { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.avatar, .avatarPlaceholder { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 50%; }
-.avatarPlaceholder { display: grid; place-items: center; background: var(--MI_THEME-buttonBg); font-size: 24px; }
+.participantsPanel { padding: 20px; }
+.sectionHeader { display: flex; align-items: center; justify-content: space-between; padding-bottom: 14px; border-bottom: solid 1px var(--MI_THEME-divider); }
+.sectionHeader span { min-width: 30px; padding: 3px 9px; border-radius: 999px; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); text-align: center; }
+.participantGroup { margin-top: 20px; }
+.groupLabel { margin-bottom: 10px; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.06em; opacity: 0.65; text-transform: uppercase; }
+.participantGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 10px; }
+.participantCard { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 12px; border-radius: 18px; background: color(from var(--MI_THEME-bg) srgb r g b / 0.42); }
+.participantIdentity { display: flex; min-width: 0; align-items: center; gap: 11px; }
+.avatar, .avatarPlaceholder { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%; }
+.avatarPlaceholder { display: grid; place-items: center; background: var(--MI_THEME-panel); }
 .participantDetails { min-width: 0; }
-.badges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 5px; font-size: 0.82em; }
-.roleBadge, .requestBadge { padding: 2px 8px; border-radius: var(--MI-radius); }
-.host { background: var(--MI_THEME-accent); color: var(--MI_THEME-fgOnAccent); }
-.speaker { background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); }
-.listener { background: var(--MI_THEME-buttonBg); }
-.requestBadge { background: var(--MI_THEME-infoBg); color: var(--MI_THEME-infoFg); }
-.mediaState { opacity: 0.75; }
+.participantDetails > strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.participantStatus { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; font-size: 0.78rem; opacity: 0.72; }
+.hostBadge { padding: 2px 7px; border-radius: 999px; background: var(--MI_THEME-accent); color: var(--MI_THEME-fgOnAccent); font-size: 0.68rem; font-weight: 800; }
+.requestBadge { color: var(--MI_THEME-infoFg); }
+.moderationActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .speaking { box-shadow: inset 4px 0 var(--MI_THEME-accent); }
-.callDock { position: fixed; bottom: var(--MI-margin); left: 50%; z-index: 10; display: flex; justify-content: space-between; align-items: center; gap: 16px; width: min(calc(100vw - var(--MI-margin) - var(--MI-margin)), 800px); padding: 12px 16px; transform: translateX(-50%); box-shadow: 0 8px 32px color-mix(in srgb, var(--MI_THEME-bg) 45%, transparent); }
-.callIndicator { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.callIndicator > div { min-width: 0; }
-.callIndicator strong, .callIndicator small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.callIndicator small { opacity: 0.7; }
-.statusDot { width: 12px; height: 12px; flex: 0 0 12px; border-radius: 50%; background: var(--MI_THEME-divider); }
-.statusDot.active { background: var(--MI_THEME-accent); box-shadow: 0 0 0 4px var(--MI_THEME-accentedBg); }
-.statusDot.busy { background: var(--MI_THEME-warn); animation: pulse 1.2s ease-in-out infinite; }
-.dockActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 
-@keyframes pulse { 50% { opacity: 0.45; } }
-
-@media (max-width: 500px) {
-	.participant { align-items: flex-start; flex-direction: column; }
-	.participant > .actions { padding-left: 64px; }
-	.callDock { align-items: stretch; flex-direction: column; }
-	.dockActions { justify-content: stretch; }
+@media (max-width: 600px) {
+	.lobby, .participantCard { align-items: stretch; flex-direction: column; }
+	.titleRow { flex-direction: column; }
+	.moderationActions { justify-content: stretch; }
 }
 </style>

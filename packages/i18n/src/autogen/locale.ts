@@ -10179,6 +10179,10 @@ export interface Locale extends ILocale {
          */
         "title": string;
         /**
+         * LIVE
+         */
+        "live": string;
+        /**
          * 通話ルームを作成
          */
         "createRoom": string;

@@ -87,6 +87,14 @@ import { PointService } from './PointService.js';
 import { InboxRuleService } from './InboxRuleService.js';
 import { LoginBonusService } from './LoginBonusService.js';
 import { EventService } from './EventService.js';
+import { CallsLiveConnectionService } from './calls/CallsLiveConnectionService.js';
+import { CallsRoomService } from './calls/CallsRoomService.js';
+import { CloudflareRealtimeClient } from './calls/CloudflareRealtimeClient.js';
+import { CallsMediaBindingService } from './calls/CallsMediaBindingService.js';
+import { CallsMediaService } from './calls/CallsMediaService.js';
+import { CallsTurnService } from './calls/CallsTurnService.js';
+import { CallsEventService } from './calls/CallsEventService.js';
+import { CallsMediaCredentialService } from './calls/CallsMediaCredentialService.js';
 
 import { ChartLoggerService } from './chart/ChartLoggerService.js';
 import FederationChart from './chart/charts/federation.js';
@@ -141,6 +149,7 @@ import { RoleEntityService } from './entities/RoleEntityService.js';
 import { ReversiGameEntityService } from './entities/ReversiGameEntityService.js';
 import { MetaEntityService } from './entities/MetaEntityService.js';
 import { EventEntityService } from './entities/EventEntityService.js';
+import { CallsEntityService } from './entities/CallsEntityService.js';
 
 import { ApAudienceService } from './activitypub/ApAudienceService.js';
 import { ApDbResolverService } from './activitypub/ApDbResolverService.js';
@@ -409,6 +418,14 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		InboxRuleService,
 		LoginBonusService,
 		EventService,
+		CallsRoomService,
+		CallsLiveConnectionService,
+		CloudflareRealtimeClient,
+		CallsMediaBindingService,
+		CallsMediaService,
+		CallsTurnService,
+		CallsEventService,
+		CallsMediaCredentialService,
 
 		ChartLoggerService,
 		FederationChart,
@@ -466,6 +483,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		SystemWebhookEntityService,
 
 		EventEntityService,
+		CallsEntityService,
 		ApAudienceService,
 		ApDbResolverService,
 		ApDeliverManagerService,
@@ -728,6 +746,14 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		LoginBonusService,
 
 		EventService,
+		CallsRoomService,
+		CallsLiveConnectionService,
+		CloudflareRealtimeClient,
+		CallsMediaBindingService,
+		CallsMediaService,
+		CallsTurnService,
+		CallsEventService,
+		CallsMediaCredentialService,
 		FederationChart,
 		NotesChart,
 		UsersChart,
@@ -783,6 +809,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		SystemWebhookEntityService,
 
 		EventEntityService,
+		CallsEntityService,
 		ApAudienceService,
 		ApDbResolverService,
 		ApDeliverManagerService,

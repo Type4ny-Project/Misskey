@@ -130,6 +130,15 @@ type Source = {
 
 	mediaProxy?: string;
 	videoThumbnailGenerator?: string;
+	cloudflareRealtime?: {
+		appId: string;
+		appSecret: string;
+		turn?: {
+			keyId: string;
+			apiToken: string;
+			ttl?: number;
+		};
+	};
 
 	perChannelMaxNoteCacheCount?: number;
 	perUserNotificationsMaxCount?: number;
@@ -191,6 +200,15 @@ export type Config = {
 	id: string;
 	outgoingAddress: string | undefined;
 	outgoingAddressFamily: 'ipv4' | 'ipv6' | 'dual' | undefined;
+	cloudflareRealtime: {
+		appId: string;
+		appSecret: string;
+		turn?: {
+			keyId: string;
+			apiToken: string;
+			ttl: number;
+		};
+	} | undefined;
 	deliverJobConcurrency: number | undefined;
 	inboxJobConcurrency: number | undefined;
 	relationshipJobConcurrency: number | undefined;
@@ -300,6 +318,20 @@ export function loadConfig(): Config {
 	const frontendEmbedManifestExists = fs.existsSync(resolve(projectBuiltDir, '_frontend_embed_vite_/manifest.json'));
 
 	const config = JSON.parse(fs.readFileSync(compiledConfigFilePath, 'utf-8')) as Source;
+	if (config.cloudflareRealtime != null) {
+		if (config.cloudflareRealtime.appId.trim() === '' || config.cloudflareRealtime.appSecret.trim() === '') {
+			throw new Error('cloudflareRealtime.appId and appSecret must both be non-empty');
+		}
+		if (config.cloudflareRealtime.turn != null) {
+			if (config.cloudflareRealtime.turn.keyId.trim() === '' || config.cloudflareRealtime.turn.apiToken.trim() === '') {
+				throw new Error('cloudflareRealtime.turn.keyId and apiToken must both be non-empty');
+			}
+			const ttl = config.cloudflareRealtime.turn.ttl ?? 3600;
+			if (!Number.isSafeInteger(ttl) || ttl < 60 || ttl > 86400) {
+				throw new Error('cloudflareRealtime.turn.ttl must be an integer between 60 and 86400 seconds');
+			}
+		}
+	}
 
 	const url = tryCreateUrl(config.url ?? process.env.MISSKEY_URL ?? '');
 	const version = meta.version;
@@ -366,6 +398,15 @@ export function loadConfig(): Config {
 		threadPoolSize: config.threadPoolSize ?? 1,
 		outgoingAddress: config.outgoingAddress,
 		outgoingAddressFamily: config.outgoingAddressFamily,
+		cloudflareRealtime: config.cloudflareRealtime == null ? undefined : {
+			appId: config.cloudflareRealtime.appId,
+			appSecret: config.cloudflareRealtime.appSecret,
+			turn: config.cloudflareRealtime.turn == null ? undefined : {
+				keyId: config.cloudflareRealtime.turn.keyId,
+				apiToken: config.cloudflareRealtime.turn.apiToken,
+				ttl: config.cloudflareRealtime.turn.ttl ?? 3600,
+			},
+		},
 		deliverJobConcurrency: config.deliverJobConcurrency,
 		inboxJobConcurrency: config.inboxJobConcurrency,
 		relationshipJobConcurrency: config.relationshipJobConcurrency,

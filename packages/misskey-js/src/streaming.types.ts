@@ -299,6 +299,28 @@ export type Channels = {
 			};
 		};
 	};
+	callsRoom: {
+		params: {
+			roomId: string;
+		};
+		events: {
+			lifecycle: (payload: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled' }) => void;
+			participant: (payload: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' }) => void;
+			role: (payload: CallsRoomEventBase & { participantId: string; role: 'host' | 'speaker' | 'listener' }) => void;
+			speakerRequest: (payload: CallsRoomEventBase & { participantId: string; requested: boolean }) => void;
+			mute: (payload: CallsRoomEventBase & { participantId: string; isMuted: boolean }) => void;
+			speaking: (payload: CallsRoomEventBase & { participantIds: string[] }) => void;
+			track: (payload: CallsRoomEventBase & { participantId: string; publicationId: string; available: boolean; mediaKind: 'audio' }) => void;
+			revoked: (payload: CallsRoomEventBase & { reason: 'access' | 'moderation' | 'room-ended' | 'logout' }) => void;
+		};
+		receives: null;
+	};
+};
+
+export type CallsRoomEventBase = {
+	sequence: number;
+	roomRevision: number;
+	occurredAt: string;
 };
 
 export type NoteUpdatedEvent = { id: Note['id'] } & ({

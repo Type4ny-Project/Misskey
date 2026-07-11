@@ -21,6 +21,7 @@ import type { MiWebhook } from '@/models/Webhook.js';
 import type { MiSystemWebhook } from '@/models/SystemWebhook.js';
 import type { MiMeta } from '@/models/Meta.js';
 import { MiAvatarDecoration, MiChatMessage, MiChatRoom, MiReversiGame, MiRole, MiRoleAssignment } from '@/models/_.js';
+import type { MiCallsRoom } from '@/models/CallsRoom.js';
 import type { Packed } from '@/misc/json-schema.js';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
@@ -30,6 +31,18 @@ import type Emitter from 'strict-event-emitter-types';
 import type { EventEmitter } from 'events';
 
 //#region Stream type-body definitions
+type CallsRoomEventBase = { sequence: number; roomRevision: number; occurredAt: string };
+export interface CallsRoomEventTypes {
+	lifecycle: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled' };
+	participant: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' };
+	role: CallsRoomEventBase & { participantId: string; role: 'host' | 'speaker' | 'listener' };
+	speakerRequest: CallsRoomEventBase & { participantId: string; requested: boolean };
+	mute: CallsRoomEventBase & { participantId: string; isMuted: boolean };
+	speaking: CallsRoomEventBase & { participantIds: string[] };
+	track: CallsRoomEventBase & { participantId: string; publicationId: string; available: boolean; mediaKind: 'audio' };
+	revoked: CallsRoomEventBase & { reason: 'access' | 'moderation' | 'room-ended' | 'logout' };
+}
+
 export interface BroadcastTypes {
 	emojiAdded: {
 		emoji: Packed<'EmojiDetailed'>;
@@ -316,6 +329,10 @@ export type GlobalEvents = {
 		name: `chatRoomStream:${MiChatRoom['id']}`;
 		payload: EventTypesToEventPayload<ChatEventTypes>;
 	};
+	callsRoom: {
+		name: `callsRoomStream:${MiCallsRoom['id']}`;
+		payload: EventTypesToEventPayload<CallsRoomEventTypes>;
+	};
 	reversi: {
 		name: `reversiStream:${MiUser['id']}`;
 		payload: EventTypesToEventPayload<ReversiEventTypes>;
@@ -425,6 +442,11 @@ export class GlobalEventService {
 	@bindThis
 	public publishChatRoomStream<K extends keyof ChatEventTypes>(toRoomId: MiChatRoom['id'], type: K, value?: ChatEventTypes[K]): void {
 		this.publish(`chatRoomStream:${toRoomId}`, type, typeof value === 'undefined' ? null : value);
+	}
+
+	@bindThis
+	public publishCallsRoomStream<K extends keyof CallsRoomEventTypes>(roomId: MiCallsRoom['id'], type: K, value: CallsRoomEventTypes[K]): void {
+		this.publish(`callsRoomStream:${roomId}`, type, value);
 	}
 
 	@bindThis

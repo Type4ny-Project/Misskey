@@ -9,11 +9,11 @@ import { prefersReducedMotion } from '@@/js/config.js';
 import { hemisphere } from '@@/js/intl-const.js';
 import type { DeviceKind } from '@/utility/device-kind.js';
 import type { TIPS } from '@/tips.js';
+import type { TimelineHeaderItem } from '@/timeline-header.js';
 import { Pizzax } from '@/lib/pizzax.js';
 import { DEFAULT_DEVICE_KIND } from '@/utility/device-kind.js';
-import type { TimelineHeaderItem } from '@/timeline-header.js';
 import { isLocalTimelineAvailable, isGlobalTimelineAvailable } from '@/scripts/get-timeline-available.js';
-import {genId} from "@/utility/id";
+import { genId } from '@/utility/id';
 
 /**
  * 「状態」を管理するストア(not「設定」)
@@ -486,7 +486,7 @@ export const store = markRaw(new Pizzax('base', {
 		default: [],
 	},
 	//#endregion
-	sound:{
+	sound: {
 		where: 'device',
 		default: {
 			bgmVolume: 0.25,

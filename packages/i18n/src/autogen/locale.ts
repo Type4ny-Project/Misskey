@@ -31,6 +31,26 @@ export interface Locale extends ILocale {
      */
     "search": string;
     /**
+     * 履歴
+     */
+    "history": string;
+    /**
+     * ポイントは正の数で指定してください
+     */
+    "pointsMustBePositive": string;
+    /**
+     * 現在のローカルユーザー数
+     */
+    "nowLocalUsers": string;
+    /**
+     * ローカルユーザー数の上限
+     */
+    "maxLocalUsers": string;
+    /**
+     * 残りのローカルユーザー枠
+     */
+    "remainingLocalUsers": string;
+    /**
      * リセット
      */
     "reset": string;
@@ -10144,6 +10164,184 @@ export interface Locale extends ILocale {
          * ダイレクトメッセージを閲覧する
          */
         "read:chat": string;
+        /**
+         * Misskey Callsのルームと参加者を閲覧する
+         */
+        "read:calls": string;
+        /**
+         * Misskey Callsへの参加と音声通話を操作する
+         */
+        "write:calls": string;
+    };
+    "_calls": {
+        /**
+         * Misskey Calls
+         */
+        "title": string;
+        /**
+         * 通話ルームを作成
+         */
+        "createRoom": string;
+        /**
+         * ルーム名
+         */
+        "roomTitle": string;
+        /**
+         * 説明
+         */
+        "roomDescription": string;
+        /**
+         * 開催場所
+         */
+        "attachmentType": string;
+        /**
+         * パーソナルルーム
+         */
+        "personalRoom": string;
+        /**
+         * チャットルーム
+         */
+        "chatRoom": string;
+        /**
+         * チャットルームID
+         */
+        "chatRoomId": string;
+        /**
+         * 公開範囲
+         */
+        "visibility": string;
+        /**
+         * 公開
+         */
+        "public": string;
+        /**
+         * フォロワーのみ
+         */
+        "followers": string;
+        /**
+         * 指定したユーザーのみ
+         */
+        "specified": string;
+        /**
+         * 通話を開始
+         */
+        "openRoom": string;
+        /**
+         * 通話を終了
+         */
+        "endRoom": string;
+        /**
+         * 予定を中止
+         */
+        "cancelRoom": string;
+        /**
+         * ルームに参加
+         */
+        "joinRoom": string;
+        /**
+         * 退出
+         */
+        "leaveRoom": string;
+        /**
+         * 音声に接続
+         */
+        "connectAudio": string;
+        /**
+         * 音声を切断
+         */
+        "disconnectAudio": string;
+        /**
+         * ミュート
+         */
+        "mute": string;
+        /**
+         * ミュート解除
+         */
+        "unmute": string;
+        /**
+         * マイク
+         */
+        "microphone": string;
+        /**
+         * リスナーとして参加する場合、マイク権限は要求されません。
+         */
+        "listenerDoesNotNeedMicrophone": string;
+        /**
+         * 発言をリクエスト
+         */
+        "requestSpeaker": string;
+        /**
+         * スピーカーにする
+         */
+        "promoteSpeaker": string;
+        /**
+         * リスナーに戻す
+         */
+        "demoteListener": string;
+        /**
+         * 参加者から削除
+         */
+        "removeParticipant": string;
+        /**
+         * ホスト
+         */
+        "host": string;
+        /**
+         * スピーカー
+         */
+        "speaker": string;
+        /**
+         * リスナー
+         */
+        "listener": string;
+        /**
+         * 開始前
+         */
+        "scheduled": string;
+        /**
+         * 通話中
+         */
+        "open": string;
+        /**
+         * 終了
+         */
+        "ended": string;
+        /**
+         * 中止
+         */
+        "cancelled": string;
+        /**
+         * このブラウザはMisskey Callsに必要な標準WebRTC APIをサポートしていません。
+         */
+        "unsupportedBrowser": string;
+        /**
+         * マイクの使用が許可されませんでした。ブラウザ設定から許可して再試行してください。
+         */
+        "permissionDenied": string;
+        /**
+         * 利用できるマイクが見つかりません。
+         */
+        "deviceNotFound": string;
+        /**
+         * 音声接続に失敗しました。再試行できます。
+         */
+        "mediaFailed": string;
+        /**
+         * 音声接続を復旧しています…
+         */
+        "reconnecting": string;
+        /**
+         * ルームには参加済みです。音声へ接続しています…
+         */
+        "roomConnectedMediaConnecting": string;
+        /**
+         * 音声再生を再開
+         */
+        "resumeAudio": string;
+        /**
+         * リアルタイム更新が切断されました。再接続を待っています。
+         */
+        "websocketDisconnected": string;
     };
     "_auth": {
         /**

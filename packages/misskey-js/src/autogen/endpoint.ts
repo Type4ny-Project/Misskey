@@ -203,6 +203,42 @@ import type {
 	BubbleGameRankingRequest,
 	BubbleGameRankingResponse,
 	BubbleGameRegisterRequest,
+	CallsCapabilitiesResponse,
+	CallsMediaCredentialRefreshRequest,
+	CallsMediaCredentialRefreshResponse,
+	CallsMediaReconcileRequest,
+	CallsMediaReconcileResponse,
+	CallsMediaRenegotiateRequest,
+	CallsMediaRenegotiateResponse,
+	CallsMediaSessionCreateRequest,
+	CallsMediaSessionCreateResponse,
+	CallsMediaTracksCloseRequest,
+	CallsMediaTracksCloseResponse,
+	CallsMediaTracksPublishRequest,
+	CallsMediaTracksPublishResponse,
+	CallsMediaTracksSubscribeRequest,
+	CallsMediaTracksSubscribeResponse,
+	CallsMediaTurnCredentialsRequest,
+	CallsMediaTurnCredentialsResponse,
+	CallsRoomsCancelRequest,
+	CallsRoomsCancelResponse,
+	CallsRoomsCreateRequest,
+	CallsRoomsCreateResponse,
+	CallsRoomsEndRequest,
+	CallsRoomsEndResponse,
+	CallsRoomsJoinRequest,
+	CallsRoomsJoinResponse,
+	CallsRoomsLeaveRequest,
+	CallsRoomsListRequest,
+	CallsRoomsListResponse,
+	CallsRoomsOpenRequest,
+	CallsRoomsOpenResponse,
+	CallsRoomsRemoveParticipantRequest,
+	CallsRoomsRequestSpeakerRequest,
+	CallsRoomsSetRoleRequest,
+	CallsRoomsSetRoleResponse,
+	CallsRoomsShowRequest,
+	CallsRoomsShowResponse,
 	ChannelsCreateRequest,
 	ChannelsCreateResponse,
 	ChannelsFavoriteRequest,
@@ -875,6 +911,26 @@ export type Endpoints = {
 	'blocking/list': { req: BlockingListRequest; res: BlockingListResponse };
 	'bubble-game/ranking': { req: BubbleGameRankingRequest; res: BubbleGameRankingResponse };
 	'bubble-game/register': { req: BubbleGameRegisterRequest; res: EmptyResponse };
+	'calls/capabilities': { req: EmptyRequest; res: CallsCapabilitiesResponse };
+	'calls/media/credential/refresh': { req: CallsMediaCredentialRefreshRequest; res: CallsMediaCredentialRefreshResponse };
+	'calls/media/reconcile': { req: CallsMediaReconcileRequest; res: CallsMediaReconcileResponse };
+	'calls/media/renegotiate': { req: CallsMediaRenegotiateRequest; res: CallsMediaRenegotiateResponse };
+	'calls/media/session/create': { req: CallsMediaSessionCreateRequest; res: CallsMediaSessionCreateResponse };
+	'calls/media/tracks/close': { req: CallsMediaTracksCloseRequest; res: CallsMediaTracksCloseResponse };
+	'calls/media/tracks/publish': { req: CallsMediaTracksPublishRequest; res: CallsMediaTracksPublishResponse };
+	'calls/media/tracks/subscribe': { req: CallsMediaTracksSubscribeRequest; res: CallsMediaTracksSubscribeResponse };
+	'calls/media/turn-credentials': { req: CallsMediaTurnCredentialsRequest; res: CallsMediaTurnCredentialsResponse };
+	'calls/rooms/cancel': { req: CallsRoomsCancelRequest; res: CallsRoomsCancelResponse };
+	'calls/rooms/create': { req: CallsRoomsCreateRequest; res: CallsRoomsCreateResponse };
+	'calls/rooms/end': { req: CallsRoomsEndRequest; res: CallsRoomsEndResponse };
+	'calls/rooms/join': { req: CallsRoomsJoinRequest; res: CallsRoomsJoinResponse };
+	'calls/rooms/leave': { req: CallsRoomsLeaveRequest; res: EmptyResponse };
+	'calls/rooms/list': { req: CallsRoomsListRequest; res: CallsRoomsListResponse };
+	'calls/rooms/open': { req: CallsRoomsOpenRequest; res: CallsRoomsOpenResponse };
+	'calls/rooms/remove-participant': { req: CallsRoomsRemoveParticipantRequest; res: EmptyResponse };
+	'calls/rooms/request-speaker': { req: CallsRoomsRequestSpeakerRequest; res: EmptyResponse };
+	'calls/rooms/set-role': { req: CallsRoomsSetRoleRequest; res: CallsRoomsSetRoleResponse };
+	'calls/rooms/show': { req: CallsRoomsShowRequest; res: CallsRoomsShowResponse };
 	'channels/create': { req: ChannelsCreateRequest; res: ChannelsCreateResponse };
 	'channels/favorite': { req: ChannelsFavoriteRequest; res: EmptyResponse };
 	'channels/featured': { req: EmptyRequest; res: ChannelsFeaturedResponse };

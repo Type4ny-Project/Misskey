@@ -4,9 +4,11 @@
 -
 
 ### Client
+- Feat: WebSocketとWebRTCを利用したMisskey Calls音声ルームを追加
 - Feat: センシティブなメディアをタップ中だけ表示するオプションを追加
 
 ### Server
+- Feat: Cloudflare Realtimeを利用するMisskey Calls APIとリアルタイムイベントを追加
 - Enhance: リモートノートクリーニングジョブのスキップ処理のパフォーマンス改善
 
 

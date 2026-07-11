@@ -85,13 +85,15 @@ import {
 	MiChatRoom,
 	MiChatRoomMembership,
 	MiChatRoomInvitation,
+	MiCallsRoom,
+	MiCallsParticipant,
+	MiCallsModerationLog,
 	MiChatApproval,
 	MiInboxRule,
 	MiEvent,
 } from './_.js';
 import type { Provider } from '@nestjs/common';
 import type { DataSource } from 'typeorm';
-
 
 const $inboxRuleRepository: Provider = {
 	provide: DI.inboxRuleRepository,
@@ -549,6 +551,24 @@ const $chatRoomInvitationsRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $callsRoomsRepository: Provider = {
+	provide: DI.callsRoomsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiCallsRoom).extend(miRepository as MiRepository<MiCallsRoom>),
+	inject: [DI.db],
+};
+
+const $callsParticipantsRepository: Provider = {
+	provide: DI.callsParticipantsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiCallsParticipant).extend(miRepository as MiRepository<MiCallsParticipant>),
+	inject: [DI.db],
+};
+
+const $callsModerationLogsRepository: Provider = {
+	provide: DI.callsModerationLogsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiCallsModerationLog).extend(miRepository as MiRepository<MiCallsModerationLog>),
+	inject: [DI.db],
+};
+
 const $chatApprovalsRepository: Provider = {
 	provide: DI.chatApprovalsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiChatApproval).extend(miRepository as MiRepository<MiChatApproval>),
@@ -652,6 +672,9 @@ const $eventsRepository: Provider = {
 		$chatRoomsRepository,
 		$chatRoomMembershipsRepository,
 		$chatRoomInvitationsRepository,
+		$callsRoomsRepository,
+		$callsParticipantsRepository,
+		$callsModerationLogsRepository,
 		$chatApprovalsRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
@@ -734,6 +757,9 @@ const $eventsRepository: Provider = {
 		$chatRoomsRepository,
 		$chatRoomMembershipsRepository,
 		$chatRoomInvitationsRepository,
+		$callsRoomsRepository,
+		$callsParticipantsRepository,
+		$callsModerationLogsRepository,
 		$chatApprovalsRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,

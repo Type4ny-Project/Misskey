@@ -701,8 +701,47 @@ type BubbleGameRankingResponse = operations['bubble-game___ranking']['responses'
 // @public (undocumented)
 type BubbleGameRegisterRequest = operations['bubble-game___register']['requestBody']['content']['application/json'];
 
+declare namespace calls {
+    export {
+        negotiateCallsCompatibility,
+        preferCallsOpus,
+        CallsCapabilityDocument,
+        CallsCompatibility,
+        CallsEventSequenceTracker
+    }
+}
+export { calls }
+
 // @public (undocumented)
 type CallsCapabilitiesResponse = operations['calls___capabilities']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsCapabilityDocument = {
+    protocolVersion: string;
+    mediaKinds: readonly string[];
+    codecs: readonly string[];
+    roles: readonly string[];
+    turnAvailable: boolean;
+    guestParticipation: boolean;
+    extensions: readonly string[];
+};
+
+// @public (undocumented)
+type CallsCompatibility = {
+    compatible: true;
+    negotiatedMajor: number;
+} | {
+    compatible: false;
+    reason: 'version-mismatch' | 'audio-unsupported' | 'opus-unsupported' | 'missing-extension';
+};
+
+// @public (undocumented)
+class CallsEventSequenceTracker {
+    // (undocumented)
+    accept(sequence: number): 'accepted' | 'duplicate' | 'gap';
+    // (undocumented)
+    reset(sequence?: number): void;
+}
 
 // @public (undocumented)
 type CallsMediaCredentialRefreshRequest = operations['calls___media___credential___refresh']['requestBody']['content']['application/json'];
@@ -3563,6 +3602,12 @@ type MyAppsRequest = operations['my___apps']['requestBody']['content']['applicat
 type MyAppsResponse = operations['my___apps']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+function negotiateCallsCompatibility(capabilities: CallsCapabilityDocument, options?: {
+    supportedMajor?: number;
+    requiredExtensions?: readonly string[];
+}): CallsCompatibility;
+
+// @public (undocumented)
 type Note = components['schemas']['Note'];
 
 declare namespace note {
@@ -3871,6 +3916,11 @@ type PointSendRequest = operations['point___send']['requestBody']['content']['ap
 
 // @public (undocumented)
 type PointSendResponse = operations['point___send']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+function preferCallsOpus<T extends {
+    mimeType: string;
+}>(codecs: readonly T[]): T[];
 
 // @public (undocumented)
 type PromoReadRequest = operations['promo___read']['requestBody']['content']['application/json'];

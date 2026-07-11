@@ -52,7 +52,7 @@
 - [x] 7.5 Cloudflareへのlocal publish、remote subscribe、即時renegotiate、track close / update、authoritative reconcile flowを実装する
 - [x] 7.6 local mute、speaker降格、`replaceTrack`によるマイク切替、device消失、remote audio autoplay復旧、完全なresource cleanupを実装する
 - [x] 7.7 一時切断の猶予、terminal failure検出、新generationでのsession再構築、republish / resubscribeを実装する
-- [ ] 7.8 state transition、operation直列化、permission error、device切替、古いresponseのfrontend unit testをbrowser API fakeで追加する
+- [x] 7.8 state transition、operation直列化、permission error、device切替、古いresponseのfrontend unit testをbrowser API fakeで追加する
 
 ## 8. サードパーティー参加protocol
 

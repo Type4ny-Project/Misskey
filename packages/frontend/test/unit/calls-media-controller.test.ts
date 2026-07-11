@@ -71,6 +71,39 @@ describe('CallsMediaController', () => {
 		expect(states).toContain('creating-session');
 	});
 
+	test('serializes concurrent connection operations and reports state transitions', async () => {
+		installBrowserMedia(vi.fn());
+		let activeSessionCreates = 0;
+		let maxActiveSessionCreates = 0;
+		let releaseFirst!: () => void;
+		const firstPending = new Promise<void>(resolve => { releaseFirst = resolve; });
+		let sessionCreates = 0;
+		apiMock.mockImplementation(async (endpoint: string) => {
+			if (endpoint === 'calls/media/turn-credentials') return null;
+			if (endpoint === 'calls/media/session/create') {
+				sessionCreates++;
+				activeSessionCreates++;
+				maxActiveSessionCreates = Math.max(maxActiveSessionCreates, activeSessionCreates);
+				if (sessionCreates === 1) await firstPending;
+				activeSessionCreates--;
+				return { participantId: 'participant-a', generation: sessionCreates, canPublish: false, mediaCredential: 'credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
+			}
+			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: [] };
+			throw new Error(`unexpected endpoint: ${endpoint}`);
+		});
+		const states: string[] = [];
+		const controller = new CallsMediaController('room-a', 'listener', state => states.push(state));
+		const first = controller.connect();
+		const second = controller.connect();
+		await vi.waitFor(() => expect(sessionCreates).toBe(1));
+		releaseFirst();
+		await Promise.all([first, second]);
+
+		expect(sessionCreates).toBe(2);
+		expect(maxActiveSessionCreates).toBe(1);
+		expect(states).toEqual(expect.arrayContaining(['creating-session', 'reconnecting']));
+	});
+
 	test('normalizes a denied microphone request and remains retryable', async () => {
 		installBrowserMedia(vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError')));
 		const reports: Array<[string, string | null]> = [];

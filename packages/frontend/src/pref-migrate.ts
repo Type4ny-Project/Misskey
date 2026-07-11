@@ -16,7 +16,7 @@ import type { SoundStore } from '@/preferences/def.js';
 
 // TODO: そのうち消す
 export function migrateOldSettings() {
-	os.waiting({ text: i18n.ts.settingsMigrating });
+	os.waiting({ text: i18n.ts.settingsMigrating as string });
 
 	store.loaded.then(async () => {
 		misskeyApi('i/registry/get', { scope: ['client'], key: 'themes' }).catch(() => []).then((themes: any) => {

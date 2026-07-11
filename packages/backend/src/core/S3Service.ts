@@ -44,7 +44,7 @@ export class S3Service {
 
 		return new S3Client({
 			endpoint: storage.objectStorageEndpoint ? u : undefined,
-			credentials: (storage.objectStorageAccessKey !== null && storage.objectStorageSecretKey !== null) ? {
+			credentials: (storage.objectStorageAccessKey != null && storage.objectStorageSecretKey != null) ? {
 				accessKeyId: storage.objectStorageAccessKey,
 				secretAccessKey: storage.objectStorageSecretKey,
 			} : undefined,

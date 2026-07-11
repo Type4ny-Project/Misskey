@@ -551,6 +551,7 @@ export type paths = {
          * admin/inbox-rule/delete
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *write:admin:inbox-rule*
          */
         post: operations['admin___inbox-rule___delete'];
@@ -560,6 +561,7 @@ export type paths = {
          * admin/inbox-rule/edit
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *write:admin:inbox-rule*
          */
         post: operations['admin___inbox-rule___edit'];
@@ -569,6 +571,7 @@ export type paths = {
          * admin/inbox-rule/list
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *read:admin:inbox-rule*
          */
         post: operations['admin___inbox-rule___list'];
@@ -578,6 +581,7 @@ export type paths = {
          * admin/inbox-rule/set
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *write:admin:inbox-rule*
          */
         post: operations['admin___inbox-rule___set'];
@@ -989,6 +993,7 @@ export type paths = {
          * admin/unset-mfa
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *write:admin:unset-mfa*
          */
         post: operations['admin___unset-mfa'];
@@ -5751,6 +5756,8 @@ export type components = {
             noteDraftLimit: number;
             scheduledNoteLimit: number;
             watermarkAvailable: boolean;
+            loginBonusGrantEnabled: boolean;
+            reactionLimit: number;
         };
         ReversiGameLite: {
             /** Format: id */
@@ -10771,6 +10778,10 @@ export interface operations {
                 };
                 content: {
                     'application/json': {
+                        isManaged: boolean;
+                        nowLocalUsers: number;
+                        maxLocalUsers: number;
+                        enableLoginBonus: boolean;
                         cacheRemoteFiles: boolean;
                         cacheRemoteSensitiveFiles: boolean;
                         emailRequiredForSignup: boolean;
@@ -14303,6 +14314,7 @@ export interface operations {
         requestBody: {
             content: {
                 'application/json': {
+                    enableLoginBonus?: boolean;
                     disableRegistration?: boolean | null;
                     pinnedUsers?: string[] | null;
                     hiddenTags?: string[] | null;

@@ -5,6 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor, type RenderResult } from '@testing-library/vue';
+import type { Directive } from 'vue';
 import type * as Misskey from 'misskey-js';
 import { customEmojis, customEmojisMap } from '@/custom-emojis.js';
 import { instance } from '@/instance.js';
@@ -92,7 +93,7 @@ vi.mock('@/utility/misskey-api.js', () => ({
 	misskeyApi: mockedMisskeyApi,
 }));
 
-type EmojiSuggestionPublicMeta = typeof instance & {
+type EmojiSuggestionPublicMeta = {
 	emojiSuggestion?: {
 		enabled: boolean;
 		maxSuggestions: number;
@@ -100,7 +101,7 @@ type EmojiSuggestionPublicMeta = typeof instance & {
 };
 
 function setEmojiSuggestionPublicMeta(value: EmojiSuggestionPublicMeta['emojiSuggestion']): void {
-	const suggestionMeta = instance as EmojiSuggestionPublicMeta;
+	const suggestionMeta = instance as unknown as EmojiSuggestionPublicMeta;
 	suggestionMeta.emojiSuggestion = value;
 }
 
@@ -211,8 +212,8 @@ async function renderPicker(props: {
 				},
 			},
 			directives: {
-				tooltip: vi.fn(),
-				panel: vi.fn(),
+					tooltip: vi.fn() as Directive,
+					panel: vi.fn() as Directive,
 			},
 		},
 	});

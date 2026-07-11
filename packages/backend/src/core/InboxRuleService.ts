@@ -36,6 +36,7 @@ export class InboxRuleService {
 
 	@bindThis
 	async evalCond(activity: IObject, user: MiRemoteUser, value: InboxRuleCondFormulaValue): Promise<boolean> {
+		const object = isCreate(activity) && typeof activity.object !== 'string' ? activity.object : activity;
 		const instanceUnpack = await this.instancesRepository
 			.findOneBy({ host: this.utilityService.toPuny(user.host) });
 		if (!instanceUnpack) {
@@ -105,27 +106,27 @@ export class InboxRuleService {
 				}
 				// メンション数が指定値以上
 				case 'maxMentionsMoreThanOrEq': {
-					if (isNote(activity.object)) {
-						return activity.object?.tag
-							? activity.object?.tag?.filter(t => t.type === 'Mention').length >= value.value
+					if (isNote(object)) {
+						return object.tag
+							? [object.tag].flat().filter(t => t.type === 'Mention').length >= value.value
 							: false;
 					}
 					return false;
 				}
 				// 添付ファイル数が指定値以上
 				case 'attachmentFileMoreThanOrEq': {
-					if (isNote(activity.object)) {
-						return activity.object?.attachment?.length ? activity.object?.attachment.length >= value.value : false;
+					if (isNote(object)) {
+						return object.attachment?.length ? object.attachment.length >= value.value : false;
 					}
 					return false;
 				}
 				case 'thisActivityIsNote': {
-					return isNote(activity.object);
+					return isNote(object);
 				}
 				// 指定されたワードが含まれている
 				case 'isIncludeThisWord': {
-					if (isNote(activity.object)) {
-						return this.utilityService.isKeyWordIncluded(typeof activity.object?.content === 'string' ? activity.object?.content : '', [value.value]);
+					if (isNote(object)) {
+						return this.utilityService.isKeyWordIncluded(typeof object.content === 'string' ? object.content : '', [value.value]);
 					}
 					return false;
 				}

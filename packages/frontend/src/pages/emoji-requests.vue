@@ -72,7 +72,7 @@ interface EmojiRequest {
 	aliases: string[];
 	license: string | null;
 	comment: string;
-	status: 'pending' | 'approved' | 'rejected';
+	status: string;
 	rejectionReason: string | null;
 }
 
@@ -101,7 +101,7 @@ async function fetchRequests() {
 		console.error(err);
 		os.alert({
 			type: 'error',
-			text: err.message,
+			text: err instanceof Error ? err.message : String(err),
 		});
 	}
 }

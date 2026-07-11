@@ -17,6 +17,7 @@ export const TIPS = [
 	'tl.local',
 	'tl.social',
 	'tl.global',
+	'tl.media',
 	'abuses',
 ] as const;
 

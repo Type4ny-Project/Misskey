@@ -6,7 +6,7 @@
 import * as crypto from 'node:crypto';
 import { URL } from 'node:url';
 import { promisify } from 'node:util';
-import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import * as htmlParser from 'node-html-parser';
 import { RsaKeyPair } from 'slacc';
 import { DI } from '@/di-symbols.js';
@@ -16,7 +16,6 @@ import { UserKeypairService } from '@/core/UserKeypairService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { LoggerService } from '@/core/LoggerService.js';
-import { MemoryKVCache } from '@/misc/cache.js';
 import { bindThis } from '@/decorators.js';
 import type Logger from '@/logger.js';
 import { validateContentTypeSetAsActivityPub } from '@/core/activitypub/misc/validator.js';
@@ -37,14 +36,8 @@ type Signed = {
 };
 
 type PrivateKey = {
-	privateKey?: string | crypto.KeyObject;
-	privateKeyPem?: string;
-	keyId: string;
-};
-
-type CachedPrivateKey = {
 	privateKeyPem: string;
-	privateKey: crypto.KeyObject;
+	keyId: string;
 };
 
 export class ApRequestCreator {
@@ -148,9 +141,8 @@ export class ApRequestCreator {
 }
 
 @Injectable()
-export class ApRequestService implements OnApplicationShutdown {
+export class ApRequestService {
 	private logger: Logger;
-	private privateKeyCache: MemoryKVCache<CachedPrivateKey>;
 
 	constructor(
 		@Inject(DI.config)
@@ -163,7 +155,6 @@ export class ApRequestService implements OnApplicationShutdown {
 	) {
 		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 		this.logger = this.loggerService?.getLogger('ap-request'); // なぜか TypeError: Cannot read properties of undefined (reading 'getLogger') と言われる
-		this.privateKeyCache = new MemoryKVCache<CachedPrivateKey>(1000 * 60 * 60); // 1h
 	}
 
 	@bindThis

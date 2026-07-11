@@ -40,7 +40,7 @@ export class LoginBonusService {
 
     const userProfile = await this.userProfilesRepository.findOne({
       where: { userId },
-      relations: ['user'],
+      relations: { user: true },
     });
 
     if (!userProfile) {
@@ -116,7 +116,7 @@ export class LoginBonusService {
   async getLoginBonusVisibility(userId: string): Promise<boolean> {
     const userProfile = await this.userProfilesRepository.findOne({
       where: { userId },
-      relations: ['user'],
+      relations: { user: true },
     });
 
     if (!userProfile) {
@@ -144,7 +144,7 @@ export class LoginBonusService {
   }> {
     const userProfile = await this.userProfilesRepository.findOne({
       where: { userId },
-      relations: ['user'],
+      relations: { user: true },
     });
 
     if (!userProfile) {
@@ -164,7 +164,7 @@ export class LoginBonusService {
   }): Promise<void> {
     const userProfile = await this.userProfilesRepository.findOne({
       where: { userId },
-      relations: ['user'],
+      relations: { user: true },
     });
 
     if (!userProfile) {
@@ -185,7 +185,7 @@ export class LoginBonusService {
   async getLoginHistory(userId: string): Promise<string[]> {
     const userProfile = await this.userProfilesRepository.findOne({
       where: { userId },
-      relations: ['user'],
+      relations: { user: true },
     });
 
     if (!userProfile) {
@@ -207,7 +207,7 @@ export class LoginBonusService {
     const user = await this.usersRepository.findOneByOrFail({ id: userId });
     const userProfile = await this.userProfilesRepository.findOne({
       where: { userId },
-      relations: ['user'],
+      relations: { user: true },
     });
 
     if (!userProfile) {

@@ -196,8 +196,8 @@ function removePinnedNote(id: string) {
 }
 
 function transferAdmin() {
-	os.selectUser({ includeSelf: true, multiple: false, localOnly: true }).then(user => {
-		if (Array.isArray(user)) return;
+	if (props.channelId == null) return;
+	os.selectUser({ includeSelf: true, localOnly: true }).then(user => {
 		os.confirm({
 			type: 'warning',
 			title: i18n.ts._channel.transferAdminConfirmTitle,
@@ -212,7 +212,7 @@ function transferAdmin() {
 				if (a) return;
 
 				misskeyApi('channels/update', {
-					channelId: props.channelId,
+					channelId: props.channelId!,
 					transferAdminUserId: user.id,
 				}).then(() => {
 					os.success();
@@ -223,18 +223,11 @@ function transferAdmin() {
 }
 
 function addUser() {
-	os.selectUser({ includeSelf: true, multiple: true, localOnly: true }).then(user => {
-		if (Array.isArray(user)) {
-			collaboratorUsers.value = [
-				...collaboratorUsers.value,
-				...user,
-			];
-		} else {
-			collaboratorUsers.value = [
-				...collaboratorUsers.value,
-				user,
-			];
-		}
+	os.selectUser({ includeSelf: true, localOnly: true }).then(user => {
+		collaboratorUsers.value = [
+			...collaboratorUsers.value,
+			user,
+		];
 		save();
 	});
 }
@@ -253,7 +246,6 @@ function save() {
 		isSensitive: isSensitive.value,
 		allowRenoteToExternal: allowRenoteToExternal.value,
 		isLocalOnly: isLocalOnly.value,
-		collaboratorIds: collaboratorUsers.value.map(x => x.id),
 	} satisfies Misskey.entities.ChannelsCreateRequest;
 
 	if (props.channelId != null) {

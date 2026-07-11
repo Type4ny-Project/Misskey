@@ -65,7 +65,7 @@ function isHashtagTimeline(timeline: Column['tl']): timeline is `hashtag:${strin
 }
 
 const timelineHashtag = computed(() => isHashtagTimeline(props.column.tl) ? props.column.tl.substring('hashtag:'.length) : undefined);
-const timelineSrc = computed(() => isHashtagTimeline(props.column.tl) ? 'hashtag' : props.column.tl);
+const timelineSrc = computed(() => isHashtagTimeline(props.column.tl) ? 'hashtag' : (props.column.tl ?? 'home'));
 const isAvailableTimeline = computed(() => isHashtagTimeline(props.column.tl) ? timelineHashtag.value !== '' : isAvailableBasicTimeline(props.column.tl));
 const timelineIconClass = computed(() => isHashtagTimeline(props.column.tl) ? 'ti ti-hash' : props.column.tl != null ? basicTimelineIconClass(props.column.tl) : undefined);
 const timelineTitle = computed(() => isHashtagTimeline(props.column.tl) ? `#${timelineHashtag.value}` : props.column.tl != null ? i18n.ts._timelines[props.column.tl] : null);

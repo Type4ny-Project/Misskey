@@ -16,6 +16,7 @@ export const meta = {
 
 	requireCredential: true,
 	requireModerator: true,
+	secure: true,
 	kind: 'write:admin:inbox-rule',
 
 	errors: {

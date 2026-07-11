@@ -61,11 +61,11 @@ async function onClick() {
 		if (isFollowing.value) {
 			await misskeyApi('hashtags/unfollow', { tag: props.tag });
 			isFollowing.value = false;
-			haptic('light');
+			haptic();
 		} else {
 			await misskeyApi('hashtags/follow', { tag: props.tag });
 			isFollowing.value = true;
-			haptic('medium');
+			haptic();
 		}
 
 		followedHashtagsCache.delete();

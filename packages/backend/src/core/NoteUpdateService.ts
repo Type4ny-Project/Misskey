@@ -132,7 +132,7 @@ export class NoteUpdateService implements OnApplicationShutdown {
 			if (this.userEntityService.isLocalUser(user)) this.activeUsersChart.write(user);
 
 			// Emit update event
-			this.globalEventService.publishNoteStream(note.id, 'updated', {
+			this.globalEventService.publishNoteStream(note, 'updated', {
 				text: updatedNote.text ?? '',
 				cw: updatedNote.cw,
 				updatedAt: updatedNote.updatedAt?.toISOString() ?? new Date().toISOString(),

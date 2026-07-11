@@ -83,6 +83,8 @@ export const userImportableEntities = ['antenna', 'blocking', 'customEmoji', 'fo
 
 export const moderationLogTypes = [
 	'inboxRejected',
+	'setInboxRule',
+	'deleteInboxRule',
 	'updateServerSettings',
 	'suspend',
 	'unsuspend',
@@ -143,6 +145,14 @@ export const moderationLogTypes = [
 export type ModerationLogPayloads = {
 	inboxRejected: {
 		activity: any;
+		rule: any;
+	};
+	setInboxRule: {
+		userId: string;
+		rule: any;
+	};
+	deleteInboxRule: {
+		userId: string;
 		rule: any;
 	};
 

@@ -529,7 +529,7 @@ async function reply() {
 	showMovedDialog();
 	os.post({
 		reply: appearNote,
-		channel: appearNote.channel,
+		channel: appearNote.channel == null ? appearNote.channel : { ...appearNote.channel, isLocalOnly: false },
 	}).then(() => {
 		focus();
 	});

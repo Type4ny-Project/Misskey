@@ -109,7 +109,7 @@ describe('EmojiSuggestionService', () => {
 		});
 		expect(readLastLogEvent(logInfo).normalizedTextHmacPrefix).toMatch(/^[0-9a-f]{12}$/);
 
-		const body = JSON.parse(send.mock.calls[0][1].body as string) as { normalizedText: string; instanceId: string; eligibility: { visibility: string; localOnly: boolean }; maxResults: number; deadlineMs: number; modelVersion?: string; emojiIndexVersion?: string; budgetMode?: string };
+		const body = JSON.parse((send.mock.calls[0] as unknown as [string, { body: string }])[1].body) as { normalizedText: string; instanceId: string; eligibility: { visibility: string; localOnly: boolean }; maxResults: number; deadlineMs: number; modelVersion?: string; emojiIndexVersion?: string; budgetMode?: string };
 		expect(body.instanceId).toBe('misskey.example.test');
 		expect(body.eligibility).toEqual({ visibility: 'public', localOnly: false });
 		expect(body.maxResults).toBe(8);
@@ -124,14 +124,14 @@ describe('EmojiSuggestionService', () => {
 			items: [{ name: 'ablobgoodnightreverse' }],
 		});
 		expect(send).toHaveBeenCalledTimes(2);
-		const localOnlyBody = JSON.parse(send.mock.calls[1][1].body as string) as { eligibility: { visibility: string; localOnly: boolean } };
+		const localOnlyBody = JSON.parse((send.mock.calls[1] as unknown as [string, { body: string }])[1].body) as { eligibility: { visibility: string; localOnly: boolean } };
 		expect(localOnlyBody.eligibility).toEqual({ visibility: 'public', localOnly: true });
 
 		await expect(service.suggestForNote(createNote({ visibility: 'home' }))).resolves.toMatchObject({
 			items: [{ name: 'ablobgoodnightreverse' }],
 		});
 		expect(send).toHaveBeenCalledTimes(3);
-		const homeBody = JSON.parse(send.mock.calls[2][1].body as string) as { eligibility: { visibility: string; localOnly: boolean } };
+		const homeBody = JSON.parse((send.mock.calls[2] as unknown as [string, { body: string }])[1].body) as { eligibility: { visibility: string; localOnly: boolean } };
 		expect(homeBody.eligibility).toEqual({ visibility: 'home', localOnly: false });
 
 		for (const note of [
@@ -261,7 +261,7 @@ describe('EmojiSuggestionService', () => {
 			renote: createNote({ text: 'renote source text' }),
 		}));
 
-		const body = JSON.parse(send.mock.calls[0][1].body as string) as { normalizedText: string };
+		const body = JSON.parse((send.mock.calls[0] as unknown as [string, { body: string }])[1].body) as { normalizedText: string };
 		expect(body.normalizedText).toBe('renote source text');
 	});
 });

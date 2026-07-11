@@ -26,6 +26,10 @@ export const meta = {
 		type: 'object',
 		optional: false, nullable: false,
 		properties: {
+			isManaged: { type: 'boolean', optional: false, nullable: false },
+			nowLocalUsers: { type: 'integer', optional: false, nullable: false },
+			maxLocalUsers: { type: 'integer', optional: false, nullable: false },
+			enableLoginBonus: { type: 'boolean', optional: false, nullable: false },
 			cacheRemoteFiles: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -834,6 +838,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				remoteNotesCleaningExpiryDaysForEachNotes: instance.remoteNotesCleaningExpiryDaysForEachNotes,
 				remoteNotesCleaningMaxProcessingDurationInMinutes: instance.remoteNotesCleaningMaxProcessingDurationInMinutes,
 				showRoleBadgesOfRemoteUsers: instance.showRoleBadgesOfRemoteUsers,
+				enableLoginBonus: instance.enableLoginBonus,
 				isManaged: envOption.managed,
 				...(envOption.managed ? {
 					nowLocalUsers: await this.usersRepository.count({ where: { host: IsNull(), username: Not(In(['instance.actor', 'relay.actor', this.config.adminUserName ?? '', this.config.rootUserName ?? ''])) } }),

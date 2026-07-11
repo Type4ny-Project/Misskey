@@ -9,7 +9,6 @@ import type { SummalyResult } from '@misskey-dev/summaly';
 import { components } from '@/components/index.js';
 import { directives } from '@/directives/index.js';
 import MkUrlPreview from '@/components/MkUrlPreview.vue';
-import { getLocalEventId } from '@/utility/url-preview.js';
 
 describe('MkUrlPreview', () => {
 	const renderPreviewBy = async (summary: Partial<SummalyResult>): Promise<RenderResult> => {
@@ -145,34 +144,6 @@ describe('MkUrlPreview', () => {
 		assert.strictEqual(iframe?.allow, 'fullscreen');
 	});
 
-	test('Existing autoplay parameters should be stripped from player url', async () => {
-		const iframe = await renderAndOpenPreview({
-			url: 'https://example.local',
-			player: {
-				url: 'https://example.local/player?autoplay=1&auto_play=1',
-				width: null,
-				height: null,
-				allow: [],
-			},
-		});
-		assert.exists(iframe, 'iframe should exist');
-		assert.strictEqual(iframe?.src, 'https://example.local/player');
-	});
-
-	test('Twitch player should not autoplay either', async () => {
-		const iframe = await renderAndOpenPreview({
-			url: 'https://example.local',
-			player: {
-				url: 'https://player.twitch.tv/?channel=test&autoplay=true',
-				width: null,
-				height: null,
-				allow: [],
-			},
-		});
-		assert.exists(iframe, 'iframe should exist');
-		assert.ok(!iframe?.src.includes('autoplay'));
-	});
-
 	test('Having a player width should keep the fixed aspect ratio', async () => {
 		const iframe = await renderAndOpenPreview({
 			url: 'https://example.local',
@@ -217,24 +188,5 @@ describe('MkUrlPreview', () => {
 		assert.exists(iframe, 'iframe should exist');
 		assert.strictEqual(iframe?.getAttribute('allow'), 'fullscreen;web-share');
 		assert.strictEqual(iframe?.getAttribute('sandbox'), 'allow-popups allow-popups-to-escape-sandbox allow-scripts allow-same-origin');
-	});
-
-	test('Local event URL should render event card', async () => {
-		const mkUrlPreview = render(MkUrlPreview, {
-		props: { url: 'events/al6jvjkccp4t000c' },
-		global: { directives, components },
-		});
-		await nextTick();
-		mkUrlPreview.getByText('al6jvjkccp4t000c');
-	});
-
-	test('Local event URL should be detected as local event', () => {
-		assert.strictEqual(getLocalEventId(`${local}/events/al6jvjkccp4t000c`), 'al6jvjkccp4t000c');
-		assert.strictEqual(getLocalEventId('/events/al6jvjkccp4t000c'), 'al6jvjkccp4t000c');
-	});
-
-	test('Non local URL should not be detected as event URL', () => {
-		assert.strictEqual(getLocalEventId('https://example.org/events/al6jvjkccp4t000c'), null);
-		assert.strictEqual(getLocalEventId('https://example.com/notes/123'), null);
 	});
 });

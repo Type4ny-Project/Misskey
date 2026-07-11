@@ -23,6 +23,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
+		enableLoginBonus: { type: 'boolean' },
 		disableRegistration: { type: 'boolean', nullable: true },
 		pinnedUsers: {
 			type: 'array', nullable: true, items: {
@@ -349,7 +350,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.backgroundImageUrl = ps.backgroundImageUrl;
 			}
 
-			if (ps.backgroundImageUrls !== undefined) {
+			if (ps.backgroundImageUrls != null) {
 				set.backgroundImageUrls = ps.backgroundImageUrls.filter(x => x.url != null && x.url !== '');
 			}
 
@@ -857,6 +858,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.showRoleBadgesOfRemoteUsers !== undefined) {
 				set.showRoleBadgesOfRemoteUsers = ps.showRoleBadgesOfRemoteUsers;
+			}
+
+			if (ps.enableLoginBonus !== undefined) {
+				set.enableLoginBonus = ps.enableLoginBonus;
 			}
 
 			const before = await this.metaService.fetch(true);

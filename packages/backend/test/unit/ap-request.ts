@@ -5,7 +5,6 @@
 
 import { describe, test } from 'vitest';
 import * as assert from 'assert';
-import * as crypto from 'node:crypto';
 import httpSignature from '@peertube/http-signature';
 
 import { genRsaKeyPair } from '@/misc/gen-key-pair.js';
@@ -69,11 +68,11 @@ describe('ap-request', () => {
 
 	test('createSignedPost with KeyObject', async () => {
 		const keypair = await genRsaKeyPair();
-		const key = { keyId: 'x', privateKey: crypto.createPrivateKey(keypair.privateKey) };
+		const key = { keyId: 'x', privateKeyPem: keypair.privateKey };
 		const url = 'https://example.com/inbox';
 		const body = JSON.stringify({ a: 1 });
 
-		const req = ApRequestCreator.createSignedPost({ key, url, body, additionalHeaders: {} });
+		const req = await ApRequestCreator.createSignedPost({ key, url, body, additionalHeaders: {} });
 		const parsed = buildParsedSignature(req.signingString, req.signature, 'rsa-sha256');
 
 		const result = httpSignature.verifySignature(parsed, keypair.publicKey);

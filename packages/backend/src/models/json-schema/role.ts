@@ -329,6 +329,14 @@ export const packedRolePoliciesSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		loginBonusGrantEnabled: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		reactionLimit: {
+			type: 'integer',
+			optional: false, nullable: false,
+		},
 	},
 } as const;
 

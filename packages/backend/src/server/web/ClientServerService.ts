@@ -691,7 +691,7 @@ export class ClientServerService {
 					id: request.params.note,
 					visibility: In(['public', 'home']),
 				},
-				relations: ['user', 'reply', 'renote'],
+				relations: { user: true, reply: true, renote: true },
 			});
 
 			if (
@@ -929,7 +929,7 @@ export class ClientServerService {
 				where: {
 					id: request.params.note,
 				},
-				relations: ['user', 'reply', 'renote'],
+				relations: { user: true, reply: true, renote: true },
 			});
 
 			if (note == null) return;

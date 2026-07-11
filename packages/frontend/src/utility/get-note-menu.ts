@@ -210,7 +210,7 @@ export function getNoteMenu(props: {
 	}
 
 	function edit(): void {
-		os.post({ initialNote: appearNote, renote: appearNote.renote, reply: appearNote.reply, channel: appearNote.channel, updateMode: true });
+		os.post({ initialNote: appearNote, renote: appearNote.renote, reply: appearNote.reply, channel: appearNote.channel == null ? appearNote.channel : { ...appearNote.channel, isLocalOnly: false }, updateMode: true });
 	}
 
 	function delEdit(): void {
@@ -227,7 +227,7 @@ export function getNoteMenu(props: {
 				globalEvents.emit('noteDeleted', appearNote.id);
 			});
 
-			os.post({ initialNote: appearNote, renote: appearNote.renote, reply: appearNote.reply, channel: appearNote.channel });
+			os.post({ initialNote: appearNote, renote: appearNote.renote, reply: appearNote.reply, channel: appearNote.channel == null ? appearNote.channel : { ...appearNote.channel, isLocalOnly: false } });
 
 			if (Date.now() - new Date(appearNote.createdAt).getTime() < 1000 * 60 && appearNote.userId === $i.id) {
 				claimAchievement('noteDeletedWithin1min');
@@ -716,7 +716,7 @@ export function getRenoteMenu(props: {
 				if (!props.mock) {
 					os.post({
 						renote: appearNote,
-						channel: appearNote.channel,
+						channel: appearNote.channel == null ? appearNote.channel : { ...appearNote.channel, isLocalOnly: false },
 					});
 				}
 			},

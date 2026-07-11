@@ -38,6 +38,7 @@ import { store } from '@/store.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 import { i18n } from '@/i18n.js';
 import { getTimelineHeaderItemDef, timelineHeaderItemDef } from '@/timeline-header.js';
+import type { TimelineHeaderItem } from '@/timeline-header.js';
 import MkDraggable from '@/components/MkDraggable.vue';
 
 const items = ref(store.s.timelineHeader.map(x => ({
@@ -54,9 +55,9 @@ async function reloadAsk() {
 	unisonReload();
 }
 
-const menuItems = computed(() => {
+const menuItems = computed<TimelineHeaderItem[]>(() => {
 	const used = new Set(items.value.map(x => x.type));
-	return Object.keys(timelineHeaderItemDef).filter(k => !used.has(k));
+	return (Object.keys(timelineHeaderItemDef) as TimelineHeaderItem[]).filter(k => !used.has(k));
 });
 
 console.log(timelineHeaderItemDef);
@@ -65,11 +66,11 @@ console.log(menuItems.value);
 async function addItem() {
 	const { canceled, result: item } = await os.select({
 		title: i18n.ts.addItem,
-		items: [...menuItems.value.map(k => ({
-			value: k, label: getTimelineHeaderItemDef(k)?.title,
-		}))],
+		items: menuItems.value.map(k => ({
+			value: k, label: getTimelineHeaderItemDef(k)?.title ?? k,
+		})),
 	});
-	if (canceled) return;
+	if (canceled || item == null) return;
 	items.value = [...items.value, {
 		id: Math.random().toString(),
 		type: item,

@@ -67,7 +67,7 @@ function setupEmojiSuggestionStoryState(): void {
 	}
 }
 
-function renderDisabledReactionPickerStory(args: Record<string, unknown>) {
+function renderDisabledReactionPickerStory(args: InstanceType<typeof MkEmojiPicker>['$props']) {
 	return {
 		components: {
 			MkEmojiPicker,
@@ -110,7 +110,7 @@ function assertSuggestionRequestBody(value: unknown, noteId: string): asserts va
 	expect(value).not.toHaveProperty(['c', 'w'].join(''));
 }
 
-function renderReactionPickerStory(args: Record<string, unknown>) {
+function renderReactionPickerStory(args: InstanceType<typeof MkEmojiPicker>['$props']) {
 	return {
 		components: {
 			MkEmojiPicker,

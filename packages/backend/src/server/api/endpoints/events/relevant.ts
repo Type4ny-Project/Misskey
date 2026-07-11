@@ -59,11 +59,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			const [followings, favorites] = await Promise.all([
 				this.channelFollowingsRepository.find({
-					select: ['followeeId'],
+					select: { followeeId: true },
 					where: { followerId: me.id },
 				}),
 				this.channelFavoritesRepository.find({
-					select: ['channelId'],
+					select: { channelId: true },
 					where: { userId: me.id },
 				}),
 			]);

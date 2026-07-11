@@ -101,14 +101,14 @@ interface EmojiRequest {
 	id: string;
 	createdAt: string;
 	updatedAt: string | null;
-	userId: string | null;
+	userId: string;
 	name: string;
 	category: string | null;
 	originalUrl: string;
 	aliases: string[];
 	license: string | null;
 	comment: string;
-	status: 'pending' | 'approved' | 'rejected';
+	status: string;
 	rejectionReason: string | null;
 }
 
@@ -160,7 +160,7 @@ async function fetchRequests(limit = 50, append = false) {
 		console.error(err);
 		os.alert({
 			type: 'error',
-			text: err.message,
+			text: err instanceof Error ? err.message : String(err),
 		});
 	} finally {
 		loading.value = false;
@@ -225,7 +225,7 @@ async function fetchAllPendingRequests(limit = 100): Promise<EmojiRequest[]> {
 	let nextUntilId: string | null = null;
 
 	for (;;) {
-		const batch = await misskeyApi('admin/emoji/list-request', {
+		const batch: EmojiRequest[] = await misskeyApi('admin/emoji/list-request', {
 			limit,
 			status: 'pending',
 			untilId: nextUntilId ?? undefined,
@@ -331,7 +331,7 @@ async function editRequest(request: EmojiRequest) {
 			requestId: request.id,
 			name: result.name,
 			category: result.category === '' ? null : result.category,
-			aliases: result.aliases.replaceAll('　', ' ').split(' ').filter((x: string) => x !== ''),
+			aliases: (result.aliases ?? '').replaceAll('　', ' ').split(' ').filter((x: string) => x !== ''),
 			license: result.license === '' ? null : result.license,
 			comment: result.comment ?? '',
 		});
@@ -357,14 +357,14 @@ async function reject(request: EmojiRequest) {
 
 	const { canceled: confirmCanceled } = await os.confirm({
 		type: 'warning',
-		text: i18n.tsx.rejectConfirm({ x: ':' + request.name + ':', reason }),
+		text: i18n.tsx.rejectConfirm({ x: ':' + request.name + ':', reason: reason ?? '' }),
 	});
 	if (confirmCanceled) return;
 
 	try {
 		await os.apiWithDialog('admin/emoji/reject-request', {
 			requestId: request.id,
-			reason: reason,
+			reason: reason ?? '',
 		});
 
 		os.alert({

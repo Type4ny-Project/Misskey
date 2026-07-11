@@ -52,7 +52,7 @@ const listItems = lists.reduce((acc, l) => {
 		iconOnly: true,
 	};
 	return acc;
-}, {});
+}, {} as Record<string, TimelineHeaderItemsDef>);
 
 const channelItems = userChannels.reduce((acc, l) => {
 	acc['channel:' + l.id] = {
@@ -61,7 +61,7 @@ const channelItems = userChannels.reduce((acc, l) => {
 		iconOnly: true,
 	};
 	return acc;
-}, {});
+}, {} as Record<string, TimelineHeaderItemsDef>);
 
 const channelFollowingItems = userChannelFollowings.reduce((acc, l) => {
 	acc['channel:' + l.id] = {
@@ -70,7 +70,7 @@ const channelFollowingItems = userChannelFollowings.reduce((acc, l) => {
 		iconOnly: true,
 	};
 	return acc;
-}, {});
+}, {} as Record<string, TimelineHeaderItemsDef>);
 
 const favoriteListItems = userFavoriteLists.reduce((acc, l) => {
 	acc['channel:' + l.id] = {
@@ -79,7 +79,7 @@ const favoriteListItems = userFavoriteLists.reduce((acc, l) => {
 		iconOnly: true,
 	};
 	return acc;
-}, {});
+}, {} as Record<string, TimelineHeaderItemsDef>);
 
 const antennaItems = antenna.reduce((acc, l) => {
 	acc['antenna:' + l.id] = {
@@ -88,7 +88,7 @@ const antennaItems = antenna.reduce((acc, l) => {
 		iconOnly: true,
 	};
 	return acc;
-}, {});
+}, {} as Record<string, TimelineHeaderItemsDef>);
 
 const hashtagItems = followedHashtags.reduce((acc, l) => {
 	acc['hashtag:' + l.tag] = {
@@ -97,7 +97,7 @@ const hashtagItems = followedHashtags.reduce((acc, l) => {
 		iconOnly: true,
 	};
 	return acc;
-}, {});
+}, {} as Record<string, TimelineHeaderItemsDef>);
 
 const remoteLocalTimelineItems = store.r.remoteLocalTimeline.value.reduce((acc, t: { host: string; name: string; }) => {
 	acc['remoteLocalTimeline:' + t.host.replace('https://', '')] = {
@@ -106,7 +106,7 @@ const remoteLocalTimelineItems = store.r.remoteLocalTimeline.value.reduce((acc, 
 		iconOnly: true,
 	};
 	return acc;
-}, {});
+}, {} as Record<string, TimelineHeaderItemsDef>);
 
 export const timelineHeaderItemDef = reactive<Partial<Record<TimelineHeaderItem, TimelineHeaderItemsDef>>>({
 	home: {

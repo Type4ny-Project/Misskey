@@ -38,7 +38,7 @@ export class CloudflareRealtimeClient {
 	) {}
 
 	public async createSession(sessionDescription?: CloudflareRealtimeSessionDescription): Promise<CloudflareRealtimeNewSessionResponse> {
-		return this.request('create-session', 'POST', cloudflareRealtimeEndpoints.createSession, sessionDescription == null ? {} : { sessionDescription });
+		return this.request('create-session', 'POST', cloudflareRealtimeEndpoints.createSession, sessionDescription == null ? undefined : { sessionDescription });
 	}
 
 	public async getSession(sessionId: string): Promise<CloudflareRealtimeSessionStateResponse> {
@@ -72,13 +72,14 @@ export class CloudflareRealtimeClient {
 		let response: Response;
 		const startedAt = performance.now();
 		try {
+			const hasBody = body != null && method !== 'GET';
 			response = await fetch(url, {
 				method,
 				headers: {
 					Authorization: `Bearer ${provider.appSecret}`,
-					'Content-Type': 'application/json',
+					...(hasBody ? { 'Content-Type': 'application/json' } : {}),
 				},
-				body: body == null || method === 'GET' ? undefined : JSON.stringify(body),
+				body: hasBody ? JSON.stringify(body) : undefined,
 				signal: AbortSignal.timeout(CloudflareRealtimeClient.timeoutMs),
 			});
 		} catch (error) {

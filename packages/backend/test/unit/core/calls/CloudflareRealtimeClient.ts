@@ -21,7 +21,8 @@ describe('CloudflareRealtimeClient', () => {
 		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 		expect(url).toContain('/apps/app-id/sessions/new');
 		expect(init.headers).toMatchObject({ Authorization: 'Bearer secret' });
-		expect(init.body).not.toContain('secret');
+		expect(init.body).toBeUndefined();
+		expect(init.headers).not.toHaveProperty('Content-Type');
 	});
 
 	test('preserves offer/answer negotiation and partial track errors from the provider contract', async () => {

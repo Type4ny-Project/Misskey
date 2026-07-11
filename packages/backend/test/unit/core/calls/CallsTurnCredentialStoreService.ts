@@ -52,4 +52,14 @@ describe('CallsTurnCredentialStoreService', () => {
 		expect(redis.values.has('calls:turn:turn-user')).toBe(false);
 		expect(redis.values.has('calls:turn-participant:participant-a')).toBe(false);
 	});
+
+	test('treats a non-success provider revoke response as a failure', async () => {
+		const redis = new FakeRedis();
+		redis.values.set('calls:turn:turn-user', '{}');
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
+		const service = new CallsTurnCredentialStoreService(config, redis as unknown as Redis.Redis);
+
+		await expect(service.revokeUsername('turn-user')).rejects.toThrow('status 503');
+		expect(redis.values.has('calls:turn:turn-user')).toBe(false);
+	});
 });

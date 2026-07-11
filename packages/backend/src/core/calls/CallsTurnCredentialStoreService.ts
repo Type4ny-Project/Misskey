@@ -33,9 +33,10 @@ export class CallsTurnCredentialStoreService {
 		const turn = this.config.cloudflareRealtime?.turn;
 		try {
 			if (turn != null) {
-				await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(turn.tokenId)}/credentials/${encodeURIComponent(username)}/revoke`, {
+				const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(turn.tokenId)}/credentials/${encodeURIComponent(username)}/revoke`, {
 					method: 'POST', headers: { Authorization: `Bearer ${turn.apiToken}` }, signal: AbortSignal.timeout(10_000),
 				});
+				if (!response.ok) throw new Error(`Cloudflare TURN credential revocation failed with status ${response.status}`);
 			}
 		} finally {
 			const pipeline = this.redis.pipeline();

@@ -62,6 +62,7 @@ export function useCallsRoom(roomId: string) {
 	}
 
 	function onStreamDisconnected() { connected.value = false; }
+
 	function onStreamConnected() {
 		connected.value = true;
 		void refresh().then(() => misskeyApi('calls/media/reconcile', { roomId })).catch(() => undefined);

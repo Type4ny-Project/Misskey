@@ -4,7 +4,8 @@
  */
 
 import { misskeyApi } from '@/utility/misskey-api.js';
-import { detectCallsMediaCapabilities, normalizeCallsMediaError, normalizeCallsStats, preferOpus, type CallsNormalizedStats } from './calls-media-core.js';
+import type { CallsNormalizedStats } from './calls-media-core.js';
+import { detectCallsMediaCapabilities, normalizeCallsMediaError, normalizeCallsStats, preferOpus } from './calls-media-core.js';
 
 export type CallsMediaState = 'idle' | 'acquiring-media' | 'creating-session' | 'negotiating' | 'connected' | 'reconnecting' | 'leaving' | 'closed' | 'failed';
 export type CallsMediaFailure = 'unsupported' | 'permission-denied' | 'device-not-found' | 'hardware-failure' | 'constraint-mismatch' | 'permission-pending' | 'negotiation-failed';

@@ -158,21 +158,23 @@ export class CallsMediaController {
 			this.publications.add(result.publicationId);
 			await this.applyNegotiation(result.negotiation);
 		}
-		await this.reconcile();
+		const subscribed = await this.reconcile();
+		if (this.role === 'listener' && !subscribed && this.peer === peer) this.setState('connected');
 	}
 
-	public async reconcile(): Promise<void> {
-		if (this.peer == null || this.generation === 0) return;
+	public async reconcile(): Promise<boolean> {
+		if (this.peer == null || this.generation === 0) return false;
 		await this.ensureCredential();
 		const authoritative = await misskeyApi('calls/media/reconcile', { roomId: this.roomId });
 		const remoteIds = authoritative.publications.filter(publication => publication.participantId !== this.participantId).map(publication => publication.id);
-		if (remoteIds.length === 0) return;
+		if (remoteIds.length === 0) return false;
 		const negotiation = await misskeyApi('calls/media/tracks/subscribe', {
 			roomId: this.roomId, connectionId: this.connectionId, generation: this.generation, publicationIds: remoteIds,
 			operationId: crypto.randomUUID(),
 			participantId: this.participantId!, mediaCredential: this.mediaCredential!,
 		});
 		await this.applyNegotiation(negotiation);
+		return true;
 	}
 
 	private async applyNegotiation(negotiation: { sessionDescription: { type: 'offer' | 'answer'; sdp: string } | null; requiresImmediateRenegotiation: boolean }): Promise<void> {

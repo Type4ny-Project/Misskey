@@ -69,6 +69,7 @@ describe('CallsMediaController', () => {
 		expect(getUserMedia).not.toHaveBeenCalled();
 		expect(apiMock).toHaveBeenCalledWith('calls/media/session/create', expect.objectContaining({ roomId: 'room-a' }));
 		expect(states).toContain('creating-session');
+		expect(controller.state).toBe('connected');
 	});
 
 	test('serializes concurrent connection operations and reports state transitions', async () => {

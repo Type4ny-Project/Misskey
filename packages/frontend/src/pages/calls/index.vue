@@ -28,6 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</form>
 
 			<MkLoading v-if="loading"/>
+			<MkResult v-else-if="loadFailed" type="error"/>
 			<MkResult v-else-if="rooms.length === 0" type="empty"/>
 			<MkA v-for="room in rooms" :key="room.id" :to="`/calls/${room.id}`" class="_panel" :class="$style.room">
 				<strong>{{ room.title }}</strong>
@@ -52,10 +53,12 @@ import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { useRouter } from '@/router.js';
+import * as os from '@/os.js';
 
 const router = useRouter();
 const rooms = ref<Misskey.entities.CallsRoom[]>([]);
 const loading = ref(true);
+const loadFailed = ref(false);
 const creating = ref(false);
 const title = ref('');
 const description = ref('');
@@ -76,8 +79,14 @@ const visibilityItems: MkSelectItem<'public' | 'followers' | 'specified'>[] = [
 
 async function reload() {
 	loading.value = true;
-	rooms.value = await misskeyApi('calls/rooms/list', { limit: 50 });
-	loading.value = false;
+	loadFailed.value = false;
+	try {
+		rooms.value = await misskeyApi('calls/rooms/list', { limit: 50 });
+	} catch {
+		loadFailed.value = true;
+	} finally {
+		loading.value = false;
+	}
 }
 
 async function createRoom() {
@@ -92,6 +101,8 @@ async function createRoom() {
 			scheduledAt: scheduledAt.value === '' ? undefined : new Date(scheduledAt.value).getTime(),
 		});
 		router.push('/calls/:roomId', { params: { roomId: room.id } });
+	} catch (error) {
+		await os.alert({ type: 'error', text: error instanceof Error ? error.message : i18n.ts.somethingHappened });
 	} finally { creating.value = false; }
 }
 

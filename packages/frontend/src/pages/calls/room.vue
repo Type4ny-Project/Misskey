@@ -7,8 +7,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 <MkStickyContainer>
 	<template #header><MkPageHeader/></template>
 	<div class="_spacer" style="--MI_SPACER-w: 800px;">
-		<MkLoading v-if="room == null"/>
-		<div v-else class="_gaps">
+		<MkLoading v-if="room == null && !loadFailed"/>
+		<div v-else-if="room == null" class="_panel" :class="$style.notFound">
+			<i class="ti ti-alert-circle"></i>
+			<strong>{{ i18n.ts.notFound }}</strong>
+			<MkButton rounded @click="router.push('/calls')">{{ i18n.ts.goBack }}</MkButton>
+		</div>
+		<div v-else class="_gaps" :class="$style.roomContent">
 			<section class="_panel" :class="$style.hero">
 				<div>
 					<strong>{{ room.title }}</strong>
@@ -28,13 +33,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkButton v-if="isHost && room.state === 'scheduled'" primary @click="openRoom">{{ i18n.ts._calls.openRoom }}</MkButton>
 				<MkButton v-if="isHost && room.state === 'scheduled'" danger @click="cancelRoom">{{ i18n.ts._calls.cancelRoom }}</MkButton>
 				<MkButton v-if="isHost && room.state === 'open'" danger @click="endRoom">{{ i18n.ts._calls.endRoom }}</MkButton>
-				<MkButton v-if="myParticipant == null && room.state === 'open'" primary @click="joinRoom"><i class="ti ti-phone-call"></i> {{ i18n.ts._calls.joinRoom }}</MkButton>
-				<MkButton v-if="myParticipant != null && (mediaState === 'idle' || mediaState === 'failed' || mediaState === 'closed')" primary @click="connectAudio">{{ i18n.ts._calls.connectAudio }}</MkButton>
+				<MkButton v-if="myParticipant == null && room.state === 'open'" primary :disabled="joining" @click="joinRoom"><i class="ti ti-phone-call"></i> {{ i18n.ts._calls.joinRoom }}</MkButton>
 				<MkButton v-if="mediaState === 'acquiring-media'" @click="media?.cancelMicrophoneRequest()">{{ i18n.ts.cancel }}</MkButton>
-				<MkButton v-if="mediaState === 'connected' || mediaState === 'reconnecting'" @click="disconnectAudio">{{ i18n.ts._calls.disconnectAudio }}</MkButton>
-				<MkButton v-if="mediaState === 'connected' && myParticipant?.role !== 'listener'" @click="toggleMute">{{ muted ? i18n.ts._calls.unmute : i18n.ts._calls.mute }}</MkButton>
-				<MkButton v-if="myParticipant?.role === 'listener'" :disabled="myParticipant.speakerRequestedAt != null" @click="requestSpeaker"><i :class="myParticipant.speakerRequestedAt != null ? 'ti ti-hourglass-empty' : 'ti ti-hand-click'"></i> {{ i18n.ts._calls.requestSpeaker }}</MkButton>
-				<MkButton v-if="myParticipant != null && !isHost" danger @click="leaveRoom"><i class="ti ti-phone-off"></i> {{ i18n.ts._calls.leaveRoom }}</MkButton>
 				<MkButton v-if="needsAudioResume" @click="resumeAudio">{{ i18n.ts._calls.resumeAudio }}</MkButton>
 			</div>
 
@@ -55,7 +55,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
 							<div :class="$style.badges">
 								<span :class="[$style.roleBadge, $style[participant.role]]">{{ i18n.ts._calls[participant.role] }}</span>
-								<span :class="$style.mediaState"><i v-if="speakingParticipantIds.has(participant.id)" class="ti ti-volume"></i><i v-else :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i> {{ participant.isMuted ? i18n.ts._calls.mute : i18n.ts._calls.unmute }}</span>
+								<span v-if="participant.role !== 'listener'" :class="$style.mediaState"><i v-if="speakingParticipantIds.has(participant.id)" class="ti ti-volume"></i><i v-else :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i> {{ participant.isMuted ? i18n.ts._calls.mute : i18n.ts._calls.unmute }}</span>
+								<span v-else :class="$style.mediaState"><i class="ti ti-headphones"></i> {{ i18n.ts.online }}</span>
 								<span v-if="participant.speakerRequestedAt != null" :class="$style.requestBadge"><i class="ti ti-hourglass-empty"></i> {{ i18n.ts._calls.requestSpeaker }}</span>
 							</div>
 						</div>
@@ -68,6 +69,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</section>
 			<div ref="audioContainer" hidden></div>
+			<footer v-if="myParticipant != null && room.state === 'open'" class="_panel _acrylic" :class="$style.callDock">
+				<div :class="$style.callIndicator">
+					<span :class="[$style.statusDot, { [$style.active]: mediaState === 'connected', [$style.busy]: mediaBusy }]" aria-hidden="true"></span>
+					<div><strong>{{ room.title }}</strong><small>{{ mediaStatusText }} · {{ i18n.ts._calls[myParticipant.role] }}</small></div>
+				</div>
+				<div :class="$style.dockActions">
+					<MkButton v-if="mediaState === 'idle' || mediaState === 'failed' || mediaState === 'closed'" primary small @click="connectAudio"><i class="ti ti-headphones"></i> {{ i18n.ts._calls.connectAudio }}</MkButton>
+					<MkButton v-if="mediaState === 'connected' && myParticipant.role !== 'listener'" small @click="toggleMute"><i :class="muted ? 'ti ti-microphone' : 'ti ti-microphone-off'"></i> {{ muted ? i18n.ts._calls.unmute : i18n.ts._calls.mute }}</MkButton>
+					<MkButton v-if="mediaState === 'connected' || mediaState === 'reconnecting'" small @click="disconnectAudio"><i class="ti ti-headphones-off"></i> {{ i18n.ts._calls.disconnectAudio }}</MkButton>
+					<MkButton v-if="myParticipant.role === 'listener'" small :disabled="myParticipant.speakerRequestedAt != null" @click="requestSpeaker"><i :class="myParticipant.speakerRequestedAt != null ? 'ti ti-hourglass-empty' : 'ti ti-hand-click'"></i> {{ i18n.ts._calls.requestSpeaker }}</MkButton>
+					<MkButton v-if="!isHost" danger small @click="leaveRoom"><i class="ti ti-phone-off"></i> {{ i18n.ts._calls.leaveRoom }}</MkButton>
+				</div>
+			</footer>
 		</div>
 	</div>
 </MkStickyContainer>
@@ -83,6 +97,7 @@ import MkSelect from '@/components/MkSelect.vue';
 import { useCallsRoom } from '@/composables/use-calls-room.js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
+import * as os from '@/os.js';
 import { definePage } from '@/page.js';
 import { useRouter } from '@/router.js';
 import { CallsMediaController } from '@/utility/calls-media.js';
@@ -102,10 +117,14 @@ const microphoneItems = computed(() => microphones.value.map(device => ({ label:
 const audioContainer = ref<HTMLElement | null>(null);
 const remoteAudio = new Set<HTMLAudioElement>();
 const needsAudioResume = ref(false);
+const loadFailed = ref(false);
+const joining = ref(false);
 const usersById = shallowRef(new Map<string, Misskey.entities.UserLite>());
 const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? null);
 const isHost = computed(() => myParticipant.value?.role === 'host');
 const failureText = computed(() => mediaFailure.value === 'unsupported' ? i18n.ts._calls.unsupportedBrowser : mediaFailure.value === 'permission-denied' ? i18n.ts._calls.permissionDenied : mediaFailure.value === 'device-not-found' ? i18n.ts._calls.deviceNotFound : mediaFailure.value === 'permission-pending' ? i18n.ts._calls.permissionPending : i18n.ts._calls.mediaFailed);
+const mediaBusy = computed(() => ['acquiring-media', 'creating-session', 'negotiating', 'reconnecting', 'leaving'].includes(mediaState.value));
+const mediaStatusText = computed(() => mediaState.value === 'connected' ? i18n.ts.online : mediaState.value === 'reconnecting' ? i18n.ts._calls.reconnecting : mediaBusy.value ? i18n.ts._calls.roomConnectedMediaConnecting : mediaState.value === 'failed' ? failureText.value : i18n.ts.offline);
 
 async function openRoom() { if (room.value != null) room.value = await misskeyApi('calls/rooms/open', { roomId: props.roomId, expectedRevision: room.value.revision }); }
 
@@ -114,15 +133,29 @@ async function cancelRoom() { if (room.value != null) room.value = await misskey
 async function endRoom() { if (room.value != null) room.value = await misskeyApi('calls/rooms/end', { roomId: props.roomId, expectedRevision: room.value.revision }); }
 
 async function joinRoom() {
+	if (joining.value) return;
 	const capabilities = detectCallsMediaCapabilities();
 	if (!capabilities.secureContext || !capabilities.peerConnection || !capabilities.transceiver) {
 		mediaState.value = 'failed';
 		mediaFailure.value = 'unsupported';
 		return;
 	}
-	await misskeyApi('calls/rooms/join', { roomId: props.roomId });
-	await refresh();
-	await connectAudio();
+	joining.value = true;
+	let joined = false;
+	try {
+		await misskeyApi('calls/rooms/join', { roomId: props.roomId });
+		joined = true;
+		await refresh();
+		await connectAudio();
+	} catch (error) {
+		await media.value?.close().catch(() => undefined);
+		media.value = null;
+		if (joined) await misskeyApi('calls/rooms/leave', { roomId: props.roomId }).catch(() => undefined);
+		await refresh().catch(() => undefined);
+		await os.alert({ type: 'error', text: error instanceof Error ? error.message : i18n.ts.somethingHappened });
+	} finally {
+		joining.value = false;
+	}
 }
 
 async function leaveRoom() { await media.value?.close(); await misskeyApi('calls/rooms/leave', { roomId: props.roomId }); router.push('/calls'); }
@@ -153,6 +186,7 @@ async function disconnectAudio() {
 }
 
 function addRemoteTrack(track: MediaStreamTrack) {
+	if ([...remoteAudio].some(audio => (audio.srcObject as MediaStream | null)?.getTracks().some(current => current.id === track.id))) return;
 	const audio = new Audio();
 	audio.autoplay = true;
 	audio.srcObject = new MediaStream([track]);
@@ -195,12 +229,17 @@ async function handleDeviceChange() {
 const removeTrackListener = onTrackChange(() => void media.value?.reconcile());
 const removeRevokedListener = onRevoked(reason => {
 	if (reason === 'stale-generation') void disconnectAudio().then(connectAudio);
+	else if (reason === 'moderation' && myParticipant.value?.role === 'listener' && room.value?.state === 'open') void disconnectAudio().then(connectAudio);
 	else void media.value?.close();
 });
 watch(() => myParticipant.value?.isMuted, value => { if (value != null) muted.value = value; });
+watch(() => myParticipant.value?.role, (role, previousRole) => {
+	if (previousRole === 'listener' && role === 'speaker' && room.value?.state === 'open') void (media.value == null ? connectAudio() : disconnectAudio().then(connectAudio));
+});
+watch(() => room.value?.state, state => { if (state === 'ended' || state === 'cancelled') void disconnectAudio(); });
 watch(() => participants.value.map(participant => participant.userId), userIds => { void loadParticipantUsers(userIds); }, { immediate: true });
 const heartbeatTimer = window.setInterval(() => { const identity = media.value?.connectionIdentity; if (identity != null) heartbeat(identity.connectionId, identity.generation); }, 30_000);
-onMounted(() => { void refresh(); navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange); });
+onMounted(() => { void refresh().catch(() => { loadFailed.value = true; }); navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange); });
 onUnmounted(() => { window.clearInterval(heartbeatTimer); navigator.mediaDevices?.removeEventListener('devicechange', handleDeviceChange); removeTrackListener(); removeRevokedListener(); void media.value?.close(); for (const audio of remoteAudio) audio.remove(); });
 
 definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti ti-phone' }));
@@ -210,6 +249,9 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .hero { display: flex; justify-content: space-between; gap: 16px; padding: 24px; }
 .hero p { margin-bottom: 0; opacity: 0.7; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.roomContent { min-height: calc(100dvh - 90px); padding-bottom: 96px; }
+.notFound { display: grid; justify-items: center; gap: 12px; padding: 40px; text-align: center; }
+.notFound > i { font-size: 2rem; }
 .participants { padding: 0 20px 8px; }
 .sectionHeader { display: flex; justify-content: space-between; align-items: center; padding: 16px 0 8px; border-bottom: solid 1px var(--MI_THEME-divider); }
 .sectionHeader span { min-width: 28px; padding: 2px 8px; text-align: center; border-radius: var(--MI-radius); background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); }
@@ -227,9 +269,22 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .requestBadge { background: var(--MI_THEME-infoBg); color: var(--MI_THEME-infoFg); }
 .mediaState { opacity: 0.75; }
 .speaking { box-shadow: inset 4px 0 var(--MI_THEME-accent); }
+.callDock { position: fixed; bottom: var(--MI-margin); left: 50%; z-index: 10; display: flex; justify-content: space-between; align-items: center; gap: 16px; width: min(calc(100vw - var(--MI-margin) - var(--MI-margin)), 800px); padding: 12px 16px; transform: translateX(-50%); box-shadow: 0 8px 32px color-mix(in srgb, var(--MI_THEME-bg) 45%, transparent); }
+.callIndicator { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.callIndicator > div { min-width: 0; }
+.callIndicator strong, .callIndicator small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.callIndicator small { opacity: 0.7; }
+.statusDot { width: 12px; height: 12px; flex: 0 0 12px; border-radius: 50%; background: var(--MI_THEME-divider); }
+.statusDot.active { background: var(--MI_THEME-accent); box-shadow: 0 0 0 4px var(--MI_THEME-accentedBg); }
+.statusDot.busy { background: var(--MI_THEME-warn); animation: pulse 1.2s ease-in-out infinite; }
+.dockActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+@keyframes pulse { 50% { opacity: 0.45; } }
 
 @media (max-width: 500px) {
 	.participant { align-items: flex-start; flex-direction: column; }
 	.participant > .actions { padding-left: 64px; }
+	.callDock { align-items: stretch; flex-direction: column; }
+	.dockActions { justify-content: stretch; }
 }
 </style>

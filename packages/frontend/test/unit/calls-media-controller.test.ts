@@ -12,7 +12,8 @@ import { CallsMediaController } from '@/utility/calls-media.js';
 
 class FakePeerConnection extends EventTarget {
 	public static instances: FakePeerConnection[] = [];
-	public connectionState = 'new';
+	public connectionState = 'connected';
+	public iceGatheringState = 'complete';
 	public localDescription: RTCSessionDescriptionInit | null = null;
 	public sender = {
 		track: null as MediaStreamTrack | null,
@@ -32,7 +33,12 @@ class FakePeerConnection extends EventTarget {
 	public async setRemoteDescription() {}
 	public async setLocalDescription(description: RTCSessionDescriptionInit) { this.localDescription = description; }
 	public async createOffer() { return { type: 'offer' as const, sdp: 'offer' }; }
-	public getStats() { return Promise.resolve(new Map()); }
+	public getStats() {
+		return Promise.resolve(new Map([
+			['outbound', { type: 'outbound-rtp', kind: 'audio', packetsSent: 1, bytesSent: 1 }],
+			['transport', { type: 'transport', dtlsState: 'connected' }],
+		]));
+	}
 	public setConfiguration() {}
 }
 
@@ -70,6 +76,23 @@ describe('CallsMediaController', () => {
 		expect(apiMock).toHaveBeenCalledWith('calls/media/session/create', expect.objectContaining({ roomId: 'room-a' }));
 		expect(states).toContain('creating-session');
 		expect(controller.state).toBe('connected');
+	});
+
+	test('does not subscribe to the same remote publication twice', async () => {
+		installBrowserMedia(vi.fn());
+		apiMock.mockImplementation(async (endpoint: string) => {
+			if (endpoint === 'calls/media/turn-credentials') return null;
+			if (endpoint === 'calls/media/session/create') return { participantId: 'participant-a', generation: 1, canPublish: false, mediaCredential: 'credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
+			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: [{ id: 'publication-b', participantId: 'participant-b' }] };
+			if (endpoint === 'calls/media/tracks/subscribe') return { requiresImmediateRenegotiation: false, sessionDescription: null, trackErrors: [] };
+			throw new Error(`unexpected endpoint: ${endpoint}`);
+		});
+		const controller = new CallsMediaController('room-a', 'listener');
+
+		await controller.connect();
+		await controller.reconcile();
+
+		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/subscribe')).toHaveLength(1);
 	});
 
 	test('serializes concurrent connection operations and reports state transitions', async () => {

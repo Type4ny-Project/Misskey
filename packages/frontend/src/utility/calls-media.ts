@@ -21,6 +21,7 @@ export class CallsMediaController {
 	private queue = Promise.resolve();
 	private reconnectTimer: number | null = null;
 	private publications = new Set<string>();
+	private subscribedPublications = new Set<string>();
 	private mediaCredential: string | null = null;
 	private credentialExpiresAt = 0;
 	private turnRefreshTimer: number | null = null;
@@ -149,24 +150,34 @@ export class CallsMediaController {
 			this.setState('negotiating');
 			const offer = await peer.createOffer();
 			await peer.setLocalDescription(offer);
+			await this.waitForIceGathering(peer);
 			const result = await misskeyApi('calls/media/tracks/publish', {
 				roomId: this.roomId, connectionId: this.connectionId, generation: this.generation,
 				operationId: crypto.randomUUID(),
 				participantId: this.participantId!, mediaCredential: this.mediaCredential!,
-				mid: sendTransceiver.mid ?? '0', sessionDescription: { type: 'offer', sdp: offer.sdp ?? '' },
+				mid: sendTransceiver.mid ?? '0', sessionDescription: { type: 'offer', sdp: peer.localDescription?.sdp ?? offer.sdp ?? '' },
 			});
 			this.publications.add(result.publicationId);
 			await this.applyNegotiation(result.negotiation);
+			await this.waitUntilPublishing(peer);
 		}
-		const subscribed = await this.reconcile();
+		const subscribed = await this.reconcileNow();
 		if (this.role === 'listener' && !subscribed && this.peer === peer) this.setState('connected');
 	}
 
-	public async reconcile(): Promise<boolean> {
+	public reconcile(): Promise<boolean> {
+		return this.enqueue(() => this.reconcileNow());
+	}
+
+	private async reconcileNow(): Promise<boolean> {
 		if (this.peer == null || this.generation === 0) return false;
 		await this.ensureCredential();
 		const authoritative = await misskeyApi('calls/media/reconcile', { roomId: this.roomId });
-		const remoteIds = authoritative.publications.filter(publication => publication.participantId !== this.participantId).map(publication => publication.id);
+		const authoritativeRemoteIds = new Set(authoritative.publications.filter(publication => publication.participantId !== this.participantId).map(publication => publication.id));
+		for (const publicationId of this.subscribedPublications) {
+			if (!authoritativeRemoteIds.has(publicationId)) this.subscribedPublications.delete(publicationId);
+		}
+		const remoteIds = [...authoritativeRemoteIds].filter(publicationId => !this.subscribedPublications.has(publicationId));
 		if (remoteIds.length === 0) return false;
 		const negotiation = await misskeyApi('calls/media/tracks/subscribe', {
 			roomId: this.roomId, connectionId: this.connectionId, generation: this.generation, publicationIds: remoteIds,
@@ -174,6 +185,7 @@ export class CallsMediaController {
 			participantId: this.participantId!, mediaCredential: this.mediaCredential!,
 		});
 		await this.applyNegotiation(negotiation);
+		for (const publicationId of remoteIds) this.subscribedPublications.add(publicationId);
 		return true;
 	}
 
@@ -184,14 +196,50 @@ export class CallsMediaController {
 			await this.ensureCredential();
 			const answer = await this.peer.createAnswer();
 			await this.peer.setLocalDescription(answer);
+			await this.waitForIceGathering(this.peer);
 			const result = await misskeyApi('calls/media/renegotiate', {
 				roomId: this.roomId, connectionId: this.connectionId, generation: this.generation,
 				operationId: crypto.randomUUID(),
 				participantId: this.participantId!, mediaCredential: this.mediaCredential!,
-				sessionDescription: { type: 'answer', sdp: answer.sdp ?? '' },
+				sessionDescription: { type: 'answer', sdp: this.peer.localDescription?.sdp ?? answer.sdp ?? '' },
 			});
 			if (result.requiresImmediateRenegotiation) await this.applyNegotiation(result);
 		}
+	}
+
+	private async waitForIceGathering(peer: RTCPeerConnection): Promise<void> {
+		if (peer.iceGatheringState == null || peer.iceGatheringState === 'complete') return;
+		await new Promise<void>(resolve => {
+			const timeout = window.setTimeout(finish, 5000);
+
+			function finish() {
+				window.clearTimeout(timeout);
+				peer.removeEventListener('icegatheringstatechange', handleChange);
+				resolve();
+			}
+
+			function handleChange() { if (peer.iceGatheringState === 'complete') finish(); }
+
+			peer.addEventListener('icegatheringstatechange', handleChange);
+		});
+	}
+
+	private async waitUntilPublishing(peer: RTCPeerConnection): Promise<void> {
+		const deadline = Date.now() + 10_000;
+		while (Date.now() < deadline) {
+			if (peer !== this.peer) throw new DOMException('Calls media operation was replaced', 'AbortError');
+			if (peer.connectionState === 'failed') throw new Error('Publisher connection failed before sending audio packets');
+			const report = await peer.getStats();
+			let outboundReady = false;
+			let transportReady = false;
+			report.forEach(value => {
+				if (value.type === 'outbound-rtp' && value.kind === 'audio' && (value.packetsSent ?? 0) > 0 && (value.bytesSent ?? 0) > 0) outboundReady = true;
+				if (value.type === 'transport' && value.dtlsState === 'connected') transportReady = true;
+			});
+			if (peer.connectionState === 'connected' && outboundReady && transportReady) return;
+			await new Promise(resolve => window.setTimeout(resolve, 250));
+		}
+		throw new Error('Publisher is not actually sending audio packets');
 	}
 
 	public setMuted(muted: boolean): void { if (this.localTrack != null) this.localTrack.enabled = !muted; }
@@ -221,6 +269,7 @@ export class CallsMediaController {
 			await misskeyApi('calls/media/tracks/close', { roomId: this.roomId, participantId: this.participantId!, connectionId: this.connectionId, generation: this.generation, operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential!, publicationId }).catch(() => undefined);
 		}
 		this.publications.clear();
+		this.subscribedPublications.clear();
 		this.cleanupPeer(true);
 		this.setState('closed');
 	}
@@ -311,6 +360,7 @@ export class CallsMediaController {
 		this.cancelMicrophoneRequest();
 		this.peer?.close();
 		this.peer = null;
+		this.subscribedPublications.clear();
 		if (stopTrack) { this.localTrack?.stop(); this.localTrack = null; }
 	}
 

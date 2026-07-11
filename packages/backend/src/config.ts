@@ -138,7 +138,7 @@ type Source = {
 		maxPublishedTracksPerApplication?: number;
 		disabledApplicationIds?: string[];
 		turn?: {
-			keyId: string;
+			tokenId: string;
 			apiToken: string;
 			ttl?: number;
 		};
@@ -212,7 +212,7 @@ export type Config = {
 		maxPublishedTracksPerApplication: number;
 		disabledApplicationIds: string[];
 		turn?: {
-			keyId: string;
+			tokenId: string;
 			apiToken: string;
 			ttl: number;
 		};
@@ -331,8 +331,8 @@ export function loadConfig(): Config {
 			throw new Error('cloudflareRealtime.appId and appSecret must both be non-empty');
 		}
 		if (config.cloudflareRealtime.turn != null) {
-			if (config.cloudflareRealtime.turn.keyId.trim() === '' || config.cloudflareRealtime.turn.apiToken.trim() === '') {
-				throw new Error('cloudflareRealtime.turn.keyId and apiToken must both be non-empty');
+			if (config.cloudflareRealtime.turn.tokenId.trim() === '' || config.cloudflareRealtime.turn.apiToken.trim() === '') {
+				throw new Error('cloudflareRealtime.turn.tokenId and apiToken must both be non-empty');
 			}
 			const ttl = config.cloudflareRealtime.turn.ttl ?? 3600;
 			if (!Number.isSafeInteger(ttl) || ttl < 60 || ttl > 86400) {
@@ -420,7 +420,7 @@ export function loadConfig(): Config {
 			maxPublishedTracksPerApplication: config.cloudflareRealtime.maxPublishedTracksPerApplication ?? 8,
 			disabledApplicationIds: config.cloudflareRealtime.disabledApplicationIds ?? [],
 			turn: config.cloudflareRealtime.turn == null ? undefined : {
-				keyId: config.cloudflareRealtime.turn.keyId,
+				tokenId: config.cloudflareRealtime.turn.tokenId,
 				apiToken: config.cloudflareRealtime.turn.apiToken,
 				ttl: config.cloudflareRealtime.turn.ttl ?? 3600,
 			},

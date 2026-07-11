@@ -19,7 +19,7 @@ describe('CallsTurnService', () => {
 		const credentialStore = { register: vi.fn().mockResolvedValue(undefined), revokeUsername: vi.fn().mockResolvedValue(undefined) };
 		const participants = { findOneBy: vi.fn().mockResolvedValue({ id: 'participant-a' }) };
 		const rooms = { getRoom: vi.fn().mockResolvedValue({ id: 'room-a', state: 'open' }), assertCanAccess: vi.fn() };
-		const config = { cloudflareRealtime: { turn: { keyId: 'server-key-id', apiToken: 'server-api-token', ttl: 3600 } } } as Config;
+		const config = { cloudflareRealtime: { turn: { tokenId: 'server-key-id', apiToken: 'server-api-token', ttl: 3600 } } } as Config;
 		const service = new CallsTurnService(config, participants as never, rooms as never, credentialStore as never);
 
 		const result = await service.issue({ id: 'user-a' } as never, 'room-a');
@@ -47,7 +47,7 @@ describe('CallsTurnService', () => {
 		const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
 		vi.stubGlobal('fetch', fetch);
 		const credentialStore = { revokeUsername: vi.fn().mockResolvedValue(undefined) };
-		const config = { cloudflareRealtime: { turn: { keyId: 'server-key-id', apiToken: 'server-api-token', ttl: 3600 } } } as Config;
+		const config = { cloudflareRealtime: { turn: { tokenId: 'server-key-id', apiToken: 'server-api-token', ttl: 3600 } } } as Config;
 		const service = new CallsTurnService(config, {} as never, {} as never, credentialStore as never);
 
 		await service.revoke('short-lived-user');

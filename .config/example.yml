@@ -394,8 +394,10 @@ proxyBypassHosts:
 #  maxSessionsPerApplication: 10
 #  maxPublishedTracksPerApplication: 8
 #  disabledApplicationIds: []
+#  # Cloudflare Realtime TURN credentials. These are the dashboard's
+#  # "Turn Token ID" and its API token, not RealtimeKit credentials.
 #  turn:
-#    keyId: example-turn-key-id
+#    tokenId: example-turn-token-id
 #    apiToken: example-turn-api-token
 #    ttl: 3600
 

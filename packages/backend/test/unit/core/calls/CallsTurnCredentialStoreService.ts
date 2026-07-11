@@ -22,7 +22,7 @@ class FakeRedis {
 	}
 }
 
-const config = { cloudflareRealtime: { enabled: true, appId: 'app', appSecret: 'secret', turn: { keyId: 'turn-key', apiToken: 'turn-token', ttl: 60 } } } as Config;
+const config = { cloudflareRealtime: { enabled: true, appId: 'app', appSecret: 'secret', turn: { tokenId: 'turn-key', apiToken: 'turn-token', ttl: 60 } } } as Config;
 
 describe('CallsTurnCredentialStoreService', () => {
 	afterEach(() => vi.unstubAllGlobals());

@@ -40,7 +40,7 @@ export class CallsTurnService {
 		const participant = await this.participantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
 		if (participant == null) throw new CallsRoomError('participant-not-found');
 
-		const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(turn.keyId)}/credentials/generate-ice-servers`, {
+		const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(turn.tokenId)}/credentials/generate-ice-servers`, {
 			method: 'POST',
 			headers: { Authorization: `Bearer ${turn.apiToken}`, 'Content-Type': 'application/json' },
 			body: JSON.stringify({ ttl: turn.ttl }),

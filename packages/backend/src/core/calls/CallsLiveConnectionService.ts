@@ -11,6 +11,7 @@ export type CallsLiveConnection = {
 	participantId: string;
 	connectionId: string;
 	generation: number;
+	applicationId: string;
 	sessionId: string | null;
 	createdAt: string;
 	lastSeenAt: string;
@@ -27,12 +28,12 @@ export class CallsLiveConnectionService {
 		private redis: Redis.Redis,
 	) {}
 
-	public async replace(participantId: string, connectionId: string): Promise<{ current: CallsLiveConnection; previous: CallsLiveConnection | null }> {
+	public async replace(participantId: string, connectionId: string, applicationId = 'first-party'): Promise<{ current: CallsLiveConnection; previous: CallsLiveConnection | null }> {
 		const key = this.connectionKey(participantId);
 		const previousRaw = await this.redis.get(key);
 		const generation = await this.redis.incr(`calls:connection-generation:${participantId}`);
 		const now = new Date().toISOString();
-		const current: CallsLiveConnection = { participantId, connectionId, generation, sessionId: null, createdAt: now, lastSeenAt: now };
+		const current: CallsLiveConnection = { participantId, connectionId, generation, applicationId, sessionId: null, createdAt: now, lastSeenAt: now };
 		await this.redis.set(key, JSON.stringify(current), 'EX', CallsLiveConnectionService.ttlSeconds);
 		return { current, previous: previousRaw == null ? null : JSON.parse(previousRaw) as CallsLiveConnection };
 	}

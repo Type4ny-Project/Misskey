@@ -8,7 +8,8 @@ import { REQUEST } from '@nestjs/core';
 import { bindThis } from '@/decorators.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
 import { CallsRoomService } from '@/core/calls/CallsRoomService.js';
-import type { JsonObject } from '@/misc/json-value.js';
+import { CallsMediaService } from '@/core/calls/CallsMediaService.js';
+import type { JsonObject, JsonValue } from '@/misc/json-value.js';
 import Channel, { type ChannelRequest } from '../channel.js';
 
 @Injectable({ scope: Scope.TRANSIENT })
@@ -22,6 +23,7 @@ export class CallsRoomChannel extends Channel {
 	constructor(
 		@Inject(REQUEST) request: ChannelRequest,
 		private callsRoomService: CallsRoomService,
+		private callsMediaService: CallsMediaService,
 	) { super(request); }
 
 	@bindThis
@@ -43,11 +45,26 @@ export class CallsRoomChannel extends Channel {
 			const room = await this.callsRoomService.getRoom(this.roomId);
 			await this.callsRoomService.assertCanAccess(this.user, room);
 		} catch {
-			this.send('revoked', { reason: 'access' });
+			this.send('revoked', {
+				sequence: data.body.sequence,
+				roomRevision: data.body.roomRevision,
+				occurredAt: new Date().toISOString(),
+				reason: 'access',
+			});
 			this.dispose();
 			return;
 		}
 		this.send(data.type, data.body);
+	}
+
+	@bindThis
+	public onMessage(type: string, body: JsonValue) {
+		if (this.user == null || (this.connection.token != null && !this.connection.token.permission.includes('write:calls'))) return;
+		if (type === 'mute' && typeof body === 'boolean') void this.callsRoomService.setMuted(this.user, this.roomId, body).catch(() => undefined);
+		if (type === 'speaking' && typeof body === 'boolean') void this.callsRoomService.reportSpeaking(this.user, this.roomId, body).catch(() => undefined);
+		if (type === 'heartbeat' && typeof body === 'object' && body != null && !Array.isArray(body) && typeof body.connectionId === 'string' && typeof body.generation === 'number') {
+			void this.callsMediaService.heartbeat(this.user, this.roomId, body.connectionId, body.generation).catch(() => undefined);
+		}
 	}
 
 	@bindThis

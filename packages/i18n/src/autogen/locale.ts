@@ -10211,6 +10211,18 @@ export interface Locale extends ILocale {
          */
         "visibility": string;
         /**
+         * 参加を許可するユーザーID
+         */
+        "specifiedUserIds": string;
+        /**
+         * ユーザーIDを空白またはカンマ区切りで入力してください。
+         */
+        "specifiedUserIdsDescription": string;
+        /**
+         * 開始予定日時
+         */
+        "scheduledAt": string;
+        /**
          * 公開
          */
         "public": string;
@@ -10318,6 +10330,10 @@ export interface Locale extends ILocale {
          * マイクの使用が許可されませんでした。ブラウザ設定から許可して再試行してください。
          */
         "permissionDenied": string;
+        /**
+         * マイクの許可を確認できませんでした。ブラウザの許可画面を確認して再試行してください。
+         */
+        "permissionPending": string;
         /**
          * 利用できるマイクが見つかりません。
          */

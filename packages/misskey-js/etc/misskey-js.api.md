@@ -718,6 +718,7 @@ type CallsCapabilitiesResponse = operations['calls___capabilities']['responses']
 // @public (undocumented)
 type CallsCapabilityDocument = {
     protocolVersion: string;
+    enabled?: boolean;
     mediaKinds: readonly string[];
     codecs: readonly string[];
     roles: readonly string[];
@@ -732,15 +733,15 @@ type CallsCompatibility = {
     negotiatedMajor: number;
 } | {
     compatible: false;
-    reason: 'version-mismatch' | 'audio-unsupported' | 'opus-unsupported' | 'missing-extension';
+    reason: 'feature-disabled' | 'version-mismatch' | 'audio-unsupported' | 'opus-unsupported' | 'missing-extension';
 };
 
 // @public (undocumented)
 class CallsEventSequenceTracker {
     // (undocumented)
-    accept(sequence: number): 'accepted' | 'duplicate' | 'gap';
+    accept(sequence: number, roomRevision?: number): 'accepted' | 'duplicate' | 'gap';
     // (undocumented)
-    reset(sequence?: number): void;
+    reset(sequence?: number, roomRevision?: number): void;
 }
 
 // @public (undocumented)
@@ -1204,10 +1205,18 @@ export type Channels = {
                 mediaKind: 'audio';
             }) => void;
             revoked: (payload: CallsRoomEventBase & {
-                reason: 'access' | 'moderation' | 'room-ended' | 'logout';
+                participantId?: string;
+                reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation';
             }) => void;
         };
-        receives: null;
+        receives: {
+            mute: boolean;
+            speaking: boolean;
+            heartbeat: {
+                connectionId: string;
+                generation: number;
+            };
+        };
     };
 };
 

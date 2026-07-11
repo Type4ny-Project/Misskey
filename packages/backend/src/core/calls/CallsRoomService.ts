@@ -25,6 +25,9 @@ import { ChatService } from '@/core/ChatService.js';
 import { IdService } from '@/core/IdService.js';
 import { RoleService } from '@/core/RoleService.js';
 import { CallsEventService } from './CallsEventService.js';
+import { CallsMediaRevocationService } from './CallsMediaRevocationService.js';
+import { CallsTelemetryService } from './CallsTelemetryService.js';
+import type { Config } from '@/config.js';
 
 export const CALLS_MAX_SPEAKERS = 8;
 export const CALLS_MAX_LISTENERS = 100;
@@ -33,10 +36,13 @@ export type CallsRoomErrorCode =
 	| 'access-denied'
 	| 'attachment-not-found'
 	| 'invalid-state'
+	| 'invalid-metadata'
 	| 'participant-not-found'
 	| 'room-full'
 	| 'room-not-found'
 	| 'stale-revision';
+
+export class CallsFeatureDisabledError extends Error {}
 
 export class CallsRoomError extends Error {
 	constructor(public readonly code: CallsRoomErrorCode) {
@@ -51,6 +57,8 @@ export function isCallsRoomTransitionAllowed(from: MiCallsRoom['state'], to: MiC
 @Injectable()
 export class CallsRoomService {
 	constructor(
+		@Inject(DI.config)
+		private config: Config,
 		@Inject(DI.callsRoomsRepository)
 		private callsRoomsRepository: CallsRoomsRepository,
 		@Inject(DI.callsParticipantsRepository)
@@ -64,6 +72,8 @@ export class CallsRoomService {
 		private idService: IdService,
 		private roleService: RoleService,
 		private callsEventService: CallsEventService,
+		private callsMediaRevocationService: CallsMediaRevocationService,
+		private callsTelemetryService: CallsTelemetryService,
 	) {}
 
 	@bindThis
@@ -73,9 +83,14 @@ export class CallsRoomService {
 		title: string;
 		description?: string;
 		visibility?: CallsRoomVisibility;
+		visibleUserIds?: MiUser['id'][];
 		scheduledAt?: Date | null;
 	}): Promise<MiCallsRoom> {
+		this.assertEnabled();
 		if (owner.host !== null) throw new CallsRoomError('access-denied');
+		const title = this.sanitizeMetadata(params.title);
+		if (title.length === 0) throw new CallsRoomError('invalid-metadata');
+		const description = this.sanitizeMetadata(params.description ?? '');
 
 		if (params.attachmentType === 'chatRoom') {
 			const chatRoom = params.chatRoomId == null ? null : await this.chatRoomsRepository.findOneBy({ id: params.chatRoomId });
@@ -91,9 +106,10 @@ export class CallsRoomService {
 			attachmentType: params.attachmentType,
 			ownerUserId: owner.id,
 			chatRoomId: params.attachmentType === 'chatRoom' ? params.chatRoomId : null,
-			title: params.title,
-			description: params.description ?? '',
+			title,
+			description,
 			visibility: params.attachmentType === 'chatRoom' ? 'specified' : (params.visibility ?? 'specified'),
+			visibleUserIds: params.attachmentType === 'personal' && params.visibility === 'specified' ? [...new Set(params.visibleUserIds ?? [])] : [],
 			state: 'scheduled',
 			scheduledAt: params.scheduledAt ?? null,
 			startedAt: null,
@@ -115,6 +131,7 @@ export class CallsRoomService {
 			speakerRequestedAt: null,
 			updatedAt: now,
 		});
+		this.callsTelemetryService.lifecycle({ action: 'room-created', roomId: room.id });
 
 		return room;
 	}
@@ -128,6 +145,7 @@ export class CallsRoomService {
 
 	@bindThis
 	public async assertCanAccess(user: MiUser, room: MiCallsRoom): Promise<void> {
+		this.assertEnabled();
 		if (user.host !== null) throw new CallsRoomError('access-denied');
 		if (room.ownerUserId === user.id || await this.roleService.isModerator(user)) return;
 
@@ -145,8 +163,7 @@ export class CallsRoomService {
 			if (Object.hasOwn(followings, room.ownerUserId)) return;
 		}
 
-		const participant = await this.callsParticipantsRepository.findOneBy({ roomId: room.id, userId: user.id });
-		if (participant == null) throw new CallsRoomError('access-denied');
+		if (!room.visibleUserIds.includes(user.id)) throw new CallsRoomError('access-denied');
 	}
 
 	@bindThis
@@ -220,6 +237,10 @@ export class CallsRoomService {
 		if (result.affected !== 1) throw new CallsRoomError('stale-revision');
 		const updated = result.raw[0] as MiCallsRoom;
 		await this.callsEventService.publish(roomId, updated.revision, 'lifecycle', { state: updated.state });
+		this.callsTelemetryService.lifecycle({ action: `room-${updated.state}`, roomId });
+		if (updated.state === 'ended' || updated.state === 'cancelled') {
+			await this.callsMediaRevocationService.revokeRoom(roomId, updated.revision, 'room-ended');
+		}
 		return updated;
 	}
 
@@ -263,6 +284,7 @@ export class CallsRoomService {
 		}
 		const revision = await this.bumpRevision(roomId);
 		await this.callsEventService.publish(roomId, revision, 'participant', { participantId: joined.id, action: 'joined' });
+		this.callsTelemetryService.lifecycle({ action: 'participant-joined', roomId, participantId: joined.id });
 		return joined;
 	}
 
@@ -275,6 +297,8 @@ export class CallsRoomService {
 		await this.callsParticipantsRepository.update(participant.id, { state: 'left', leftAt: now, updatedAt: now });
 		const revision = await this.bumpRevision(roomId);
 		await this.callsEventService.publish(roomId, revision, 'participant', { participantId: participant.id, action: 'left' });
+		await this.callsMediaRevocationService.revokeParticipant(participant, revision, 'access');
+		this.callsTelemetryService.lifecycle({ action: 'participant-left', roomId, participantId: participant.id, reason: 'access' });
 	}
 
 	@bindThis
@@ -323,6 +347,8 @@ export class CallsRoomService {
 		});
 		const updated = await this.callsParticipantsRepository.findOneByOrFail({ id: participant.id });
 		await this.callsEventService.publish(roomId, revision, 'role', { participantId: participant.id, role });
+		if (role === 'listener') await this.callsMediaRevocationService.revokeParticipant(updated, revision, 'moderation');
+		this.callsTelemetryService.lifecycle({ action: `participant-${role}`, roomId, participantId: participant.id, reason: 'moderation' });
 		return updated;
 	}
 
@@ -334,6 +360,36 @@ export class CallsRoomService {
 		await this.callsParticipantsRepository.update(participant.id, { speakerRequestedAt: now, updatedAt: now });
 		const revision = await this.bumpRevision(roomId);
 		await this.callsEventService.publish(roomId, revision, 'speakerRequest', { participantId: participant.id, requested: true });
+	}
+
+	@bindThis
+	public async setMuted(user: MiUser, roomId: string, isMuted: boolean): Promise<void> {
+		const room = await this.getRoom(roomId);
+		await this.assertCanAccess(user, room);
+		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
+		const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
+		if (participant == null || participant.role === 'listener') throw new CallsRoomError('participant-not-found');
+		if (participant.isMuted === isMuted) return;
+		const now = new Date();
+		await this.callsParticipantsRepository.update(participant.id, { isMuted, updatedAt: now });
+		const revision = await this.bumpRevision(roomId);
+		await this.callsModerationLogsRepository.insert({
+			id: this.idService.gen(), roomId, actorUserId: user.id, targetParticipantId: participant.id,
+			action: isMuted ? 'mute' : 'unmute', previousRole: participant.role, nextRole: participant.role,
+			reason: null, roomRevision: revision, createdAt: now,
+		});
+		await this.callsEventService.publish(roomId, revision, 'mute', { participantId: participant.id, isMuted });
+		this.callsTelemetryService.lifecycle({ action: isMuted ? 'participant-muted' : 'participant-unmuted', roomId, participantId: participant.id });
+	}
+
+	@bindThis
+	public async reportSpeaking(user: MiUser, roomId: string, speaking: boolean): Promise<void> {
+		const room = await this.getRoom(roomId);
+		await this.assertCanAccess(user, room);
+		if (room.state !== 'open') return;
+		const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
+		if (participant == null || participant.role === 'listener' || participant.isMuted) return;
+		await this.callsEventService.reportSpeaking(roomId, room.revision, participant.id, speaking);
 	}
 
 	@bindThis
@@ -355,6 +411,8 @@ export class CallsRoomService {
 			roomRevision: Number((result.raw[0] as { revision: number }).revision), createdAt: now,
 		});
 		await this.callsEventService.publish(roomId, Number((result.raw[0] as { revision: number }).revision), 'participant', { participantId: participant.id, action: 'removed' });
+		await this.callsMediaRevocationService.revokeParticipant(participant, Number((result.raw[0] as { revision: number }).revision), 'moderation');
+		this.callsTelemetryService.lifecycle({ action: 'participant-removed', roomId, participantId: participant.id, reason: 'moderation' });
 	}
 
 	private async bumpRevision(roomId: string): Promise<number> {
@@ -363,5 +421,13 @@ export class CallsRoomService {
 			.where('id = :roomId', { roomId }).returning('revision').execute();
 		if (result.affected !== 1) throw new CallsRoomError('room-not-found');
 		return Number((result.raw[0] as { revision: number }).revision);
+	}
+
+	private sanitizeMetadata(value: string): string {
+		return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim();
+	}
+
+	private assertEnabled(): void {
+		if (this.config.cloudflareRealtime == null || !this.config.cloudflareRealtime.enabled) throw new CallsFeatureDisabledError();
 	}
 }

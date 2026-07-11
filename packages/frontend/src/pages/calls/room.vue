@@ -6,11 +6,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <MkStickyContainer>
 	<template #header><MkPageHeader/></template>
-	<MkSpacer :contentMax="800">
+	<div class="_spacer" style="--MI_SPACER-w: 800px;">
 		<MkLoading v-if="room == null"/>
 		<div v-else class="_gaps">
 			<section class="_panel" :class="$style.hero">
-				<div><strong>{{ room.title }}</strong><p>{{ room.description }}</p></div>
+				<div>
+					<strong>{{ room.title }}</strong>
+					<p>{{ room.description }}</p>
+					<small>{{ i18n.ts._calls[room.attachment.type === 'personal' ? 'personalRoom' : 'chatRoom'] }} · {{ i18n.ts._calls[room.visibility] }}</small>
+					<small v-if="room.scheduledAt != null"> · {{ new Date(room.scheduledAt).toLocaleString() }}</small>
+				</div>
 				<span>{{ i18n.ts._calls[room.state] }}</span>
 			</section>
 			<MkInfo v-if="!connected" warn>{{ i18n.ts._calls.websocketDisconnected }}</MkInfo>
@@ -21,10 +26,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<div :class="$style.actions">
 				<MkButton v-if="isHost && room.state === 'scheduled'" primary @click="openRoom">{{ i18n.ts._calls.openRoom }}</MkButton>
+				<MkButton v-if="isHost && room.state === 'scheduled'" danger @click="cancelRoom">{{ i18n.ts._calls.cancelRoom }}</MkButton>
 				<MkButton v-if="isHost && room.state === 'open'" danger @click="endRoom">{{ i18n.ts._calls.endRoom }}</MkButton>
 				<MkButton v-if="myParticipant == null && room.state === 'open'" primary @click="joinRoom">{{ i18n.ts._calls.joinRoom }}</MkButton>
-				<MkButton v-if="myParticipant != null && mediaState === 'idle'" primary @click="connectAudio">{{ i18n.ts._calls.connectAudio }}</MkButton>
-				<MkButton v-if="mediaState === 'connected'" @click="toggleMute">{{ muted ? i18n.ts._calls.unmute : i18n.ts._calls.mute }}</MkButton>
+				<MkButton v-if="myParticipant != null && (mediaState === 'idle' || mediaState === 'failed' || mediaState === 'closed')" primary @click="connectAudio">{{ i18n.ts._calls.connectAudio }}</MkButton>
+				<MkButton v-if="mediaState === 'acquiring-media'" @click="media?.cancelMicrophoneRequest()">{{ i18n.ts.cancel }}</MkButton>
+				<MkButton v-if="mediaState === 'connected' || mediaState === 'reconnecting'" @click="disconnectAudio">{{ i18n.ts._calls.disconnectAudio }}</MkButton>
+				<MkButton v-if="mediaState === 'connected' && myParticipant?.role !== 'listener'" @click="toggleMute">{{ muted ? i18n.ts._calls.unmute : i18n.ts._calls.mute }}</MkButton>
 				<MkButton v-if="myParticipant?.role === 'listener'" @click="requestSpeaker">{{ i18n.ts._calls.requestSpeaker }}</MkButton>
 				<MkButton v-if="myParticipant != null && !isHost" @click="leaveRoom">{{ i18n.ts._calls.leaveRoom }}</MkButton>
 				<MkButton v-if="needsAudioResume" @click="resumeAudio">{{ i18n.ts._calls.resumeAudio }}</MkButton>
@@ -35,8 +43,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</MkSelect>
 
 			<section class="_panel" :class="$style.participants">
-				<div v-for="participant in participants" :key="participant.id" :class="$style.participant">
-					<div><strong>{{ participant.userId }}</strong><small>{{ i18n.ts._calls[participant.role] }}</small></div>
+				<div v-for="participant in participants" :key="participant.id" :class="[$style.participant, { [$style.speaking]: speakingParticipantIds.has(participant.id) }]">
+					<div><strong>{{ participant.userId }}</strong><small><i v-if="speakingParticipantIds.has(participant.id)" class="ti ti-volume"></i> {{ i18n.ts._calls[participant.role] }} · {{ participant.isMuted ? i18n.ts._calls.mute : i18n.ts._calls.unmute }}</small></div>
 					<div v-if="isHost && participant.role !== 'host'" :class="$style.actions">
 						<MkButton v-if="participant.role === 'listener'" small @click="setRole(participant.id, 'speaker')">{{ i18n.ts._calls.promoteSpeaker }}</MkButton>
 						<MkButton v-else small @click="setRole(participant.id, 'listener')">{{ i18n.ts._calls.demoteListener }}</MkButton>
@@ -46,12 +54,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</section>
 			<div ref="audioContainer" hidden></div>
 		</div>
-	</MkSpacer>
+	</div>
 </MkStickyContainer>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue';
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
 import type { CallsMediaFailure, CallsMediaState } from '@/utility/calls-media.js';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
@@ -66,7 +74,7 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 
 const props = defineProps<{ roomId: string }>();
 const router = useRouter();
-const { room, participants, connected, refresh, onTrackChange } = useCallsRoom(props.roomId);
+const { room, participants, connected, speakingParticipantIds, refresh, setMuted, setSpeaking, heartbeat, onTrackChange, onRevoked } = useCallsRoom(props.roomId);
 const media = shallowRef<CallsMediaController | null>(null);
 const mediaState = ref<CallsMediaState>('idle');
 const mediaFailure = ref<CallsMediaFailure | null>(null);
@@ -79,11 +87,13 @@ const remoteAudio = new Set<HTMLAudioElement>();
 const needsAudioResume = ref(false);
 const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? null);
 const isHost = computed(() => myParticipant.value?.role === 'host');
-const failureText = computed(() => mediaFailure.value === 'unsupported' ? i18n.ts._calls.unsupportedBrowser : mediaFailure.value === 'permission-denied' ? i18n.ts._calls.permissionDenied : mediaFailure.value === 'device-not-found' ? i18n.ts._calls.deviceNotFound : i18n.ts._calls.mediaFailed);
+const failureText = computed(() => mediaFailure.value === 'unsupported' ? i18n.ts._calls.unsupportedBrowser : mediaFailure.value === 'permission-denied' ? i18n.ts._calls.permissionDenied : mediaFailure.value === 'device-not-found' ? i18n.ts._calls.deviceNotFound : mediaFailure.value === 'permission-pending' ? i18n.ts._calls.permissionPending : i18n.ts._calls.mediaFailed);
 
-async function openRoom() { if (room.value != null) await misskeyApi('calls/rooms/open', { roomId: props.roomId, expectedRevision: room.value.revision }); }
+async function openRoom() { if (room.value != null) room.value = await misskeyApi('calls/rooms/open', { roomId: props.roomId, expectedRevision: room.value.revision }); }
 
-async function endRoom() { if (room.value != null) await misskeyApi('calls/rooms/end', { roomId: props.roomId, expectedRevision: room.value.revision }); }
+async function cancelRoom() { if (room.value != null) room.value = await misskeyApi('calls/rooms/cancel', { roomId: props.roomId, expectedRevision: room.value.revision }); }
+
+async function endRoom() { if (room.value != null) room.value = await misskeyApi('calls/rooms/end', { roomId: props.roomId, expectedRevision: room.value.revision }); }
 
 async function joinRoom() { await misskeyApi('calls/rooms/join', { roomId: props.roomId }); await refresh(); }
 
@@ -91,15 +101,27 @@ async function leaveRoom() { await media.value?.close(); await misskeyApi('calls
 
 async function requestSpeaker() { await misskeyApi('calls/rooms/request-speaker', { roomId: props.roomId }); }
 
-async function setRole(participantId: string, role: 'speaker' | 'listener') { if (room.value != null) await misskeyApi('calls/rooms/set-role', { roomId: props.roomId, participantId, role, expectedRevision: room.value.revision }); }
+async function setRole(participantId: string, role: 'speaker' | 'listener') { if (room.value != null) { await misskeyApi('calls/rooms/set-role', { roomId: props.roomId, participantId, role, expectedRevision: room.value.revision }); await refresh(); } }
 
-async function removeParticipant(participantId: string) { if (room.value != null) await misskeyApi('calls/rooms/remove-participant', { roomId: props.roomId, participantId, expectedRevision: room.value.revision }); }
+async function removeParticipant(participantId: string) { if (room.value != null) { await misskeyApi('calls/rooms/remove-participant', { roomId: props.roomId, participantId, expectedRevision: room.value.revision }); await refresh(); } }
 
 async function connectAudio() {
 	if (myParticipant.value == null) return;
-	media.value = new CallsMediaController(props.roomId, myParticipant.value.role, (state, failure) => { mediaState.value = state; mediaFailure.value = failure; }, addRemoteTrack);
-	await media.value.connect(selectedMicrophone.value || undefined);
+	await media.value?.close().catch(() => undefined);
+	media.value = new CallsMediaController(props.roomId, myParticipant.value.role, (state, failure) => { mediaState.value = state; mediaFailure.value = failure; }, addRemoteTrack, (_stats, speaking) => setSpeaking(speaking));
+	try {
+		await media.value.connect(selectedMicrophone.value || undefined);
+	} catch {
+		// CallsMediaController reports a normalized, user-facing failure through onState.
+		return;
+	}
 	if (myParticipant.value.role !== 'listener') await loadMicrophones();
+}
+
+async function disconnectAudio() {
+	await media.value?.close();
+	media.value = null;
+	muted.value = false;
 }
 
 function addRemoteTrack(track: MediaStreamTrack) {
@@ -114,15 +136,30 @@ function addRemoteTrack(track: MediaStreamTrack) {
 
 async function resumeAudio() { await Promise.all([...remoteAudio].map(audio => audio.play())); needsAudioResume.value = false; }
 
-function toggleMute() { muted.value = !muted.value; media.value?.setMuted(muted.value); }
+function toggleMute() { muted.value = !muted.value; media.value?.setMuted(muted.value); setMuted(muted.value); }
 
 async function switchMicrophone(deviceId: string) { await media.value?.switchMicrophone(deviceId); }
 
 async function loadMicrophones() { microphones.value = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'audioinput'); selectedMicrophone.value ||= microphones.value[0]?.deviceId ?? ''; }
 
+async function handleDeviceChange() {
+	const previous = selectedMicrophone.value;
+	await loadMicrophones();
+	if (previous !== '' && !microphones.value.some(device => device.deviceId === previous)) {
+		selectedMicrophone.value = microphones.value[0]?.deviceId ?? '';
+		if (selectedMicrophone.value !== '' && mediaState.value === 'connected') await switchMicrophone(selectedMicrophone.value);
+	}
+}
+
 const removeTrackListener = onTrackChange(() => void media.value?.reconcile());
-onMounted(refresh);
-onUnmounted(() => { removeTrackListener(); void media.value?.close(); for (const audio of remoteAudio) audio.remove(); });
+const removeRevokedListener = onRevoked(reason => {
+	if (reason === 'stale-generation') void disconnectAudio().then(connectAudio);
+	else void media.value?.close();
+});
+watch(() => myParticipant.value?.isMuted, value => { if (value != null) muted.value = value; });
+const heartbeatTimer = window.setInterval(() => { const identity = media.value?.connectionIdentity; if (identity != null) heartbeat(identity.connectionId, identity.generation); }, 30_000);
+onMounted(() => { void refresh(); navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange); });
+onUnmounted(() => { window.clearInterval(heartbeatTimer); navigator.mediaDevices?.removeEventListener('devicechange', handleDeviceChange); removeTrackListener(); removeRevokedListener(); void media.value?.close(); for (const audio of remoteAudio) audio.remove(); });
 
 definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti ti-phone' }));
 </script>
@@ -134,5 +171,6 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .participants { padding: 8px 20px; }
 .participant { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: solid 1px var(--MI_THEME-divider); }
 .participant:last-child { border-bottom: 0; }
+.speaking { box-shadow: inset 3px 0 var(--MI_THEME-accent); }
 .participant small { display: block; opacity: 0.7; }
 </style>

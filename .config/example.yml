@@ -388,8 +388,12 @@ proxyBypassHosts:
 
 # Cloudflare Realtime SFU configuration. Keep all values server-side.
 #cloudflareRealtime:
+#  enabled: false
 #  appId: example-app-id
 #  appSecret: example-app-secret
+#  maxSessionsPerApplication: 10
+#  maxPublishedTracksPerApplication: 8
+#  disabledApplicationIds: []
 #  turn:
 #    keyId: example-turn-key-id
 #    apiToken: example-turn-api-token

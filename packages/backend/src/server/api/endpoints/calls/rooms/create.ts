@@ -24,7 +24,8 @@ export const paramDef = {
 		title: { type: 'string', minLength: 1, maxLength: 256 },
 		description: { type: 'string', maxLength: 2048, default: '' },
 		visibility: { type: 'string', enum: ['public', 'followers', 'specified'], default: 'specified' },
-		scheduledAt: { type: 'string', format: 'date-time', nullable: true },
+		visibleUserIds: { type: 'array', maxItems: 100, uniqueItems: true, items: { type: 'string', format: 'misskey:id' } },
+		scheduledAt: { type: 'integer', minimum: -8_640_000_000_000_000, maximum: 8_640_000_000_000_000, nullable: true },
 	},
 	required: ['attachmentType', 'title'],
 } as const;
@@ -36,7 +37,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			try {
 				const room = await callsRoomService.create(me, {
 					attachmentType: ps.attachmentType, chatRoomId: ps.chatRoomId, title: ps.title,
-					description: ps.description, visibility: ps.visibility,
+					description: ps.description, visibility: ps.visibility, visibleUserIds: ps.visibleUserIds,
 					scheduledAt: ps.scheduledAt == null ? null : new Date(ps.scheduledAt),
 				});
 				return callsEntityService.packRoom(room);

@@ -311,9 +311,13 @@ export type Channels = {
 			mute: (payload: CallsRoomEventBase & { participantId: string; isMuted: boolean }) => void;
 			speaking: (payload: CallsRoomEventBase & { participantIds: string[] }) => void;
 			track: (payload: CallsRoomEventBase & { participantId: string; publicationId: string; available: boolean; mediaKind: 'audio' }) => void;
-			revoked: (payload: CallsRoomEventBase & { reason: 'access' | 'moderation' | 'room-ended' | 'logout' }) => void;
+			revoked: (payload: CallsRoomEventBase & { participantId?: string; reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation' }) => void;
 		};
-		receives: null;
+		receives: {
+			mute: boolean;
+			speaking: boolean;
+			heartbeat: { connectionId: string; generation: number };
+		};
 	};
 };
 

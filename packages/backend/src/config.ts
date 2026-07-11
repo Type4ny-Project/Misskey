@@ -131,8 +131,12 @@ type Source = {
 	mediaProxy?: string;
 	videoThumbnailGenerator?: string;
 	cloudflareRealtime?: {
+		enabled?: boolean;
 		appId: string;
 		appSecret: string;
+		maxSessionsPerApplication?: number;
+		maxPublishedTracksPerApplication?: number;
+		disabledApplicationIds?: string[];
 		turn?: {
 			keyId: string;
 			apiToken: string;
@@ -201,8 +205,12 @@ export type Config = {
 	outgoingAddress: string | undefined;
 	outgoingAddressFamily: 'ipv4' | 'ipv6' | 'dual' | undefined;
 	cloudflareRealtime: {
+		enabled: boolean;
 		appId: string;
 		appSecret: string;
+		maxSessionsPerApplication: number;
+		maxPublishedTracksPerApplication: number;
+		disabledApplicationIds: string[];
 		turn?: {
 			keyId: string;
 			apiToken: string;
@@ -331,6 +339,12 @@ export function loadConfig(): Config {
 				throw new Error('cloudflareRealtime.turn.ttl must be an integer between 60 and 86400 seconds');
 			}
 		}
+		for (const [name, value] of Object.entries({
+			maxSessionsPerApplication: config.cloudflareRealtime.maxSessionsPerApplication ?? 10,
+			maxPublishedTracksPerApplication: config.cloudflareRealtime.maxPublishedTracksPerApplication ?? 8,
+		})) {
+			if (!Number.isSafeInteger(value) || value < 1 || value > 10_000) throw new Error(`cloudflareRealtime.${name} must be an integer between 1 and 10000`);
+		}
 	}
 
 	const url = tryCreateUrl(config.url ?? process.env.MISSKEY_URL ?? '');
@@ -399,8 +413,12 @@ export function loadConfig(): Config {
 		outgoingAddress: config.outgoingAddress,
 		outgoingAddressFamily: config.outgoingAddressFamily,
 		cloudflareRealtime: config.cloudflareRealtime == null ? undefined : {
+			enabled: config.cloudflareRealtime.enabled ?? true,
 			appId: config.cloudflareRealtime.appId,
 			appSecret: config.cloudflareRealtime.appSecret,
+			maxSessionsPerApplication: config.cloudflareRealtime.maxSessionsPerApplication ?? 10,
+			maxPublishedTracksPerApplication: config.cloudflareRealtime.maxPublishedTracksPerApplication ?? 8,
+			disabledApplicationIds: config.cloudflareRealtime.disabledApplicationIds ?? [],
 			turn: config.cloudflareRealtime.turn == null ? undefined : {
 				keyId: config.cloudflareRealtime.turn.keyId,
 				apiToken: config.cloudflareRealtime.turn.apiToken,

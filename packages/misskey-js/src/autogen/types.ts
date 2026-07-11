@@ -3132,6 +3132,16 @@ export type paths = {
          */
         post: operations['i___import-user-lists'];
     };
+    '/i/logout': {
+        /**
+         * i/logout
+         * @description No description provided.
+         *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+         *     **Credential required**: *Yes*
+         */
+        post: operations['i___logout'];
+    };
     '/i/move': {
         /**
          * i/move
@@ -16448,6 +16458,7 @@ export interface operations {
                 content: {
                     'application/json': {
                         protocolVersion: string;
+                        enabled: boolean;
                         mediaKinds: 'audio'[];
                         codecs: ('opus' | 'pcma' | 'pcmu')[];
                         roles: ('host' | 'speaker' | 'listener')[];
@@ -16519,6 +16530,7 @@ export interface operations {
                     participantId: string;
                     connectionId: string;
                     generation: number;
+                    operationId: string;
                     mediaCredential: string;
                 };
             };
@@ -16679,6 +16691,7 @@ export interface operations {
                     participantId: string;
                     connectionId: string;
                     generation: number;
+                    operationId: string;
                     mediaCredential: string;
                     sessionDescription: {
                         /** @enum {string} */
@@ -16773,6 +16786,7 @@ export interface operations {
                     /** Format: misskey:id */
                     roomId: string;
                     connectionId: string;
+                    operationId: string;
                     sessionDescription?: {
                         /** @enum {string} */
                         type: 'offer' | 'answer';
@@ -16869,6 +16883,7 @@ export interface operations {
                     participantId: string;
                     connectionId: string;
                     generation: number;
+                    operationId: string;
                     mediaCredential: string;
                     /** Format: misskey:id */
                     publicationId: string;
@@ -16963,6 +16978,7 @@ export interface operations {
                     participantId: string;
                     connectionId: string;
                     generation: number;
+                    operationId: string;
                     mediaCredential: string;
                     mid: string;
                     sessionDescription: {
@@ -17065,6 +17081,7 @@ export interface operations {
                     participantId: string;
                     connectionId: string;
                     generation: number;
+                    operationId: string;
                     mediaCredential: string;
                     publicationIds: string[];
                 };
@@ -17314,8 +17331,8 @@ export interface operations {
                      * @enum {string}
                      */
                     visibility?: 'public' | 'followers' | 'specified';
-                    /** Format: date-time */
-                    scheduledAt?: string | null;
+                    visibleUserIds?: string[];
+                    scheduledAt?: number | null;
                 };
             };
         };
@@ -31032,6 +31049,61 @@ export interface operations {
             };
             /** @description Too many requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    i___logout: {
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
                 headers: {
                     [name: string]: unknown;
                 };

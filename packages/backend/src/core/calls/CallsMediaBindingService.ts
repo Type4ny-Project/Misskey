@@ -14,6 +14,7 @@ export type CallsPublicationBinding = {
 	participantId: string;
 	connectionId: string;
 	generation: number;
+	applicationId: string;
 	providerSessionId: string;
 	providerTrackName: string;
 	providerMid: string | null;

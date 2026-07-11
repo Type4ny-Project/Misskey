@@ -17,6 +17,7 @@ export class CallsReferenceClient {
 	private generation = 0;
 	private mediaCredential = '';
 	private tracker = new calls.CallsEventSequenceTracker();
+	private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 	constructor(origin: string, credential: string) {
 		this.api = new api.APIClient({ origin, credential });
@@ -34,12 +35,23 @@ export class CallsReferenceClient {
 		await this.api.request('calls/rooms/join', { roomId });
 		const channel = this.stream.useChannel('callsRoom', { roomId });
 		this.channel = channel;
-		for (const event of ['lifecycle', 'participant', 'role', 'speakerRequest', 'mute', 'speaking', 'track', 'revoked'] as const) {
+		for (const event of ['lifecycle', 'participant', 'role', 'speakerRequest', 'mute', 'speaking', 'track'] as const) {
 			channel.on(event, payload => {
-				if (this.tracker.accept(payload.sequence) === 'gap') void this.reconcile(roomId);
+				const sequence = this.tracker.accept(payload.sequence, payload.roomRevision);
+				if (sequence === 'duplicate') return;
+				if (sequence === 'gap') void this.reconcileAuthoritativeState(roomId);
 				if (event === 'track') void this.reconcile(roomId);
 			});
 		}
+		channel.on('revoked', payload => {
+			const sequence = this.tracker.accept(payload.sequence, payload.roomRevision);
+			if (sequence === 'duplicate') return;
+			if (sequence === 'gap') void this.reconcileAuthoritativeState(roomId);
+			if (payload.participantId == null || payload.participantId === this.participantId) {
+				this.closeMedia();
+				if (payload.reason === 'stale-generation') void this.createMediaSession(roomId);
+			}
+		});
 
 		if (publishMicrophone) {
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -56,15 +68,18 @@ export class CallsReferenceClient {
 		const capabilities = RTCRtpReceiver.getCapabilities('audio');
 		if (capabilities != null && typeof transceiver.setCodecPreferences === 'function') transceiver.setCodecPreferences(calls.preferCallsOpus(capabilities.codecs));
 		if (this.localTrack != null) await transceiver.sender.replaceTrack(this.localTrack);
-		const session = await this.api.request('calls/media/session/create', { roomId, connectionId: this.connectionId });
+		const session = await this.api.request('calls/media/session/create', { roomId, connectionId: this.connectionId, operationId: crypto.randomUUID() });
 		this.participantId = session.participantId;
 		this.generation = session.generation;
 		this.mediaCredential = session.mediaCredential;
+		if (this.heartbeatTimer != null) clearInterval(this.heartbeatTimer);
+		this.heartbeatTimer = setInterval(() => this.channel?.send('heartbeat', { connectionId: this.connectionId, generation: this.generation }), 30_000);
 		if (this.localTrack != null) {
 			const offer = await this.peer.createOffer();
 			await this.peer.setLocalDescription(offer);
 			const published = await this.api.request('calls/media/tracks/publish', {
 				roomId, participantId: this.participantId, connectionId: this.connectionId, generation: this.generation,
+				operationId: crypto.randomUUID(),
 				mediaCredential: this.mediaCredential, mid: transceiver.mid ?? '0', sessionDescription: { type: 'offer', sdp: offer.sdp ?? '' },
 			});
 			await this.applyNegotiation(roomId, published.negotiation);
@@ -79,9 +94,15 @@ export class CallsReferenceClient {
 		if (publicationIds.length === 0) return;
 		const negotiation = await this.api.request('calls/media/tracks/subscribe', {
 			roomId, participantId: this.participantId, connectionId: this.connectionId, generation: this.generation,
+			operationId: crypto.randomUUID(),
 			mediaCredential: this.mediaCredential, publicationIds,
 		});
 		await this.applyNegotiation(roomId, negotiation);
+	}
+
+	private async reconcileAuthoritativeState(roomId: string): Promise<void> {
+		await this.api.request('calls/rooms/show', { roomId });
+		await this.reconcile(roomId);
 	}
 
 	private async applyNegotiation(roomId: string, negotiation: { sessionDescription: { type: 'offer' | 'answer'; sdp: string } | null; requiresImmediateRenegotiation: boolean }): Promise<void> {
@@ -92,6 +113,7 @@ export class CallsReferenceClient {
 			await this.peer.setLocalDescription(answer);
 			await this.api.request('calls/media/renegotiate', {
 				roomId, participantId: this.participantId, connectionId: this.connectionId, generation: this.generation,
+				operationId: crypto.randomUUID(),
 				mediaCredential: this.mediaCredential, sessionDescription: { type: 'answer', sdp: answer.sdp ?? '' },
 			});
 		}
@@ -99,8 +121,16 @@ export class CallsReferenceClient {
 
 	public async close(roomId: string): Promise<void> {
 		this.channel?.dispose();
-		this.peer?.close();
-		this.localTrack?.stop();
+		if (this.heartbeatTimer != null) clearInterval(this.heartbeatTimer);
+		this.heartbeatTimer = null;
+		this.closeMedia();
 		await this.api.request('calls/rooms/leave', { roomId });
+	}
+
+	private closeMedia(): void {
+		this.peer?.close();
+		this.peer = null;
+		this.localTrack?.stop();
+		this.localTrack = null;
 	}
 }

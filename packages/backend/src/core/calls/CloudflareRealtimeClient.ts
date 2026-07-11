@@ -17,6 +17,7 @@ import {
 	type CloudflareRealtimeTrack,
 	type CloudflareRealtimeTracksResponse,
 } from './CloudflareRealtimeProviderContract.js';
+import { CallsTelemetryService } from './CallsTelemetryService.js';
 
 export class CloudflareRealtimeClientError extends Error {
 	constructor(public readonly detail: CloudflareRealtimeProviderError) {
@@ -33,41 +34,43 @@ export class CloudflareRealtimeClient {
 	constructor(
 		@Inject(DI.config)
 		private config: Config,
+		private telemetry: CallsTelemetryService,
 	) {}
 
 	public async createSession(sessionDescription?: CloudflareRealtimeSessionDescription): Promise<CloudflareRealtimeNewSessionResponse> {
-		return this.request('POST', cloudflareRealtimeEndpoints.createSession, sessionDescription == null ? {} : { sessionDescription });
+		return this.request('create-session', 'POST', cloudflareRealtimeEndpoints.createSession, sessionDescription == null ? {} : { sessionDescription });
 	}
 
 	public async getSession(sessionId: string): Promise<CloudflareRealtimeSessionStateResponse> {
-		return this.request('GET', this.path(cloudflareRealtimeEndpoints.getSession, sessionId));
+		return this.request('get-session', 'GET', this.path(cloudflareRealtimeEndpoints.getSession, sessionId));
 	}
 
 	public async addTracks(sessionId: string, tracks: CloudflareRealtimeTrack[], sessionDescription?: CloudflareRealtimeSessionDescription): Promise<CloudflareRealtimeTracksResponse> {
-		return this.request('POST', this.path(cloudflareRealtimeEndpoints.addTracks, sessionId), { tracks, sessionDescription });
+		return this.request('add-tracks', 'POST', this.path(cloudflareRealtimeEndpoints.addTracks, sessionId), { tracks, sessionDescription });
 	}
 
 	public async updateTracks(sessionId: string, tracks: CloudflareRealtimeTrack[], sessionDescription?: CloudflareRealtimeSessionDescription): Promise<CloudflareRealtimeTracksResponse> {
-		return this.request('PUT', this.path(cloudflareRealtimeEndpoints.updateTracks, sessionId), { tracks, sessionDescription });
+		return this.request('update-tracks', 'PUT', this.path(cloudflareRealtimeEndpoints.updateTracks, sessionId), { tracks, sessionDescription });
 	}
 
 	public async closeTracks(sessionId: string, tracks: Array<Pick<CloudflareRealtimeTrack, 'mid'>>, force = false, sessionDescription?: CloudflareRealtimeSessionDescription): Promise<CloudflareRealtimeTracksResponse> {
-		return this.request('PUT', this.path(cloudflareRealtimeEndpoints.closeTracks, sessionId), { tracks, force, sessionDescription });
+		return this.request('close-tracks', 'PUT', this.path(cloudflareRealtimeEndpoints.closeTracks, sessionId), { tracks, force, sessionDescription });
 	}
 
 	public async renegotiate(sessionId: string, sessionDescription: CloudflareRealtimeSessionDescription): Promise<CloudflareRealtimeTracksResponse> {
-		return this.request('PUT', this.path(cloudflareRealtimeEndpoints.renegotiateSession, sessionId), { sessionDescription });
+		return this.request('renegotiate', 'PUT', this.path(cloudflareRealtimeEndpoints.renegotiateSession, sessionId), { sessionDescription });
 	}
 
 	private path(template: string, sessionId: string): string {
 		return template.replace('{sessionId}', encodeURIComponent(sessionId));
 	}
 
-	private async request<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown): Promise<T> {
+	private async request<T>(operation: string, method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown): Promise<T> {
 		const provider = this.config.cloudflareRealtime;
-		if (provider == null) throw new CloudflareRealtimeNotConfiguredError();
+		if (provider == null || !provider.enabled) throw new CloudflareRealtimeNotConfiguredError();
 		const url = `${CLOUDFLARE_REALTIME_API_BASE_URL}${path.replace('{appId}', encodeURIComponent(provider.appId))}`;
 		let response: Response;
+		const startedAt = performance.now();
 		try {
 			response = await fetch(url, {
 				method,
@@ -79,6 +82,7 @@ export class CloudflareRealtimeClient {
 				signal: AbortSignal.timeout(CloudflareRealtimeClient.timeoutMs),
 			});
 		} catch (error) {
+			this.telemetry.providerOperation({ operation, status: 0, durationMs: performance.now() - startedAt, outcome: 'failure', category: 'provider-unavailable', retryable: true });
 			throw new CloudflareRealtimeClientError({
 				kind: 'provider-unavailable',
 				status: 0,
@@ -89,8 +93,11 @@ export class CloudflareRealtimeClient {
 
 		const responseBody = await this.readJson(response);
 		if (!response.ok) {
-			throw new CloudflareRealtimeClientError(mapCloudflareRealtimeError(response.status, responseBody));
+			const detail = mapCloudflareRealtimeError(response.status, responseBody);
+			this.telemetry.providerOperation({ operation, status: response.status, durationMs: performance.now() - startedAt, outcome: 'failure', category: detail.kind, retryable: detail.retryable });
+			throw new CloudflareRealtimeClientError(detail);
 		}
+		this.telemetry.providerOperation({ operation, status: response.status, durationMs: performance.now() - startedAt, outcome: 'success' });
 		return responseBody as T;
 	}
 

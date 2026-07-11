@@ -57,6 +57,9 @@ export class MiCallsRoom {
 	@Column('varchar', { length: 16, default: 'specified' })
 	public visibility: CallsRoomVisibility;
 
+	@Column('varchar', { array: true, default: '{}' })
+	public visibleUserIds: MiUser['id'][];
+
 	@Index()
 	@Column('varchar', { length: 16, default: 'scheduled' })
 	public state: CallsRoomState;

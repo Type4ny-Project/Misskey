@@ -7,6 +7,7 @@ describe('Calls public helpers', () => {
 	test('negotiates the provider-neutral protocol', () => {
 		expect(negotiateCallsCompatibility(capabilities, { requiredExtensions: ['websocket-room-events'] })).toEqual({ compatible: true, negotiatedMajor: 1 });
 		expect(negotiateCallsCompatibility({ ...capabilities, protocolVersion: '2.0' })).toEqual({ compatible: false, reason: 'version-mismatch' });
+		expect(negotiateCallsCompatibility({ ...capabilities, enabled: false })).toEqual({ compatible: false, reason: 'feature-disabled' });
 	});
 
 	test('detects sequence gaps and duplicates', () => {
@@ -15,6 +16,8 @@ describe('Calls public helpers', () => {
 		expect(tracker.accept(10)).toBe('duplicate');
 		expect(tracker.accept(12)).toBe('gap');
 		expect(tracker.accept(13)).toBe('accepted');
+		expect(tracker.accept(1, 2)).toBe('gap');
+		expect(tracker.accept(1, 2)).toBe('duplicate');
 	});
 
 	test('keeps auxiliary codecs while preferring Opus', () => {

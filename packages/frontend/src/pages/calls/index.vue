@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <MkStickyContainer>
 	<template #header><MkPageHeader/></template>
-	<MkSpacer :contentMax="720">
+	<div class="_spacer" style="--MI_SPACER-w: 720px;">
 		<div class="_gaps">
 			<form class="_panel _gaps" :class="$style.form" @submit.prevent="createRoom">
 				<h2>{{ i18n.ts._calls.createRoom }}</h2>
@@ -19,6 +19,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkSelect v-else v-model="visibility" :items="visibilityItems">
 					<template #label>{{ i18n.ts._calls.visibility }}</template>
 				</MkSelect>
+				<MkTextarea v-if="attachmentType === 'personal' && visibility === 'specified'" v-model="specifiedUserIds">
+					<template #label>{{ i18n.ts._calls.specifiedUserIds }}</template>
+					<template #caption>{{ i18n.ts._calls.specifiedUserIdsDescription }}</template>
+				</MkTextarea>
+				<MkInput v-model="scheduledAt" type="datetime-local"><template #label>{{ i18n.ts._calls.scheduledAt }}</template></MkInput>
 				<MkButton type="submit" primary :disabled="creating">{{ i18n.ts._calls.createRoom }}</MkButton>
 			</form>
 
@@ -28,9 +33,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<strong>{{ room.title }}</strong>
 				<span>{{ i18n.ts._calls[room.state] }}</span>
 				<small>{{ room.description }}</small>
+				<small>{{ i18n.ts._calls[room.attachment.type === 'personal' ? 'personalRoom' : 'chatRoom'] }} · {{ i18n.ts._calls[room.visibility] }}</small>
 			</MkA>
 		</div>
-	</MkSpacer>
+	</div>
 </MkStickyContainer>
 </template>
 
@@ -56,6 +62,8 @@ const description = ref('');
 const attachmentType = ref<'personal' | 'chatRoom'>('personal');
 const chatRoomId = ref('');
 const visibility = ref<'public' | 'followers' | 'specified'>('public');
+const specifiedUserIds = ref('');
+const scheduledAt = ref('');
 const attachmentTypeItems: MkSelectItem<'personal' | 'chatRoom'>[] = [
 	{ label: i18n.ts._calls.personalRoom, value: 'personal' },
 	{ label: i18n.ts._calls.chatRoom, value: 'chatRoom' },
@@ -80,6 +88,8 @@ async function createRoom() {
 			chatRoomId: attachmentType.value === 'chatRoom' ? chatRoomId.value : undefined,
 			title: title.value, description: description.value,
 			visibility: attachmentType.value === 'personal' ? visibility.value : undefined,
+			visibleUserIds: attachmentType.value === 'personal' && visibility.value === 'specified' ? [...new Set(specifiedUserIds.value.split(/[\s,]+/).filter(Boolean))] : undefined,
+			scheduledAt: scheduledAt.value === '' ? undefined : new Date(scheduledAt.value).getTime(),
 		});
 		router.push('/calls/:roomId', { params: { roomId: room.id } });
 	} finally { creating.value = false; }

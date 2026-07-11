@@ -95,6 +95,11 @@ import { CallsMediaService } from './calls/CallsMediaService.js';
 import { CallsTurnService } from './calls/CallsTurnService.js';
 import { CallsEventService } from './calls/CallsEventService.js';
 import { CallsMediaCredentialService } from './calls/CallsMediaCredentialService.js';
+import { CallsMediaRevocationService } from './calls/CallsMediaRevocationService.js';
+import { CallsOperationGuardService } from './calls/CallsOperationGuardService.js';
+import { CallsTurnCredentialStoreService } from './calls/CallsTurnCredentialStoreService.js';
+import { CallsTelemetryService } from './calls/CallsTelemetryService.js';
+import { CallsApplicationQuotaService } from './calls/CallsApplicationQuotaService.js';
 
 import { ChartLoggerService } from './chart/ChartLoggerService.js';
 import FederationChart from './chart/charts/federation.js';
@@ -426,6 +431,11 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		CallsTurnService,
 		CallsEventService,
 		CallsMediaCredentialService,
+		CallsMediaRevocationService,
+		CallsOperationGuardService,
+		CallsTurnCredentialStoreService,
+		CallsTelemetryService,
+		CallsApplicationQuotaService,
 
 		ChartLoggerService,
 		FederationChart,
@@ -754,6 +764,11 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		CallsTurnService,
 		CallsEventService,
 		CallsMediaCredentialService,
+		CallsMediaRevocationService,
+		CallsOperationGuardService,
+		CallsTurnCredentialStoreService,
+		CallsTelemetryService,
+		CallsApplicationQuotaService,
 		FederationChart,
 		NotesChart,
 		UsersChart,

@@ -1,5 +1,6 @@
 import {
 	Antenna,
+	CallsRoom,
 	ChatMessage,
 	ChatMessageLite,
 	DriveFile,
@@ -299,6 +300,40 @@ export type Channels = {
 			};
 		};
 	};
+	callsRoom: {
+		params: {
+			roomId: string;
+		};
+		events: {
+			lifecycle: (payload: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled' }) => void;
+			participant: (payload: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' }) => void;
+			role: (payload: CallsRoomEventBase & { participantId: string; role: 'host' | 'speaker' | 'listener' }) => void;
+			speakerRequest: (payload: CallsRoomEventBase & { participantId: string; requested: boolean }) => void;
+			mute: (payload: CallsRoomEventBase & { participantId: string; isMuted: boolean }) => void;
+			speaking: (payload: CallsRoomEventBase & { participantIds: string[] }) => void;
+			track: (payload: CallsRoomEventBase & { participantId: string; publicationId: string; available: boolean; mediaKind: 'audio' }) => void;
+			revoked: (payload: CallsRoomEventBase & { participantId?: string; reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation' }) => void;
+		};
+		receives: {
+			mute: boolean;
+			speaking: boolean;
+			heartbeat: { connectionId: string; generation: number };
+		};
+	};
+	callsRooms: {
+		params: null;
+		events: {
+			created: (payload: { action: 'created'; room: CallsRoom }) => void;
+			updated: (payload: { action: 'open' | 'ended' | 'cancelled'; room: CallsRoom }) => void;
+		};
+		receives: null;
+	};
+};
+
+export type CallsRoomEventBase = {
+	sequence: number;
+	roomRevision: number;
+	occurredAt: string;
 };
 
 export type NoteUpdatedEvent = { id: Note['id'] } & ({

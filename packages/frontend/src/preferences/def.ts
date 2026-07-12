@@ -199,6 +199,7 @@ export const PREF_DEF = definePreferences({
 			'explore',
 			'announcements',
 			'channels',
+			'calls',
 			'search',
 			'-',
 			'ui',

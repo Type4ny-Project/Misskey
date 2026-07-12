@@ -130,6 +130,19 @@ type Source = {
 
 	mediaProxy?: string;
 	videoThumbnailGenerator?: string;
+	cloudflareRealtime?: {
+		enabled?: boolean;
+		appId: string;
+		appSecret: string;
+		maxSessionsPerApplication?: number;
+		maxPublishedTracksPerApplication?: number;
+		disabledApplicationIds?: string[];
+		turn?: {
+			tokenId: string;
+			apiToken: string;
+			ttl?: number;
+		};
+	};
 
 	perChannelMaxNoteCacheCount?: number;
 	perUserNotificationsMaxCount?: number;
@@ -191,6 +204,19 @@ export type Config = {
 	id: string;
 	outgoingAddress: string | undefined;
 	outgoingAddressFamily: 'ipv4' | 'ipv6' | 'dual' | undefined;
+	cloudflareRealtime: {
+		enabled: boolean;
+		appId: string;
+		appSecret: string;
+		maxSessionsPerApplication: number;
+		maxPublishedTracksPerApplication: number;
+		disabledApplicationIds: string[];
+		turn?: {
+			tokenId: string;
+			apiToken: string;
+			ttl: number;
+		};
+	} | undefined;
 	deliverJobConcurrency: number | undefined;
 	inboxJobConcurrency: number | undefined;
 	relationshipJobConcurrency: number | undefined;
@@ -300,6 +326,26 @@ export function loadConfig(): Config {
 	const frontendEmbedManifestExists = fs.existsSync(resolve(projectBuiltDir, '_frontend_embed_vite_/manifest.json'));
 
 	const config = JSON.parse(fs.readFileSync(compiledConfigFilePath, 'utf-8')) as Source;
+	if (config.cloudflareRealtime != null) {
+		if (config.cloudflareRealtime.appId.trim() === '' || config.cloudflareRealtime.appSecret.trim() === '') {
+			throw new Error('cloudflareRealtime.appId and appSecret must both be non-empty');
+		}
+		if (config.cloudflareRealtime.turn != null) {
+			if (config.cloudflareRealtime.turn.tokenId.trim() === '' || config.cloudflareRealtime.turn.apiToken.trim() === '') {
+				throw new Error('cloudflareRealtime.turn.tokenId and apiToken must both be non-empty');
+			}
+			const ttl = config.cloudflareRealtime.turn.ttl ?? 3600;
+			if (!Number.isSafeInteger(ttl) || ttl < 60 || ttl > 86400) {
+				throw new Error('cloudflareRealtime.turn.ttl must be an integer between 60 and 86400 seconds');
+			}
+		}
+		for (const [name, value] of Object.entries({
+			maxSessionsPerApplication: config.cloudflareRealtime.maxSessionsPerApplication ?? 10,
+			maxPublishedTracksPerApplication: config.cloudflareRealtime.maxPublishedTracksPerApplication ?? 8,
+		})) {
+			if (!Number.isSafeInteger(value) || value < 1 || value > 10_000) throw new Error(`cloudflareRealtime.${name} must be an integer between 1 and 10000`);
+		}
+	}
 
 	const url = tryCreateUrl(config.url ?? process.env.MISSKEY_URL ?? '');
 	const version = meta.version;
@@ -366,6 +412,19 @@ export function loadConfig(): Config {
 		threadPoolSize: config.threadPoolSize ?? 1,
 		outgoingAddress: config.outgoingAddress,
 		outgoingAddressFamily: config.outgoingAddressFamily,
+		cloudflareRealtime: config.cloudflareRealtime == null ? undefined : {
+			enabled: config.cloudflareRealtime.enabled ?? true,
+			appId: config.cloudflareRealtime.appId,
+			appSecret: config.cloudflareRealtime.appSecret,
+			maxSessionsPerApplication: config.cloudflareRealtime.maxSessionsPerApplication ?? 10,
+			maxPublishedTracksPerApplication: config.cloudflareRealtime.maxPublishedTracksPerApplication ?? 8,
+			disabledApplicationIds: config.cloudflareRealtime.disabledApplicationIds ?? [],
+			turn: config.cloudflareRealtime.turn == null ? undefined : {
+				tokenId: config.cloudflareRealtime.turn.tokenId,
+				apiToken: config.cloudflareRealtime.turn.apiToken,
+				ttl: config.cloudflareRealtime.turn.ttl ?? 3600,
+			},
+		},
 		deliverJobConcurrency: config.deliverJobConcurrency,
 		inboxJobConcurrency: config.inboxJobConcurrency,
 		relationshipJobConcurrency: config.relationshipJobConcurrency,

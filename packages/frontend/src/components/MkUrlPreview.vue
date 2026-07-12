@@ -44,7 +44,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 </template>
 <template v-else-if="localEventId !== null">
-	<MkUrlEventCard :event-id="localEventId"/>
+	<MkUrlEventCard :eventId="localEventId"/>
 </template>
 <div v-else>
 	<component :is="self ? 'MkA' : 'a'" :class="[$style.link, { [$style.compact]: compact }]" :[attr]="maybeRelativeUrl" rel="nofollow noopener" :target="target" :title="url">
@@ -89,6 +89,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { defineAsyncComponent, onDeactivated, onMounted, onUnmounted, ref } from 'vue';
 import { url as local } from '@@/js/config.js';
 import { versatileLang } from '@@/js/intl-const.js';
+import { maybeMakeRelative } from '@@/js/url.js';
 import type { SummalyResult } from '@misskey-dev/summaly';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
@@ -98,7 +99,6 @@ import MkUrlEventCard from '@/components/MkUrlEventCard.vue';
 import { getLocalEventId, transformPlayerUrl } from '@/utility/url-preview.js';
 import { store } from '@/store.js';
 import { prefer } from '@/preferences.js';
-import { maybeMakeRelative } from '@@/js/url.js';
 
 const props = withDefaults(defineProps<{
 	url: string;

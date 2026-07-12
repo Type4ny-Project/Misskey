@@ -132,6 +132,12 @@ export const navbarItemDef = reactive<{
 		icon: 'ti ti-device-tv',
 		to: '/channels',
 	},
+	calls: {
+		title: i18n.ts._calls.title,
+		icon: 'ti ti-phone-call',
+		show: computed(() => $i != null),
+		to: '/calls',
+	},
 	chat: {
 		title: i18n.ts.directMessage_short,
 		icon: 'ti ti-messages',

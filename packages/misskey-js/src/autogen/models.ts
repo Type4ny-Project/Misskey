@@ -70,3 +70,5 @@ export type ChatRoom = components['schemas']['ChatRoom'];
 export type ChatRoomInvitation = components['schemas']['ChatRoomInvitation'];
 export type ChatRoomMembership = components['schemas']['ChatRoomMembership'];
 export type Event = components['schemas']['Event'];
+export type CallsRoom = components['schemas']['CallsRoom'];
+export type CallsParticipant = components['schemas']['CallsParticipant'];

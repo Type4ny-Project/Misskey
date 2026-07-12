@@ -6,14 +6,14 @@
 import cluster from 'node:cluster';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { envOption } from '@/env.js';
-import { RoleService } from '@/core/RoleService.js';
-import { SignupService } from '@/core/SignupService.js';
 import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyRawBody from 'fastify-raw-body';
 import { IsNull } from 'typeorm';
+import { SignupService } from '@/core/SignupService.js';
+import { RoleService } from '@/core/RoleService.js';
+import { envOption } from '@/env.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import type { Config } from '@/config.js';
 import type { EmojisRepository, MiMeta, UserProfilesRepository, UsersRepository } from '@/models/_.js';
@@ -281,8 +281,6 @@ export class ServerService implements OnApplicationShutdown {
 			fastify.listen({ port: this.config.port, host: '0.0.0.0' });
 		}
 
-
-
 		if (envOption.managed && this.config.rootUserName && this.config.adminUserName && this.config.rootPassword && this.config.adminPassword) {
 			const hasUsers = await this.usersRepository.count() > 0;
 			if (!hasUsers) {
@@ -291,13 +289,13 @@ export class ServerService implements OnApplicationShutdown {
 				const rootUser = await this.signupService.signup({
 					username: this.config.rootUserName,
 					password: this.config.rootPassword,
-					ignorePreservedUsernames: true
+					ignorePreservedUsernames: true,
 				});
 
 				const adminUser = await this.signupService.signup({
 					username: this.config.adminUserName,
 					password: this.config.adminPassword,
-					ignorePreservedUsernames: true
+					ignorePreservedUsernames: true,
 				});
 
 				const rootRole = await this.roleService.create({
@@ -338,8 +336,6 @@ export class ServerService implements OnApplicationShutdown {
 		}
 
 		await fastify.ready();
-
-
 	}
 
 	@bindThis

@@ -69,6 +69,14 @@ export const ROUTE_DEF = [{
 	component: chatPage(() => import('@/pages/chat/message.vue')),
 	loginRequired: true,
 }, {
+	path: '/calls',
+	component: page(() => import('@/pages/calls/index.vue')),
+	loginRequired: true,
+}, {
+	path: '/calls/:roomId',
+	component: page(() => import('@/pages/calls/room.vue')),
+	loginRequired: true,
+}, {
 	path: '/instance-info/:host',
 	component: page(() => import('@/pages/instance-info.vue')),
 }, {

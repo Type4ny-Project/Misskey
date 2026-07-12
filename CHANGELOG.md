@@ -4,9 +4,14 @@
 -
 
 ### Client
+- Feat: WebSocketとWebRTCを利用したMisskey Calls音声ルームを追加
+- Enhance: Misskey Callsで同じ開催場所の既存通話へ戻れるように
+- Enhance: Misskey Callsの発話中表示をテーマのアクセントカラーと波形アニメーションへ変更
 - Feat: センシティブなメディアをタップ中だけ表示するオプションを追加
 
 ### Server
+- Feat: Cloudflare Realtimeを利用するMisskey Calls APIとリアルタイムイベントを追加
+- Fix: Misskey Callsの参加者がいない通話ルームが残り続ける問題を修正
 - Enhance: リモートノートクリーニングジョブのスキップ処理のパフォーマンス改善
 
 

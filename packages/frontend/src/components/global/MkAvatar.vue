@@ -4,10 +4,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<component :is="link ? MkA : 'span'" v-user-preview="preview ? user.id : undefined" v-bind="bound" class="_noSelect" :class="[$style.root, { [$style.animation]: animation, [$style.cat]: user.isCat, [$style.square]: squareAvatars }]" :style="{ color }" :title="acct(user)" @click="onClick">
+<component :is="link ? MkA : 'span'" v-user-preview="preview ? user.id : undefined" v-bind="bound" class="_noSelect" :class="[$style.root, { [$style.animation]: animation, [$style.cat]: user.isCat, [$style.square]: squareAvatars, [$style.callsLive]: callsRoomId != null }]" :style="{ color }" :title="acct(user)" @click="onClick">
 	<MkImgWithBlurhash v-if="prefer.s.enableHighQualityImagePlaceholders" :class="$style.inner" :src="url" :hash="user.avatarBlurhash" :cover="true" :onlyAvgColor="true"/>
 	<img v-else :class="$style.inner" :src="url" alt="" decoding="async" style="pointer-events: none;"/>
 	<MkUserOnlineIndicator v-if="indicator" :class="$style.indicator" :user="user"/>
+	<span v-if="callsIndicator && callsRoomId != null" :class="$style.callsIndicator" aria-hidden="true"><i class="ti ti-broadcast"></i></span>
 	<div v-if="user.isCat" :class="[$style.ears]">
 		<div :class="$style.earLeft">
 			<div v-if="false" :class="$style.layer">
@@ -52,6 +53,7 @@ import { getStaticImageUrl } from '@/utility/media-proxy.js';
 import { acct, userPage } from '@/filters/user.js';
 import MkUserOnlineIndicator from '@/components/MkUserOnlineIndicator.vue';
 import { prefer } from '@/preferences.js';
+import { useCallsUserRoom } from '@/composables/use-calls-user-room.js';
 
 const animation = ref(prefer.s.animation);
 const squareAvatars = ref(prefer.s.squareAvatars);
@@ -65,6 +67,7 @@ const props = withDefaults(defineProps<{
 	link?: boolean;
 	preview?: boolean;
 	indicator?: boolean;
+	callsIndicator?: boolean;
 	decorations?: DecorationEditorDecoration[];
 	forceShowDecoration?: boolean;
 }>(), {
@@ -72,6 +75,7 @@ const props = withDefaults(defineProps<{
 	link: false,
 	preview: false,
 	indicator: false,
+	callsIndicator: false,
 	decorations: undefined,
 	forceShowDecoration: false,
 });
@@ -81,6 +85,7 @@ const emit = defineEmits<{
 }>();
 
 const showDecoration = props.forceShowDecoration || prefer.s.showAvatarDecorations;
+const callsRoomId = props.callsIndicator ? useCallsUserRoom(() => props.user.id) : ref<string | null>(null);
 
 const bound = computed(() => props.link
 	? { to: userPage(props.user), target: props.target }
@@ -190,6 +195,15 @@ watch(() => props.user.avatarBlurhash, () => {
 	left: 0;
 	width: 20%;
 	height: 20%;
+}
+
+.callsLive { box-shadow: 0 0 0 3px var(--MI_THEME-error); }
+.callsIndicator { position: absolute; z-index: 3; right: -5%; bottom: -5%; display: grid; width: 34%; height: 34%; place-items: center; border: 2px solid var(--MI_THEME-panel); border-radius: 50%; background: var(--MI_THEME-error); color: var(--MI_THEME-fgOnAccent); font-size: 0.62em; pointer-events: none; }
+.animation.callsLive { animation: callsPulse 2.4s ease-in-out infinite; }
+
+@keyframes callsPulse {
+	0%, 100% { box-shadow: 0 0 0 3px var(--MI_THEME-error); }
+	50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--MI_THEME-error) 20%, transparent); }
 }
 
 .square {

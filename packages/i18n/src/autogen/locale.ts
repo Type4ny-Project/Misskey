@@ -31,6 +31,26 @@ export interface Locale extends ILocale {
      */
     "search": string;
     /**
+     * 履歴
+     */
+    "history": string;
+    /**
+     * ポイントは正の数で指定してください
+     */
+    "pointsMustBePositive": string;
+    /**
+     * 現在のローカルユーザー数
+     */
+    "nowLocalUsers": string;
+    /**
+     * ローカルユーザー数の上限
+     */
+    "maxLocalUsers": string;
+    /**
+     * 残りのローカルユーザー枠
+     */
+    "remainingLocalUsers": string;
+    /**
      * リセット
      */
     "reset": string;
@@ -10144,6 +10164,288 @@ export interface Locale extends ILocale {
          * ダイレクトメッセージを閲覧する
          */
         "read:chat": string;
+        /**
+         * Misskey Callsのルームと参加者を閲覧する
+         */
+        "read:calls": string;
+        /**
+         * Misskey Callsへの参加と音声通話を操作する
+         */
+        "write:calls": string;
+    };
+    "_calls": {
+        /**
+         * Misskey Calls
+         */
+        "title": string;
+        /**
+         * LIVE
+         */
+        "live": string;
+        /**
+         * 新しい通話
+         */
+        "newCall": string;
+        /**
+         * 音声ルームを作成して、すぐに通話を始めます。
+         */
+        "newCallDescription": string;
+        /**
+         * 作成するとすぐに通話が始まります。
+         */
+        "startsImmediately": string;
+        /**
+         * 指定した日時の通話予定を作成します。
+         */
+        "createsSchedule": string;
+        /**
+         * 通話を開始
+         */
+        "startCall": string;
+        /**
+         * 予定を作成
+         */
+        "scheduleCall": string;
+        /**
+         * 詳細設定
+         */
+        "advancedSettings": string;
+        /**
+         * 通話中のルーム
+         */
+        "activeRooms": string;
+        /**
+         * 開始予定のルーム
+         */
+        "scheduledRooms": string;
+        /**
+         * 現在通話中のルームはありません
+         */
+        "noActiveRooms": string;
+        /**
+         * 説明はありません
+         */
+        "noDescription": string;
+        /**
+         * 自分をホストにして通話を始めます
+         */
+        "personalRoomDescription": string;
+        /**
+         * 既存のチャットルームに通話を追加します
+         */
+        "chatRoomDescription": string;
+        /**
+         * このチャットルームのメンバーと音声で話せます。
+         */
+        "chatRoomCallDescription": string;
+        /**
+         * 空欄の場合は作成後すぐに通話を開始します。
+         */
+        "scheduledAtDescription": string;
+        /**
+         * 通話ルームを作成
+         */
+        "createRoom": string;
+        /**
+         * ルーム名
+         */
+        "roomTitle": string;
+        /**
+         * 説明
+         */
+        "roomDescription": string;
+        /**
+         * 開催場所
+         */
+        "attachmentType": string;
+        /**
+         * パーソナルルーム
+         */
+        "personalRoom": string;
+        /**
+         * チャットルーム
+         */
+        "chatRoom": string;
+        /**
+         * チャットルームID
+         */
+        "chatRoomId": string;
+        /**
+         * 公開範囲
+         */
+        "visibility": string;
+        /**
+         * 参加を許可するユーザーID
+         */
+        "specifiedUserIds": string;
+        /**
+         * ユーザーIDを空白またはカンマ区切りで入力してください。
+         */
+        "specifiedUserIdsDescription": string;
+        /**
+         * 開始予定日時
+         */
+        "scheduledAt": string;
+        /**
+         * 公開
+         */
+        "public": string;
+        /**
+         * フォロワーのみ
+         */
+        "followers": string;
+        /**
+         * 指定したユーザーのみ
+         */
+        "specified": string;
+        /**
+         * 通話を開始
+         */
+        "openRoom": string;
+        /**
+         * 通話を終了
+         */
+        "endRoom": string;
+        /**
+         * 予定を中止
+         */
+        "cancelRoom": string;
+        /**
+         * ルームに参加
+         */
+        "joinRoom": string;
+        /**
+         * この通話に参加中
+         */
+        "alreadyJoined": string;
+        /**
+         * この開催場所には、通話中または開始予定のルームがあります。新しいルームを作らず、既存のルームを確認できます。
+         */
+        "activeAttachmentExists": string;
+        /**
+         * 既存のルームを見る
+         */
+        "returnToCall": string;
+        /**
+         * 現在の通話から退出して、この通話に参加しますか？
+         */
+        "switchRoomConfirm": string;
+        /**
+         * 退出
+         */
+        "leaveRoom": string;
+        /**
+         * 音声に接続
+         */
+        "connectAudio": string;
+        /**
+         * 音声を切断
+         */
+        "disconnectAudio": string;
+        /**
+         * ミュート
+         */
+        "mute": string;
+        /**
+         * ミュート解除
+         */
+        "unmute": string;
+        /**
+         * マイク
+         */
+        "microphone": string;
+        /**
+         * 使用するマイク
+         */
+        "selectMicrophone": string;
+        /**
+         * リスナーとして参加する場合、マイク権限は要求されません。
+         */
+        "listenerDoesNotNeedMicrophone": string;
+        /**
+         * 発言をリクエスト
+         */
+        "requestSpeaker": string;
+        /**
+         * 発言をリクエスト済み
+         */
+        "speakerRequested": string;
+        /**
+         * スピーカーにする
+         */
+        "promoteSpeaker": string;
+        /**
+         * リスナーに戻す
+         */
+        "demoteListener": string;
+        /**
+         * 参加者から削除
+         */
+        "removeParticipant": string;
+        /**
+         * ホスト
+         */
+        "host": string;
+        /**
+         * スピーカー
+         */
+        "speaker": string;
+        /**
+         * リスナー
+         */
+        "listener": string;
+        /**
+         * 開始前
+         */
+        "scheduled": string;
+        /**
+         * 通話中
+         */
+        "open": string;
+        /**
+         * 終了
+         */
+        "ended": string;
+        /**
+         * 中止
+         */
+        "cancelled": string;
+        /**
+         * このブラウザはMisskey Callsに必要な標準WebRTC APIをサポートしていません。
+         */
+        "unsupportedBrowser": string;
+        /**
+         * マイクの使用が許可されませんでした。ブラウザ設定から許可して再試行してください。
+         */
+        "permissionDenied": string;
+        /**
+         * マイクの許可を確認できませんでした。ブラウザの許可画面を確認して再試行してください。
+         */
+        "permissionPending": string;
+        /**
+         * 利用できるマイクが見つかりません。
+         */
+        "deviceNotFound": string;
+        /**
+         * 音声接続に失敗しました。再試行できます。
+         */
+        "mediaFailed": string;
+        /**
+         * 音声接続を復旧しています…
+         */
+        "reconnecting": string;
+        /**
+         * ルームには参加済みです。音声へ接続しています…
+         */
+        "roomConnectedMediaConnecting": string;
+        /**
+         * 音声再生を再開
+         */
+        "resumeAudio": string;
+        /**
+         * リアルタイム更新が切断されました。再接続を待っています。
+         */
+        "websocketDisconnected": string;
     };
     "_auth": {
         /**

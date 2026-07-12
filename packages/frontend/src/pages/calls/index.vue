@@ -15,7 +15,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong>{{ i18n.ts._calls.newCall }}</strong>
 						<p>{{ i18n.ts._calls.newCallDescription }}</p>
 					</div>
-					<MkButton primary gradate rounded @click="openCreateForm"><i class="ti ti-broadcast"></i> {{ i18n.ts._calls.createRoom }}</MkButton>
+					<MkButton v-if="activePersonalRoom != null" primary rounded @click="openRoom(activePersonalRoom.id)"><i class="ti ti-phone-call"></i> {{ i18n.ts._calls.returnToCall }}</MkButton>
+					<MkButton v-else primary gradate rounded @click="openCreateForm"><i class="ti ti-broadcast"></i> {{ i18n.ts._calls.createRoom }}</MkButton>
 				</div>
 
 				<form v-else :class="$style.createForm" @submit.prevent="createRoom">
@@ -46,6 +47,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkInput v-if="attachmentType === 'chatRoom'" v-model="chatRoomId" required>
 						<template #label>{{ i18n.ts._calls.chatRoomId }}</template>
 					</MkInput>
+					<MkInfo v-if="existingAttachmentRoom != null" warn>{{ i18n.ts._calls.activeAttachmentExists }}</MkInfo>
 
 					<button type="button" class="_button" :class="$style.advancedToggle" @click="advancedOpen = !advancedOpen">
 						<i class="ti ti-adjustments"></i><span>{{ i18n.ts._calls.advancedSettings }}</span><i :class="advancedOpen ? 'ti ti-chevron-up' : 'ti ti-chevron-down'"></i>
@@ -66,7 +68,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 					<footer :class="$style.createActions">
 						<MkButton type="button" rounded @click="closeCreateForm">{{ i18n.ts.cancel }}</MkButton>
-						<MkButton type="submit" primary gradate rounded :disabled="creating || title.trim() === ''">
+						<MkButton v-if="existingAttachmentRoom != null" type="button" primary rounded @click="openRoom(existingAttachmentRoom.id)">
+							<i class="ti ti-phone-call"></i> {{ i18n.ts._calls.returnToCall }}
+						</MkButton>
+						<MkButton v-else type="submit" primary gradate rounded :disabled="creating || title.trim() === ''">
 							<i :class="scheduledAt === '' ? 'ti ti-phone-call' : 'ti ti-calendar-plus'"></i>
 							{{ scheduledAt === '' ? i18n.ts._calls.startCall : i18n.ts._calls.scheduleCall }}
 						</MkButton>
@@ -103,12 +108,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, onActivated, onMounted, onUnmounted, ref } from 'vue';
 import type * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
+import MkInfo from '@/components/MkInfo.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import type { MkSelectItem } from '@/components/MkSelect.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkCallsRoomCard from '@/components/MkCallsRoomCard.vue';
 import { i18n } from '@/i18n.js';
+import { $i } from '@/i.js';
 import * as os from '@/os.js';
 import { definePage } from '@/page.js';
 import { useRouter } from '@/router.js';
@@ -133,6 +140,12 @@ const specifiedUserIds = ref('');
 const scheduledAt = ref('');
 const activeRooms = computed(() => rooms.value.filter(room => room.state === 'open'));
 const scheduledRooms = computed(() => rooms.value.filter(room => room.state === 'scheduled'));
+const activePersonalRoom = computed(() => rooms.value.find(room => room.attachment.type === 'personal' && room.attachment.ownerUserId === $i?.id && (room.state === 'open' || room.state === 'scheduled')) ?? null);
+const existingAttachmentRoom = computed(() => rooms.value.find(room => {
+	if (room.state !== 'open' && room.state !== 'scheduled') return false;
+	if (attachmentType.value === 'personal') return room.attachment.type === 'personal' && room.attachment.ownerUserId === $i?.id;
+	return room.attachment.type === 'chatRoom' && room.attachment.chatRoomId === chatRoomId.value;
+}) ?? null);
 const visibilityItems: MkSelectItem<'public' | 'followers' | 'specified'>[] = [
 	{ label: i18n.ts._calls.public, value: 'public' },
 	{ label: i18n.ts._calls.followers, value: 'followers' },
@@ -169,6 +182,10 @@ function closeCreateForm(): void {
 
 async function createRoom(): Promise<void> {
 	if (creating.value || title.value.trim() === '') return;
+	if (existingAttachmentRoom.value != null) {
+		openRoom(existingAttachmentRoom.value.id);
+		return;
+	}
 	creating.value = true;
 	try {
 		let room = await misskeyApi('calls/rooms/create', {
@@ -198,6 +215,11 @@ async function createRoom(): Promise<void> {
 	} finally {
 		creating.value = false;
 	}
+}
+
+function openRoom(roomId: string): void {
+	closeCreateForm();
+	router.push('/calls/:roomId', { params: { roomId } });
 }
 
 onMounted(() => {

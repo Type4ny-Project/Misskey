@@ -4,6 +4,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
 
@@ -21,7 +22,7 @@ export class StaleCallsConnectionError extends Error {}
 
 @Injectable()
 export class CallsLiveConnectionService {
-	private static readonly ttlSeconds = 90;
+	public static readonly ttlSeconds = 90;
 
 	constructor(
 		@Inject(DI.redis)
@@ -41,6 +42,55 @@ export class CallsLiveConnectionService {
 	public async get(participantId: string): Promise<CallsLiveConnection | null> {
 		const value = await this.redis.get(this.connectionKey(participantId));
 		return value == null ? null : JSON.parse(value) as CallsLiveConnection;
+	}
+
+	public async hasAny(participantIds: string[]): Promise<boolean> {
+		if (participantIds.length === 0) return false;
+		const connections = await this.redis.mget(participantIds.map(participantId => this.connectionKey(participantId)));
+		return connections.some(connection => connection != null);
+	}
+
+	public async withRoomLock<T>(roomId: string, callback: (assertHeld: () => Promise<void>) => Promise<T>): Promise<T> {
+		const key = `calls:room-lock:${roomId}`;
+		const token = randomUUID();
+		for (let attempt = 0; attempt < 80; attempt++) {
+			if (await this.redis.set(key, token, 'PX', 5000, 'NX') === 'OK') {
+				let lockLost = false;
+				const renew = async (): Promise<void> => {
+					try {
+						const renewed = await this.redis.eval(
+							`if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('PEXPIRE', KEYS[1], ARGV[2]) end return 0`,
+							1,
+							key,
+							token,
+							5000,
+						);
+						if (renewed !== 1) lockLost = true;
+					} catch {
+						lockLost = true;
+					}
+				};
+				const renewal = setInterval(() => {
+					void renew();
+				}, 1000);
+				try {
+					return await callback(async () => {
+						await renew();
+						if (lockLost) throw new Error('Calls room lock was lost');
+					});
+				} finally {
+					clearInterval(renewal);
+					await this.redis.eval(
+						`if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end return 0`,
+						1,
+						key,
+						token,
+					);
+				}
+			}
+			await new Promise(resolve => setTimeout(resolve, 25));
+		}
+		throw new Error('Timed out while locking a Calls room');
 	}
 
 	public async assertCurrent(participantId: string, connectionId: string, generation: number): Promise<CallsLiveConnection> {

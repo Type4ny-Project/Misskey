@@ -19,12 +19,15 @@ import type {
 import type { CallsModerationAction } from '@/models/CallsModerationLog.js';
 import type { CallsParticipantRole } from '@/models/CallsParticipant.js';
 import type { CallsRoomVisibility } from '@/models/CallsRoom.js';
+import { MiCallsParticipant as MiCallsParticipantEntity } from '@/models/CallsParticipant.js';
+import { MiCallsRoom as MiCallsRoomEntity } from '@/models/CallsRoom.js';
 import { bindThis } from '@/decorators.js';
 import { CacheService } from '@/core/CacheService.js';
 import { ChatService } from '@/core/ChatService.js';
 import { IdService } from '@/core/IdService.js';
 import { RoleService } from '@/core/RoleService.js';
 import { CallsEventService } from './CallsEventService.js';
+import { CallsLiveConnectionService } from './CallsLiveConnectionService.js';
 import { CallsMediaRevocationService } from './CallsMediaRevocationService.js';
 import { CallsTelemetryService } from './CallsTelemetryService.js';
 import type { Config } from '@/config.js';
@@ -72,6 +75,7 @@ export class CallsRoomService {
 		private chatService: ChatService,
 		private idService: IdService,
 		private roleService: RoleService,
+		private callsLiveConnectionService: CallsLiveConnectionService,
 		private callsEventService: CallsEventService,
 		private callsMediaRevocationService: CallsMediaRevocationService,
 		private callsTelemetryService: CallsTelemetryService,
@@ -106,7 +110,7 @@ export class CallsRoomService {
 			chatRoomId: params.attachmentType === 'chatRoom' ? params.chatRoomId! : IsNull(),
 			state: In(['scheduled', 'open']),
 		});
-		if (activeAttachment != null) throw new CallsRoomError('active-attachment');
+		if (activeAttachment != null && !(await this.endIfEmpty(activeAttachment))) throw new CallsRoomError('active-attachment');
 
 		const now = new Date();
 		const room = await this.callsRoomsRepository.insertOne({
@@ -193,6 +197,7 @@ export class CallsRoomService {
 		});
 		const visible: MiCallsRoom[] = [];
 		for (const room of candidates) {
+			if (await this.endIfEmpty(room)) continue;
 			try {
 				await this.assertCanAccess(user, room);
 				visible.push(room);
@@ -453,6 +458,42 @@ export class CallsRoomService {
 			.where('id = :roomId', { roomId }).returning('revision').execute();
 		if (result.affected !== 1) throw new CallsRoomError('room-not-found');
 		return Number((result.raw[0] as { revision: number }).revision);
+	}
+
+	private async endIfEmpty(room: MiCallsRoom): Promise<boolean> {
+		if (room.state !== 'open') return false;
+		if (Date.now() - room.updatedAt.getTime() < CallsLiveConnectionService.ttlSeconds * 1000) return false;
+		const result = await this.callsLiveConnectionService.withRoomLock(room.id, async (assertLockHeld): Promise<{ room: MiCallsRoom; changed: boolean } | null> => {
+			const current = await this.callsRoomsRepository.findOneBy({ id: room.id });
+			if (current == null || current.state !== 'open') return current?.state === 'ended' ? { room: current, changed: false } : null;
+			if (Date.now() - current.updatedAt.getTime() < CallsLiveConnectionService.ttlSeconds * 1000) return null;
+			const participants = await this.callsParticipantsRepository.findBy({ roomId: room.id, state: 'active' });
+			if (await this.callsLiveConnectionService.hasAny(participants.map(participant => participant.id))) return null;
+			const now = new Date();
+			await assertLockHeld();
+			return this.callsRoomsRepository.manager.transaction(async manager => {
+				const roomRepository = manager.getRepository(MiCallsRoomEntity);
+				const participantRepository = manager.getRepository(MiCallsParticipantEntity);
+				const result = await roomRepository.createQueryBuilder().update()
+					.set({ state: 'ended', endedAt: now, revision: () => '"revision" + 1', updatedAt: now })
+					.where('id = :roomId AND revision = :revision AND state = :state', { roomId: room.id, revision: current.revision, state: 'open' })
+					.returning('*').execute();
+				if (result.affected !== 1) {
+					const latest = await roomRepository.findOneBy({ id: room.id });
+					return latest?.state === 'ended' ? { room: latest, changed: false } : null;
+				}
+				await participantRepository.update({ roomId: room.id, state: 'active' }, { state: 'left', leftAt: now, isMuted: true, updatedAt: now });
+				return { room: result.raw[0] as MiCallsRoom, changed: true };
+			});
+		});
+		if (result == null || result.room.state !== 'ended') return false;
+		if (!result.changed) return true;
+		const updated = result.room;
+		await this.callsEventService.publish(room.id, updated.revision, 'lifecycle', { state: 'ended' });
+		this.callsEventService.publishRoomsList('updated', { roomId: room.id, action: 'ended' });
+		await this.callsMediaRevocationService.revokeRoom(room.id, updated.revision, 'room-ended');
+		this.callsTelemetryService.lifecycle({ action: 'room-ended', roomId: room.id, reason: 'empty' });
+		return true;
 	}
 
 	private sanitizeMetadata(value: string): string {

@@ -40,12 +40,25 @@ export class CallsMediaService {
 		applicationId: string;
 		sessionDescription?: CloudflareRealtimeSessionDescription;
 	}): Promise<{ participantId: string; generation: number; canPublish: boolean; sessionDescription?: CloudflareRealtimeSessionDescription }> {
-		const participant = await this.authorizeParticipant(user, input.roomId);
-		await this.quotaService.reserveSession(input.applicationId, participant.id);
-		let createdGeneration: { connectionId: string; generation: number } | null = null;
+		const authorizedParticipant = await this.authorizeParticipant(user, input.roomId);
+		await this.quotaService.reserveSession(input.applicationId, authorizedParticipant.id);
+		let locked: { participant: MiCallsParticipant; replacement: Awaited<ReturnType<CallsLiveConnectionService['replace']>> };
 		try {
-			const replacement = await this.liveConnectionService.replace(participant.id, input.connectionId, input.applicationId);
-			createdGeneration = replacement.current;
+			locked = await this.liveConnectionService.withRoomLock(input.roomId, async (assertLockHeld) => {
+				const lockedParticipant = await this.authorizeParticipant(user, input.roomId);
+				await assertLockHeld();
+				return {
+					participant: lockedParticipant,
+					replacement: await this.liveConnectionService.replace(lockedParticipant.id, input.connectionId, input.applicationId),
+				};
+			});
+		} catch (error) {
+			await this.quotaService.releaseSession(input.applicationId, authorizedParticipant.id);
+			throw error;
+		}
+		const { participant, replacement } = locked;
+		const createdGeneration: { connectionId: string; generation: number } = replacement.current;
+		try {
 			if (replacement.previous != null) {
 				await this.revocationService.closeGeneration(participant.id, replacement.previous.generation);
 				if (replacement.previous.applicationId !== input.applicationId) await this.quotaService.release(replacement.previous.applicationId, participant.id);
@@ -55,9 +68,7 @@ export class CallsMediaService {
 			this.telemetry.lifecycle({ action: 'media-session-created', roomId: input.roomId, participantId: participant.id, generation: replacement.current.generation, applicationId: input.applicationId });
 			return { participantId: participant.id, generation: replacement.current.generation, canPublish: participant.role !== 'listener', sessionDescription: response.sessionDescription };
 		} catch (error) {
-			if (createdGeneration != null) {
-				await this.liveConnectionService.clear(participant.id, createdGeneration.connectionId, createdGeneration.generation);
-			}
+			await this.liveConnectionService.clear(participant.id, createdGeneration.connectionId, createdGeneration.generation);
 			await this.quotaService.releaseSession(input.applicationId, participant.id);
 			throw error;
 		}

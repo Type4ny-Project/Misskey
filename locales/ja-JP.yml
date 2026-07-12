@@ -2706,6 +2706,8 @@ _calls:
   cancelRoom: "予定を中止"
   joinRoom: "ルームに参加"
   alreadyJoined: "この通話に参加中"
+  activeAttachmentExists: "この開催場所には、通話中または開始予定のルームがあります。新しいルームを作らず、既存のルームを確認できます。"
+  returnToCall: "既存のルームを見る"
   switchRoomConfirm: "現在の通話から退出して、この通話に参加しますか？"
   leaveRoom: "退出"
   connectAudio: "音声に接続"

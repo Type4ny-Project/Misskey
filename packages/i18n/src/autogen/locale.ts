@@ -10319,6 +10319,14 @@ export interface Locale extends ILocale {
          */
         "alreadyJoined": string;
         /**
+         * この開催場所には、通話中または開始予定のルームがあります。新しいルームを作らず、既存のルームを確認できます。
+         */
+        "activeAttachmentExists": string;
+        /**
+         * 既存のルームを見る
+         */
+        "returnToCall": string;
+        /**
          * 現在の通話から退出して、この通話に参加しますか？
          */
         "switchRoomConfirm": string;

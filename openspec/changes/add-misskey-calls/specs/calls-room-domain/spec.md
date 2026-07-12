@@ -1,5 +1,16 @@
 ## ADDED Requirements
 
+### Requirement: アクティブルームの再利用と空ルームの終了
+クライアントは同じattachmentに`scheduled`または`open`のルームが存在する場合、新規作成を送信せず既存ルームへの導線を提示しなければならない（SHALL）。サーバーは接続heartbeatのTTLを超えてもlive connectionが1件も存在しない`open`ルームを終了し、active attachment制約を解放しなければならない（SHALL）。
+
+#### Scenario: 既存のパーソナルルームがある
+- **WHEN** 開催者がCalls作成画面を開き、同じpersonal attachmentにアクティブルームがある
+- **THEN** クライアントは作成操作の代わりに既存ルームへ戻る操作を表示する
+
+#### Scenario: live connectionがないルームが残った
+- **WHEN** openルームの全参加者connectionがheartbeat TTLを超えて失効する
+- **THEN** サーバーはルームをendedへ遷移させ、参加者をleftとしてactive attachment制約を解放する
+
 ### Requirement: Callsルームは必ず1種類の所属先だけを持つ
 システムはすべてのCallsルームを、1人のlocal host userに紐づく`personal`ルーム、または1つの既存local ChatRoomに紐づく`chatRoom`ルームのどちらかとして表現しなければならない（SHALL）。どちらも指定されていない、または両方が指定されたrecord / create requestは拒否しなければならない。
 

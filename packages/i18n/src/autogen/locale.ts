@@ -10183,6 +10183,62 @@ export interface Locale extends ILocale {
          */
         "live": string;
         /**
+         * 新しい通話
+         */
+        "newCall": string;
+        /**
+         * 音声ルームを作成して、すぐに通話を始めます。
+         */
+        "newCallDescription": string;
+        /**
+         * 作成するとすぐに通話が始まります。
+         */
+        "startsImmediately": string;
+        /**
+         * 指定した日時の通話予定を作成します。
+         */
+        "createsSchedule": string;
+        /**
+         * 通話を開始
+         */
+        "startCall": string;
+        /**
+         * 予定を作成
+         */
+        "scheduleCall": string;
+        /**
+         * 詳細設定
+         */
+        "advancedSettings": string;
+        /**
+         * 通話中のルーム
+         */
+        "activeRooms": string;
+        /**
+         * 開始予定のルーム
+         */
+        "scheduledRooms": string;
+        /**
+         * 現在通話中のルームはありません
+         */
+        "noActiveRooms": string;
+        /**
+         * 説明はありません
+         */
+        "noDescription": string;
+        /**
+         * 自分をホストにして通話を始めます
+         */
+        "personalRoomDescription": string;
+        /**
+         * 既存のチャットルームに通話を追加します
+         */
+        "chatRoomDescription": string;
+        /**
+         * 空欄の場合は作成後すぐに通話を開始します。
+         */
+        "scheduledAtDescription": string;
+        /**
          * 通話ルームを作成
          */
         "createRoom": string;

@@ -77,7 +77,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div v-if="speakers.length > 0" :class="$style.participantGroup">
 					<div :class="$style.groupLabel">{{ i18n.ts._calls.speaker }}</div>
 					<div :class="$style.participantGrid">
-						<article v-for="participant in speakers" :key="participant.id" :class="[$style.participantCard, speakingParticipantIds.has(participant.id) && $style.speaking]">
+						<article v-for="participant in speakers" :key="participant.id" :class="[$style.participantCard, !participant.isMuted && $style.speakerActive, speakingParticipantIds.has(participant.id) && $style.speaking]">
 							<div :class="$style.participantIdentity">
 								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.avatar" indicator link preview/>
 								<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
@@ -86,6 +86,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<div :class="$style.participantStatus">
 										<span v-if="participant.role === 'host'" :class="$style.hostBadge">HOST</span>
 										<span><i v-if="speakingParticipantIds.has(participant.id)" class="ti ti-volume"></i><i v-else :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i> {{ participant.isMuted ? i18n.ts._calls.mute : speakingParticipantIds.has(participant.id) ? i18n.ts._calls.live : i18n.ts._calls.unmute }}</span>
+										<span v-if="!participant.isMuted" :class="$style.voiceMeter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
 									</div>
 								</div>
 							</div>
@@ -260,12 +261,46 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .hostBadge { padding: 2px 7px; border-radius: 999px; background: var(--MI_THEME-accent); color: var(--MI_THEME-fgOnAccent); font-size: 0.68rem; font-weight: 800; }
 .requestBadge { color: var(--MI_THEME-infoFg); }
 .moderationActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.speakerActive { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--MI_THEME-accent) 24%, transparent); }
+.speakerActive::after {
+	position: absolute;
+	inset: 1px;
+	border: 1px solid var(--MI_THEME-accent);
+	border-radius: 17px;
+	content: '';
+	opacity: 0.16;
+	pointer-events: none;
+	animation: speakerBreath 2.8s ease-in-out infinite;
+}
+.voiceMeter { display: inline-flex; height: 13px; align-items: center; gap: 2px; color: var(--MI_THEME-accent); }
+.voiceMeter > i { display: block; width: 2px; height: 100%; border-radius: 999px; background: currentColor; transform: scaleY(0.28); transform-origin: center; animation: meterIdle 2.4s ease-in-out infinite; }
+.voiceMeter > i:nth-child(2) { animation-delay: -0.7s; }
+.voiceMeter > i:nth-child(3) { animation-delay: -1.35s; }
+.voiceMeter > i:nth-child(4) { animation-delay: -0.35s; }
+.voiceMeter > i:nth-child(5) { animation-delay: -1.05s; }
+.speaking .voiceMeter > i { animation-name: meterSpeaking; animation-duration: 0.68s; }
 .speaking {
 	background:
 		radial-gradient(circle at 0% 20%, color-mix(in srgb, var(--MI_THEME-accent) 20%, transparent), transparent 34%),
 		radial-gradient(circle at 0% 80%, color-mix(in srgb, var(--MI_THEME-accent) 12%, transparent), transparent 30%),
 		color(from var(--MI_THEME-bg) srgb r g b / 0.42);
 	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--MI_THEME-accent) 52%, transparent);
+}
+
+@keyframes speakerBreath {
+	0%, 100% { opacity: 0.12; transform: scale(0.995); }
+	50% { opacity: 0.46; transform: scale(1); }
+}
+
+@keyframes meterIdle {
+	0%, 100% { transform: scaleY(0.22); opacity: 0.42; }
+	50% { transform: scaleY(0.48); opacity: 0.72; }
+}
+
+@keyframes meterSpeaking {
+	0%, 100% { transform: scaleY(0.28); }
+	30% { transform: scaleY(1); }
+	65% { transform: scaleY(0.52); }
 }
 .speaking::before {
 	position: absolute;
@@ -285,7 +320,7 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.speaking::before { animation: none; }
+	.speakerActive::after, .voiceMeter > i, .speaking::before { animation: none; }
 }
 
 @media (max-width: 600px) {

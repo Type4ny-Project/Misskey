@@ -73,7 +73,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<div :class="$style.summaryRow">
 			<button class="_button _panel" :class="$style.main" @click="expanded = !expanded">
-				<div :class="[$style.avatarRing, isLiveSpeaking && $style.avatarRingLive]">
+				<div :class="[$style.avatarRing, $style.avatarRingActive, isLiveSpeaking && $style.avatarRingLive]">
 					<MkAvatar v-if="hostUser != null" :user="hostUser" :class="$style.avatar"/>
 					<i v-else class="ti ti-phone"></i>
 				</div>
@@ -172,7 +172,8 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .summaryRow { display: flex; align-items: stretch; gap: 8px; }
 .main { display: flex; min-width: min(310px, calc(100vw - 120px)); align-items: center; gap: 11px; padding: 9px 12px; border-radius: 22px; text-align: left; box-shadow: 0 12px 30px color(from var(--MI_THEME-bg) srgb r g b / 0.24); }
 .avatarRing { position: relative; z-index: 0; display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; border-radius: 50%; isolation: isolate; }
-.avatarRingLive::before, .avatarRingLive::after { position: absolute; z-index: -1; inset: -4px; border: 2px solid var(--MI_THEME-accent); border-radius: 44% 56% 48% 52% / 52% 43% 57% 48%; content: ''; pointer-events: none; animation: organicRing 1.65s ease-in-out infinite; }
+.avatarRingActive::before, .avatarRingLive::after { position: absolute; z-index: -1; inset: -4px; border: 2px solid var(--MI_THEME-accent); border-radius: 44% 56% 48% 52% / 52% 43% 57% 48%; content: ''; pointer-events: none; animation: organicRing 3.2s ease-in-out infinite; }
+.avatarRingLive::before { animation-duration: 1.25s; }
 .avatarRingLive::after { inset: -7px; border-color: color-mix(in srgb, var(--MI_THEME-accent) 42%, transparent); animation-delay: -0.72s; animation-direction: reverse; }
 .avatar { width: 38px; height: 38px; }
 .body { min-width: 0; flex: 1; }
@@ -196,7 +197,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.userAvatarLive, .avatarRingLive::before, .avatarRingLive::after { animation: none; }
+	.userAvatarLive, .avatarRingActive::before, .avatarRingLive::after { animation: none; }
 }
 
 @media (max-width: 500px) {

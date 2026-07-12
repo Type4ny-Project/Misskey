@@ -86,7 +86,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<div :class="$style.participantStatus">
 										<span v-if="participant.role === 'host'" :class="$style.hostBadge">HOST</span>
 										<span><i v-if="speakingParticipantIds.has(participant.id)" class="ti ti-volume"></i><i v-else :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i> {{ participant.isMuted ? i18n.ts._calls.mute : speakingParticipantIds.has(participant.id) ? i18n.ts._calls.live : i18n.ts._calls.unmute }}</span>
-										<span v-if="!participant.isMuted" :class="$style.voiceMeter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+										<span v-if="!participant.isMuted" :class="$style.voiceMeter" aria-hidden="true">
+											<span :class="[$style.meterLayer, $style.meterIdle]"><i></i><i></i><i></i><i></i><i></i></span>
+											<span :class="[$style.meterLayer, $style.meterSpeaking]"><i></i><i></i><i></i><i></i><i></i></span>
+										</span>
 									</div>
 								</div>
 							</div>
@@ -251,7 +254,7 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .participantGroup { margin-top: 20px; }
 .groupLabel { margin-bottom: 10px; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.06em; opacity: 0.65; text-transform: uppercase; }
 .participantGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 10px; }
-.participantCard { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; overflow: hidden; padding: 12px; border-radius: 18px; background: color(from var(--MI_THEME-bg) srgb r g b / 0.42); }
+.participantCard { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; overflow: hidden; padding: 12px; border-radius: 18px; background-color: color(from var(--MI_THEME-bg) srgb r g b / 0.42); transition: background-color 0.45s ease, box-shadow 0.45s ease; }
 .participantIdentity { display: flex; min-width: 0; align-items: center; gap: 11px; }
 .avatar, .avatarPlaceholder { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%; }
 .avatarPlaceholder { display: grid; place-items: center; background: var(--MI_THEME-panel); }
@@ -261,7 +264,20 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .hostBadge { padding: 2px 7px; border-radius: 999px; background: var(--MI_THEME-accent); color: var(--MI_THEME-fgOnAccent); font-size: 0.68rem; font-weight: 800; }
 .requestBadge { color: var(--MI_THEME-infoFg); }
 .moderationActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-.speakerActive { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--MI_THEME-accent) 24%, transparent); }
+.speakerActive { background-color: color-mix(in srgb, var(--MI_THEME-accent) 6%, color(from var(--MI_THEME-bg) srgb r g b / 0.42)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--MI_THEME-accent) 24%, transparent); }
+.speakerActive::before {
+	position: absolute;
+	inset: 7px auto 7px 0;
+	width: 4px;
+	border-radius: 45% 55% 48% 52% / 35% 60% 40% 65%;
+	background: linear-gradient(180deg, transparent, var(--MI_THEME-accent) 18%, color-mix(in srgb, var(--MI_THEME-accent) 55%, transparent) 50%, var(--MI_THEME-accent) 82%, transparent);
+	background-size: 100% 180%;
+	content: '';
+	opacity: 0;
+	pointer-events: none;
+	transform: scaleY(0.55);
+	transition: opacity 0.38s ease, transform 0.38s ease;
+}
 .speakerActive::after {
 	position: absolute;
 	inset: 1px;
@@ -272,18 +288,21 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 	pointer-events: none;
 	animation: speakerBreath 2.8s ease-in-out infinite;
 }
-.voiceMeter { display: inline-flex; height: 13px; align-items: center; gap: 2px; color: var(--MI_THEME-accent); }
-.voiceMeter > i { display: block; width: 2px; height: 100%; border-radius: 999px; background: currentColor; transform: scaleY(0.28); transform-origin: center; animation: meterIdle 2.4s ease-in-out infinite; }
-.voiceMeter > i:nth-child(2) { animation-delay: -0.7s; }
-.voiceMeter > i:nth-child(3) { animation-delay: -1.35s; }
-.voiceMeter > i:nth-child(4) { animation-delay: -0.35s; }
-.voiceMeter > i:nth-child(5) { animation-delay: -1.05s; }
-.speaking .voiceMeter > i { animation-name: meterSpeaking; animation-duration: 0.68s; }
+.voiceMeter { position: relative; display: inline-block; width: 18px; height: 13px; color: var(--MI_THEME-accent); }
+.meterLayer { position: absolute; inset: 0; display: inline-flex; align-items: center; gap: 2px; transition: opacity 0.38s ease; }
+.meterLayer > i { display: block; width: 2px; height: 100%; border-radius: 999px; background: currentColor; transform: scaleY(0.28); transform-origin: center; }
+.meterLayer > i:nth-child(2) { animation-delay: -0.7s; }
+.meterLayer > i:nth-child(3) { animation-delay: -1.35s; }
+.meterLayer > i:nth-child(4) { animation-delay: -0.35s; }
+.meterLayer > i:nth-child(5) { animation-delay: -1.05s; }
+.meterIdle { opacity: 1; }
+.meterIdle > i { animation: meterIdle 2.4s ease-in-out infinite; }
+.meterSpeaking { opacity: 0; }
+.meterSpeaking > i { animation: meterSpeaking 0.68s ease-in-out infinite; }
+.speaking .meterIdle { opacity: 0; }
+.speaking .meterSpeaking { opacity: 1; }
 .speaking {
-	background:
-		radial-gradient(circle at 0% 20%, color-mix(in srgb, var(--MI_THEME-accent) 20%, transparent), transparent 34%),
-		radial-gradient(circle at 0% 80%, color-mix(in srgb, var(--MI_THEME-accent) 12%, transparent), transparent 30%),
-		color(from var(--MI_THEME-bg) srgb r g b / 0.42);
+	background-color: color-mix(in srgb, var(--MI_THEME-accent) 15%, color(from var(--MI_THEME-bg) srgb r g b / 0.42));
 	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--MI_THEME-accent) 52%, transparent);
 }
 
@@ -302,16 +321,7 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 	30% { transform: scaleY(1); }
 	65% { transform: scaleY(0.52); }
 }
-.speaking::before {
-	position: absolute;
-	inset: 7px auto 7px 0;
-	width: 4px;
-	border-radius: 45% 55% 48% 52% / 35% 60% 40% 65%;
-	background: linear-gradient(180deg, transparent, var(--MI_THEME-accent) 18%, color-mix(in srgb, var(--MI_THEME-accent) 55%, transparent) 50%, var(--MI_THEME-accent) 82%, transparent);
-	background-size: 100% 180%;
-	content: '';
-	animation: speakingWave 1.15s ease-in-out infinite;
-}
+.speaking::before { opacity: 1; transform: scaleY(1); animation: speakingWave 1.15s ease-in-out infinite; }
 
 @keyframes speakingWave {
 	0%, 100% { transform: scaleY(0.72) translateY(-3px); background-position: 0 0; }
@@ -320,7 +330,7 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.speakerActive::after, .voiceMeter > i, .speaking::before { animation: none; }
+	.speakerActive::after, .meterLayer > i, .speaking::before { animation: none; }
 }
 
 @media (max-width: 600px) {

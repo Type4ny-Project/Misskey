@@ -28,6 +28,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<p v-if="room.description" :class="$style.description">{{ room.description }}</p>
 				<small v-if="room.scheduledAt != null">{{ new Date(room.scheduledAt).toLocaleString() }}</small>
+				<div v-if="isHost || (sessionIsCurrent && session.needsAudioResume.value)" :class="$style.roomActions">
+					<MkButton v-if="isHost && room.state === 'scheduled'" primary @click="openRoom">{{ i18n.ts._calls.openRoom }}</MkButton>
+					<MkButton v-if="isHost && room.state === 'scheduled'" danger @click="cancelRoom">{{ i18n.ts._calls.cancelRoom }}</MkButton>
+					<MkButton v-if="isHost && room.state === 'open' && !sessionIsCurrent" danger @click="endRoom">{{ i18n.ts._calls.endRoom }}</MkButton>
+					<MkButton v-if="sessionIsCurrent && session.needsAudioResume.value" @click="session.resumeAudio()">{{ i18n.ts._calls.resumeAudio }}</MkButton>
+				</div>
 			</section>
 
 			<MkInfo v-if="!connected" warn>{{ i18n.ts._calls.websocketDisconnected }}</MkInfo>
@@ -45,13 +51,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<MkButton primary large rounded :disabled="session.joining.value" @click="joinRoom"><i class="ti ti-broadcast"></i> {{ i18n.ts._calls.joinRoom }}</MkButton>
 			</section>
-
-			<div :class="$style.roomActions">
-				<MkButton v-if="isHost && room.state === 'scheduled'" primary @click="openRoom">{{ i18n.ts._calls.openRoom }}</MkButton>
-				<MkButton v-if="isHost && room.state === 'scheduled'" danger @click="cancelRoom">{{ i18n.ts._calls.cancelRoom }}</MkButton>
-				<MkButton v-if="isHost && room.state === 'open'" danger @click="endRoom">{{ i18n.ts._calls.endRoom }}</MkButton>
-				<MkButton v-if="sessionIsCurrent && session.needsAudioResume.value" @click="session.resumeAudio()">{{ i18n.ts._calls.resumeAudio }}</MkButton>
-			</div>
 
 			<MkSelect v-if="sessionIsCurrent && session.isSpeaker.value && session.microphones.value.length > 0" :modelValue="session.selectedMicrophone.value" :items="microphoneItems" @update:modelValue="session.switchMicrophone">
 				<template #label>{{ i18n.ts._calls.microphone }}</template>
@@ -238,7 +237,7 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .lobby { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px; }
 .lobbyBody { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 12px; }
 .lobby p { margin: 6px 0 0; opacity: 0.68; }
-.roomActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.roomActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: solid 1px var(--MI_THEME-divider); }
 .callControls { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
 .controlButton { display: inline-flex; min-width: 120px; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border-radius: 999px; background: var(--MI_THEME-buttonBg); }
 .controlButtonActive { color: var(--MI_THEME-accent); background: var(--MI_THEME-accentedBg); }

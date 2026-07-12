@@ -50,6 +50,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</TransitionGroup>
 			</div>
 
+			<section v-if="room != null && !initializing" :class="$style.callsSection">
+				<header :class="$style.callsHeader"><strong><i class="ti ti-phone"></i> {{ i18n.ts._calls.title }}</strong></header>
+				<MkCallsRoomCard v-if="attachedCall != null" :key="attachedCall.id" :room="attachedCall"/>
+				<div v-else class="_panel" :class="$style.callsEmpty">
+					<div><strong>{{ i18n.ts._calls.noActiveRooms }}</strong><small>{{ i18n.ts._calls.chatRoomCallDescription }}</small></div>
+					<MkButton v-if="room.ownerId === $i.id" primary gradate rounded :disabled="creatingCall" @click="startAttachedCall"><i class="ti ti-phone-plus"></i> {{ i18n.ts._calls.startCall }}</MkButton>
+				</div>
+			</section>
+
 			<div v-if="user && (!user.canChat || user.host !== null)">
 				<MkInfo warn>{{ i18n.ts._chat.chatNotAvailableInOtherAccount }}</MkInfo>
 			</div>
@@ -88,7 +97,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref, useTemplateRef, computed, onMounted, onBeforeUnmount, onDeactivated, onActivated } from 'vue';
+import { ref, useTemplateRef, computed, onMounted, onBeforeUnmount, onDeactivated, onActivated, shallowRef } from 'vue';
 import * as Misskey from 'misskey-js';
 import { getScrollContainer } from '@@/js/scroll.js';
 import XMessage from './XMessage.vue';
@@ -110,7 +119,9 @@ import MkButton from '@/components/MkButton.vue';
 import { useRouter } from '@/router.js';
 import { useMutationObserver } from '@/composables/use-mutation-observer.js';
 import MkInfo from '@/components/MkInfo.vue';
+import MkCallsRoomCard from '@/components/MkCallsRoomCard.vue';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
+import { useCallsSession } from '@/utility/calls-session.js';
 
 const $i = ensureSignin();
 const router = useRouter();
@@ -135,6 +146,10 @@ const canFetchMore = ref(false);
 const user = ref<Misskey.entities.UserDetailed | null>(null);
 const room = ref<Misskey.entities.ChatRoom | null>(null);
 const connection = ref<Misskey.IChannelConnection<Misskey.Channels['chatUser']> | Misskey.IChannelConnection<Misskey.Channels['chatRoom']> | null>(null);
+const callsConnection = ref<Misskey.IChannelConnection<Misskey.Channels['callsRooms']> | null>(null);
+const attachedCall = shallowRef<Misskey.entities.CallsRoom | null>(null);
+const creatingCall = ref(false);
+const callsSession = useCallsSession();
 const showIndicator = ref(false);
 const timelineEl = useTemplateRef('timelineEl');
 const timeline = makeDateSeparatedTimelineComputedRef(messages);
@@ -236,6 +251,11 @@ async function initialize() {
 
 		room.value = r;
 		messages.value = m.map(x => normalizeMessage(x));
+		await reloadAttachedCall();
+		callsConnection.value?.dispose();
+		callsConnection.value = useStream().useChannel('callsRooms');
+		callsConnection.value.on('created', onCallsRoomChanged);
+		callsConnection.value.on('updated', onCallsRoomChanged);
 
 		if (messages.value.length === LIMIT) {
 			canFetchMore.value = true;
@@ -363,8 +383,42 @@ onActivated(() => {
 
 onBeforeUnmount(() => {
 	connection.value?.dispose();
+	callsConnection.value?.dispose();
 	window.document.removeEventListener('visibilitychange', onVisibilitychange);
 });
+
+async function reloadAttachedCall(): Promise<void> {
+	if (room.value == null) return;
+	const rooms = await misskeyApi('calls/rooms/list', { limit: 2, chatRoomId: room.value.id, states: ['open', 'scheduled'] });
+	attachedCall.value = rooms[0] ?? null;
+}
+
+function onCallsRoomChanged(payload: { room: Misskey.entities.CallsRoom }): void {
+	if (room.value == null || payload.room.attachment.type !== 'chatRoom' || payload.room.attachment.chatRoomId !== room.value.id) return;
+	attachedCall.value = payload.room.state === 'open' || payload.room.state === 'scheduled' ? payload.room : null;
+}
+
+async function startAttachedCall(): Promise<void> {
+	if (room.value == null || creatingCall.value) return;
+	creatingCall.value = true;
+	try {
+		let call = await misskeyApi('calls/rooms/create', {
+			attachmentType: 'chatRoom',
+			chatRoomId: room.value.id,
+			title: room.value.name,
+			description: room.value.description,
+		});
+		call = await misskeyApi('calls/rooms/open', { roomId: call.id, expectedRevision: call.revision });
+		attachedCall.value = call;
+		router.push('/calls/:roomId', { params: { roomId: call.id } });
+		await callsSession.join(call.id, true);
+	} catch (error) {
+		await os.alert({ type: 'error', text: error instanceof Error ? error.message : i18n.ts.somethingHappened });
+		await reloadAttachedCall().catch(() => undefined);
+	} finally {
+		creatingCall.value = false;
+	}
+}
 
 async function inviteUser() {
 	if (room.value == null) return;
@@ -498,6 +552,13 @@ definePage(computed(() => {
 	margin: 0 auto;
 }
 
+.callsSection { display: flex; flex-direction: column; gap: 8px; }
+.callsHeader { padding: 0 4px; color: var(--MI_THEME-fg); }
+.callsHeader i { margin-right: 6px; color: var(--MI_THEME-accent); }
+.callsEmpty { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; }
+.callsEmpty strong, .callsEmpty small { display: block; }
+.callsEmpty small { margin-top: 4px; opacity: 0.68; }
+
 .footer {
 	width: 100%;
 	padding-top: 8px;
@@ -554,5 +615,9 @@ definePage(computed(() => {
 	width: fit-content;
 	padding: 0.5em 1em;
 	margin: 0 auto;
+}
+
+@media (max-width: 600px) {
+	.callsEmpty { align-items: stretch; flex-direction: column; }
 }
 </style>

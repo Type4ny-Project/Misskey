@@ -9,6 +9,7 @@ import { ApiError } from '@/server/api/error.js';
 export const callsErrors = {
 	accessDenied: { message: 'You do not have access to this Calls room.', code: 'CALLS_ACCESS_DENIED', id: '3a432e2d-51e8-42f4-ae52-d2b0a7b89afa' },
 	attachmentNotFound: { message: 'The attached room does not exist.', code: 'CALLS_ATTACHMENT_NOT_FOUND', id: '5985f4cf-84bb-4997-9e68-46f421f29e84' },
+	activeAttachment: { message: 'An active Calls room already exists for this attachment.', code: 'CALLS_ACTIVE_ATTACHMENT', id: '4a8fd21d-0d68-4b8d-884c-9970f1d5f1f4' },
 	invalidState: { message: 'The Calls room is not in the required state.', code: 'CALLS_INVALID_STATE', id: '27bbe09b-c516-4c8a-a9fc-4b5c8de79cbb' },
 	invalidMetadata: { message: 'The Calls room metadata is invalid.', code: 'CALLS_INVALID_METADATA', id: '7fc75953-7ec9-4e2f-aee2-af12a8101971' },
 	participantNotFound: { message: 'The Calls participant does not exist.', code: 'CALLS_PARTICIPANT_NOT_FOUND', id: '17e679a9-0ad9-4fe0-a09f-92dae12e445a' },
@@ -23,6 +24,7 @@ export function callsApiError(error: unknown): never {
 	if (!(error instanceof CallsRoomError)) throw error;
 	const key = error.code === 'access-denied' ? 'accessDenied'
 		: error.code === 'attachment-not-found' ? 'attachmentNotFound'
+			: error.code === 'active-attachment' ? 'activeAttachment'
 			: error.code === 'invalid-state' ? 'invalidState'
 				: error.code === 'invalid-metadata' ? 'invalidMetadata'
 				: error.code === 'participant-not-found' ? 'participantNotFound'

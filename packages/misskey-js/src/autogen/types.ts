@@ -1440,6 +1440,15 @@ export type paths = {
          */
         post: operations['calls___rooms___show'];
     };
+    '/calls/users/active-rooms': {
+        /**
+         * calls/users/active-rooms
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:calls*
+         */
+        post: operations['calls___users___active-rooms'];
+    };
     '/channels/create': {
         /**
          * channels/create
@@ -17613,6 +17622,9 @@ export interface operations {
                 'application/json': {
                     /** @default 20 */
                     limit?: number;
+                    /** Format: misskey:id */
+                    chatRoomId?: string;
+                    states?: ('scheduled' | 'open')[];
                 };
             };
         };
@@ -17970,6 +17982,76 @@ export interface operations {
                         room: components['schemas']['CallsRoom'];
                         participants: components['schemas']['CallsParticipant'][];
                     };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'calls___users___active-rooms': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    userIds: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** Format: id */
+                        userId: string;
+                        /** Format: id */
+                        roomId: string;
+                    }[];
                 };
             };
             /** @description Client error */

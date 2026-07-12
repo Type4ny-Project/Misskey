@@ -43,6 +43,11 @@ export interface CallsRoomEventTypes {
 	revoked: CallsRoomEventBase & { participantId?: string; reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation' };
 }
 
+export interface CallsRoomsEventTypes {
+	created: { roomId: MiCallsRoom['id'] };
+	updated: { roomId: MiCallsRoom['id']; action: 'open' | 'ended' | 'cancelled' };
+}
+
 export interface BroadcastTypes {
 	emojiAdded: {
 		emoji: Packed<'EmojiDetailed'>;
@@ -333,6 +338,10 @@ export type GlobalEvents = {
 		name: `callsRoomStream:${MiCallsRoom['id']}`;
 		payload: EventTypesToEventPayload<CallsRoomEventTypes>;
 	};
+	callsRooms: {
+		name: 'callsRoomsStream';
+		payload: EventTypesToEventPayload<CallsRoomsEventTypes>;
+	};
 	reversi: {
 		name: `reversiStream:${MiUser['id']}`;
 		payload: EventTypesToEventPayload<ReversiEventTypes>;
@@ -447,6 +456,11 @@ export class GlobalEventService {
 	@bindThis
 	public publishCallsRoomStream<K extends keyof CallsRoomEventTypes>(roomId: MiCallsRoom['id'], type: K, value: CallsRoomEventTypes[K]): void {
 		this.publish(`callsRoomStream:${roomId}`, type, value);
+	}
+
+	@bindThis
+	public publishCallsRoomsStream<K extends keyof CallsRoomsEventTypes>(type: K, value: CallsRoomsEventTypes[K]): void {
+		this.publish('callsRoomsStream', type, value);
 	}
 
 	@bindThis

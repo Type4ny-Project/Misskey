@@ -398,6 +398,7 @@ export * as 'calls/rooms/create' from './endpoints/calls/rooms/create.js';
 export * as 'calls/capabilities' from './endpoints/calls/capabilities.js';
 export * as 'calls/rooms/show' from './endpoints/calls/rooms/show.js';
 export * as 'calls/rooms/list' from './endpoints/calls/rooms/list.js';
+export * as 'calls/users/active-rooms' from './endpoints/calls/users/active-rooms.js';
 export * as 'calls/rooms/open' from './endpoints/calls/rooms/open.js';
 export * as 'calls/rooms/end' from './endpoints/calls/rooms/end.js';
 export * as 'calls/rooms/cancel' from './endpoints/calls/rooms/cancel.js';

@@ -856,6 +856,12 @@ type CallsRoomsShowRequest = operations['calls___rooms___show']['requestBody']['
 type CallsRoomsShowResponse = operations['calls___rooms___show']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type CallsUsersActiveRoomsRequest = operations['calls___users___active-rooms']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsUsersActiveRoomsResponse = operations['calls___users___active-rooms']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type Channel = components['schemas']['Channel'];
 
 // Warning: (ae-forgotten-export) The symbol "AnyOf" needs to be exported by the entry point index.d.ts
@@ -1217,6 +1223,20 @@ export type Channels = {
                 generation: number;
             };
         };
+    };
+    callsRooms: {
+        params: null;
+        events: {
+            created: (payload: {
+                action: 'created';
+                room: CallsRoom;
+            }) => void;
+            updated: (payload: {
+                action: 'open' | 'ended' | 'cancelled';
+                room: CallsRoom;
+            }) => void;
+        };
+        receives: null;
     };
 };
 
@@ -2118,6 +2138,8 @@ declare namespace entities {
         CallsRoomsSetRoleResponse,
         CallsRoomsShowRequest,
         CallsRoomsShowResponse,
+        CallsUsersActiveRoomsRequest,
+        CallsUsersActiveRoomsResponse,
         ChannelsCreateRequest,
         ChannelsCreateResponse,
         ChannelsFavoriteRequest,
@@ -4497,9 +4519,9 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 //
 // src/entities.ts:60:2 - (ae-forgotten-export) The symbol "ModerationLogPayloads" needs to be exported by the entry point index.d.ts
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:235:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:250:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:307:4 - (ae-forgotten-export) The symbol "CallsRoomEventBase" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:236:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:251:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:308:4 - (ae-forgotten-export) The symbol "CallsRoomEventBase" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

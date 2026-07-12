@@ -54,7 +54,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 	<article v-else :class="$style.article" @contextmenu.stop="onContextmenu">
 		<div v-if="appearNote.channel" :class="$style.colorBar" :style="{ background: appearNote.channel.color }"></div>
-		<MkAvatar :class="[$style.avatar, prefer.s.useStickyIcons ? $style.useSticky : null]" :user="appearNote.user" :link="!mock" :preview="!mock"/>
+		<div :class="[$style.avatarWrap, prefer.s.useStickyIcons ? $style.useSticky : null]">
+			<MkAvatar :class="$style.avatar" :user="appearNote.user" :link="!mock" :preview="!mock" :callsIndicator="!mock"/>
+			<button v-if="!mock && callsRoomId != null" type="button" class="_button" :class="$style.callsButton" :aria-label="i18n.ts._calls.joinRoom" @click.stop="openCallsRoom"><i class="ti ti-broadcast"></i></button>
+		</div>
 		<div :class="$style.main">
 			<MkNoteHeader :note="appearNote" :mini="true"/>
 			<MkInstanceTicker v-if="showTicker" :host="appearNote.user.host" :instance="appearNote.user.instance"/>
@@ -251,6 +254,8 @@ import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
 import { DI } from '@/di.js';
 import { globalEvents, useGlobalEvent } from '@/events.js';
+import MkCallsJoinDialog from '@/components/MkCallsJoinDialog.vue';
+import { useCallsUserRoom } from '@/composables/use-calls-user-room.js';
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note;
@@ -296,6 +301,7 @@ if (noteViewInterruptors.length > 0) {
 
 const isRenote = Misskey.note.isPureRenote(note);
 const appearNote = getAppearNote(note) ?? note;
+const callsRoomId = useCallsUserRoom(appearNote.userId);
 const { $note: $appearNote, subscribe: subscribeManuallyToNoteCapture } = useNoteCapture({
 	note: appearNote,
 	parentNote: note,
@@ -333,6 +339,11 @@ const pleaseLoginContext = computed<OpenOnRemoteOptions>(() => ({
 	type: 'lookup',
 	url: `https://${host}/notes/${appearNote.id}`,
 }));
+
+function openCallsRoom(): void {
+	if (callsRoomId.value == null) return;
+	os.popup(MkCallsJoinDialog, { roomId: callsRoomId.value }, { closed: () => undefined });
+}
 
 useGlobalEvent('noteUpdated', (updatedNote) => {
 	if (updatedNote.id === note.id) {
@@ -921,9 +932,9 @@ function emitUpdReaction(emoji: string, delta: number) {
 	pointer-events: none;
 }
 
-.avatar {
+.avatarWrap {
+	position: relative;
 	flex-shrink: 0;
-	display: block !important;
 	margin: 0 14px 0 0;
 	width: 58px;
 	height: 58px;
@@ -934,6 +945,9 @@ function emitUpdReaction(emoji: string, delta: number) {
 		left: 0;
 	}
 }
+
+.avatar { display: block !important; width: 100%; height: 100%; }
+.callsButton { position: absolute; z-index: 4; right: -7px; bottom: -7px; display: grid; width: 27px; height: 27px; place-items: center; border: 2px solid var(--MI_THEME-panel); border-radius: 50%; background: var(--MI_THEME-error); color: var(--MI_THEME-fgOnAccent); font-size: 0.72rem; box-shadow: 0 3px 8px color-mix(in srgb, var(--MI_THEME-bg) 30%, transparent); }
 
 .main {
 	flex: 1;
@@ -1070,7 +1084,7 @@ function emitUpdReaction(emoji: string, delta: number) {
 		padding: 24px 26px;
 	}
 
-	.avatar {
+	.avatarWrap {
 		width: 50px;
 		height: 50px;
 	}
@@ -1114,7 +1128,7 @@ function emitUpdReaction(emoji: string, delta: number) {
 }
 
 @container (max-width: 450px) {
-	.avatar {
+	.avatarWrap {
 		margin: 0 10px 0 0;
 		width: 46px;
 		height: 46px;
@@ -1153,7 +1167,7 @@ function emitUpdReaction(emoji: string, delta: number) {
 }
 
 @container (max-width: 300px) {
-	.avatar {
+	.avatarWrap {
 		width: 44px;
 		height: 44px;
 	}

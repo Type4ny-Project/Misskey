@@ -4,7 +4,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { In } from 'typeorm';
+import { In, IsNull } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type {
 	CallsModerationLogsRepository,
@@ -35,6 +35,7 @@ export const CALLS_MAX_LISTENERS = 100;
 export type CallsRoomErrorCode =
 	| 'access-denied'
 	| 'attachment-not-found'
+	| 'active-attachment'
 	| 'invalid-state'
 	| 'invalid-metadata'
 	| 'participant-not-found'
@@ -99,6 +100,13 @@ export class CallsRoomService {
 				throw new CallsRoomError('access-denied');
 			}
 		}
+		const activeAttachment = await this.callsRoomsRepository.findOneBy({
+			attachmentType: params.attachmentType,
+			ownerUserId: params.attachmentType === 'personal' ? owner.id : undefined,
+			chatRoomId: params.attachmentType === 'chatRoom' ? params.chatRoomId! : IsNull(),
+			state: In(['scheduled', 'open']),
+		});
+		if (activeAttachment != null) throw new CallsRoomError('active-attachment');
 
 		const now = new Date();
 		const room = await this.callsRoomsRepository.insertOne({
@@ -132,6 +140,7 @@ export class CallsRoomService {
 			updatedAt: now,
 		});
 		this.callsTelemetryService.lifecycle({ action: 'room-created', roomId: room.id });
+		this.callsEventService.publishRoomsList('created', { roomId: room.id });
 
 		return room;
 	}
@@ -175,10 +184,10 @@ export class CallsRoomService {
 	}
 
 	@bindThis
-	public async listDiscoverable(user: MiUser, limit: number): Promise<MiCallsRoom[]> {
+	public async listDiscoverable(user: MiUser, limit: number, chatRoomId?: MiChatRoom['id'], states: Array<'scheduled' | 'open'> = ['scheduled', 'open']): Promise<MiCallsRoom[]> {
 		if (user.host !== null) return [];
 		const candidates = await this.callsRoomsRepository.find({
-			where: { state: In(['scheduled', 'open']) },
+			where: { state: In(states), ...(chatRoomId == null ? {} : { chatRoomId }) },
 			order: { createdAt: 'DESC' },
 			take: Math.min(limit * 4, 400),
 		});
@@ -193,6 +202,28 @@ export class CallsRoomService {
 			}
 		}
 		return visible;
+	}
+
+	@bindThis
+	public async listActiveRoomsForUsers(viewer: MiUser, userIds: MiUser['id'][]): Promise<Array<{ userId: MiUser['id']; roomId: MiCallsRoom['id'] }>> {
+		if (viewer.host !== null || userIds.length === 0) return [];
+		const participants = await this.callsParticipantsRepository.findBy({ userId: In(userIds), state: 'active' });
+		if (participants.length === 0) return [];
+		const rooms = await this.callsRoomsRepository.findBy({ id: In([...new Set(participants.map(participant => participant.roomId))]), state: 'open' });
+		const roomsById = new Map(rooms.map(room => [room.id, room]));
+		const accessible = new Set<string>();
+		for (const room of rooms) {
+			try {
+				await this.assertCanAccess(viewer, room);
+				accessible.add(room.id);
+			} catch (error) {
+				if (!(error instanceof CallsRoomError) || error.code !== 'access-denied') throw error;
+			}
+		}
+		return participants.flatMap(participant => {
+			const room = roomsById.get(participant.roomId);
+			return room != null && accessible.has(room.id) ? [{ userId: participant.userId, roomId: room.id }] : [];
+		});
 	}
 
 	@bindThis
@@ -238,6 +269,7 @@ export class CallsRoomService {
 		const updated = result.raw[0] as MiCallsRoom;
 		await this.callsEventService.publish(roomId, updated.revision, 'lifecycle', { state: updated.state });
 		this.callsTelemetryService.lifecycle({ action: `room-${updated.state}`, roomId });
+		this.callsEventService.publishRoomsList('updated', { roomId, action: updated.state as 'open' | 'ended' | 'cancelled' });
 		if (updated.state === 'ended' || updated.state === 'cancelled') {
 			await this.callsMediaRevocationService.revokeRoom(roomId, updated.revision, 'room-ended');
 		}

@@ -18,6 +18,8 @@ export const callsRoomStates = ['scheduled', 'open', 'ended', 'cancelled'] as co
 export type CallsRoomState = typeof callsRoomStates[number];
 
 @Entity('calls_room')
+@Index('IDX_calls_room_active_personal_owner', ['ownerUserId'], { unique: true, where: `"attachmentType" = 'personal' AND "state" IN ('scheduled', 'open')` })
+@Index('IDX_calls_room_active_chat_room', ['chatRoomId'], { unique: true, where: `"attachmentType" = 'chatRoom' AND "state" IN ('scheduled', 'open')` })
 @Check('CHK_calls_room_attachment', `("attachmentType" = 'personal' AND "chatRoomId" IS NULL) OR ("attachmentType" = 'chatRoom' AND "chatRoomId" IS NOT NULL)`)
 @Check('CHK_calls_room_attachment_type', `"attachmentType" IN ('personal', 'chatRoom')`)
 @Check('CHK_calls_room_visibility', `"visibility" IN ('public', 'followers', 'specified')`)

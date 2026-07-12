@@ -10235,6 +10235,10 @@ export interface Locale extends ILocale {
          */
         "chatRoomDescription": string;
         /**
+         * このチャットルームのメンバーと音声で話せます。
+         */
+        "chatRoomCallDescription": string;
+        /**
          * 空欄の場合は作成後すぐに通話を開始します。
          */
         "scheduledAtDescription": string;
@@ -10311,6 +10315,14 @@ export interface Locale extends ILocale {
          */
         "joinRoom": string;
         /**
+         * この通話に参加中
+         */
+        "alreadyJoined": string;
+        /**
+         * 現在の通話から退出して、この通話に参加しますか？
+         */
+        "switchRoomConfirm": string;
+        /**
          * 退出
          */
         "leaveRoom": string;
@@ -10335,6 +10347,10 @@ export interface Locale extends ILocale {
          */
         "microphone": string;
         /**
+         * 使用するマイク
+         */
+        "selectMicrophone": string;
+        /**
          * リスナーとして参加する場合、マイク権限は要求されません。
          */
         "listenerDoesNotNeedMicrophone": string;
@@ -10342,6 +10358,10 @@ export interface Locale extends ILocale {
          * 発言をリクエスト
          */
         "requestSpeaker": string;
+        /**
+         * 発言をリクエスト済み
+         */
+        "speakerRequested": string;
         /**
          * スピーカーにする
          */

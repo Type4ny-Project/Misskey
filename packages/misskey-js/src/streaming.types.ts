@@ -1,5 +1,6 @@
 import {
 	Antenna,
+	CallsRoom,
 	ChatMessage,
 	ChatMessageLite,
 	DriveFile,
@@ -318,6 +319,14 @@ export type Channels = {
 			speaking: boolean;
 			heartbeat: { connectionId: string; generation: number };
 		};
+	};
+	callsRooms: {
+		params: null;
+		events: {
+			created: (payload: { action: 'created'; room: CallsRoom }) => void;
+			updated: (payload: { action: 'open' | 'ended' | 'cancelled'; room: CallsRoom }) => void;
+		};
+		receives: null;
 	};
 };
 

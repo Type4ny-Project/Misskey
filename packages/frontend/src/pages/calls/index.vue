@@ -80,11 +80,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkResult v-else-if="loadFailed" type="error"/>
 				<div v-else-if="activeRooms.length === 0" :class="$style.empty"><i class="ti ti-phone-off"></i><span>{{ i18n.ts._calls.noActiveRooms }}</span></div>
 				<div v-else :class="$style.roomList">
-					<MkA v-for="room in activeRooms" :key="room.id" :to="`/calls/${room.id}`" :class="$style.roomCard">
-						<div :class="$style.roomLive">● {{ i18n.ts._calls.live }}</div>
-						<div :class="$style.roomBody"><strong>{{ room.title }}</strong><small>{{ room.description || i18n.ts._calls.noDescription }}</small></div>
-						<div :class="$style.roomMeta"><span><i :class="room.attachment.type === 'personal' ? 'ti ti-user' : 'ti ti-messages'"></i> {{ i18n.ts._calls[room.attachment.type === 'personal' ? 'personalRoom' : 'chatRoom'] }}</span><i class="ti ti-chevron-right"></i></div>
-					</MkA>
+					<MkCallsRoomCard v-for="room in activeRooms" :key="room.id" :room="room"/>
 				</div>
 			</section>
 
@@ -111,12 +107,14 @@ import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import type { MkSelectItem } from '@/components/MkSelect.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
+import MkCallsRoomCard from '@/components/MkCallsRoomCard.vue';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { definePage } from '@/page.js';
 import { useRouter } from '@/router.js';
 import { useCallsSession } from '@/utility/calls-session.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { useStream } from '@/stream.js';
 
 const router = useRouter();
 const session = useCallsSession();
@@ -141,6 +139,7 @@ const visibilityItems: MkSelectItem<'public' | 'followers' | 'specified'>[] = [
 	{ label: i18n.ts._calls.specified, value: 'specified' },
 ];
 let refreshTimer: number | null = null;
+let roomsConnection: Misskey.IChannelConnection<Misskey.Channels['callsRooms']> | null = null;
 
 async function reload(showLoading = true): Promise<void> {
 	if (showLoading) loading.value = true;
@@ -203,10 +202,26 @@ async function createRoom(): Promise<void> {
 
 onMounted(() => {
 	void reload();
-	refreshTimer = window.setInterval(() => void reload(false), 10_000);
+	roomsConnection = useStream().useChannel('callsRooms');
+	roomsConnection.on('created', onRoomListEvent);
+	roomsConnection.on('updated', onRoomListEvent);
+	refreshTimer = window.setInterval(() => void reload(false), 60_000);
 });
 onActivated(() => void reload(false));
-onUnmounted(() => { if (refreshTimer != null) window.clearInterval(refreshTimer); });
+onUnmounted(() => {
+	if (refreshTimer != null) window.clearInterval(refreshTimer);
+	roomsConnection?.dispose();
+});
+
+function onRoomListEvent(payload: { room: Misskey.entities.CallsRoom }): void {
+	const index = rooms.value.findIndex(room => room.id === payload.room.id);
+	if (payload.room.state === 'ended' || payload.room.state === 'cancelled') {
+		if (index !== -1) rooms.value.splice(index, 1);
+		return;
+	}
+	if (index === -1) rooms.value.unshift(payload.room);
+	else rooms.value.splice(index, 1, payload.room);
+}
 
 definePage(() => ({ title: i18n.ts._calls.title, icon: 'ti ti-phone' }));
 </script>

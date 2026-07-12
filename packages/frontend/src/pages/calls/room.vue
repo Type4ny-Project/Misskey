@@ -36,9 +36,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkInfo v-if="sessionIsCurrent && session.mediaFailure.value != null" warn>{{ failureText }}</MkInfo>
 
 			<section v-if="room.state === 'open' && !sessionIsCurrent" class="_panel" :class="$style.lobby">
-				<div>
+				<div :class="$style.lobbyBody">
 					<strong><i class="ti ti-door-enter"></i> {{ i18n.ts._calls.joinRoom }}</strong>
 					<p>{{ myParticipant?.role === 'listener' || myParticipant == null ? i18n.ts._calls.listenerDoesNotNeedMicrophone : i18n.ts._calls.microphone }}</p>
+					<MkSelect v-if="myParticipant != null && myParticipant.role !== 'listener' && session.microphones.value.length > 0" :modelValue="session.selectedMicrophone.value" :items="microphoneItems" @update:modelValue="session.switchMicrophone">
+						<template #label>{{ i18n.ts._calls.selectMicrophone }}</template>
+					</MkSelect>
 				</div>
 				<MkButton primary large rounded :disabled="session.joining.value" @click="joinRoom"><i class="ti ti-broadcast"></i> {{ i18n.ts._calls.joinRoom }}</MkButton>
 			</section>
@@ -53,6 +56,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkSelect v-if="sessionIsCurrent && session.isSpeaker.value && session.microphones.value.length > 0" :modelValue="session.selectedMicrophone.value" :items="microphoneItems" @update:modelValue="session.switchMicrophone">
 				<template #label>{{ i18n.ts._calls.microphone }}</template>
 			</MkSelect>
+
+			<section v-if="sessionIsCurrent" class="_panel" :class="$style.callControls">
+				<button v-if="session.isSpeaker.value" type="button" class="_button" :class="[$style.controlButton, session.muted.value && $style.controlButtonActive]" @click="session.toggleMute()">
+					<i :class="session.muted.value ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i>
+					<span>{{ session.muted.value ? i18n.ts._calls.unmute : i18n.ts._calls.mute }}</span>
+				</button>
+				<button v-else type="button" class="_button" :class="[$style.controlButton, session.myParticipant.value?.speakerRequestedAt != null && $style.controlButtonActive]" :disabled="session.myParticipant.value?.speakerRequestedAt != null" @click="session.requestSpeaker()">
+					<i class="ti ti-hand-stop"></i>
+					<span>{{ session.myParticipant.value?.speakerRequestedAt != null ? i18n.ts._calls.speakerRequested : i18n.ts._calls.requestSpeaker }}</span>
+				</button>
+				<button type="button" class="_button" :class="[$style.controlButton, $style.controlButtonDanger]" @click="leaveCurrentRoom">
+					<i class="ti ti-door-exit"></i>
+					<span>{{ isHost ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom }}</span>
+				</button>
+			</section>
 
 			<section class="_panel" :class="$style.participantsPanel">
 				<header :class="$style.sectionHeader"><strong><i class="ti ti-users"></i> {{ i18n.ts.users }}</strong><span>{{ participants.length }}</span></header>
@@ -154,6 +172,13 @@ async function joinRoom(): Promise<void> {
 	}
 }
 
+async function leaveCurrentRoom(): Promise<void> {
+	const { canceled } = await os.confirm({ type: 'warning', text: isHost.value ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom });
+	if (canceled) return;
+	await session.leave();
+	router.push('/calls');
+}
+
 async function setRole(participantId: string, role: 'speaker' | 'listener'): Promise<void> {
 	if (room.value == null) return;
 	await misskeyApi('calls/rooms/set-role', { roomId: props.roomId, participantId, role, expectedRevision: room.value.revision });
@@ -192,7 +217,11 @@ watch(isSessionRoom, active => {
 		void pageConnection.value.refresh().catch(() => { loadFailed.value = true; });
 	}
 }, { immediate: true });
-onMounted(() => { void refreshRoom().catch(() => { loadFailed.value = true; }); });
+onMounted(() => {
+	void refreshRoom().then(() => {
+		if (myParticipant.value != null && myParticipant.value.role !== 'listener') void session.prepareMicrophones();
+	}).catch(() => { loadFailed.value = true; });
+});
 onUnmounted(() => pageConnection.value?.dispose());
 
 definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti ti-phone' }));
@@ -207,8 +236,13 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .stateBadge { padding: 5px 10px; border-radius: 999px; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); font-size: 0.82rem; font-weight: 700; }
 .description { margin: 16px 0 0; opacity: 0.78; white-space: pre-wrap; }
 .lobby { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px; }
+.lobbyBody { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 12px; }
 .lobby p { margin: 6px 0 0; opacity: 0.68; }
 .roomActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.callControls { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
+.controlButton { display: inline-flex; min-width: 120px; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border-radius: 999px; background: var(--MI_THEME-buttonBg); }
+.controlButtonActive { color: var(--MI_THEME-accent); background: var(--MI_THEME-accentedBg); }
+.controlButtonDanger { color: var(--MI_THEME-error); }
 .notFound { display: grid; justify-items: center; gap: 12px; padding: 40px; text-align: center; }
 .notFound > i { font-size: 2rem; }
 .participantsPanel { padding: 20px; }
@@ -230,7 +264,7 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .speaking { box-shadow: inset 4px 0 var(--MI_THEME-accent); }
 
 @media (max-width: 600px) {
-	.lobby, .participantCard { align-items: stretch; flex-direction: column; }
+	.lobby, .participantCard, .callControls { align-items: stretch; flex-direction: column; }
 	.titleRow { flex-direction: column; }
 	.moderationActions { justify-content: stretch; }
 }

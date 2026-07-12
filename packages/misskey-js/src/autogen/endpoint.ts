@@ -239,6 +239,8 @@ import type {
 	CallsRoomsSetRoleResponse,
 	CallsRoomsShowRequest,
 	CallsRoomsShowResponse,
+	CallsUsersActiveRoomsRequest,
+	CallsUsersActiveRoomsResponse,
 	ChannelsCreateRequest,
 	ChannelsCreateResponse,
 	ChannelsFavoriteRequest,
@@ -931,6 +933,7 @@ export type Endpoints = {
 	'calls/rooms/request-speaker': { req: CallsRoomsRequestSpeakerRequest; res: EmptyResponse };
 	'calls/rooms/set-role': { req: CallsRoomsSetRoleRequest; res: CallsRoomsSetRoleResponse };
 	'calls/rooms/show': { req: CallsRoomsShowRequest; res: CallsRoomsShowResponse };
+	'calls/users/active-rooms': { req: CallsUsersActiveRoomsRequest; res: CallsUsersActiveRoomsResponse };
 	'channels/create': { req: ChannelsCreateRequest; res: ChannelsCreateResponse };
 	'channels/favorite': { req: ChannelsFavoriteRequest; res: EmptyResponse };
 	'channels/featured': { req: EmptyRequest; res: ChannelsFeaturedResponse };

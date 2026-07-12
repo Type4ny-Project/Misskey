@@ -69,6 +69,10 @@ async function loadMicrophones(): Promise<void> {
 	microphones.value = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'audioinput');
 }
 
+async function prepareMicrophones(): Promise<void> {
+	await loadMicrophones();
+}
+
 async function connectMedia(generation: number): Promise<void> {
 	const participant = myParticipant.value;
 	const targetRoomId = currentRoomId.value;
@@ -254,6 +258,7 @@ export function useCallsSession() {
 		toggleMute,
 		requestSpeaker,
 		switchMicrophone,
+		prepareMicrophones,
 		resumeAudio,
 		refresh() { return connection.value?.refresh() ?? Promise.resolve(); },
 	};

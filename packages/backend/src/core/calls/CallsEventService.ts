@@ -6,7 +6,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import * as Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
-import { GlobalEventService, type CallsRoomEventTypes } from '@/core/GlobalEventService.js';
+import { GlobalEventService, type CallsRoomEventTypes, type CallsRoomsEventTypes } from '@/core/GlobalEventService.js';
 
 @Injectable()
 export class CallsEventService {
@@ -38,5 +38,9 @@ export class CallsEventService {
 		if (acquired !== 'OK') return;
 		const participantIds = await this.redis.zrange(key, 0, -1);
 		await this.publish(roomId, roomRevision, 'speaking', { participantIds });
+	}
+
+	public publishRoomsList<K extends keyof CallsRoomsEventTypes>(type: K, body: CallsRoomsEventTypes[K]): void {
+		this.globalEventService.publishCallsRoomsStream(type, body);
 	}
 }

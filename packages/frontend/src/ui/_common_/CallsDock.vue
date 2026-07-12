@@ -153,7 +153,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .panelHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .panelTitle { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .panelMeta { display: flex; gap: 8px; margin-top: 4px; font-size: 0.78rem; opacity: 0.72; }
-.panelMeta > :first-child, .live { color: var(--MI_THEME-error); font-weight: 800; letter-spacing: 0.08em; }
+.panelMeta > :first-child, .live { color: var(--MI_THEME-accent); font-weight: 800; letter-spacing: 0.08em; }
 .circleButton { width: 32px; height: 32px; border-radius: 999px; }
 .quickActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .quickAction { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 999px; background: color(from var(--MI_THEME-bg) srgb r g b / 0.36); font-size: 0.85rem; }
@@ -165,14 +165,15 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .userRow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 16px; background: color(from var(--MI_THEME-bg) srgb r g b / 0.28); }
 .userAvatar, .avatarPlaceholder { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; }
 .avatarPlaceholder { display: grid; place-items: center; background: var(--MI_THEME-bg); }
-.userAvatarLive { box-shadow: 0 0 0 3px var(--MI_THEME-accent); }
+.userAvatarLive { box-shadow: 0 0 0 3px var(--MI_THEME-accent), 0 0 16px color-mix(in srgb, var(--MI_THEME-accent) 38%, transparent); animation: avatarPulse 1.35s ease-in-out infinite alternate; }
 .userBody { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
 .userBody small { opacity: 0.68; }
 .inlineAction { flex: 0 0 auto; padding: 6px 10px; border-radius: 999px; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); font-size: 0.78rem; font-weight: 700; }
 .summaryRow { display: flex; align-items: stretch; gap: 8px; }
 .main { display: flex; min-width: min(310px, calc(100vw - 120px)); align-items: center; gap: 11px; padding: 9px 12px; border-radius: 22px; text-align: left; box-shadow: 0 12px 30px color(from var(--MI_THEME-bg) srgb r g b / 0.24); }
-.avatarRing { display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; border-radius: 50%; }
-.avatarRingLive { box-shadow: 0 0 0 3px var(--MI_THEME-error); }
+.avatarRing { position: relative; z-index: 0; display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; border-radius: 50%; isolation: isolate; }
+.avatarRingLive::before, .avatarRingLive::after { position: absolute; z-index: -1; inset: -4px; border: 2px solid var(--MI_THEME-accent); border-radius: 44% 56% 48% 52% / 52% 43% 57% 48%; content: ''; pointer-events: none; animation: organicRing 1.65s ease-in-out infinite; }
+.avatarRingLive::after { inset: -7px; border-color: color-mix(in srgb, var(--MI_THEME-accent) 42%, transparent); animation-delay: -0.72s; animation-direction: reverse; }
 .avatar { width: 38px; height: 38px; }
 .body { min-width: 0; flex: 1; }
 .titleRow { display: flex; align-items: center; gap: 7px; }
@@ -182,6 +183,21 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .action { display: grid; width: 52px; place-items: center; border-radius: 20px; font-size: 1.15rem; }
 .actionMuted { color: var(--MI_THEME-warn); }
 .actionDanger { color: var(--MI_THEME-error); }
+
+@keyframes organicRing {
+	0%, 100% { transform: scale(0.96) rotate(0deg); border-radius: 44% 56% 48% 52% / 52% 43% 57% 48%; opacity: 0.68; }
+	35% { transform: scale(1.06) rotate(7deg); border-radius: 58% 42% 55% 45% / 42% 57% 43% 58%; opacity: 1; }
+	68% { transform: scale(1.01) rotate(-5deg); border-radius: 49% 51% 39% 61% / 60% 44% 56% 40%; opacity: 0.78; }
+}
+
+@keyframes avatarPulse {
+	from { transform: scale(0.96); }
+	to { transform: scale(1.03); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.userAvatarLive, .avatarRingLive::before, .avatarRingLive::after { animation: none; }
+}
 
 @media (max-width: 500px) {
 	.root { right: 12px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 24px); }

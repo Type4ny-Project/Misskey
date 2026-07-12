@@ -231,7 +231,7 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .titleRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .roomTitle { font-size: 1.3rem; font-weight: 800; }
 .roomMeta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; font-size: 0.86rem; opacity: 0.75; }
-.liveIndicator { color: var(--MI_THEME-error); font-weight: 800; letter-spacing: 0.08em; }
+.liveIndicator { color: var(--MI_THEME-accent); font-weight: 800; letter-spacing: 0.08em; }
 .stateBadge { padding: 5px 10px; border-radius: 999px; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); font-size: 0.82rem; font-weight: 700; }
 .description { margin: 16px 0 0; opacity: 0.78; white-space: pre-wrap; }
 .lobby { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px; }
@@ -250,7 +250,7 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .participantGroup { margin-top: 20px; }
 .groupLabel { margin-bottom: 10px; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.06em; opacity: 0.65; text-transform: uppercase; }
 .participantGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 10px; }
-.participantCard { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 12px; border-radius: 18px; background: color(from var(--MI_THEME-bg) srgb r g b / 0.42); }
+.participantCard { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; overflow: hidden; padding: 12px; border-radius: 18px; background: color(from var(--MI_THEME-bg) srgb r g b / 0.42); }
 .participantIdentity { display: flex; min-width: 0; align-items: center; gap: 11px; }
 .avatar, .avatarPlaceholder { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%; }
 .avatarPlaceholder { display: grid; place-items: center; background: var(--MI_THEME-panel); }
@@ -260,7 +260,33 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .hostBadge { padding: 2px 7px; border-radius: 999px; background: var(--MI_THEME-accent); color: var(--MI_THEME-fgOnAccent); font-size: 0.68rem; font-weight: 800; }
 .requestBadge { color: var(--MI_THEME-infoFg); }
 .moderationActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-.speaking { box-shadow: inset 4px 0 var(--MI_THEME-accent); }
+.speaking {
+	background:
+		radial-gradient(circle at 0% 20%, color-mix(in srgb, var(--MI_THEME-accent) 20%, transparent), transparent 34%),
+		radial-gradient(circle at 0% 80%, color-mix(in srgb, var(--MI_THEME-accent) 12%, transparent), transparent 30%),
+		color(from var(--MI_THEME-bg) srgb r g b / 0.42);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--MI_THEME-accent) 52%, transparent);
+}
+.speaking::before {
+	position: absolute;
+	inset: 7px auto 7px 0;
+	width: 4px;
+	border-radius: 45% 55% 48% 52% / 35% 60% 40% 65%;
+	background: linear-gradient(180deg, transparent, var(--MI_THEME-accent) 18%, color-mix(in srgb, var(--MI_THEME-accent) 55%, transparent) 50%, var(--MI_THEME-accent) 82%, transparent);
+	background-size: 100% 180%;
+	content: '';
+	animation: speakingWave 1.15s ease-in-out infinite;
+}
+
+@keyframes speakingWave {
+	0%, 100% { transform: scaleY(0.72) translateY(-3px); background-position: 0 0; }
+	45% { transform: scaleY(1.08) translateY(2px); background-position: 0 100%; }
+	70% { transform: scaleY(0.88) translateY(-1px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.speaking::before { animation: none; }
+}
 
 @media (max-width: 600px) {
 	.lobby, .participantCard, .callControls { align-items: stretch; flex-direction: column; }

@@ -6,6 +6,7 @@
 ### Client
 - Feat: WebSocketとWebRTCを利用したMisskey Calls音声ルームを追加
 - Enhance: Misskey Callsで同じ開催場所の既存通話へ戻れるように
+- Enhance: Misskey Callsの発話中表示をテーマのアクセントカラーと波形アニメーションへ変更
 - Feat: センシティブなメディアをタップ中だけ表示するオプションを追加
 
 ### Server

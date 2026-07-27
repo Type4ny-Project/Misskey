@@ -9,6 +9,7 @@
 ### Server
 - Enhance: Docker・systemd の起動時に pnpm を常駐させないようにしてメモリ使用量を削減
 - Enhance: リモートノートクリーニングジョブのスキップ処理のパフォーマンス改善
+- Enhance: ActivityPub の featured 応答・JSON-LD エラー処理・フェデレーション集計の負荷を軽減
 
 
 ## 2026.5.4

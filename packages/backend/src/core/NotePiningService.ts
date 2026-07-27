@@ -18,6 +18,7 @@ import { ApDeliverManagerService } from '@/core/activitypub/ApDeliverManagerServ
 import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
 import { bindThis } from '@/decorators.js';
 import { RoleService } from '@/core/RoleService.js';
+import { FeaturedCollectionCacheService } from '@/core/FeaturedCollectionCacheService.js';
 
 @Injectable()
 export class NotePiningService {
@@ -40,6 +41,7 @@ export class NotePiningService {
 		private relayService: RelayService,
 		private apDeliverManagerService: ApDeliverManagerService,
 		private apRendererService: ApRendererService,
+		private featuredCollectionCacheService: FeaturedCollectionCacheService,
 	) {
 	}
 
@@ -75,6 +77,9 @@ export class NotePiningService {
 			userId: user.id,
 			noteId: note.id,
 		} as MiUserNotePining);
+		if (this.userEntityService.isLocalUser(user)) {
+			await this.featuredCollectionCacheService.invalidate(user.id);
+		}
 
 		// Deliver to remote followers
 		if (this.userEntityService.isLocalUser(user) && !note.localOnly && ['public', 'home'].includes(note.visibility)) {
@@ -99,10 +104,13 @@ export class NotePiningService {
 			throw new IdentifiableError('b302d4cf-c050-400a-bbb3-be208681f40c', 'No such note.');
 		}
 
-		this.userNotePiningsRepository.delete({
+		await this.userNotePiningsRepository.delete({
 			userId: user.id,
 			noteId: note.id,
 		});
+		if (this.userEntityService.isLocalUser(user)) {
+			await this.featuredCollectionCacheService.invalidate(user.id);
+		}
 
 		// Deliver to remote followers
 		if (this.userEntityService.isLocalUser(user) && !note.localOnly && ['public', 'home'].includes(note.visibility)) {

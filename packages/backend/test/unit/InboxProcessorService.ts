@@ -5,9 +5,16 @@
 
 import * as Bull from 'bullmq';
 import { describe, expect, test } from 'vitest';
+import { JsonLdError } from '@/core/activitypub/JsonLdService.js';
 import { createUnrecoverableJsonLdError } from '@/queue/processors/InboxProcessorService.js';
 
 describe('InboxProcessorService JSON-LD error classification', () => {
+	test('does not retry JsonLdError instances', () => {
+		const error = new JsonLdError('test-jsonld-error', 'test');
+
+		expect(createUnrecoverableJsonLdError(error)).toBeInstanceOf(Bull.UnrecoverableError);
+	});
+
 	test('does not retry deterministic jsonld validation errors', () => {
 		const error = Object.assign(new Error('Safe mode validation error.'), {
 			name: 'jsonld.ValidationError',

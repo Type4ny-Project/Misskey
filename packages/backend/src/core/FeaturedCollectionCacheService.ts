@@ -9,10 +9,11 @@ import * as Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
 import type { IOrderedCollection } from '@/core/activitypub/type.js';
 
-const FEATURED_COLLECTION_CACHE_TTL_SECONDS = 180;
+export const FEATURED_COLLECTION_CACHE_TTL_SECONDS = 180;
 const FEATURED_COLLECTION_VERSION_TTL_SECONDS = 24 * 60 * 60;
 const FEATURED_COLLECTION_LOCK_TTL_MS = 30_000;
 const FEATURED_COLLECTION_LOCK_POLL_INTERVAL_MS = 100;
+const FEATURED_COLLECTION_LOCK_WAIT_TIMEOUT_MS = 5_000;
 
 export type FeaturedCollection = IOrderedCollection & {
 	'@context': unknown;
@@ -91,7 +92,7 @@ export class FeaturedCollectionCacheService {
 		// Another worker is rendering this user. Poll the shared cache instead of
 		// rendering the same collection again. A bounded fallback preserves
 		// availability if the lock holder crashed or Redis lost the lock state.
-		const deadline = Date.now() + FEATURED_COLLECTION_LOCK_TTL_MS;
+		const deadline = Date.now() + FEATURED_COLLECTION_LOCK_WAIT_TIMEOUT_MS;
 		while (Date.now() < deadline) {
 			await new Promise<void>(resolve => setTimeout(resolve, FEATURED_COLLECTION_LOCK_POLL_INTERVAL_MS));
 			const cached = await this.get(userId);
@@ -221,15 +222,17 @@ export class FeaturedCollectionCacheService {
 		this.inFlight.delete(userId);
 
 		try {
-			// Incrementing the version and deleting the value in one Redis script
-			// closes the race with a render running in another backend worker.
+			// Replacing the version with a non-repeating token and deleting the
+			// value atomically closes the race with a render running in another
+			// backend worker. A random token remains safe even if the version key
+			// expired between the render and this invalidation.
 			await this.redisClient.eval(
-				`redis.call('incr', KEYS[1])
-				redis.call('expire', KEYS[1], ARGV[1])
+				`redis.call('set', KEYS[1], ARGV[1], 'EX', ARGV[2])
 				return redis.call('del', KEYS[2])`,
 				2,
 				this.versionKey(userId),
 				this.cacheKey(userId),
+				randomUUID(),
 				FEATURED_COLLECTION_VERSION_TTL_SECONDS,
 			);
 		} catch {

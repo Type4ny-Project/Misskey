@@ -31,9 +31,9 @@ function createRedisMock() {
 			},
 			eval: async (script: string, _keyCount: number, ...args: string[]) => {
 				calls.eval++;
-				if (script.includes('redis.call(\'incr\'')) {
-					const [versionKey, cacheKey] = args;
-					values.set(versionKey, String(Number(values.get(versionKey) ?? '0') + 1));
+				if (script.includes('redis.call(\'set\', KEYS[1], ARGV[1], \'EX\'')) {
+					const [versionKey, cacheKey, version] = args;
+					values.set(versionKey, version);
 					return Number(values.delete(cacheKey));
 				}
 				if (script.includes('current = redis.call(\'get\'')) {
@@ -128,7 +128,7 @@ describe('FeaturedCollectionCacheService', () => {
 	});
 
 	test('invalidates the shared collection after a pin change', async () => {
-		const { client, calls } = createRedisMock();
+		const { client, calls, values } = createRedisMock();
 		const service = new FeaturedCollectionCacheService(client);
 		const firstLoader = vi.fn().mockResolvedValue(collection);
 		const secondCollection = { ...collection, totalItems: 1 };
@@ -136,12 +136,19 @@ describe('FeaturedCollectionCacheService', () => {
 
 		await service.fetch('alice', firstLoader);
 		await service.invalidate('alice');
+		const firstVersion = values.get('kvcache:activityPubFeatured:alice:version');
+		values.delete('kvcache:activityPubFeatured:alice:version');
+		await service.invalidate('alice');
+		const secondVersion = values.get('kvcache:activityPubFeatured:alice:version');
 		const refreshed = await service.fetch('alice', secondLoader);
 
 		expect(refreshed).toEqual(secondCollection);
+		expect(firstVersion).toBeDefined();
+		expect(secondVersion).toBeDefined();
+		expect(secondVersion).not.toBe(firstVersion);
 		expect(firstLoader).toHaveBeenCalledOnce();
 		expect(secondLoader).toHaveBeenCalledOnce();
-		expect(calls.eval).toBe(5);
+		expect(calls.eval).toBe(6);
 	});
 
 	test('does not repopulate Redis with a render started before invalidation', async () => {

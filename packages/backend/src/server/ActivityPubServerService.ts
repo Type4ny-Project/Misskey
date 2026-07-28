@@ -31,7 +31,7 @@ import { IActivity } from '@/core/activitypub/type.js';
 import { isQuote, isRenote } from '@/misc/is-renote.js';
 import * as Acct from '@/misc/acct.js';
 import { FanoutTimelineEndpointService } from '@/core/FanoutTimelineEndpointService.js';
-import { FeaturedCollectionCacheService, type FeaturedCollection } from '@/core/FeaturedCollectionCacheService.js';
+import { FEATURED_COLLECTION_CACHE_TTL_SECONDS, FeaturedCollectionCacheService, type FeaturedCollection } from '@/core/FeaturedCollectionCacheService.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginOptions, FastifyBodyParser } from 'fastify';
 import type { FindOptionsWhere } from 'typeorm';
 
@@ -427,7 +427,7 @@ export class ActivityPubServerService {
 			)) as FeaturedCollection;
 		});
 
-		reply.header('Cache-Control', 'public, max-age=180');
+		reply.header('Cache-Control', `public, max-age=${FEATURED_COLLECTION_CACHE_TTL_SECONDS}`);
 		vary(reply.raw, 'Accept');
 		this.setResponseType(request, reply);
 		return rendered;

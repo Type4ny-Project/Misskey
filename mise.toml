@@ -18,7 +18,10 @@ PGDATABASE = "misskey"
 REDIS_HOST = "127.0.0.1"
 REDIS_PORT = "6379"
 MISSKEY_SOCKET = "{{ config_root }}/.mise/run/misskey.sock"
-VITE_HOST = "127.0.0.1"
+MISSKEY_DEV_URL = "http://100.87.128.76:3000/"
+MISSKEY_WEB_HOST = "0.0.0.0"
+VITE_HOST = "0.0.0.0"
+__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS = "lab-02.internal.nanasi-apps.xyz,100.87.128.76,192.168.1.40"
 
 [tasks."postgres:init"]
 description = "Initialize the project-local PostgreSQL cluster"
@@ -92,7 +95,7 @@ fi
 '''
 
 [tasks."config:init"]
-description = "Create a loopback-only Misskey development config"
+description = "Create a host-accessible Misskey development config"
 run = '''
 set -eu
 if [ ! -e "$MISE_CONFIG_ROOT/.config/default.yml" ]; then
@@ -101,7 +104,6 @@ if [ ! -e "$MISE_CONFIG_ROOT/.config/default.yml" ]; then
 	setup_password="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
 	sed -i \
 		-e "s|# setupPassword: example_password_please_change_this_or_you_will_get_hacked|setupPassword: $setup_password|" \
-		-e "s|url: https://example.tld/|url: http://127.0.0.1:3000/|" \
 		-e "s|# socket: /path/to/misskey.sock|socket: '$MISSKEY_SOCKET'|" \
 		-e "s|# chmodSocket: '777'|chmodSocket: '600'|" \
 		-e "s|  host: localhost|  host: 127.0.0.1|g" \
@@ -109,10 +111,13 @@ if [ ! -e "$MISE_CONFIG_ROOT/.config/default.yml" ]; then
 		-e "s|pass: example-misskey-pass|pass: ''|" \
 		"$MISE_CONFIG_ROOT/.config/default.yml"
 fi
+sed -i \
+	-e "s|^url: .*|url: $MISSKEY_DEV_URL|" \
+	"$MISE_CONFIG_ROOT/.config/default.yml"
 '''
 
 [tasks."proxy:init"]
-description = "Create a loopback-only Caddy proxy for the Misskey socket"
+description = "Create a host-accessible Caddy proxy for the Misskey socket"
 run = '''
 set -eu
 mkdir -p "$MISE_CONFIG_ROOT/.mise/log" "$MISE_CONFIG_ROOT/.mise/run"
@@ -122,8 +127,8 @@ cat > "$MISE_CONFIG_ROOT/.mise/Caddyfile" <<EOF
 	auto_https off
 }
 
-http://127.0.0.1:3000 {
-	bind 127.0.0.1
+:3000 {
+	bind $MISSKEY_WEB_HOST
 	log {
 		output file $MISE_CONFIG_ROOT/.mise/log/caddy-access.log
 	}

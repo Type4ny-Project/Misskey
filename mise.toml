@@ -59,9 +59,7 @@ set -eu
 if [ ! -e "$MISE_CONFIG_ROOT/.config/default.yml" ]; then
 	cp "$MISE_CONFIG_ROOT/.config/example.yml" "$MISE_CONFIG_ROOT/.config/default.yml"
 	mkdir -p "$MISE_CONFIG_ROOT/.mise/run"
-	setup_password="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
 	sed -i \
-		-e "s|# setupPassword: example_password_please_change_this_or_you_will_get_hacked|setupPassword: $setup_password|" \
 		-e "s|# socket: /path/to/misskey.sock|socket: '$MISSKEY_SOCKET'|" \
 		-e "s|# chmodSocket: '777'|chmodSocket: '600'|" \
 		-e "s|  host: localhost|  host: 127.0.0.1|g" \
@@ -70,6 +68,7 @@ if [ ! -e "$MISE_CONFIG_ROOT/.config/default.yml" ]; then
 		"$MISE_CONFIG_ROOT/.config/default.yml"
 fi
 sed -i \
+	-e "/^setupPassword:/d" \
 	-e "s|^url: .*|url: $MISSKEY_DEV_URL|" \
 	"$MISE_CONFIG_ROOT/.config/default.yml"
 '''

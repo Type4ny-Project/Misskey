@@ -9,8 +9,8 @@ import { CallsEntityService } from '@/core/entities/CallsEntityService.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { callsApiError, callsErrors } from '../_shared.js';
 export const meta = { tags: ['calls'], stability: 'experimental', requireCredential: true, prohibitMoved: true, kind: 'write:calls', limit: { key: 'calls-join', duration: 60 * 1000, max: 30 }, errors: callsErrors, res: { type: 'object', optional: false, nullable: false, ref: 'CallsParticipant' } } as const;
-export const paramDef = { type: 'object', properties: { roomId: { type: 'string', format: 'misskey:id' } }, required: ['roomId'] } as const;
+export const paramDef = { type: 'object', properties: { roomId: { type: 'string', format: 'misskey:id' }, reconnectToken: { type: 'string', pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' } }, required: ['roomId'] } as const;
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
-	constructor(service: CallsRoomService, entity: CallsEntityService) { super(meta, paramDef, async (ps, me) => { try { return entity.packParticipant(await service.join(me, ps.roomId)); } catch (error) { callsApiError(error); } }); }
+	constructor(service: CallsRoomService, entity: CallsEntityService) { super(meta, paramDef, async (ps, me) => { try { return entity.packParticipant(await service.join(me, ps.roomId, ps.reconnectToken)); } catch (error) { callsApiError(error); } }); }
 }

@@ -31,6 +31,7 @@ export const packedCallsRoomSchema = {
 		},
 		title: { type: 'string', optional: false, nullable: false },
 		description: { type: 'string', optional: false, nullable: false },
+		mode: { type: 'string', enum: ['open', 'stage'], optional: false, nullable: false },
 		visibility: { type: 'string', enum: ['public', 'followers', 'specified'], optional: false, nullable: false },
 		state: { type: 'string', enum: ['scheduled', 'open', 'ended', 'cancelled'], optional: false, nullable: false },
 		scheduledAt: { type: 'string', format: 'date-time', optional: false, nullable: true },

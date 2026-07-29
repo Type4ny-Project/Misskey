@@ -407,6 +407,7 @@ export * as 'calls/rooms/leave' from './endpoints/calls/rooms/leave.js';
 export * as 'calls/rooms/set-role' from './endpoints/calls/rooms/set-role.js';
 export * as 'calls/rooms/remove-participant' from './endpoints/calls/rooms/remove-participant.js';
 export * as 'calls/rooms/request-speaker' from './endpoints/calls/rooms/request-speaker.js';
+export * as 'calls/rooms/cancel-speaker-request' from './endpoints/calls/rooms/cancel-speaker-request.js';
 export * as 'calls/media/session/create' from './endpoints/calls/media/session-create.js';
 export * as 'calls/media/tracks/publish' from './endpoints/calls/media/publish.js';
 export * as 'calls/media/tracks/subscribe' from './endpoints/calls/media/subscribe.js';

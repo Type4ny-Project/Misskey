@@ -1650,6 +1650,17 @@ declare module '../api.js' {
      * 
      * **Credential required**: *Yes* / **Permission**: *write:calls*
      */
+    request<E extends 'calls/rooms/cancel-speaker-request', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:calls*
+     */
     request<E extends 'calls/rooms/create', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
@@ -1768,7 +1779,7 @@ declare module '../api.js' {
 
     /**
      * No description provided.
-     *
+     * 
      * **Credential required**: *Yes* / **Permission**: *write:channels*
      */
     request<E extends 'channels/create', P extends Endpoints[E]['req']>(

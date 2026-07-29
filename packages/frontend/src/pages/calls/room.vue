@@ -20,7 +20,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div :class="$style.roomTitle"><i class="ti ti-broadcast"></i> {{ room.title }}</div>
 						<div :class="$style.roomMeta">
 							<span v-if="room.state === 'open'" :class="$style.liveIndicator">● {{ i18n.ts._calls.live }}</span>
-							<span>{{ i18n.ts._calls[room.attachment.type === 'personal' ? 'personalRoom' : 'chatRoom'] }}</span>
+							<span>{{ i18n.ts._calls[room.mode === 'open' ? 'openCall' : 'stageCall'] }}</span>
 							<span>{{ i18n.ts._calls[room.visibility] }}</span>
 						</div>
 					</div>
@@ -40,11 +40,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkInfo v-if="sessionIsCurrent && (session.mediaState.value === 'creating-session' || session.mediaState.value === 'negotiating')">{{ i18n.ts._calls.roomConnectedMediaConnecting }}</MkInfo>
 			<MkInfo v-if="sessionIsCurrent && session.mediaState.value === 'reconnecting'" warn>{{ i18n.ts._calls.reconnecting }}</MkInfo>
 			<MkInfo v-if="sessionIsCurrent && session.mediaFailure.value != null" warn>{{ failureText }}</MkInfo>
+			<MkInfo v-if="sessionIsCurrent && session.speakerRequestResult.value === 'rejected'" warn>{{ i18n.ts._calls.speakerRequestRejected }}</MkInfo>
 
 			<section v-if="room.state === 'open' && !sessionIsCurrent" class="_panel" :class="$style.lobby">
 				<div :class="$style.lobbyBody">
 					<strong><i class="ti ti-door-enter"></i> {{ i18n.ts._calls.joinRoom }}</strong>
-					<p>{{ myParticipant?.role === 'listener' || myParticipant == null ? i18n.ts._calls.listenerDoesNotNeedMicrophone : i18n.ts._calls.microphone }}</p>
+					<p>{{ room.mode === 'open' ? i18n.ts._calls.joinMutedHint : myParticipant?.role === 'listener' || myParticipant == null ? i18n.ts._calls.listenerDoesNotNeedMicrophone : i18n.ts._calls.microphone }}</p>
 					<MkSelect v-if="myParticipant != null && myParticipant.role !== 'listener' && session.microphones.value.length > 0" :modelValue="session.selectedMicrophone.value" :items="microphoneItems" @update:modelValue="session.switchMicrophone">
 						<template #label>{{ i18n.ts._calls.selectMicrophone }}</template>
 					</MkSelect>
@@ -61,9 +62,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<i :class="session.muted.value ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i>
 					<span>{{ session.muted.value ? i18n.ts._calls.unmute : i18n.ts._calls.mute }}</span>
 				</button>
-				<button v-else type="button" class="_button" :class="[$style.controlButton, session.myParticipant.value?.speakerRequestedAt != null && $style.controlButtonActive]" :disabled="session.myParticipant.value?.speakerRequestedAt != null" @click="session.requestSpeaker()">
+				<button v-else-if="room.mode === 'stage'" type="button" class="_button" :class="[$style.controlButton, session.myParticipant.value?.speakerRequestedAt != null && $style.controlButtonActive]" @click="session.myParticipant.value?.speakerRequestedAt != null ? session.cancelSpeakerRequest() : session.requestSpeaker()">
 					<i class="ti ti-hand-stop"></i>
-					<span>{{ session.myParticipant.value?.speakerRequestedAt != null ? i18n.ts._calls.speakerRequested : i18n.ts._calls.requestSpeaker }}</span>
+					<span>{{ session.myParticipant.value?.speakerRequestedAt != null ? i18n.ts._calls.cancelSpeakerRequest : i18n.ts._calls.requestSpeaker }}</span>
 				</button>
 				<button type="button" class="_button" :class="[$style.controlButton, $style.controlButtonDanger]" @click="leaveCurrentRoom">
 					<i class="ti ti-door-exit"></i>
@@ -71,21 +72,34 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</button>
 			</section>
 
+			<section v-if="room.mode === 'stage' && speakers.length > 0" class="_panel" :class="$style.stageSpotlight">
+				<strong :class="$style.groupLabel">{{ speakingParticipantIds.size > 0 ? i18n.ts._calls.nowSpeaking : i18n.ts._calls.speaker }}</strong>
+				<div :class="$style.stagePeople">
+					<div v-for="participant in stageSpotlightParticipants" :key="participant.id" :class="[$style.stagePerson, speakingParticipantIds.has(participant.id) && $style.stagePersonSpeaking]">
+						<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.stageAvatar" indicator/>
+						<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
+						<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
+						<small>{{ speakingParticipantIds.has(participant.id) ? i18n.ts._calls.speakingNow : participant.isMuted ? i18n.ts._calls.mutedStatus : i18n.ts._calls.microphoneOn }}</small>
+					</div>
+				</div>
+			</section>
+
 			<section class="_panel" :class="$style.participantsPanel">
 				<header :class="$style.sectionHeader"><strong><i class="ti ti-users"></i> {{ i18n.ts.users }}</strong><span>{{ participants.length }}</span></header>
 
 				<div v-if="speakers.length > 0" :class="$style.participantGroup">
-					<div :class="$style.groupLabel">{{ i18n.ts._calls.speaker }}</div>
-					<div :class="$style.participantGrid">
-						<article v-for="participant in speakers" :key="participant.id" :class="[$style.participantCard, !participant.isMuted && $style.speakerActive, speakingParticipantIds.has(participant.id) && $style.speaking]">
-							<div :class="$style.participantIdentity">
-								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.avatar" indicator link preview/>
+					<div :class="$style.groupLabel">{{ room.mode === 'open' ? i18n.ts.users : i18n.ts._calls.speaker }}</div>
+					<div :class="[$style.participantGrid, room.mode === 'open' && $style.openParticipantGrid]">
+						<article v-for="participant in speakers" :key="participant.id" :class="[$style.participantCard, room.mode === 'open' && $style.openParticipantCard, !participant.isMuted && $style.speakerActive, speakingParticipantIds.has(participant.id) && $style.speaking]">
+							<div :class="[$style.participantIdentity, room.mode === 'open' && $style.openParticipantIdentity]">
+								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="[$style.avatar, room.mode === 'open' && $style.openAvatar]" indicator link preview/>
 								<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
 								<div :class="$style.participantDetails">
 									<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
 									<div :class="$style.participantStatus">
-										<span v-if="participant.role === 'host'" :class="$style.hostBadge">HOST</span>
-										<span><i v-if="speakingParticipantIds.has(participant.id)" class="ti ti-volume"></i><i v-else :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i> {{ participant.isMuted ? i18n.ts._calls.mute : speakingParticipantIds.has(participant.id) ? i18n.ts._calls.live : i18n.ts._calls.unmute }}</span>
+										<span v-if="participant.role === 'host'" :class="$style.hostBadge">{{ i18n.ts._calls.host }}</span>
+										<span v-if="room.mode === 'open'" :class="[$style.compactStatus, participant.isMuted && $style.compactStatusMuted, speakingParticipantIds.has(participant.id) && $style.compactStatusSpeaking]" :aria-label="participant.isMuted ? i18n.ts._calls.mutedStatus : speakingParticipantIds.has(participant.id) ? i18n.ts._calls.speakingNow : i18n.ts._calls.microphoneOn" :title="participant.isMuted ? i18n.ts._calls.mutedStatus : speakingParticipantIds.has(participant.id) ? i18n.ts._calls.speakingNow : i18n.ts._calls.microphoneOn"><i v-if="speakingParticipantIds.has(participant.id)" class="ti ti-volume"></i><i v-else :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i></span>
+										<span v-else><i v-if="speakingParticipantIds.has(participant.id)" class="ti ti-volume"></i><i v-else :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i> {{ participant.isMuted ? i18n.ts._calls.mutedStatus : speakingParticipantIds.has(participant.id) ? i18n.ts._calls.speakingNow : i18n.ts._calls.microphoneOn }}</span>
 										<span v-if="!participant.isMuted" :class="$style.voiceMeter" aria-hidden="true">
 											<span :class="[$style.meterLayer, $style.meterIdle]"><i></i><i></i><i></i><i></i><i></i></span>
 											<span :class="[$style.meterLayer, $style.meterSpeaking]"><i></i><i></i><i></i><i></i><i></i></span>
@@ -93,7 +107,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</div>
 								</div>
 							</div>
-							<div v-if="isHost && participant.role !== 'host'" :class="$style.moderationActions">
+							<div v-if="room.mode === 'stage' && isHost && participant.role !== 'host'" :class="$style.moderationActions">
 								<MkButton small @click="setRole(participant.id, 'listener')">{{ i18n.ts._calls.demoteListener }}</MkButton>
 								<MkButton small danger @click="removeParticipant(participant.id)">{{ i18n.ts._calls.removeParticipant }}</MkButton>
 							</div>
@@ -101,7 +115,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 				</div>
 
-				<div v-if="listeners.length > 0" :class="$style.participantGroup">
+				<div v-if="room.mode === 'stage' && listeners.length > 0" :class="$style.participantGroup">
 					<div :class="$style.groupLabel">{{ i18n.ts._calls.listener }}</div>
 					<div :class="$style.participantGrid">
 						<article v-for="participant in listeners" :key="participant.id" :class="$style.participantCard">
@@ -115,6 +129,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 							<div v-if="isHost" :class="$style.moderationActions">
 								<MkButton small primary @click="setRole(participant.id, 'speaker')">{{ participant.speakerRequestedAt != null ? i18n.ts.approve : i18n.ts._calls.promoteSpeaker }}</MkButton>
+								<MkButton v-if="participant.speakerRequestedAt != null" small @click="setRole(participant.id, 'listener')">{{ i18n.ts.reject }}</MkButton>
 								<MkButton small danger @click="removeParticipant(participant.id)">{{ i18n.ts._calls.removeParticipant }}</MkButton>
 							</div>
 						</article>
@@ -156,6 +171,10 @@ const myParticipant = computed(() => participants.value.find(participant => part
 const isHost = computed(() => myParticipant.value?.role === 'host');
 const speakers = computed(() => participants.value.filter(participant => participant.role !== 'listener'));
 const listeners = computed(() => participants.value.filter(participant => participant.role === 'listener'));
+const stageSpotlightParticipants = computed(() => {
+	const speaking = speakers.value.filter(participant => speakingParticipantIds.value.has(participant.id));
+	return speaking.length > 0 ? speaking : speakers.value;
+});
 const sessionIsCurrent = computed(() => isSessionRoom.value && session.isActive.value);
 const microphoneItems = computed(() => session.microphones.value.map(device => ({ label: device.label || device.deviceId, value: device.deviceId })));
 const failureText = computed(() => session.mediaFailure.value === 'unsupported' ? i18n.ts._calls.unsupportedBrowser : session.mediaFailure.value === 'permission-denied' ? i18n.ts._calls.permissionDenied : session.mediaFailure.value === 'device-not-found' ? i18n.ts._calls.deviceNotFound : session.mediaFailure.value === 'permission-pending' ? i18n.ts._calls.permissionPending : i18n.ts._calls.mediaFailed);
@@ -170,6 +189,7 @@ async function joinRoom(): Promise<void> {
 	try {
 		await session.join(props.roomId, myParticipant.value != null);
 		await refreshRoom();
+		os.toast(i18n.ts._calls.joinedCall);
 	} catch (error) {
 		await os.alert({ type: 'error', text: error instanceof Error ? error.message : i18n.ts.somethingHappened });
 	}
@@ -179,6 +199,7 @@ async function leaveCurrentRoom(): Promise<void> {
 	const { canceled } = await os.confirm({ type: 'warning', text: isHost.value ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom });
 	if (canceled) return;
 	await session.leave();
+	os.toast(i18n.ts._calls.leftCall);
 	router.push('/calls');
 }
 
@@ -249,17 +270,34 @@ definePage(() => ({ title: room.value?.title ?? i18n.ts._calls.title, icon: 'ti 
 .notFound { display: grid; justify-items: center; gap: 12px; padding: 40px; text-align: center; }
 .notFound > i { font-size: 2rem; }
 .participantsPanel { padding: 20px; }
+.stageSpotlight { padding: 24px; text-align: center; }
+.stagePeople { display: flex; flex-wrap: wrap; justify-content: center; gap: 22px; }
+.stagePerson { display: grid; min-width: 120px; justify-items: center; gap: 7px; padding: 14px; border-radius: 20px; transition: background-color 0.4s ease, transform 0.4s ease; }
+.stagePersonSpeaking { background: var(--MI_THEME-accentedBg); transform: translateY(-2px); }
+.stageAvatar { width: 76px; height: 76px; border-radius: 50%; }
+.stagePersonSpeaking .stageAvatar { box-shadow: 0 0 0 4px var(--MI_THEME-accent), 0 0 26px color-mix(in srgb, var(--MI_THEME-accent) 42%, transparent); }
+.stagePerson small { color: var(--MI_THEME-accent); }
 .sectionHeader { display: flex; align-items: center; justify-content: space-between; padding-bottom: 14px; border-bottom: solid 1px var(--MI_THEME-divider); }
 .sectionHeader span { min-width: 30px; padding: 3px 9px; border-radius: 999px; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); text-align: center; }
 .participantGroup { margin-top: 20px; }
 .groupLabel { margin-bottom: 10px; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.06em; opacity: 0.65; text-transform: uppercase; }
 .participantGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 10px; }
+.openParticipantGrid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; }
 .participantCard { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; overflow: hidden; padding: 12px; border-radius: 18px; background-color: color(from var(--MI_THEME-bg) srgb r g b / 0.42); transition: background-color 0.45s ease, box-shadow 0.45s ease; }
+.openParticipantCard { min-height: 150px; justify-content: center; padding: 18px 12px; text-align: center; }
 .participantIdentity { display: flex; min-width: 0; align-items: center; gap: 11px; }
+.openParticipantIdentity { width: 100%; flex-direction: column; gap: 10px; }
 .avatar, .avatarPlaceholder { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%; }
+.openAvatar { width: 72px; height: 72px; flex-basis: 72px; }
+.openParticipantIdentity > .avatarPlaceholder { width: 72px; height: 72px; flex-basis: 72px; font-size: 1.6rem; }
 .avatarPlaceholder { display: grid; place-items: center; background: var(--MI_THEME-panel); }
 .participantDetails { min-width: 0; }
 .participantDetails > strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.openParticipantCard .participantDetails { width: 100%; }
+.openParticipantCard .participantStatus { justify-content: center; }
+.compactStatus { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); }
+.compactStatusMuted { background: color-mix(in srgb, var(--MI_THEME-fg) 9%, transparent); color: color-mix(in srgb, var(--MI_THEME-fg) 58%, transparent); }
+.compactStatusSpeaking { background: var(--MI_THEME-accent); color: var(--MI_THEME-fgOnAccent); box-shadow: 0 0 12px color-mix(in srgb, var(--MI_THEME-accent) 48%, transparent); }
 .participantStatus { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; font-size: 0.78rem; opacity: 0.72; }
 .hostBadge { padding: 2px 7px; border-radius: 999px; background: var(--MI_THEME-accent); color: var(--MI_THEME-fgOnAccent); font-size: 0.68rem; font-weight: 800; }
 .requestBadge { color: var(--MI_THEME-infoFg); }

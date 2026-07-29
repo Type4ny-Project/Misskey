@@ -7,7 +7,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import type { CallsParticipantsRepository, CallsRoomsRepository, MiCallsParticipant } from '@/models/_.js';
 import { CallsEventService } from './CallsEventService.js';
-import { CallsLiveConnectionService } from './CallsLiveConnectionService.js';
+import { CallsLiveConnectionService, type CallsLiveConnection } from './CallsLiveConnectionService.js';
 import { CallsMediaBindingService, type CallsPublicationBinding } from './CallsMediaBindingService.js';
 import { CloudflareRealtimeClient } from './CloudflareRealtimeClient.js';
 import { CallsTurnCredentialStoreService } from './CallsTurnCredentialStoreService.js';
@@ -55,6 +55,14 @@ export class CallsMediaRevocationService {
 		}
 		await this.turnCredentials.revokeParticipant(participant.id);
 		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason: 'stale-generation' });
+	}
+
+	public async revokeDisconnectedGeneration(participant: MiCallsParticipant, connection: CallsLiveConnection, roomRevision: number): Promise<void> {
+		const publications = await this.bindings.clearGeneration(participant.id, connection.generation);
+		await this.closeProviderPublications(publications);
+		await this.quota.release(connection.applicationId, participant.id);
+		await this.turnCredentials.revokeParticipant(participant.id);
+		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason: 'access' });
 	}
 
 	public async revokeRoom(roomId: string, roomRevision: number, reason: CallsRevocationReason): Promise<void> {

@@ -222,6 +222,7 @@ import type {
 	CallsMediaTurnCredentialsResponse,
 	CallsRoomsCancelRequest,
 	CallsRoomsCancelResponse,
+	CallsRoomsCancelSpeakerRequestRequest,
 	CallsRoomsCreateRequest,
 	CallsRoomsCreateResponse,
 	CallsRoomsEndRequest,
@@ -923,6 +924,7 @@ export type Endpoints = {
 	'calls/media/tracks/subscribe': { req: CallsMediaTracksSubscribeRequest; res: CallsMediaTracksSubscribeResponse };
 	'calls/media/turn-credentials': { req: CallsMediaTurnCredentialsRequest; res: CallsMediaTurnCredentialsResponse };
 	'calls/rooms/cancel': { req: CallsRoomsCancelRequest; res: CallsRoomsCancelResponse };
+	'calls/rooms/cancel-speaker-request': { req: CallsRoomsCancelSpeakerRequestRequest; res: EmptyResponse };
 	'calls/rooms/create': { req: CallsRoomsCreateRequest; res: CallsRoomsCreateResponse };
 	'calls/rooms/end': { req: CallsRoomsEndRequest; res: CallsRoomsEndResponse };
 	'calls/rooms/join': { req: CallsRoomsJoinRequest; res: CallsRoomsJoinResponse };

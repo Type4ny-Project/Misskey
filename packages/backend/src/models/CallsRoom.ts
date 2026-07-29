@@ -14,6 +14,9 @@ export type CallsRoomAttachmentType = typeof callsRoomAttachmentTypes[number];
 export const callsRoomVisibilities = ['public', 'followers', 'specified'] as const;
 export type CallsRoomVisibility = typeof callsRoomVisibilities[number];
 
+export const callsRoomModes = ['open', 'stage'] as const;
+export type CallsRoomMode = typeof callsRoomModes[number];
+
 export const callsRoomStates = ['scheduled', 'open', 'ended', 'cancelled'] as const;
 export type CallsRoomState = typeof callsRoomStates[number];
 
@@ -23,6 +26,7 @@ export type CallsRoomState = typeof callsRoomStates[number];
 @Check('CHK_calls_room_attachment', `("attachmentType" = 'personal' AND "chatRoomId" IS NULL) OR ("attachmentType" = 'chatRoom' AND "chatRoomId" IS NOT NULL)`)
 @Check('CHK_calls_room_attachment_type', `"attachmentType" IN ('personal', 'chatRoom')`)
 @Check('CHK_calls_room_visibility', `"visibility" IN ('public', 'followers', 'specified')`)
+@Check('CHK_calls_room_mode', `"mode" IN ('open', 'stage')`)
 @Check('CHK_calls_room_state', `"state" IN ('scheduled', 'open', 'ended', 'cancelled')`)
 @Check('CHK_calls_room_revision', '"revision" >= 0')
 @Check('CHK_calls_room_lifecycle', `("state" = 'scheduled' AND "startedAt" IS NULL AND "endedAt" IS NULL) OR ("state" = 'open' AND "startedAt" IS NOT NULL AND "endedAt" IS NULL) OR ("state" IN ('ended', 'cancelled') AND "endedAt" IS NOT NULL)`)
@@ -58,6 +62,9 @@ export class MiCallsRoom {
 
 	@Column('varchar', { length: 16, default: 'specified' })
 	public visibility: CallsRoomVisibility;
+
+	@Column('varchar', { length: 16, default: 'open' })
+	public mode: CallsRoomMode;
 
 	@Column('varchar', { array: true, default: '{}' })
 	public visibleUserIds: MiUser['id'][];

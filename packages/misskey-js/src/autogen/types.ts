@@ -1350,6 +1350,15 @@ export type paths = {
          */
         post: operations['calls___rooms___cancel'];
     };
+    '/calls/rooms/cancel-speaker-request': {
+        /**
+         * calls/rooms/cancel-speaker-request
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:calls*
+         */
+        post: operations['calls___rooms___cancel-speaker-request'];
+    };
     '/calls/rooms/create': {
         /**
          * calls/rooms/create
@@ -6351,6 +6360,8 @@ export type components = {
             };
             title: string;
             description: string;
+            /** @enum {string} */
+            mode: 'open' | 'stage';
             /** @enum {string} */
             visibility: 'public' | 'followers' | 'specified';
             /** @enum {string} */
@@ -17324,6 +17335,78 @@ export interface operations {
             };
         };
     };
+    'calls___rooms___cancel-speaker-request': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     calls___rooms___create: {
         requestBody: {
             content: {
@@ -17335,6 +17418,11 @@ export interface operations {
                     title: string;
                     /** @default  */
                     description?: string;
+                    /**
+                     * @default open
+                     * @enum {string}
+                     */
+                    mode?: 'open' | 'stage';
                     /**
                      * @default specified
                      * @enum {string}
@@ -17484,6 +17572,7 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     roomId: string;
+                    reconnectToken?: string;
                 };
             };
         };
@@ -17559,6 +17648,9 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     roomId: string;
+                    reconnectToken?: string;
+                    connectionId?: string;
+                    generation?: number;
                 };
             };
         };

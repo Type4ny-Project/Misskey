@@ -1,5 +1,27 @@
 ## ADDED Requirements
 
+### Requirement: 通話モード
+ルームは、参加者全員が発言できるオープン通話と、ホストが発言者を管理するステージモードを持たなければならない（MUST）。
+
+#### Scenario: オープン通話への参加
+- **WHEN** ユーザーがオープン通話へ参加する
+- **THEN** ユーザーはスピーカーとして参加し、発言リクエストなしでマイクを利用できる
+
+#### Scenario: ステージへの参加
+- **WHEN** ユーザーがステージへ参加する
+- **THEN** ユーザーはリスナーとして参加し、ホストの承認後に発言できる
+
+### Requirement: 発言リクエスト状態
+ステージの発言リクエストは、本人による取消とホストによる拒否をリアルタイムに同期しなければならない（MUST）。
+
+#### Scenario: 本人がリクエストを取り消す
+- **WHEN** リクエスト中のユーザーが取消を選択する
+- **THEN** リクエスト状態が解除され、全参加者へ同期される
+
+#### Scenario: ホストがリクエストを拒否する
+- **WHEN** ホストが発言リクエストを拒否する
+- **THEN** リクエスト状態が解除され、本人に拒否結果が表示される
+
 ### Requirement: アクティブルームの再利用と空ルームの終了
 クライアントは同じattachmentに`scheduled`または`open`のルームが存在する場合、新規作成を送信せず既存ルームへの導線を提示しなければならない（SHALL）。サーバーは接続heartbeatのTTLを超えてもlive connectionが1件も存在しない`open`ルームを終了し、active attachment制約を解放しなければならない（SHALL）。
 
@@ -10,6 +32,15 @@
 #### Scenario: live connectionがないルームが残った
 - **WHEN** openルームの全参加者connectionがheartbeat TTLを超えて失効する
 - **THEN** サーバーはルームをendedへ遷移させ、参加者をleftとしてactive attachment制約を解放する
+
+#### Scenario: hostが誤ってリロードする
+- **WHEN** hostのブラウザがopenルーム参加中にリロードされる
+- **THEN** クライアントはhost participantを退出させ、30秒間だけ右下に直前のルームへ再参加する導線を表示する
+- **AND** 30秒以内に再参加したhostはhost roleを維持する
+
+#### Scenario: 誰も戻らない
+- **WHEN** 最後のlive connectionが失効してから30秒間参加者が戻らない
+- **THEN** サーバーはopenルームをendedへ遷移させる
 
 ### Requirement: Callsルームは必ず1種類の所属先だけを持つ
 システムはすべてのCallsルームを、1人のlocal host userに紐づく`personal`ルーム、または1つの既存local ChatRoomに紐づく`chatRoom`ルームのどちらかとして表現しなければならない（SHALL）。どちらも指定されていない、または両方が指定されたrecord / create requestは拒否しなければならない。

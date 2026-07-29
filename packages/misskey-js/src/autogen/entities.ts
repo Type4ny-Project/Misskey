@@ -225,6 +225,7 @@ export type CallsMediaTurnCredentialsRequest = operations['calls___media___turn-
 export type CallsMediaTurnCredentialsResponse = operations['calls___media___turn-credentials']['responses']['200']['content']['application/json'];
 export type CallsRoomsCancelRequest = operations['calls___rooms___cancel']['requestBody']['content']['application/json'];
 export type CallsRoomsCancelResponse = operations['calls___rooms___cancel']['responses']['200']['content']['application/json'];
+export type CallsRoomsCancelSpeakerRequestRequest = operations['calls___rooms___cancel-speaker-request']['requestBody']['content']['application/json'];
 export type CallsRoomsCreateRequest = operations['calls___rooms___create']['requestBody']['content']['application/json'];
 export type CallsRoomsCreateResponse = operations['calls___rooms___create']['responses']['200']['content']['application/json'];
 export type CallsRoomsEndRequest = operations['calls___rooms___end']['requestBody']['content']['application/json'];

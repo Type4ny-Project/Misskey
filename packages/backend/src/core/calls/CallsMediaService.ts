@@ -47,6 +47,7 @@ export class CallsMediaService {
 			locked = await this.liveConnectionService.withRoomLock(input.roomId, async (assertLockHeld) => {
 				const lockedParticipant = await this.authorizeParticipant(user, input.roomId);
 				await assertLockHeld();
+				await this.liveConnectionService.clearRoomEmptySince(input.roomId);
 				return {
 					participant: lockedParticipant,
 					replacement: await this.liveConnectionService.replace(lockedParticipant.id, input.connectionId, input.applicationId),

@@ -19,6 +19,7 @@ export class CallsEntityService {
 			},
 			title: room.title,
 			description: room.description,
+			mode: room.mode,
 			visibility: room.visibility,
 			state: room.state,
 			scheduledAt: room.scheduledAt?.toISOString() ?? null,

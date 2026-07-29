@@ -7,11 +7,15 @@
 - Feat: WebSocketとWebRTCを利用したMisskey Calls音声ルームを追加
 - Enhance: Misskey Callsで同じ開催場所の既存通話へ戻れるように
 - Enhance: Misskey Callsの発話中表示をテーマのアクセントカラーと波形アニメーションへ変更
+- Enhance: Misskey Callsでリロード後に直前の通話へ戻れる導線を追加
+- Enhance: Misskey Callsにオープン通話とステージモード、展開式の参加者一覧を追加
 - Feat: センシティブなメディアをタップ中だけ表示するオプションを追加
 
 ### Server
 - Feat: Cloudflare Realtimeを利用するMisskey Calls APIとリアルタイムイベントを追加
 - Fix: Misskey Callsの参加者がいない通話ルームが残り続ける問題を修正
+- Enhance: Misskey Callsの空ルームを30秒の再接続猶予後に終了するように
+- Enhance: Misskey Callsの通話モードと発言リクエストの取消・拒否同期に対応
 - Enhance: リモートノートクリーニングジョブのスキップ処理のパフォーマンス改善
 
 

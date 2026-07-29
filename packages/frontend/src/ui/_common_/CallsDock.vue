@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.panelTitle">{{ room.title }}</strong>
 						<div :class="$style.panelMeta"><span>{{ i18n.ts._calls.live }}</span><span>{{ participants.length }} {{ i18n.ts.users }}</span></div>
 					</div>
-					<button class="_button" :class="$style.circleButton" @click="expanded = false"><i class="ti ti-chevron-down"></i></button>
+					<button class="_button" :class="$style.circleButton" :aria-label="i18n.ts.close" @click="expanded = false"><i class="ti ti-chevron-down"></i></button>
 				</header>
 
 				<div :class="$style.quickActions">
@@ -21,36 +21,37 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<i :class="session.muted.value ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i>
 						<span>{{ session.muted.value ? i18n.ts._calls.unmute : i18n.ts._calls.mute }}</span>
 					</button>
-					<button v-else class="_button" :class="[$style.quickAction, session.myParticipant.value?.speakerRequestedAt != null && $style.quickActionActive]" :disabled="session.myParticipant.value?.speakerRequestedAt != null" @click="session.requestSpeaker()">
+					<button v-else-if="room?.mode === 'stage'" class="_button" :class="[$style.quickAction, session.myParticipant.value?.speakerRequestedAt != null && $style.quickActionActive]" @click="session.myParticipant.value?.speakerRequestedAt != null ? session.cancelSpeakerRequest() : session.requestSpeaker()">
 						<i class="ti ti-hand-stop"></i>
-						<span>{{ i18n.ts._calls.requestSpeaker }}</span>
+						<span>{{ session.myParticipant.value?.speakerRequestedAt != null ? i18n.ts._calls.cancelSpeakerRequest : i18n.ts._calls.requestSpeaker }}</span>
 					</button>
 					<button class="_button" :class="$style.quickAction" @click="openRoom"><i class="ti ti-layout-dashboard"></i><span>{{ i18n.ts.details }}</span></button>
 					<button class="_button" :class="[$style.quickAction, $style.quickActionDanger]" @click="leaveRoom"><i class="ti ti-door-exit"></i><span>{{ session.isHost.value ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom }}</span></button>
 				</div>
 
-				<section v-if="session.isHost.value && pendingRequests.length > 0" :class="$style.section">
+				<section v-if="room?.mode === 'stage' && session.isHost.value && pendingRequests.length > 0" :class="$style.section">
 					<strong :class="$style.sectionLabel">{{ i18n.ts._calls.requestSpeaker }}</strong>
 					<div :class="$style.userList">
 						<div v-for="participant in pendingRequests" :key="participant.id" :class="$style.userRow">
 							<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.userAvatar"/>
 							<div :class="$style.userBody"><strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong></div>
 							<button class="_button" :class="$style.inlineAction" @click="setRole(participant.id, 'speaker')">{{ i18n.ts.approve }}</button>
+							<button class="_button" :class="$style.inlineAction" @click="setRole(participant.id, 'listener')">{{ i18n.ts.reject }}</button>
 						</div>
 					</div>
 				</section>
 
 				<section v-if="speakers.length > 0" :class="$style.section">
-					<strong :class="$style.sectionLabel">{{ i18n.ts._calls.speaker }}</strong>
+					<strong :class="$style.sectionLabel">{{ room?.mode === 'open' ? i18n.ts.users : i18n.ts._calls.speaker }}</strong>
 					<div :class="$style.userList">
 						<div v-for="participant in speakers" :key="participant.id" :class="$style.userRow">
 							<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="[$style.userAvatar, session.speakingParticipantIds.value.has(participant.id) && $style.userAvatarLive]"/>
 							<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
 							<div :class="$style.userBody">
 								<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
-								<small>{{ participant.role === 'host' ? i18n.ts._calls.host : participant.isMuted ? i18n.ts._calls.mute : session.speakingParticipantIds.value.has(participant.id) ? i18n.ts._calls.live : i18n.ts._calls.speaker }}</small>
+								<small>{{ participant.role === 'host' ? i18n.ts._calls.host : participant.isMuted ? i18n.ts._calls.mutedStatus : session.speakingParticipantIds.value.has(participant.id) ? i18n.ts._calls.speakingNow : i18n.ts._calls.microphoneOn }}</small>
 							</div>
-							<button v-if="session.isHost.value && participant.role !== 'host'" class="_button" :class="$style.inlineAction" :title="i18n.ts._calls.demoteListener" @click="setRole(participant.id, 'listener')"><i class="ti ti-microphone-off"></i></button>
+							<button v-if="room?.mode === 'stage' && session.isHost.value && participant.role !== 'host'" class="_button" :class="$style.inlineAction" :title="i18n.ts._calls.demoteListener" @click="setRole(participant.id, 'listener')"><i class="ti ti-microphone-off"></i></button>
 						</div>
 					</div>
 				</section>
@@ -79,14 +80,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<div :class="$style.body">
 					<div :class="$style.titleRow"><span :class="$style.live">{{ i18n.ts._calls.live }}</span><strong>{{ room.title }}</strong></div>
-					<small>{{ participants.length }} {{ i18n.ts.users }} · {{ i18n.ts._calls[session.myParticipant.value!.role] }}</small>
+					<small>{{ participants.length }} {{ i18n.ts.users }} · {{ i18n.tsx._calls.peopleSpeaking({ count: speakingCount }) }} · {{ connectionStatus }}</small>
 				</div>
 				<i :class="expanded ? 'ti ti-chevron-down' : 'ti ti-chevron-up'"></i>
 			</button>
 			<div :class="$style.actions">
-				<button v-if="session.isSpeaker.value" class="_button _panel" :class="[$style.action, session.muted.value && $style.actionMuted]" @click="session.toggleMute()"><i :class="session.muted.value ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i></button>
-				<button class="_button _panel" :class="[$style.action, $style.actionDanger]" @click="leaveRoom"><i class="ti ti-door-exit"></i></button>
+				<button v-if="session.isSpeaker.value" class="_button _panel" :class="[$style.action, session.muted.value && $style.actionMuted]" :aria-label="session.muted.value ? i18n.ts._calls.unmute : i18n.ts._calls.mute" @click="session.toggleMute()"><i :class="session.muted.value ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i></button>
+				<button class="_button _panel" :class="[$style.action, $style.actionDanger]" :aria-label="session.isHost.value ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom" @click="leaveRoom"><i class="ti ti-door-exit"></i></button>
 			</div>
+		</div>
+	</div>
+	<div v-else-if="session.reconnectCandidate.value != null" :class="$style.root">
+		<div :class="$style.summaryRow">
+			<button class="_button _panel" :class="[$style.main, $style.resumeMain]" @click="resumeRecentRoom">
+				<div :class="[$style.avatarRing, $style.avatarRingActive]"><i class="ti ti-phone-call"></i></div>
+				<div :class="$style.body">
+					<div :class="$style.titleRow"><span :class="$style.live">{{ i18n.ts._calls.resumePreviousCall }}</span><strong>{{ session.reconnectCandidate.value.title }}</strong></div>
+					<small>{{ i18n.ts._calls.resumePreviousCallDescription }}</small>
+				</div>
+			</button>
+			<button class="_button _panel" :class="$style.action" :aria-label="i18n.ts.close" @click="session.dismissReconnectCandidate()"><i class="ti ti-x"></i></button>
 		</div>
 	</div>
 </Teleport>
@@ -112,6 +125,8 @@ const pendingRequests = computed(() => listeners.value.filter(participant => par
 const hostParticipant = computed(() => participants.value.find(participant => participant.role === 'host') ?? null);
 const hostUser = computed(() => hostParticipant.value == null ? null : participantUser(hostParticipant.value.userId));
 const isLiveSpeaking = computed(() => session.myParticipant.value != null && session.speakingParticipantIds.value.has(session.myParticipant.value.id));
+const speakingCount = computed(() => session.speakingParticipantIds.value.size);
+const connectionStatus = computed(() => session.mediaState.value === 'reconnecting' ? i18n.ts._calls.reconnectingShort : session.mediaState.value === 'connected' ? i18n.ts._calls.connected : session.mediaState.value === 'failed' ? i18n.ts._calls.connectionFailed : session.mediaState.value === 'closed' ? i18n.ts._calls.disconnected : i18n.ts._calls.connecting);
 
 function participantUser(userId: string): Misskey.entities.UserLite | null {
 	return session.usersById.value.get(userId) ?? null;
@@ -129,7 +144,19 @@ async function leaveRoom(): Promise<void> {
 	if (canceled) return;
 	expanded.value = false;
 	await session.leave();
+	os.toast(i18n.ts._calls.leftCall);
 	if (wasOnRoomPage) mainRouter.push('/calls');
+}
+
+async function resumeRecentRoom(): Promise<void> {
+	try {
+		await session.resumeRecentRoom();
+		os.toast(i18n.ts._calls.joinedCall);
+		openRoom();
+	} catch (error) {
+		session.dismissReconnectCandidate();
+		await os.alert({ type: 'error', text: error instanceof Error ? error.message : i18n.ts.somethingHappened });
+	}
 }
 
 async function setRole(participantId: string, role: 'speaker' | 'listener'): Promise<void> {
@@ -171,6 +198,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .inlineAction { flex: 0 0 auto; padding: 6px 10px; border-radius: 999px; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); font-size: 0.78rem; font-weight: 700; }
 .summaryRow { display: flex; align-items: stretch; gap: 8px; }
 .main { display: flex; min-width: min(310px, calc(100vw - 120px)); align-items: center; gap: 11px; padding: 9px 12px; border-radius: 22px; text-align: left; box-shadow: 0 12px 30px color(from var(--MI_THEME-bg) srgb r g b / 0.24); }
+.resumeMain { min-width: min(350px, calc(100vw - 92px)); }
 .avatarRing { position: relative; z-index: 0; display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; border-radius: 50%; isolation: isolate; }
 .avatarRingActive::before, .avatarRingActive::after { position: absolute; z-index: -1; inset: -4px; border: 2px solid var(--MI_THEME-accent); border-radius: 44% 56% 48% 52% / 52% 43% 57% 48%; content: ''; opacity: 0.62; pointer-events: none; transition: opacity 0.4s ease, scale 0.4s ease; }
 .avatarRingActive::before { animation: organicRing 3.2s ease-in-out infinite; }

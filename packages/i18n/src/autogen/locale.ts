@@ -10183,6 +10183,54 @@ export interface Locale extends ILocale {
          */
         "live": string;
         /**
+         * 発話中
+         */
+        "speakingNow": string;
+        /**
+         * 現在話している人
+         */
+        "nowSpeaking": string;
+        /**
+         * マイクON
+         */
+        "microphoneOn": string;
+        /**
+         * ミュート中
+         */
+        "mutedStatus": string;
+        /**
+         * {count}人が発話中
+         */
+        "peopleSpeaking": ParameterizedString<"count">;
+        /**
+         * 接続済み
+         */
+        "connected": string;
+        /**
+         * 接続中…
+         */
+        "connecting": string;
+        /**
+         * 再接続中…
+         */
+        "reconnectingShort": string;
+        /**
+         * 接続に失敗
+         */
+        "connectionFailed": string;
+        /**
+         * 切断済み
+         */
+        "disconnected": string;
+        /**
+         * 通話に参加しました
+         */
+        "joinedCall": string;
+        /**
+         * 通話から退出しました
+         */
+        "leftCall": string;
+        /**
          * 新しい通話
          */
         "newCall": string;
@@ -10255,11 +10303,31 @@ export interface Locale extends ILocale {
          */
         "roomDescription": string;
         /**
+         * 通話モード
+         */
+        "callMode": string;
+        /**
+         * オープン通話
+         */
+        "openCall": string;
+        /**
+         * 参加者全員がいつでも話せます。
+         */
+        "openCallDescription": string;
+        /**
+         * ステージ
+         */
+        "stageCall": string;
+        /**
+         * ホストが発言できる参加者を管理します。
+         */
+        "stageCallDescription": string;
+        /**
          * 開催場所
          */
         "attachmentType": string;
         /**
-         * パーソナルルーム
+         * 通話ルーム
          */
         "personalRoom": string;
         /**
@@ -10315,6 +10383,10 @@ export interface Locale extends ILocale {
          */
         "joinRoom": string;
         /**
+         * 最初はミュートで参加します
+         */
+        "joinMutedHint": string;
+        /**
          * この通話に参加中
          */
         "alreadyJoined": string;
@@ -10326,6 +10398,14 @@ export interface Locale extends ILocale {
          * 既存のルームを見る
          */
         "returnToCall": string;
+        /**
+         * さっきの部屋に参加する
+         */
+        "resumePreviousCall": string;
+        /**
+         * リロード前の通話へ戻れます
+         */
+        "resumePreviousCallDescription": string;
         /**
          * 現在の通話から退出して、この通話に参加しますか？
          */
@@ -10370,6 +10450,18 @@ export interface Locale extends ILocale {
          * 発言をリクエスト済み
          */
         "speakerRequested": string;
+        /**
+         * 発言リクエストを取り消す
+         */
+        "cancelSpeakerRequest": string;
+        /**
+         * 発言リクエストが拒否されました。
+         */
+        "speakerRequestRejected": string;
+        /**
+         * ほか{count}人…
+         */
+        "moreParticipants": ParameterizedString<"count">;
         /**
          * スピーカーにする
          */

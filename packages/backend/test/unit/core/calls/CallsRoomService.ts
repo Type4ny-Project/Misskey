@@ -67,7 +67,7 @@ describe('CallsRoomService lifecycle', () => {
 			{ findOneBy: async () => staleRoom, insertOne: roomInsert, manager: { transaction: async (callback: (manager: typeof transactionManager) => Promise<unknown>) => callback(transactionManager) } } as never,
 			{ findBy: async () => [{ id: 'participant-host' }], update: participantUpdate, insertOne: async () => ({}) } as never,
 			{} as never, {} as never, {} as never, {} as never, { gen: () => 'generated-id' } as never,
-			{ isModerator: async () => false } as never, { hasAny: async () => false, withRoomLock: async (_roomId: string, callback: (assertHeld: () => Promise<void>) => Promise<unknown>) => callback(async () => undefined) } as never,
+			{ isModerator: async () => false } as never, { hasAny: async () => false, getOrMarkRoomEmptySince: async () => Date.now() - 31_000, withRoomLock: async (_roomId: string, callback: (assertHeld: () => Promise<void>) => Promise<unknown>) => callback(async () => undefined) } as never,
 			{ publish: async () => undefined, publishRoomsList: () => undefined } as never,
 			{ revokeRoom: async () => undefined } as never, { lifecycle: () => undefined } as never,
 		);
@@ -80,6 +80,42 @@ describe('CallsRoomService lifecycle', () => {
 			expect.objectContaining({ state: 'left', isMuted: true }),
 		);
 		expect(roomInsert).toHaveBeenCalledOnce();
+	});
+
+	test('allows a host to leave temporarily without ending the room', async () => {
+		const participant = { id: 'participant-host', roomId: 'room-a', userId: 'owner-a', role: 'host', state: 'active' };
+		const participantUpdate = vi.fn(async () => undefined);
+		let reconnectConsumed = false;
+		const queryBuilder = {
+			update: () => queryBuilder,
+			set: () => queryBuilder,
+			where: () => queryBuilder,
+			returning: () => queryBuilder,
+			execute: async () => ({ affected: 1, raw: [{ revision: 8 }] }),
+		};
+		const publish = vi.fn(async () => undefined);
+		const connection = { participantId: participant.id, connectionId: 'connection-a', generation: 4, applicationId: 'first-party' };
+		const revokeDisconnectedGeneration = vi.fn(async () => undefined);
+		const service = new CallsRoomService(
+			{ cloudflareRealtime: { enabled: true } } as Config,
+			{ createQueryBuilder: () => queryBuilder } as never,
+			{ findOneBy: async () => participant, update: participantUpdate } as never,
+			{} as never, {} as never, {} as never, {} as never, {} as never, {} as never,
+			{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback(), isReconnectTokenConsumed: async () => reconnectConsumed, get: async () => connection, clear: async () => true } as never,
+			{ publish } as never, { revokeDisconnectedGeneration } as never, { lifecycle: () => undefined } as never,
+		);
+
+		await expect(service.leave({ id: 'owner-a' } as MiUser, 'room-a')).rejects.toMatchObject({ code: 'invalid-state' });
+		const reconnect = { token: crypto.randomUUID(), connectionId: connection.connectionId, generation: connection.generation };
+		await expect(service.leave({ id: 'owner-a' } as MiUser, 'room-a', reconnect)).resolves.toBeUndefined();
+		expect(participantUpdate).toHaveBeenCalledWith(participant.id, expect.objectContaining({ state: 'left' }));
+		expect(publish).toHaveBeenCalledWith('room-a', 8, 'participant', { participantId: participant.id, action: 'left' });
+		expect(revokeDisconnectedGeneration).toHaveBeenCalled();
+
+		participantUpdate.mockClear();
+		reconnectConsumed = true;
+		await expect(service.leave({ id: 'owner-a' } as MiUser, 'room-a', reconnect)).resolves.toBeUndefined();
+		expect(participantUpdate).not.toHaveBeenCalled();
 	});
 });
 

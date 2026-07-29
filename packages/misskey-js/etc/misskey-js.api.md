@@ -805,6 +805,9 @@ type CallsRoomsCancelRequest = operations['calls___rooms___cancel']['requestBody
 type CallsRoomsCancelResponse = operations['calls___rooms___cancel']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type CallsRoomsCancelSpeakerRequestRequest = operations['calls___rooms___cancel-speaker-request']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
 type CallsRoomsCreateRequest = operations['calls___rooms___create']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -2121,6 +2124,7 @@ declare namespace entities {
         CallsMediaTurnCredentialsResponse,
         CallsRoomsCancelRequest,
         CallsRoomsCancelResponse,
+        CallsRoomsCancelSpeakerRequestRequest,
         CallsRoomsCreateRequest,
         CallsRoomsCreateResponse,
         CallsRoomsEndRequest,

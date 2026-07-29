@@ -27,24 +27,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<p v-if="snapshot.room.description" :class="$style.description">{{ snapshot.room.description }}</p>
 
-			<div v-if="speakers.length > 0" :class="$style.userSection">
-				<strong>{{ i18n.ts._calls.speaker }}</strong>
+			<div v-if="sortedParticipants.length > 0" :class="$style.userSection">
+				<strong>{{ i18n.ts.users }}</strong>
 				<div :class="$style.userList">
-					<div v-for="participant in speakers" :key="participant.id" :class="$style.userChip">
+					<div v-for="participant in sortedParticipants" :key="participant.id" :class="$style.userChip">
 						<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" indicator :class="$style.userAvatar"/>
 						<MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/>
 						<span v-else>{{ participant.userId }}</span>
-					</div>
-				</div>
-			</div>
-
-			<div v-if="listeners.length > 0" :class="$style.userSection">
-				<strong>{{ i18n.ts._calls.listener }}</strong>
-				<div :class="$style.userList">
-					<div v-for="participant in listeners" :key="participant.id" :class="$style.userChip">
-						<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" indicator :class="$style.userAvatar"/>
-						<MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/>
-						<span v-else>{{ participant.userId }}</span>
+						<small v-if="participant.role === 'host'">{{ i18n.ts._calls.host }}</small>
 					</div>
 				</div>
 			</div>
@@ -83,13 +73,21 @@ const emit = defineEmits<{
 
 const dialog = shallowRef<InstanceType<typeof MkModalWindow>>();
 const snapshot = shallowRef<Misskey.entities.CallsRoomsShowResponse | null>(null);
-const usersById = shallowRef(new Map<string, Misskey.entities.UserLite>());
+const usersById = shallowRef(new Map<string, Misskey.entities.UserDetailed>());
 const loading = ref(true);
 const joining = ref(false);
 const router = useRouter();
 const session = useCallsSession();
 const speakers = computed(() => snapshot.value?.participants.filter(participant => participant.role !== 'listener') ?? []);
 const listeners = computed(() => snapshot.value?.participants.filter(participant => participant.role === 'listener') ?? []);
+const sortedParticipants = computed(() => [...(snapshot.value?.participants ?? [])].sort((a, b) => {
+	const priority = (participant: typeof a) => {
+		if (participant.role === 'host') return 0;
+		const user = usersById.value.get(participant.userId);
+		return user?.isFollowing && user?.isFollowed ? 1 : 2;
+	};
+	return priority(a) - priority(b);
+}));
 const hostUser = computed(() => {
 	const host = snapshot.value?.participants.find(participant => participant.role === 'host');
 	return host == null ? null : participantUser(host.userId);

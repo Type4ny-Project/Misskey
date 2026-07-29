@@ -33,30 +33,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkTextarea>
 
 					<div :class="$style.fieldGroup">
-						<div :class="$style.fieldLabel">{{ i18n.ts._calls.attachmentType }}</div>
+						<div :class="$style.fieldLabel">{{ i18n.ts._calls.callMode }}</div>
 						<div :class="$style.choiceGrid">
-							<button type="button" class="_button" :class="[$style.choice, attachmentType === 'personal' && $style.choiceActive]" @click="attachmentType = 'personal'">
-								<i class="ti ti-user"></i><span><strong>{{ i18n.ts._calls.personalRoom }}</strong><small>{{ i18n.ts._calls.personalRoomDescription }}</small></span>
+							<button type="button" class="_button" :class="[$style.choice, mode === 'open' && $style.choiceActive]" @click="mode = 'open'">
+								<i class="ti ti-users"></i><span><strong>{{ i18n.ts._calls.openCall }}</strong><small>{{ i18n.ts._calls.openCallDescription }}</small></span>
 							</button>
-							<button type="button" class="_button" :class="[$style.choice, attachmentType === 'chatRoom' && $style.choiceActive]" @click="attachmentType = 'chatRoom'">
-								<i class="ti ti-messages"></i><span><strong>{{ i18n.ts._calls.chatRoom }}</strong><small>{{ i18n.ts._calls.chatRoomDescription }}</small></span>
+							<button type="button" class="_button" :class="[$style.choice, mode === 'stage' && $style.choiceActive]" @click="mode = 'stage'">
+								<i class="ti ti-presentation"></i><span><strong>{{ i18n.ts._calls.stageCall }}</strong><small>{{ i18n.ts._calls.stageCallDescription }}</small></span>
 							</button>
 						</div>
 					</div>
-
-					<MkInput v-if="attachmentType === 'chatRoom'" v-model="chatRoomId" required>
-						<template #label>{{ i18n.ts._calls.chatRoomId }}</template>
-					</MkInput>
 					<MkInfo v-if="existingAttachmentRoom != null" warn>{{ i18n.ts._calls.activeAttachmentExists }}</MkInfo>
 
 					<button type="button" class="_button" :class="$style.advancedToggle" @click="advancedOpen = !advancedOpen">
 						<i class="ti ti-adjustments"></i><span>{{ i18n.ts._calls.advancedSettings }}</span><i :class="advancedOpen ? 'ti ti-chevron-up' : 'ti ti-chevron-down'"></i>
 					</button>
 					<div v-if="advancedOpen" :class="$style.advancedFields">
-						<MkSelect v-if="attachmentType === 'personal'" v-model="visibility" :items="visibilityItems">
+						<MkSelect v-model="visibility" :items="visibilityItems">
 							<template #label>{{ i18n.ts._calls.visibility }}</template>
 						</MkSelect>
-						<MkTextarea v-if="attachmentType === 'personal' && visibility === 'specified'" v-model="specifiedUserIds">
+						<MkTextarea v-if="visibility === 'specified'" v-model="specifiedUserIds">
 							<template #label>{{ i18n.ts._calls.specifiedUserIds }}</template>
 							<template #caption>{{ i18n.ts._calls.specifiedUserIdsDescription }}</template>
 						</MkTextarea>
@@ -133,8 +129,7 @@ const createFormOpen = ref(false);
 const advancedOpen = ref(false);
 const title = ref('');
 const description = ref('');
-const attachmentType = ref<'personal' | 'chatRoom'>('personal');
-const chatRoomId = ref('');
+const mode = ref<'open' | 'stage'>('open');
 const visibility = ref<'public' | 'followers' | 'specified'>('public');
 const specifiedUserIds = ref('');
 const scheduledAt = ref('');
@@ -143,8 +138,7 @@ const scheduledRooms = computed(() => rooms.value.filter(room => room.state === 
 const activePersonalRoom = computed(() => rooms.value.find(room => room.attachment.type === 'personal' && room.attachment.ownerUserId === $i?.id && (room.state === 'open' || room.state === 'scheduled')) ?? null);
 const existingAttachmentRoom = computed(() => rooms.value.find(room => {
 	if (room.state !== 'open' && room.state !== 'scheduled') return false;
-	if (attachmentType.value === 'personal') return room.attachment.type === 'personal' && room.attachment.ownerUserId === $i?.id;
-	return room.attachment.type === 'chatRoom' && room.attachment.chatRoomId === chatRoomId.value;
+	return room.attachment.type === 'personal' && room.attachment.ownerUserId === $i?.id;
 }) ?? null);
 const visibilityItems: MkSelectItem<'public' | 'followers' | 'specified'>[] = [
 	{ label: i18n.ts._calls.public, value: 'public' },
@@ -173,8 +167,7 @@ function closeCreateForm(): void {
 	advancedOpen.value = false;
 	title.value = '';
 	description.value = '';
-	attachmentType.value = 'personal';
-	chatRoomId.value = '';
+	mode.value = 'open';
 	visibility.value = 'public';
 	specifiedUserIds.value = '';
 	scheduledAt.value = '';
@@ -189,12 +182,12 @@ async function createRoom(): Promise<void> {
 	creating.value = true;
 	try {
 		let room = await misskeyApi('calls/rooms/create', {
-			attachmentType: attachmentType.value,
-			chatRoomId: attachmentType.value === 'chatRoom' ? chatRoomId.value : undefined,
+			attachmentType: 'personal',
+			mode: mode.value,
 			title: title.value.trim(),
 			description: description.value.trim(),
-			visibility: attachmentType.value === 'personal' ? visibility.value : undefined,
-			visibleUserIds: attachmentType.value === 'personal' && visibility.value === 'specified' ? [...new Set(specifiedUserIds.value.split(/[\s,]+/).filter(Boolean))] : undefined,
+			visibility: visibility.value,
+			visibleUserIds: visibility.value === 'specified' ? [...new Set(specifiedUserIds.value.split(/[\s,]+/).filter(Boolean))] : undefined,
 			scheduledAt: scheduledAt.value === '' ? undefined : new Date(scheduledAt.value).getTime(),
 		});
 		if (scheduledAt.value === '') {

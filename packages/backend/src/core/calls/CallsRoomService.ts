@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { In, IsNull } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type {
@@ -18,7 +18,7 @@ import type {
 } from '@/models/_.js';
 import type { CallsModerationAction } from '@/models/CallsModerationLog.js';
 import type { CallsParticipantRole } from '@/models/CallsParticipant.js';
-import type { CallsRoomVisibility } from '@/models/CallsRoom.js';
+import type { CallsRoomMode, CallsRoomVisibility } from '@/models/CallsRoom.js';
 import { MiCallsParticipant as MiCallsParticipantEntity } from '@/models/CallsParticipant.js';
 import { MiCallsRoom as MiCallsRoomEntity } from '@/models/CallsRoom.js';
 import { bindThis } from '@/decorators.js';
@@ -34,6 +34,7 @@ import type { Config } from '@/config.js';
 
 export const CALLS_MAX_SPEAKERS = 8;
 export const CALLS_MAX_LISTENERS = 100;
+export const CALLS_EMPTY_ROOM_GRACE_MS = 30_000;
 
 export type CallsRoomErrorCode =
 	| 'access-denied'
@@ -59,7 +60,9 @@ export function isCallsRoomTransitionAllowed(from: MiCallsRoom['state'], to: MiC
 }
 
 @Injectable()
-export class CallsRoomService {
+export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
+	private emptyRoomSweepTimer: NodeJS.Timeout | null = null;
+	private emptyRoomSweepRunning = false;
 	constructor(
 		@Inject(DI.config)
 		private config: Config,
@@ -81,12 +84,28 @@ export class CallsRoomService {
 		private callsTelemetryService: CallsTelemetryService,
 	) {}
 
+	public onModuleInit(): void {
+		this.emptyRoomSweepTimer = setInterval(() => {
+			if (this.emptyRoomSweepRunning) return;
+			this.emptyRoomSweepRunning = true;
+			void this.sweepEmptyRooms().finally(() => {
+				this.emptyRoomSweepRunning = false;
+			});
+		}, 5000);
+		this.emptyRoomSweepTimer.unref();
+	}
+
+	public onModuleDestroy(): void {
+		if (this.emptyRoomSweepTimer != null) clearInterval(this.emptyRoomSweepTimer);
+	}
+
 	@bindThis
 	public async create(owner: MiUser, params: {
 		attachmentType: 'personal' | 'chatRoom';
 		chatRoomId?: MiChatRoom['id'];
 		title: string;
 		description?: string;
+		mode?: CallsRoomMode;
 		visibility?: CallsRoomVisibility;
 		visibleUserIds?: MiUser['id'][];
 		scheduledAt?: Date | null;
@@ -120,6 +139,7 @@ export class CallsRoomService {
 			chatRoomId: params.attachmentType === 'chatRoom' ? params.chatRoomId : null,
 			title,
 			description,
+			mode: params.mode ?? 'open',
 			visibility: params.attachmentType === 'chatRoom' ? 'specified' : (params.visibility ?? 'specified'),
 			visibleUserIds: params.attachmentType === 'personal' && params.visibility === 'specified' ? [...new Set(params.visibleUserIds ?? [])] : [],
 			state: 'scheduled',
@@ -282,7 +302,16 @@ export class CallsRoomService {
 	}
 
 	@bindThis
-	public async join(user: MiUser, roomId: string): Promise<MiCallsParticipant> {
+	public async join(user: MiUser, roomId: string, reconnectToken?: string): Promise<MiCallsParticipant> {
+		return this.callsLiveConnectionService.withRoomLock(roomId, async () => {
+			if (reconnectToken != null) await this.callsLiveConnectionService.consumeReconnectToken(reconnectToken);
+			const participant = await this.joinLocked(user, roomId);
+			await this.callsLiveConnectionService.clearRoomEmptySince(roomId);
+			return participant;
+		});
+	}
+
+	private async joinLocked(user: MiUser, roomId: string): Promise<MiCallsParticipant> {
 		const room = await this.getRoom(roomId);
 		await this.assertCanAccess(user, room);
 		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
@@ -296,9 +325,9 @@ export class CallsRoomService {
 		let joined: MiCallsParticipant;
 		if (current != null) {
 			await this.callsParticipantsRepository.update(current.id, {
-				role: current.role === 'host' ? 'host' : 'listener',
+				role: current.role === 'host' ? 'host' : room.mode === 'open' ? 'speaker' : 'listener',
 				state: 'active',
-				isMuted: false,
+				isMuted: room.mode === 'open',
 				joinedAt: now,
 				leftAt: null,
 				speakerRequestedAt: null,
@@ -310,9 +339,9 @@ export class CallsRoomService {
 				id: this.idService.gen(),
 				roomId,
 				userId: user.id,
-				role: 'listener',
+				role: room.mode === 'open' ? 'speaker' : 'listener',
 				state: 'active',
-				isMuted: false,
+				isMuted: room.mode === 'open',
 				joinedAt: now,
 				leftAt: null,
 				speakerRequestedAt: null,
@@ -326,7 +355,23 @@ export class CallsRoomService {
 	}
 
 	@bindThis
-	public async leave(user: MiUser, roomId: string): Promise<void> {
+	public async leave(user: MiUser, roomId: string, reconnect?: { token: string; connectionId: string; generation: number }): Promise<void> {
+		if (reconnect != null) {
+			return this.callsLiveConnectionService.withRoomLock(roomId, async () => {
+				if (await this.callsLiveConnectionService.isReconnectTokenConsumed(reconnect.token)) return;
+				const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
+				if (participant == null) return;
+				const connection = await this.callsLiveConnectionService.get(participant.id);
+				if (connection == null || connection.connectionId !== reconnect.connectionId || connection.generation !== reconnect.generation) return;
+				if (!(await this.callsLiveConnectionService.clear(participant.id, reconnect.connectionId, reconnect.generation))) return;
+				const now = new Date();
+				await this.callsParticipantsRepository.update(participant.id, { state: 'left', leftAt: now, updatedAt: now });
+				const revision = await this.bumpRevision(roomId);
+				await this.callsEventService.publish(roomId, revision, 'participant', { participantId: participant.id, action: 'left' });
+				await this.callsMediaRevocationService.revokeDisconnectedGeneration(participant, connection, revision);
+				this.callsTelemetryService.lifecycle({ action: 'participant-left', roomId, participantId: participant.id, reason: 'reload' });
+			});
+		}
 		const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
 		if (participant == null) throw new CallsRoomError('participant-not-found');
 		if (participant.role === 'host') throw new CallsRoomError('invalid-state');
@@ -346,7 +391,7 @@ export class CallsRoomService {
 	private async moderateRole(host: MiUser, roomId: string, participantId: string, role: Exclude<CallsParticipantRole, 'host'>, expectedRevision: number, action: CallsModerationAction): Promise<MiCallsParticipant> {
 		const room = await this.getRoom(roomId);
 		if (room.ownerUserId !== host.id && !(await this.roleService.isModerator(host))) throw new CallsRoomError('access-denied');
-		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
+		if (room.state !== 'open' || room.mode !== 'stage') throw new CallsRoomError('invalid-state');
 		const participant = await this.callsParticipantsRepository.findOneBy({ id: participantId, roomId, state: 'active' });
 		if (participant == null || participant.role === 'host') throw new CallsRoomError('participant-not-found');
 
@@ -384,6 +429,9 @@ export class CallsRoomService {
 		});
 		const updated = await this.callsParticipantsRepository.findOneByOrFail({ id: participant.id });
 		await this.callsEventService.publish(roomId, revision, 'role', { participantId: participant.id, role });
+		if (role === 'listener' && participant.speakerRequestedAt != null) {
+			await this.callsEventService.publish(roomId, revision, 'speakerRequest', { participantId: participant.id, requested: false });
+		}
 		if (role === 'listener') await this.callsMediaRevocationService.revokeParticipant(updated, revision, 'moderation');
 		this.callsTelemetryService.lifecycle({ action: `participant-${role}`, roomId, participantId: participant.id, reason: 'moderation' });
 		return updated;
@@ -391,12 +439,23 @@ export class CallsRoomService {
 
 	@bindThis
 	public async requestSpeaker(user: MiUser, roomId: string): Promise<void> {
+		const room = await this.getRoom(roomId);
+		if (room.mode !== 'stage') throw new CallsRoomError('invalid-state');
 		const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active', role: 'listener' });
 		if (participant == null) throw new CallsRoomError('participant-not-found');
 		const now = new Date();
 		await this.callsParticipantsRepository.update(participant.id, { speakerRequestedAt: now, updatedAt: now });
 		const revision = await this.bumpRevision(roomId);
 		await this.callsEventService.publish(roomId, revision, 'speakerRequest', { participantId: participant.id, requested: true });
+	}
+
+	@bindThis
+	public async cancelSpeakerRequest(user: MiUser, roomId: string): Promise<void> {
+		const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active', role: 'listener' });
+		if (participant == null || participant.speakerRequestedAt == null) throw new CallsRoomError('participant-not-found');
+		await this.callsParticipantsRepository.update(participant.id, { speakerRequestedAt: null, updatedAt: new Date() });
+		const revision = await this.bumpRevision(roomId);
+		await this.callsEventService.publish(roomId, revision, 'speakerRequest', { participantId: participant.id, requested: false });
 	}
 
 	@bindThis
@@ -462,13 +521,16 @@ export class CallsRoomService {
 
 	private async endIfEmpty(room: MiCallsRoom): Promise<boolean> {
 		if (room.state !== 'open') return false;
-		if (Date.now() - room.updatedAt.getTime() < CallsLiveConnectionService.ttlSeconds * 1000) return false;
 		const result = await this.callsLiveConnectionService.withRoomLock(room.id, async (assertLockHeld): Promise<{ room: MiCallsRoom; changed: boolean } | null> => {
 			const current = await this.callsRoomsRepository.findOneBy({ id: room.id });
 			if (current == null || current.state !== 'open') return current?.state === 'ended' ? { room: current, changed: false } : null;
-			if (Date.now() - current.updatedAt.getTime() < CallsLiveConnectionService.ttlSeconds * 1000) return null;
 			const participants = await this.callsParticipantsRepository.findBy({ roomId: room.id, state: 'active' });
-			if (await this.callsLiveConnectionService.hasAny(participants.map(participant => participant.id))) return null;
+			if (await this.callsLiveConnectionService.hasAny(participants.map(participant => participant.id))) {
+				await this.callsLiveConnectionService.clearRoomEmptySince(room.id);
+				return null;
+			}
+			const emptySince = await this.callsLiveConnectionService.getOrMarkRoomEmptySince(room.id);
+			if (Date.now() - emptySince < CALLS_EMPTY_ROOM_GRACE_MS) return null;
 			const now = new Date();
 			await assertLockHeld();
 			return this.callsRoomsRepository.manager.transaction(async manager => {
@@ -494,6 +556,14 @@ export class CallsRoomService {
 		await this.callsMediaRevocationService.revokeRoom(room.id, updated.revision, 'room-ended');
 		this.callsTelemetryService.lifecycle({ action: 'room-ended', roomId: room.id, reason: 'empty' });
 		return true;
+	}
+
+	private async sweepEmptyRooms(): Promise<void> {
+		for (let skip = 0; ; skip += 100) {
+			const rooms = await this.callsRoomsRepository.find({ where: { state: 'open' }, order: { id: 'ASC' }, take: 100, skip });
+			for (const room of rooms) await this.endIfEmpty(room).catch(() => undefined);
+			if (rooms.length < 100) break;
+		}
 	}
 
 	private sanitizeMetadata(value: string): string {

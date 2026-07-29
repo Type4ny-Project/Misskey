@@ -10,9 +10,37 @@ import { $i } from '@/i.js';
 import { CallsMediaController } from '@/utility/calls-media.js';
 import type { CallsMediaFailure, CallsMediaState } from '@/utility/calls-media.js';
 import { detectCallsMediaCapabilities } from '@/utility/calls-media-core.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
+import { miLocalStorage } from '@/local-storage.js';
+import { misskeyApi, misskeyApiKeepalive } from '@/utility/misskey-api.js';
 
 type CallsRoomConnection = ReturnType<typeof createCallsRoomConnection>;
+type CallsReconnectCandidate = { roomId: string; title: string; userId: string; reconnectToken: string; expiresAt: number };
+const reconnectStorageKey = 'miux:calls-reconnect' as const;
+
+function safeRemoveReconnectCandidate(): void {
+	try {
+		miLocalStorage.removeItem(reconnectStorageKey);
+	} catch {
+		// localStorage can be unavailable in hardened browser modes.
+	}
+}
+
+function loadReconnectCandidate(): CallsReconnectCandidate | null {
+	let value: unknown;
+	try {
+		value = miLocalStorage.getItemAsJson(reconnectStorageKey);
+	} catch {
+		safeRemoveReconnectCandidate();
+		return null;
+	}
+	if (typeof value !== 'object' || value == null) return null;
+	const candidate = value as Partial<CallsReconnectCandidate>;
+	if (typeof candidate.roomId !== 'string' || typeof candidate.title !== 'string' || typeof candidate.userId !== 'string' || typeof candidate.reconnectToken !== 'string' || typeof candidate.expiresAt !== 'number' || !Number.isFinite(candidate.expiresAt) || candidate.userId !== $i?.id || candidate.expiresAt <= Date.now()) {
+		safeRemoveReconnectCandidate();
+		return null;
+	}
+	return candidate as CallsReconnectCandidate;
+}
 
 const currentRoomId = ref<string | null>(null);
 const connection = shallowRef<CallsRoomConnection | null>(null);
@@ -24,12 +52,25 @@ const joining = ref(false);
 const selectedMicrophone = ref('');
 const microphones = ref<MediaDeviceInfo[]>([]);
 const needsAudioResume = ref(false);
+const reconnectCandidate = ref<CallsReconnectCandidate | null>(null);
+const speakerRequestResult = ref<'rejected' | null>(null);
 const usersById = shallowRef(new Map<string, Misskey.entities.UserLite>());
 const remoteAudio = new Set<HTMLAudioElement>();
 
 let removeTrackListener: (() => void) | null = null;
 let removeRevokedListener: (() => void) | null = null;
 let sessionGeneration = 0;
+let reconnectExpiryTimer: number | null = null;
+let cancelingSpeakerRequest = false;
+
+function setReconnectCandidate(candidate: CallsReconnectCandidate | null): void {
+	if (reconnectExpiryTimer != null) window.clearTimeout(reconnectExpiryTimer);
+	reconnectCandidate.value = candidate;
+	if (candidate == null) return;
+	reconnectExpiryTimer = window.setTimeout(() => dismissReconnectCandidate(), Math.max(0, candidate.expiresAt - Date.now()));
+}
+
+setReconnectCandidate(loadReconnectCandidate());
 
 const room = computed(() => connection.value?.room.value ?? null);
 const participants = computed(() => connection.value?.participants.value ?? []);
@@ -92,6 +133,7 @@ async function connectMedia(generation: number): Promise<void> {
 	);
 	media.value = controller;
 	await controller.connect(selectedMicrophone.value || undefined);
+	controller.setMuted(participant.isMuted);
 	if (generation !== sessionGeneration || media.value !== controller) {
 		await controller.close().catch(() => undefined);
 		return;
@@ -128,7 +170,7 @@ function attachConnection(roomId: string): CallsRoomConnection {
 	return next;
 }
 
-async function join(roomId: string, alreadyParticipant: boolean): Promise<void> {
+async function join(roomId: string, alreadyParticipant: boolean, reconnectToken?: string): Promise<void> {
 	if (joining.value) return;
 	const capabilities = detectCallsMediaCapabilities();
 	if (!capabilities.secureContext || !capabilities.peerConnection || !capabilities.transceiver) {
@@ -147,12 +189,14 @@ async function join(roomId: string, alreadyParticipant: boolean): Promise<void> 
 		const next = attachConnection(roomId);
 		await next.refresh();
 		if (!alreadyParticipant) {
-			await misskeyApi('calls/rooms/join', { roomId });
+			await misskeyApi('calls/rooms/join', { roomId, reconnectToken });
 			joinedNow = true;
 			await next.refresh();
 		}
 		if (myParticipant.value == null) throw new Error('Calls participant state was not created');
 		await connectMedia(generation);
+		setReconnectCandidate(null);
+		safeRemoveReconnectCandidate();
 	} catch (error) {
 		if (generation !== sessionGeneration) return;
 		if (joinedNow) await misskeyApi('calls/rooms/leave', { roomId }).catch(() => undefined);
@@ -178,12 +222,48 @@ async function leave(): Promise<void> {
 	const targetRoomId = currentRoomId.value;
 	const targetIsHost = isHost.value;
 	if (targetRoomId == null) return;
+	setReconnectCandidate(null);
+	safeRemoveReconnectCandidate();
 	await clearSession();
 	if (targetIsHost && targetRoom?.state === 'open') {
 		await misskeyApi('calls/rooms/end', { roomId: targetRoomId, expectedRevision: targetRoom.revision }).catch(() => undefined);
 	} else {
 		await misskeyApi('calls/rooms/leave', { roomId: targetRoomId }).catch(() => undefined);
 	}
+}
+
+async function resumeRecentRoom(): Promise<void> {
+	const candidate = reconnectCandidate.value;
+	if (candidate == null) return;
+	if (candidate.expiresAt <= Date.now()) {
+		dismissReconnectCandidate();
+		return;
+	}
+	await join(candidate.roomId, false, candidate.reconnectToken);
+}
+
+function dismissReconnectCandidate(): void {
+	setReconnectCandidate(null);
+	safeRemoveReconnectCandidate();
+}
+
+function onPageHide(event: PageTransitionEvent): void {
+	if (event.persisted) return;
+	const targetRoomId = currentRoomId.value;
+	const targetRoom = room.value;
+	const identity = media.value?.connectionIdentity;
+	if (targetRoomId == null || targetRoom?.state !== 'open' || identity == null || $i == null) return;
+	const candidate = { roomId: targetRoomId, title: targetRoom.title, userId: $i.id, reconnectToken: crypto.randomUUID(), expiresAt: Date.now() + 30_000 };
+	misskeyApiKeepalive('calls/rooms/leave', { roomId: targetRoomId, reconnectToken: candidate.reconnectToken, connectionId: identity.connectionId, generation: identity.generation });
+	try {
+		miLocalStorage.setItemAsJson(reconnectStorageKey, candidate);
+	} catch {
+		// The transient leave must still be sent when storage is unavailable.
+	}
+}
+
+function onReconnectStorage(event: StorageEvent): void {
+	if (event.key === reconnectStorageKey) setReconnectCandidate(loadReconnectCandidate());
 }
 
 async function toggleMute(): Promise<void> {
@@ -195,7 +275,20 @@ async function toggleMute(): Promise<void> {
 
 async function requestSpeaker(): Promise<void> {
 	if (currentRoomId.value == null || myParticipant.value?.role !== 'listener') return;
+	speakerRequestResult.value = null;
 	await misskeyApi('calls/rooms/request-speaker', { roomId: currentRoomId.value });
+	await connection.value?.refresh();
+}
+
+async function cancelSpeakerRequest(): Promise<void> {
+	if (currentRoomId.value == null || myParticipant.value?.speakerRequestedAt == null) return;
+	cancelingSpeakerRequest = true;
+	try {
+		await misskeyApi('calls/rooms/cancel-speaker-request', { roomId: currentRoomId.value });
+		await connection.value?.refresh();
+	} finally {
+		window.setTimeout(() => { cancelingSpeakerRequest = false; });
+	}
 }
 
 async function switchMicrophone(deviceId: string): Promise<void> {
@@ -216,6 +309,13 @@ watch(() => myParticipant.value?.role, (role, previousRole) => {
 	if (previousRole === 'listener' && role === 'speaker' && room.value?.state === 'open') void reconnectMedia();
 });
 
+watch(() => myParticipant.value?.speakerRequestedAt, (requestedAt, previousRequestedAt) => {
+	if (!cancelingSpeakerRequest && previousRequestedAt != null && requestedAt == null && myParticipant.value?.role === 'listener') {
+		speakerRequestResult.value = 'rejected';
+		window.setTimeout(() => { speakerRequestResult.value = null; }, 5000);
+	}
+});
+
 watch(() => room.value?.state, state => {
 	if (state === 'ended' || state === 'cancelled') void clearSession();
 });
@@ -229,10 +329,13 @@ watch(() => participants.value.map(participant => participant.userId), async use
 	usersById.value = next;
 });
 
+window.addEventListener('pagehide', onPageHide);
+window.addEventListener('storage', onReconnectStorage);
+
 window.setInterval(() => {
 	const identity = media.value?.connectionIdentity;
 	if (identity != null) connection.value?.heartbeat(identity.connectionId, identity.generation);
-}, 30_000);
+}, 10_000);
 
 export function useCallsSession() {
 	return {
@@ -252,14 +355,19 @@ export function useCallsSession() {
 		selectedMicrophone,
 		microphones,
 		needsAudioResume,
+		reconnectCandidate,
+		speakerRequestResult,
 		usersById,
 		join,
 		leave,
 		toggleMute,
 		requestSpeaker,
+		cancelSpeakerRequest,
 		switchMicrophone,
 		prepareMicrophones,
 		resumeAudio,
+		resumeRecentRoom,
+		dismissReconnectCandidate,
 		refresh() { return connection.value?.refresh() ?? Promise.resolve(); },
 	};
 }

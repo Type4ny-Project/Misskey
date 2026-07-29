@@ -4,95 +4,53 @@ min_version = "2026.7.7"
 node = "26.4.0"
 pnpm = "11.9.0"
 python = "3.12.13"
-"conda:postgresql" = "18.4"
-redis = "8.8.1"
 ffmpeg = "8.1.2"
 caddy = "2.11.4"
 
 [env]
-PGDATA = "{{ config_root }}/.mise/data/postgres"
-PGHOST = "127.0.0.1"
-PGPORT = "5432"
-PGUSER = "misskey"
-PGDATABASE = "misskey"
-REDIS_HOST = "127.0.0.1"
-REDIS_PORT = "6379"
+COMPOSE_FILE = "{{ config_root }}/compose.local-db.yml"
+COMPOSE_PROJECT_NAME = "misskey-typeany-dev"
+MISSKEY_DOCKER_BIND = "127.0.0.1"
 MISSKEY_SOCKET = "{{ config_root }}/.mise/run/misskey.sock"
 MISSKEY_DEV_URL = "http://100.87.128.76:3000/"
 MISSKEY_WEB_HOST = "0.0.0.0"
 VITE_HOST = "0.0.0.0"
 __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS = "lab-02.internal.nanasi-apps.xyz,100.87.128.76,192.168.1.40"
 
-[tasks."postgres:init"]
-description = "Initialize the project-local PostgreSQL cluster"
+[tasks."docker:init"]
+description = "Create the Docker Compose environment for PostgreSQL and Redis"
 run = '''
 set -eu
-mkdir -p "$PGDATA" "$MISE_CONFIG_ROOT/.mise/log"
-if [ ! -s "$PGDATA/PG_VERSION" ]; then
-	initdb \
-		--auth-host=trust \
-		--auth-local=trust \
-		--encoding=UTF8 \
-		--locale=C.UTF-8 \
-		--username="$PGUSER" \
-		"$PGDATA"
+if [ ! -e "$MISE_CONFIG_ROOT/.config/docker.env" ]; then
+	umask 077
+	cat > "$MISE_CONFIG_ROOT/.config/docker.env" <<EOF
+POSTGRES_USER=misskey
+POSTGRES_DB=misskey
+POSTGRES_HOST_AUTH_METHOD=trust
+EOF
 fi
 '''
 
-[tasks."postgres:start"]
-description = "Start project-local PostgreSQL on loopback"
-depends = ["postgres:init"]
-run = '''
-set -eu
-if ! pg_ctl -D "$PGDATA" status >/dev/null 2>&1; then
-	pg_ctl \
-		-D "$PGDATA" \
-		-l "$MISE_CONFIG_ROOT/.mise/log/postgres.log" \
-		-o "-h $PGHOST -p $PGPORT" \
-		start
-fi
-if ! psql --dbname=postgres --tuples-only --no-align --command="SELECT 1 FROM pg_database WHERE datname = '$PGDATABASE'" | grep -qx 1; then
-	createdb "$PGDATABASE"
-fi
-'''
+[tasks."docker:start"]
+description = "Start Dockerized PostgreSQL and Redis on loopback"
+depends = ["docker:init"]
+run = "docker compose up --detach --wait db redis"
 
-[tasks."postgres:stop"]
-description = "Stop project-local PostgreSQL"
-run = '''
-set -eu
-if pg_ctl -D "$PGDATA" status >/dev/null 2>&1; then
-	pg_ctl -D "$PGDATA" stop --mode=fast
-fi
-'''
+[tasks."docker:stop"]
+description = "Stop Dockerized PostgreSQL and Redis"
+run = "docker compose stop db redis"
 
-[tasks."redis:start"]
-description = "Start project-local Redis on loopback"
-run = '''
-set -eu
-mkdir -p \
-	"$MISE_CONFIG_ROOT/.mise/data/redis" \
-	"$MISE_CONFIG_ROOT/.mise/log" \
-	"$MISE_CONFIG_ROOT/.mise/run"
-if ! redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping >/dev/null 2>&1; then
-	redis-server \
-		--bind "$REDIS_HOST" \
-		--daemonize yes \
-		--dir "$MISE_CONFIG_ROOT/.mise/data/redis" \
-		--logfile "$MISE_CONFIG_ROOT/.mise/log/redis.log" \
-		--pidfile "$MISE_CONFIG_ROOT/.mise/run/redis.pid" \
-		--port "$REDIS_PORT" \
-		--protected-mode yes
-fi
-'''
+[tasks."docker:down"]
+description = "Remove development containers while preserving database files"
+run = "docker compose down"
 
-[tasks."redis:stop"]
-description = "Stop project-local Redis"
-run = '''
-set -eu
-if redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping >/dev/null 2>&1; then
-	redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" shutdown
-fi
-'''
+[tasks."docker:logs"]
+description = "Follow PostgreSQL and Redis container logs"
+run = "docker compose logs --follow db redis"
+
+[tasks."docker:status"]
+description = "Show PostgreSQL and Redis container status"
+run = "docker compose ps"
 
 [tasks."config:init"]
 description = "Create a host-accessible Misskey development config"
@@ -139,7 +97,7 @@ caddy validate --config "$MISE_CONFIG_ROOT/.mise/Caddyfile" --adapter caddyfile
 '''
 
 [tasks."proxy:start"]
-description = "Start or reload the loopback-only Caddy proxy"
+description = "Start or reload the host-accessible Caddy proxy"
 depends = ["proxy:init"]
 run = '''
 set -eu
@@ -153,13 +111,13 @@ description = "Stop the loopback-only Caddy proxy"
 run = "caddy stop >/dev/null 2>&1 || true"
 
 [tasks."services:start"]
-description = "Start PostgreSQL, Redis, and the loopback proxy"
-depends = ["postgres:start", "redis:start", "proxy:start"]
+description = "Start Dockerized PostgreSQL, Redis, and the host-accessible proxy"
+depends = ["docker:start", "proxy:start"]
 
 [tasks."services:stop"]
-description = "Stop PostgreSQL, Redis, and the loopback proxy"
+description = "Stop Dockerized PostgreSQL, Redis, and the host-accessible proxy"
 run = [
-	{ tasks = ["postgres:stop", "redis:stop", "proxy:stop"] },
+	{ tasks = ["docker:stop", "proxy:stop"] },
 ]
 
 [tasks.setup]

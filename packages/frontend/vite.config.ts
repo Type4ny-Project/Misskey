@@ -29,6 +29,7 @@ const additionalAllowedHosts = process.env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOST
 	? process.env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS.split(',').map(value => value.trim()).filter(value => value.length > 0)
 	: [];
 const allowedHosts = [...new Set([...(host ? [host] : []), ...additionalAllowedHosts])];
+const viteHost = process.env.VITE_HOST ?? '0.0.0.0';
 const vitePort = Number(process.env.VITE_PORT ?? 5173);
 const portlessUrl = process.env.PORTLESS_URL ? new URL(process.env.PORTLESS_URL) : null;
 const commitHash = (() => {
@@ -115,8 +116,8 @@ export function getConfig(): UserConfig {
 		clearScreen: false,
 
 		server: {
-			// The backend allows access from any addresses, so vite also allows access from any addresses.
-			host: '0.0.0.0',
+			// Keep the existing all-address behavior unless the development environment narrows it.
+			host: viteHost,
 			allowedHosts: allowedHosts.length > 0 ? allowedHosts : undefined,
 			port: vitePort,
 			strictPort: true,

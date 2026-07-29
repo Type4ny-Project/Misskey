@@ -18,6 +18,7 @@ const devConfig = process.env.NODE_ENV === 'development'
 	: {};
 const url = process.env.NODE_ENV === 'development' ? devConfig.url : null;
 const host = url ? (new URL(url)).hostname : undefined;
+const viteHost = process.env.VITE_HOST ?? '0.0.0.0';
 const embedVitePort = Number(process.env.EMBED_VITE_PORT ?? 5174);
 const portlessUrl = process.env.PORTLESS_URL ? new URL(process.env.PORTLESS_URL) : null;
 const additionalAllowedHosts = process.env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
@@ -93,8 +94,8 @@ export function getConfig(): UserConfig {
 		clearScreen: false,
 
 		server: {
-			// The backend allows access from any addresses, so vite also allows access from any addresses.
-			host: '0.0.0.0',
+			// Keep the existing all-address behavior unless the development environment narrows it.
+			host: viteHost,
 			allowedHosts: allowedHosts.length > 0 ? allowedHosts : undefined,
 			port: embedVitePort,
 			strictPort: true,

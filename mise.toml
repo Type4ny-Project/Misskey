@@ -1,0 +1,176 @@
+min_version = "2026.7.7"
+
+[tools]
+node = "26.4.0"
+pnpm = "11.9.0"
+python = "3.12.13"
+"conda:postgresql" = "18.4"
+redis = "8.8.1"
+ffmpeg = "8.1.2"
+caddy = "2.11.4"
+
+[env]
+PGDATA = "{{ config_root }}/.mise/data/postgres"
+PGHOST = "127.0.0.1"
+PGPORT = "5432"
+PGUSER = "misskey"
+PGDATABASE = "misskey"
+REDIS_HOST = "127.0.0.1"
+REDIS_PORT = "6379"
+MISSKEY_SOCKET = "{{ config_root }}/.mise/run/misskey.sock"
+VITE_HOST = "127.0.0.1"
+
+[tasks."postgres:init"]
+description = "Initialize the project-local PostgreSQL cluster"
+run = '''
+set -eu
+mkdir -p "$PGDATA" "$MISE_CONFIG_ROOT/.mise/log"
+if [ ! -s "$PGDATA/PG_VERSION" ]; then
+	initdb \
+		--auth-host=trust \
+		--auth-local=trust \
+		--encoding=UTF8 \
+		--locale=C.UTF-8 \
+		--username="$PGUSER" \
+		"$PGDATA"
+fi
+'''
+
+[tasks."postgres:start"]
+description = "Start project-local PostgreSQL on loopback"
+depends = ["postgres:init"]
+run = '''
+set -eu
+if ! pg_ctl -D "$PGDATA" status >/dev/null 2>&1; then
+	pg_ctl \
+		-D "$PGDATA" \
+		-l "$MISE_CONFIG_ROOT/.mise/log/postgres.log" \
+		-o "-h $PGHOST -p $PGPORT" \
+		start
+fi
+if ! psql --dbname=postgres --tuples-only --no-align --command="SELECT 1 FROM pg_database WHERE datname = '$PGDATABASE'" | grep -qx 1; then
+	createdb "$PGDATABASE"
+fi
+'''
+
+[tasks."postgres:stop"]
+description = "Stop project-local PostgreSQL"
+run = '''
+set -eu
+if pg_ctl -D "$PGDATA" status >/dev/null 2>&1; then
+	pg_ctl -D "$PGDATA" stop --mode=fast
+fi
+'''
+
+[tasks."redis:start"]
+description = "Start project-local Redis on loopback"
+run = '''
+set -eu
+mkdir -p \
+	"$MISE_CONFIG_ROOT/.mise/data/redis" \
+	"$MISE_CONFIG_ROOT/.mise/log" \
+	"$MISE_CONFIG_ROOT/.mise/run"
+if ! redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping >/dev/null 2>&1; then
+	redis-server \
+		--bind "$REDIS_HOST" \
+		--daemonize yes \
+		--dir "$MISE_CONFIG_ROOT/.mise/data/redis" \
+		--logfile "$MISE_CONFIG_ROOT/.mise/log/redis.log" \
+		--pidfile "$MISE_CONFIG_ROOT/.mise/run/redis.pid" \
+		--port "$REDIS_PORT" \
+		--protected-mode yes
+fi
+'''
+
+[tasks."redis:stop"]
+description = "Stop project-local Redis"
+run = '''
+set -eu
+if redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping >/dev/null 2>&1; then
+	redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" shutdown
+fi
+'''
+
+[tasks."config:init"]
+description = "Create a loopback-only Misskey development config"
+run = '''
+set -eu
+if [ ! -e "$MISE_CONFIG_ROOT/.config/default.yml" ]; then
+	cp "$MISE_CONFIG_ROOT/.config/example.yml" "$MISE_CONFIG_ROOT/.config/default.yml"
+	mkdir -p "$MISE_CONFIG_ROOT/.mise/run"
+	setup_password="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+	sed -i \
+		-e "s|# setupPassword: example_password_please_change_this_or_you_will_get_hacked|setupPassword: $setup_password|" \
+		-e "s|url: https://example.tld/|url: http://127.0.0.1:3000/|" \
+		-e "s|# socket: /path/to/misskey.sock|socket: '$MISSKEY_SOCKET'|" \
+		-e "s|# chmodSocket: '777'|chmodSocket: '600'|" \
+		-e "s|  host: localhost|  host: 127.0.0.1|g" \
+		-e "s|user: example-misskey-user|user: misskey|" \
+		-e "s|pass: example-misskey-pass|pass: ''|" \
+		"$MISE_CONFIG_ROOT/.config/default.yml"
+fi
+'''
+
+[tasks."proxy:init"]
+description = "Create a loopback-only Caddy proxy for the Misskey socket"
+run = '''
+set -eu
+mkdir -p "$MISE_CONFIG_ROOT/.mise/log" "$MISE_CONFIG_ROOT/.mise/run"
+cat > "$MISE_CONFIG_ROOT/.mise/Caddyfile" <<EOF
+{
+	admin 127.0.0.1:2019
+	auto_https off
+}
+
+http://127.0.0.1:3000 {
+	bind 127.0.0.1
+	log {
+		output file $MISE_CONFIG_ROOT/.mise/log/caddy-access.log
+	}
+	reverse_proxy "unix/$MISSKEY_SOCKET"
+}
+EOF
+caddy validate --config "$MISE_CONFIG_ROOT/.mise/Caddyfile" --adapter caddyfile
+'''
+
+[tasks."proxy:start"]
+description = "Start or reload the loopback-only Caddy proxy"
+depends = ["proxy:init"]
+run = '''
+set -eu
+if ! caddy reload --config "$MISE_CONFIG_ROOT/.mise/Caddyfile" --adapter caddyfile >/dev/null 2>&1; then
+	caddy start --config "$MISE_CONFIG_ROOT/.mise/Caddyfile" --adapter caddyfile
+fi
+'''
+
+[tasks."proxy:stop"]
+description = "Stop the loopback-only Caddy proxy"
+run = "caddy stop >/dev/null 2>&1 || true"
+
+[tasks."services:start"]
+description = "Start PostgreSQL, Redis, and the loopback proxy"
+depends = ["postgres:start", "redis:start", "proxy:start"]
+
+[tasks."services:stop"]
+description = "Stop PostgreSQL, Redis, and the loopback proxy"
+run = [
+	{ tasks = ["postgres:stop", "redis:stop", "proxy:stop"] },
+]
+
+[tasks.setup]
+description = "Install dependencies and prepare local development services"
+depends = ["config:init", "services:start"]
+run = [
+	"pnpm install --frozen-lockfile",
+	"pnpm build",
+	"pnpm migrate",
+]
+
+[tasks.dev]
+description = "Start Misskey development mode with local services"
+depends = ["config:init", "services:start"]
+run = "pnpm dev"
+
+[tasks.check]
+description = "Run the repository lint and type checks"
+run = "pnpm lint"

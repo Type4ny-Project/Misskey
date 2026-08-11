@@ -7,7 +7,7 @@ import { Brackets, In, IsNull, Not } from 'typeorm';
 import { Injectable, Inject } from '@nestjs/common';
 import type { MiUser, MiLocalUser, MiRemoteUser } from '@/models/User.js';
 import type { MiNote, IMentionedRemoteUsers } from '@/models/Note.js';
-import type { InstancesRepository, MiMeta, NotesRepository, UsersRepository } from '@/models/_.js';
+import type { InstancesRepository, MiMeta, NotesRepository, UserNotePiningsRepository, UsersRepository } from '@/models/_.js';
 import { RelayService } from '@/core/RelayService.js';
 import { FederatedInstanceService } from '@/core/FederatedInstanceService.js';
 import { DI } from '@/di-symbols.js';
@@ -22,6 +22,7 @@ import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { bindThis } from '@/decorators.js';
 import { SearchService } from '@/core/SearchService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
+import { FeaturedCollectionCacheService } from '@/core/FeaturedCollectionCacheService.js';
 import { isQuote, isRenote } from '@/misc/is-renote.js';
 
 @Injectable()
@@ -42,6 +43,9 @@ export class NoteDeleteService {
 		@Inject(DI.instancesRepository)
 		private instancesRepository: InstancesRepository,
 
+		@Inject(DI.userNotePiningsRepository)
+		private userNotePiningsRepository: UserNotePiningsRepository,
+
 		private userEntityService: UserEntityService,
 		private globalEventService: GlobalEventService,
 		private relayService: RelayService,
@@ -53,6 +57,7 @@ export class NoteDeleteService {
 		private notesChart: NotesChart,
 		private perUserNotesChart: PerUserNotesChart,
 		private instanceChart: InstanceChart,
+		private featuredCollectionCacheService: FeaturedCollectionCacheService,
 	) {}
 
 	/**
@@ -62,6 +67,10 @@ export class NoteDeleteService {
 	 */
 	async delete(user: { id: MiUser['id']; uri: MiUser['uri']; host: MiUser['host']; isBot: MiUser['isBot']; }, note: MiNote, quiet = false, deleter?: MiUser) {
 		const deletedAt = new Date();
+		const invalidatesFeaturedCollection = this.userEntityService.isLocalUser(user) && await this.userNotePiningsRepository.existsBy({
+			userId: user.id,
+			noteId: note.id,
+		});
 
 		if (note.replyId) {
 			await this.notesRepository.decrement({ id: note.replyId }, 'repliesCount', 1);
@@ -114,6 +123,10 @@ export class NoteDeleteService {
 			id: note.id,
 			userId: user.id,
 		});
+
+		if (invalidatesFeaturedCollection) {
+			await this.featuredCollectionCacheService.invalidate(user.id);
+		}
 
 		if (deleter && (note.userId !== deleter.id)) {
 			const user = await this.usersRepository.findOneByOrFail({ id: note.userId });

@@ -239,7 +239,7 @@ describe('ChannelFollowingService', () => {
 		});
 
 		test('creates a request for a channel that requires approval', async () => {
-			channel1.isFollowApprovalRequired = true;
+			await channelsRepository.update(channel1.id, { isFollowApprovalRequired: true });
 
 			const state = await service.followOrRequest(alice, channel1, false);
 
@@ -252,7 +252,7 @@ describe('ChannelFollowingService', () => {
 		});
 
 		test('lets a channel manager bypass approval', async () => {
-			channel1.isFollowApprovalRequired = true;
+			await channelsRepository.update(channel1.id, { isFollowApprovalRequired: true });
 
 			const state = await service.followOrRequest(alice, channel1, true);
 
@@ -289,6 +289,31 @@ describe('ChannelFollowingService', () => {
 			expect(await service.rejectRequest(bob, channel1)).toBe(true);
 			expect(await fetchChannelFollowRequests()).toHaveLength(0);
 			expect(await fetchChannelFollowing()).toHaveLength(0);
+		});
+
+		test('cancellation wins over a concurrent approval', async () => {
+			for (let i = 0; i < 5; i++) {
+				await createFollowRequest();
+
+				await Promise.all([
+					service.approveRequest(bob, channel1),
+					service.unfollow(bob, channel1),
+				]);
+
+				expect(await fetchChannelFollowRequests()).toHaveLength(0);
+				expect(await fetchChannelFollowing()).toHaveLength(0);
+			}
+		});
+
+		test('approves pending requests when approval is disabled', async () => {
+			await createFollowRequest();
+
+			await service.setFollowApprovalRequired(channel1, false);
+
+			expect(await fetchChannelFollowRequests()).toHaveLength(0);
+			const followings = await fetchChannelFollowing();
+			expect(followings).toHaveLength(1);
+			expect(followings[0].followerId).toBe(bob.id);
 		});
 	});
 

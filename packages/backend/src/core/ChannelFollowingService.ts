@@ -5,7 +5,7 @@
 
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import Redis from 'ioredis';
-import type { DataSource } from 'typeorm';
+import type { DataSource, EntityManager } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { ChannelFollowingsRepository, ChannelFollowRequestsRepository, ChannelsRepository, MiUser } from '@/models/_.js';
 import { MiChannel } from '@/models/_.js';
@@ -103,19 +103,13 @@ export class ChannelFollowingService implements OnModuleInit {
 		requestUser: Pick<MiUser, 'id'>,
 		targetChannel: MiChannel,
 	): Promise<void> {
-		await this.channelFollowingsRepository.createQueryBuilder()
-			.insert()
-			.values({
-				id: this.idService.gen(),
+		await this.db.transaction(async manager => {
+			await this.lockChannel(manager, targetChannel.id);
+			await this.insertFollowing(manager, requestUser.id, targetChannel.id);
+			await manager.getRepository(MiChannelFollowRequest).delete({
 				followerId: requestUser.id,
-				followeeId: targetChannel.id,
-			})
-			.orIgnore()
-			.execute();
-
-		await this.channelFollowRequestsRepository.delete({
-			followerId: requestUser.id,
-			channelId: targetChannel.id,
+				channelId: targetChannel.id,
+			});
 		});
 
 		this.globalEventService.publishInternalEvent('followChannel', {
@@ -130,30 +124,42 @@ export class ChannelFollowingService implements OnModuleInit {
 		targetChannel: MiChannel,
 		bypassApproval: boolean,
 	): Promise<'following' | 'pending'> {
-		const isFollowing = await this.channelFollowingsRepository.exists({
-			where: {
-				followerId: requestUser.id,
-				followeeId: targetChannel.id,
-			},
+		let followed = false;
+		const state = await this.db.transaction(async manager => {
+			const channel = await this.lockChannel(manager, targetChannel.id);
+			const isFollowing = await manager.getRepository(MiChannelFollowing).exists({
+				where: {
+					followerId: requestUser.id,
+					followeeId: channel.id,
+				},
+			});
+			if (isFollowing) return 'following' as const;
+
+			if (!channel.isFollowApprovalRequired || bypassApproval) {
+				await this.insertFollowing(manager, requestUser.id, channel.id);
+				await manager.getRepository(MiChannelFollowRequest).delete({
+					followerId: requestUser.id,
+					channelId: channel.id,
+				});
+				followed = true;
+				return 'following' as const;
+			}
+
+			await manager.getRepository(MiChannelFollowRequest).createQueryBuilder()
+				.insert()
+				.values({
+					id: this.idService.gen(),
+					followerId: requestUser.id,
+					channelId: channel.id,
+				})
+				.orIgnore()
+				.execute();
+
+			return 'pending' as const;
 		});
-		if (isFollowing) return 'following';
 
-		if (!targetChannel.isFollowApprovalRequired || bypassApproval) {
-			await this.follow(requestUser, targetChannel);
-			return 'following';
-		}
-
-		await this.channelFollowRequestsRepository.createQueryBuilder()
-			.insert()
-			.values({
-				id: this.idService.gen(),
-				followerId: requestUser.id,
-				channelId: targetChannel.id,
-			})
-			.orIgnore()
-			.execute();
-
-		return 'pending';
+		if (followed) this.publishFollowEvent(requestUser.id, targetChannel.id);
+		return state;
 	}
 
 	@bindThis
@@ -161,16 +167,17 @@ export class ChannelFollowingService implements OnModuleInit {
 		requestUser: Pick<MiUser, 'id'>,
 		targetChannel: MiChannel,
 	): Promise<void> {
-		await Promise.all([
-			this.channelFollowingsRepository.delete({
+		await this.db.transaction(async manager => {
+			await this.lockChannel(manager, targetChannel.id);
+			await manager.getRepository(MiChannelFollowing).delete({
 				followerId: requestUser.id,
 				followeeId: targetChannel.id,
-			}),
-			this.channelFollowRequestsRepository.delete({
+			});
+			await manager.getRepository(MiChannelFollowRequest).delete({
 				followerId: requestUser.id,
 				channelId: targetChannel.id,
-			}),
-		]);
+			});
+		});
 
 		this.globalEventService.publishInternalEvent('unfollowChannel', {
 			userId: requestUser.id,
@@ -185,21 +192,14 @@ export class ChannelFollowingService implements OnModuleInit {
 	): Promise<boolean> {
 		let approved = false;
 		await this.db.transaction(async manager => {
+			await this.lockChannel(manager, targetChannel.id);
 			const requestDeleteResult = await manager.getRepository(MiChannelFollowRequest).delete({
 				followerId: follower.id,
 				channelId: targetChannel.id,
 			});
 			if ((requestDeleteResult.affected ?? 0) === 0) return;
 
-			await manager.getRepository(MiChannelFollowing).createQueryBuilder()
-				.insert()
-				.values({
-					id: this.idService.gen(),
-					followerId: follower.id,
-					followeeId: targetChannel.id,
-				})
-				.orIgnore()
-				.execute();
+			await this.insertFollowing(manager, follower.id, targetChannel.id);
 			approved = true;
 		});
 
@@ -217,11 +217,71 @@ export class ChannelFollowingService implements OnModuleInit {
 		follower: Pick<MiUser, 'id'>,
 		targetChannel: MiChannel,
 	): Promise<boolean> {
-		const result = await this.channelFollowRequestsRepository.delete({
-			followerId: follower.id,
-			channelId: targetChannel.id,
+		return await this.db.transaction(async manager => {
+			await this.lockChannel(manager, targetChannel.id);
+			const result = await manager.getRepository(MiChannelFollowRequest).delete({
+				followerId: follower.id,
+				channelId: targetChannel.id,
+			});
+			return (result.affected ?? 0) > 0;
 		});
-		return (result.affected ?? 0) > 0;
+	}
+
+	@bindThis
+	public async setFollowApprovalRequired(
+		targetChannel: MiChannel,
+		required: boolean,
+	): Promise<void> {
+		let approvedFollowerIds: MiUser['id'][] = [];
+		await this.db.transaction(async manager => {
+			await this.lockChannel(manager, targetChannel.id);
+
+			if (!required) {
+				const requests = await manager.getRepository(MiChannelFollowRequest).findBy({
+					channelId: targetChannel.id,
+				});
+				for (const request of requests) {
+					await this.insertFollowing(manager, request.followerId, targetChannel.id);
+				}
+				await manager.getRepository(MiChannelFollowRequest).delete({ channelId: targetChannel.id });
+				approvedFollowerIds = requests.map(request => request.followerId);
+			}
+
+			await manager.getRepository(MiChannel).update(targetChannel.id, {
+				isFollowApprovalRequired: required,
+			});
+		});
+
+		for (const followerId of approvedFollowerIds) {
+			this.publishFollowEvent(followerId, targetChannel.id);
+		}
+	}
+
+	private async lockChannel(manager: EntityManager, channelId: MiChannel['id']): Promise<MiChannel> {
+		return await manager.getRepository(MiChannel).findOneOrFail({
+			where: { id: channelId },
+			lock: { mode: 'pessimistic_write' },
+		});
+	}
+
+	private async insertFollowing(
+		manager: EntityManager,
+		followerId: MiUser['id'],
+		channelId: MiChannel['id'],
+	): Promise<void> {
+		await manager.getRepository(MiChannelFollowing).createQueryBuilder()
+			.insert()
+			.values({
+				id: this.idService.gen(),
+				followerId,
+				followeeId: channelId,
+			})
+			.orIgnore()
+			.execute();
+	}
+
+	private publishFollowEvent(userId: MiUser['id'], channelId: MiChannel['id']): void {
+		this.globalEventService.publishInternalEvent('followChannel', { userId, channelId });
 	}
 
 	@bindThis

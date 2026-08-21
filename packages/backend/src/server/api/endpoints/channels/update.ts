@@ -11,6 +11,7 @@ import { ChannelEntityService } from '@/core/entities/ChannelEntityService.js';
 import { DI } from '@/di-symbols.js';
 import { RoleService } from '@/core/RoleService.js';
 import { ChannelService } from '@/core/ChannelService.js';
+import { ChannelFollowingService } from '@/core/ChannelFollowingService.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -92,6 +93,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private roleService: RoleService,
 		private channelService: ChannelService,
+		private channelFollowingService: ChannelFollowingService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const channel = await this.channelsRepository.findOneBy({
@@ -144,7 +146,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				channel.userId = ps.transferAdminUserId;
 			}
 
-			await this.channelsRepository.update(channel.id, {
+			const updates = {
 				...(ps.name ? { name: ps.name } : {}),
 				...(ps.description !== undefined ? { description: ps.description } : {}),
 				...(ps.pinnedNoteIds ? { pinnedNoteIds: ps.pinnedNoteIds } : {}),
@@ -155,9 +157,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...(typeof ps.allowRenoteToExternal === 'boolean' ? { allowRenoteToExternal: ps.allowRenoteToExternal } : {}),
 				...(ps.isLocalOnly !== undefined ? { isLocalOnly: ps.isLocalOnly } : {}),
 				...(ps.isUnlisted !== undefined ? { isUnlisted: ps.isUnlisted } : {}),
-				...(ps.isFollowApprovalRequired !== undefined ? { isFollowApprovalRequired: ps.isFollowApprovalRequired } : {}),
 				...(ps.transferAdminUserId !== undefined && channel.userId === ps.transferAdminUserId ? { userId: ps.transferAdminUserId } : {}),
-			});
+			};
+			if (Object.keys(updates).length > 0) await this.channelsRepository.update(channel.id, updates);
+			if (ps.isFollowApprovalRequired !== undefined) {
+				await this.channelFollowingService.setFollowApprovalRequired(channel, ps.isFollowApprovalRequired);
+			}
 
 			return await this.channelEntityService.pack(channel.id, me);
 		});

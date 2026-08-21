@@ -85,5 +85,18 @@ describe('チャンネルのフォロー承認', () => {
 
 		const removedShow = await api('channels/show', { channelId: targetChannel.id }, follower);
 		assert.strictEqual(removedShow.body.isFollowing, false);
+
+		const secondFollow = await api('channels/follow', { channelId: targetChannel.id }, follower);
+		assert.strictEqual(secondFollow.body.state, 'pending');
+		const disableApproval = await api('channels/update', {
+			channelId: targetChannel.id,
+			isFollowApprovalRequired: false,
+		}, collaborator);
+		assert.strictEqual(disableApproval.status, 200);
+
+		const approvalDisabledShow = await api('channels/show', { channelId: targetChannel.id }, follower);
+		assert.strictEqual(approvalDisabledShow.body.isFollowApprovalRequired, false);
+		assert.strictEqual(approvalDisabledShow.body.isFollowing, true);
+		assert.strictEqual(approvalDisabledShow.body.hasPendingFollowRequest, false);
 	});
 });

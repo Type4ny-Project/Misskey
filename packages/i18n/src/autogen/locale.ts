@@ -31,26 +31,6 @@ export interface Locale extends ILocale {
      */
     "search": string;
     /**
-     * 履歴
-     */
-    "history": string;
-    /**
-     * ポイントは正の数で指定してください
-     */
-    "pointsMustBePositive": string;
-    /**
-     * 現在のローカルユーザー数
-     */
-    "nowLocalUsers": string;
-    /**
-     * ローカルユーザー数の上限
-     */
-    "maxLocalUsers": string;
-    /**
-     * 残りのローカルユーザー枠
-     */
-    "remainingLocalUsers": string;
-    /**
      * リセット
      */
     "reset": string;

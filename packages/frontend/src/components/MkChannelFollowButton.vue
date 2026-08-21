@@ -31,8 +31,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import * as Misskey from 'misskey-js';
+import { useInterval } from '@@/js/use-interval.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
@@ -51,6 +52,28 @@ const isFollowing = ref(props.channel.isFollowing);
 const hasPendingFollowRequest = ref(props.channel.hasPendingFollowRequest ?? false);
 const followersCount = ref(props.channel.followersCount);
 const wait = ref(false);
+
+watch(() => props.channel, (channel) => {
+	isFollowing.value = channel.isFollowing;
+	hasPendingFollowRequest.value = channel.hasPendingFollowRequest ?? false;
+	followersCount.value = channel.followersCount;
+});
+
+useInterval(async () => {
+	if (!hasPendingFollowRequest.value) return;
+	try {
+		const channel = await misskeyApi('channels/show', { channelId: props.channel.id });
+		isFollowing.value = channel.isFollowing ?? false;
+		hasPendingFollowRequest.value = channel.hasPendingFollowRequest ?? false;
+		followersCount.value = channel.followersCount;
+		emit('followersCountChanged', followersCount.value);
+	} catch (error) {
+		console.error(error);
+	}
+}, 30000, {
+	immediate: false,
+	afterMounted: true,
+});
 
 async function onClick() {
 	wait.value = true;

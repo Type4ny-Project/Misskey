@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div class="_spacer" :style="spacerStyle">
 		<div v-if="channel && tab === 'overview'" class="_gaps">
 			<div class="_panel" :class="$style.bannerContainer">
-				<XChannelFollowButton :channel="channel" :full="true" :class="$style.subscribe" @followersCountChanged="updateFollowersCount"/>
+				<XChannelFollowButton :key="channel.id" :channel="channel" :full="true" :class="$style.subscribe" @followersCountChanged="updateFollowersCount"/>
 				<MkButton v-if="favorited" v-tooltip="i18n.ts.unfavorite" asLike class="button" rounded primary :class="$style.favorite" @click="unfavorite()"><i class="ti ti-star"></i></MkButton>
 				<MkButton v-else v-tooltip="i18n.ts.favorite" asLike class="button" rounded :class="$style.favorite" @click="favorite()"><i class="ti ti-star"></i></MkButton>
 				<div :style="{ backgroundImage: channel.bannerUrl ? `url(${channel.bannerUrl})` : undefined }" :class="$style.banner">
@@ -145,7 +145,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<ChannelFollowRequests :key="channelId" :channelId="channelId" @resolved="handleFollowRequestResolved"/>
 		</div>
 		<div v-else-if="tab === 'followerManagement' && canManageChannelFollowers" class="_gaps">
-			<ChannelFollowers :key="channelId" :channelId="channelId" :managerIds="channelManagerIds" @removed="adjustFollowersCount(-1)"/>
+			<ChannelFollowers :key="channelId" :channelId="channelId" :managerIds="channelManagerIds" @removed="refreshFollowersCount"/>
 		</div>
 	</div>
 	<template #footer>
@@ -404,14 +404,15 @@ function updateFollowersCount(count: number): void {
 	channel.value.followersCount = count;
 }
 
-function adjustFollowersCount(delta: number): void {
-	if (channel.value == null) return;
-	channel.value.followersCount = Math.max(0, channel.value.followersCount + delta);
+async function handleFollowRequestResolved(): Promise<void> {
+	await Promise.all([refreshFollowersCount(), refreshPendingFollowRequests()]);
 }
 
-async function handleFollowRequestResolved(approved: boolean): Promise<void> {
-	if (approved) adjustFollowersCount(1);
-	await refreshPendingFollowRequests();
+async function refreshFollowersCount(): Promise<void> {
+	const currentChannelId = props.channelId;
+	const updatedChannel = await misskeyApi('channels/show', { channelId: currentChannelId });
+	if (channel.value?.id !== currentChannelId) return;
+	channel.value.followersCount = updatedChannel.followersCount;
 }
 
 async function refreshPendingFollowRequests(): Promise<void> {

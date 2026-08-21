@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <MkPagination :paginator="requestsPaginator">
 	<template #empty><MkResult type="empty" :text="i18n.ts.noFollowRequests"/></template>
 	<template #default="{ items }">
-		<div class="_gaps" :class="$style.requests">
+		<div class="_gaps">
 			<div v-for="request in items" :key="request.id" class="_panel" :class="$style.user">
 				<MkAvatar :class="$style.avatar" :user="request.user" indicator link preview/>
 				<div :class="$style.body">

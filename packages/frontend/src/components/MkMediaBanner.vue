@@ -4,15 +4,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="$style.root" @mousedown="onPointerDown" @touchstart="onPointerDown" @mouseup="onPointerUp" @mouseleave="onPointerUp" @touchend="onPointerUp" @touchcancel="onPointerUp">
+<div
+	:class="$style.root"
+	@mousedown="onPointerDown"
+	@touchstart="onPointerDown"
+	@mouseup="onPointerUp"
+	@mouseleave="onPointerUp"
+	@touchend="onPointerUp"
+	@touchcancel="onPointerUp"
+>
 	<MkMediaAudio v-if="media.type.startsWith('audio') && media.type !== 'audio/midi'" :audio="media"/>
-	<Transition name="fade">
-		<div v-if="isActuallyHidden" :class="$style.sensitive" @click="reveal">
-			<span style="font-size: 1.6em;"><i class="ti ti-alert-triangle"></i></span>
-			<b>{{ i18n.ts.sensitive }}</b>
-			<span>{{ i18n.ts.clickToShow }}</span>
-		</div>
-	</Transition>
+	<div v-if="isActuallyHidden" :class="$style.sensitive" @click="reveal">
+		<span style="font-size: 1.6em;"><i class="ti ti-alert-triangle"></i></span>
+		<b>{{ i18n.ts.sensitive }}</b>
+		<span>{{ i18n.ts.clickToShow }}</span>
+	</div>
 	<a
 		v-if="!isActuallyHidden"
 		:class="$style.download"

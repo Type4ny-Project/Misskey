@@ -4,8 +4,10 @@
  */
 
 import { setImmediate } from 'node:timers/promises';
+import util from 'util';
 import * as mfm from 'mfm-js';
 import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { In } from 'typeorm';
 import { extractCustomEmojisFromMfm } from '@/misc/extract-custom-emojis-from-mfm.js';
 import { extractHashtags } from '@/misc/extract-hashtags.js';
 import { MiNote, IMentionedRemoteUsers } from '@/models/Note.js';
@@ -21,9 +23,7 @@ import { ApRendererService } from '@/core/activitypub/ApRendererService.js';
 import { ApDeliverManagerService } from '@/core/activitypub/ApDeliverManagerService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { RelayService } from '@/core/RelayService.js';
-import { In } from 'typeorm';
 import ActiveUsersChart from '@/core/chart/charts/active-users.js';
-import util from 'util';
 
 export type NoteUpdateData = {
 	updatedAt?: Date | null;
@@ -141,7 +141,6 @@ export class NoteUpdateService implements OnApplicationShutdown {
 			//#region AP deliver
 			if (this.userEntityService.isLocalUser(user)) {
 				setImmediate(async () => {
-					// @ts-ignore
 					const noteActivity = await this.renderNoteActivity(updatedNote, user);
 					await this.deliverToConcerned(user, updatedNote, noteActivity);
 				});

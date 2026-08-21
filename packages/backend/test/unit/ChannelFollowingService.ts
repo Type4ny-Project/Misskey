@@ -318,6 +318,7 @@ describe('ChannelFollowingService', () => {
 
 		test('approves pending requests when approval is disabled', async () => {
 			await createFollowRequest();
+			const requestId = (await fetchChannelFollowRequests())[0].id;
 
 			await service.setFollowApprovalRequired(channel1, false);
 
@@ -325,6 +326,7 @@ describe('ChannelFollowingService', () => {
 			const followings = await fetchChannelFollowing();
 			expect(followings).toHaveLength(1);
 			expect(followings[0].followerId).toBe(bob.id);
+			expect(followings[0].id).not.toBe(requestId);
 			expect(await fetchFollowersCount()).toBe(1);
 		});
 	});

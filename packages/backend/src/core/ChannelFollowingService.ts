@@ -248,27 +248,20 @@ export class ChannelFollowingService implements OnModuleInit {
 		targetChannel: MiChannel,
 		required: boolean,
 	): Promise<void> {
-		let approvedFollowerIds: MiUser['id'][] = [];
+		const approvedFollowerIds: MiUser['id'][] = [];
 		await this.db.transaction(async manager => {
 			await this.lockChannel(manager, targetChannel.id);
 
 			if (!required) {
-				const approvedFollowers = await manager.query(`
-					WITH requests AS (
-						DELETE FROM "channel_follow_request"
-						WHERE "channelId" = $1
-						RETURNING "id", "followerId", "channelId"
-					), inserted AS (
-						INSERT INTO "channel_following" ("id", "followerId", "followeeId")
-						SELECT "id", "followerId", "channelId" FROM requests
-						ON CONFLICT ("followerId", "followeeId") DO NOTHING
-						RETURNING "followerId"
-					)
-					SELECT "followerId" FROM inserted
-				`, [targetChannel.id]) as { followerId: MiUser['id'] }[];
-				approvedFollowerIds = approvedFollowers.map(following => following.followerId);
-				if (approvedFollowerIds.length > 0) {
-					await manager.getRepository(MiChannel).increment({ id: targetChannel.id }, 'followersCount', approvedFollowerIds.length);
+				const requests = await manager.getRepository(MiChannelFollowRequest).find({
+					where: { channelId: targetChannel.id },
+					select: { followerId: true },
+				});
+				await manager.getRepository(MiChannelFollowRequest).delete({ channelId: targetChannel.id });
+				for (const request of requests) {
+					if (await this.insertFollowing(manager, request.followerId, targetChannel.id)) {
+						approvedFollowerIds.push(request.followerId);
+					}
 				}
 			}
 

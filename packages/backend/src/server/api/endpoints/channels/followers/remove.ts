@@ -6,7 +6,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ChannelFollowingService } from '@/core/ChannelFollowingService.js';
 import { ChannelService } from '@/core/ChannelService.js';
-import { RoleService } from '@/core/RoleService.js';
 import { DI } from '@/di-symbols.js';
 import type { ChannelsRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
@@ -39,13 +38,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private channelsRepository: ChannelsRepository,
 		private channelService: ChannelService,
 		private channelFollowingService: ChannelFollowingService,
-		private roleService: RoleService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const channel = await this.channelsRepository.findOneBy({ id: ps.channelId });
 			if (channel == null) throw new ApiError(meta.errors.noSuchChannel);
-			const isModerator = await this.roleService.isModerator(me);
-			if (!await this.channelService.canEditChannel(channel, me, isModerator)) throw new ApiError(meta.errors.accessDenied);
+			if (!this.channelService.isChannelManager(channel, me)) throw new ApiError(meta.errors.accessDenied);
 			await this.channelFollowingService.unfollow({ id: ps.userId }, channel);
 		});
 	}

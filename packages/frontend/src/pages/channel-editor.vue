@@ -89,8 +89,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<ChannelEditorFollowers v-if="channelId != null" :channelId="channelId"/>
-
 			<MkFolder v-if="isRoot">
 				<template #label>{{ i18n.ts._channel.dangerSettings }}</template>
 
@@ -128,7 +126,6 @@ import { useRouter } from '@/router.js';
 import { $i, iAmModerator } from '@/i.js';
 import { userPage } from '@/filters/user.js';
 import MkUserCardMini from '@/components/MkUserCardMini.vue';
-import ChannelEditorFollowers from '@/pages/channel-editor.followers.vue';
 
 const router = useRouter();
 

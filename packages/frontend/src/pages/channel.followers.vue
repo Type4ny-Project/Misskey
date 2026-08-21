@@ -4,43 +4,40 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<MkFolder>
-	<template #label>{{ i18n.ts._channel.followerManagement }}</template>
-	<div class="_gaps">
-		<MkFolder>
-			<template #label>{{ i18n.ts._channel.followRequests }}</template>
-			<MkPagination :paginator="requestsPaginator">
-				<template #empty><MkResult type="empty" :text="i18n.ts.noFollowRequests"/></template>
-				<template #default="{ items }">
-					<div class="_gaps">
-						<div v-for="request in items" :key="request.id" class="_panel" :class="$style.userItem">
-							<MkUserCardMini :user="request.user"/>
-							<div :class="$style.actions">
-								<MkButton primary rounded @click="approve(request.user)"><i class="ti ti-check"></i> {{ i18n.ts.approve }}</MkButton>
-								<MkButton danger rounded @click="reject(request.user)"><i class="ti ti-x"></i> {{ i18n.ts.reject }}</MkButton>
-							</div>
+<div class="_gaps">
+	<MkFolder :defaultOpen="true">
+		<template #label>{{ i18n.ts._channel.followRequests }}</template>
+		<MkPagination :paginator="requestsPaginator">
+			<template #empty><MkResult type="empty" :text="i18n.ts.noFollowRequests"/></template>
+			<template #default="{ items }">
+				<div class="_gaps">
+					<div v-for="request in items" :key="request.id" class="_panel" :class="$style.userItem">
+						<MkUserCardMini :user="request.user"/>
+						<div :class="$style.actions">
+							<MkButton primary rounded @click="approve(request.user)"><i class="ti ti-check"></i> {{ i18n.ts.approve }}</MkButton>
+							<MkButton danger rounded @click="reject(request.user)"><i class="ti ti-x"></i> {{ i18n.ts.reject }}</MkButton>
 						</div>
 					</div>
-				</template>
-			</MkPagination>
-		</MkFolder>
+				</div>
+			</template>
+		</MkPagination>
+	</MkFolder>
 
-		<MkFolder>
-			<template #label>{{ i18n.ts.followers }}</template>
-			<MkPagination :paginator="followersPaginator">
-				<template #empty><MkResult type="empty" :text="i18n.ts._channel.noFollowers"/></template>
-				<template #default="{ items }">
-					<div class="_gaps">
-						<div v-for="following in items" :key="following.id" class="_panel" :class="$style.userItem">
-							<MkUserCardMini :user="following.user"/>
-							<MkButton danger rounded @click="remove(following.user)"><i class="ti ti-user-minus"></i> {{ i18n.ts.remove }}</MkButton>
-						</div>
+	<MkFolder>
+		<template #label>{{ i18n.ts.followers }}</template>
+		<MkPagination :paginator="followersPaginator">
+			<template #empty><MkResult type="empty" :text="i18n.ts._channel.noFollowers"/></template>
+			<template #default="{ items }">
+				<div class="_gaps">
+					<div v-for="following in items" :key="following.id" class="_panel" :class="$style.userItem">
+						<MkUserCardMini :user="following.user"/>
+						<MkButton danger rounded @click="remove(following.user)"><i class="ti ti-user-minus"></i> {{ i18n.ts.remove }}</MkButton>
 					</div>
-				</template>
-			</MkPagination>
-		</MkFolder>
-	</div>
-</MkFolder>
+				</div>
+			</template>
+		</MkPagination>
+	</MkFolder>
+</div>
 </template>
 
 <script setup lang="ts">

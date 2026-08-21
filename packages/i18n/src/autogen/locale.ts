@@ -9185,7 +9185,7 @@ export interface Locale extends ILocale {
          */
         "isUnlisted": string;
         /**
-         * チャンネル一覧・検索・トレンドには表示されません。URLを知っているユーザーは引き続き閲覧できます。
+         * チャンネル一覧・トレンドには表示されません。検索やURLからは引き続き閲覧できます。
          */
         "isUnlistedDescription": string;
         /**

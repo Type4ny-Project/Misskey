@@ -7,7 +7,6 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ChannelService } from '@/core/ChannelService.js';
 import { IdService } from '@/core/IdService.js';
 import { QueryService } from '@/core/QueryService.js';
-import { RoleService } from '@/core/RoleService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { DI } from '@/di-symbols.js';
 import type { ChannelFollowRequestsRepository, ChannelsRepository } from '@/models/_.js';
@@ -66,7 +65,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.channelFollowRequestsRepository)
 		private channelFollowRequestsRepository: ChannelFollowRequestsRepository,
 		private channelService: ChannelService,
-		private roleService: RoleService,
 		private queryService: QueryService,
 		private userEntityService: UserEntityService,
 		private idService: IdService,
@@ -75,8 +73,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const channel = await this.channelsRepository.findOneBy({ id: ps.channelId });
 			if (channel == null) throw new ApiError(meta.errors.noSuchChannel);
 
-			const isModerator = await this.roleService.isModerator(me);
-			if (!await this.channelService.canEditChannel(channel, me, isModerator)) {
+			if (!this.channelService.isChannelManager(channel, me)) {
 				throw new ApiError(meta.errors.accessDenied);
 			}
 

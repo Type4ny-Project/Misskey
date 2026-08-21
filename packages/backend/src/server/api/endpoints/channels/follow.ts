@@ -9,7 +9,6 @@ import type { ChannelsRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
 import { ChannelFollowingService } from '@/core/ChannelFollowingService.js';
 import { ChannelService } from '@/core/ChannelService.js';
-import { RoleService } from '@/core/RoleService.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -57,7 +56,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private channelsRepository: ChannelsRepository,
 		private channelFollowingService: ChannelFollowingService,
 		private channelService: ChannelService,
-		private roleService: RoleService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const channel = await this.channelsRepository.findOneBy({
@@ -68,8 +66,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchChannel);
 			}
 
-			const isModerator = await this.roleService.isModerator(me);
-			const canManage = await this.channelService.canEditChannel(channel, me, isModerator);
+			const canManage = this.channelService.isChannelManager(channel, me);
 			const state = await this.channelFollowingService.followOrRequest(me, channel, canManage);
 
 			return { state };

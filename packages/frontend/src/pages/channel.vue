@@ -141,6 +141,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 		</div>
+		<div v-else-if="tab === 'followers' && canManageChannelFollowers" class="_gaps">
+			<ChannelFollowers :channelId="channelId"/>
+		</div>
 	</div>
 	<template #footer>
 		<div :class="$style.footer">
@@ -187,6 +190,7 @@ import { notesSearchAvailable } from '@/utility/check-permissions.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { useRouter } from '@/router.js';
 import { Paginator } from '@/utility/paginator.js';
+import ChannelFollowers from '@/pages/channel.followers.vue';
 
 const router = useRouter();
 
@@ -209,6 +213,7 @@ const tab = ref('overview');
 
 const channel = ref<Misskey.entities.Channel | null>(null);
 const canManageChannelEvents = computed(() => hasChannelEventManagePermission(channel.value));
+const canManageChannelFollowers = computed(() => isChannelManager(channel.value));
 const favorited = ref(false);
 const searchQuery = ref('');
 const searchPaginator = shallowRef();
@@ -367,8 +372,13 @@ async function search() {
 }
 
 function hasChannelEventManagePermission(targetChannel: Misskey.entities.Channel | null): boolean {
-	if (!$i || targetChannel == null) return false;
 	if (iAmModerator) return true;
+
+	return isChannelManager(targetChannel);
+}
+
+function isChannelManager(targetChannel: Misskey.entities.Channel | null): boolean {
+	if (!$i || targetChannel == null) return false;
 
 	return $i.id === targetChannel.userId || isChannelCollaborator(targetChannel, $i.id);
 }
@@ -557,7 +567,11 @@ const headerTabs = computed(() => [{
 	key: 'events',
 	title: i18n.ts._events.eventCalendar,
 	icon: 'ti ti-calendar-event',
-	}, ...(canManageChannelEvents.value ? [{
+}, ...(canManageChannelFollowers.value ? [{
+		key: 'followers',
+		title: i18n.ts._channel.followRequests,
+		icon: 'ti ti-user-check',
+}] : []), ...(canManageChannelEvents.value ? [{
 		key: 'manage',
 		title: i18n.ts.manage,
 		icon: 'ti ti-settings',
@@ -568,7 +582,7 @@ const headerTabs = computed(() => [{
 }]);
 
 const spacerStyle = computed(() => {
-	const wide = tab.value === 'events' || tab.value === 'manage';
+	const wide = tab.value === 'events' || tab.value === 'manage' || tab.value === 'followers';
 	return {
 		'--MI_SPACER-w': wide ? '1040px' : '700px',
 	};

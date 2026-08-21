@@ -37,9 +37,17 @@ describe('チャンネルのフォロー承認', () => {
 	}, 1000 * 60 * 2);
 
 	test('非掲載チャンネルを共同管理者が承認し、フォロワーを削除できる', async () => {
+		const list = await api('channels/search', { query: '' }, follower);
+		assert.strictEqual(list.status, 200);
+		assert.strictEqual(list.body.some(channel => channel.id === targetChannel.id), false);
+
 		const search = await api('channels/search', { query: 'private-channel' }, follower);
 		assert.strictEqual(search.status, 200);
-		assert.strictEqual(search.body.some(channel => channel.id === targetChannel.id), false);
+		assert.strictEqual(search.body.some(channel => channel.id === targetChannel.id), true);
+
+		const featured = await api('channels/featured', {}, follower);
+		assert.strictEqual(featured.status, 200);
+		assert.strictEqual(featured.body.some(channel => channel.id === targetChannel.id), false);
 
 		const directShow = await api('channels/show', { channelId: targetChannel.id }, follower);
 		assert.strictEqual(directShow.status, 200);

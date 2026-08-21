@@ -2408,7 +2408,7 @@ _channel:
   allowRenoteToExternal: "チャンネル外へのリノートと引用リノートを許可する"
   isLocalOnly: "チャンネルでの投稿をローカルのみに制限する"
   isUnlisted: "チャンネル一覧に掲載しない"
-  isUnlistedDescription: "チャンネル一覧・検索・トレンドには表示されません。URLを知っているユーザーは引き続き閲覧できます。"
+  isUnlistedDescription: "チャンネル一覧・トレンドには表示されません。検索やURLからは引き続き閲覧できます。"
   isFollowApprovalRequired: "フォローを承認制にする"
   isFollowApprovalRequiredDescription: "共同管理者またはチャンネル管理者が承認するまで、フォローは申請中になります。"
   followerManagement: "フォロワー管理"

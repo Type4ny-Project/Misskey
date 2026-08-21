@@ -232,7 +232,9 @@ describe('ChannelFollowingService', () => {
 			expect(followings[0].followerId).toBe(alice.id);
 			expect(await fetchFollowersCount()).toBe(1);
 
-			await service.follow(alice, channel1);
+			await expect(service.follow(alice, channel1)).rejects.toMatchObject({
+				id: '6e335e39-0203-4418-a936-b3f2dc987845',
+			});
 			expect(await fetchFollowersCount()).toBe(1);
 		});
 	});

@@ -93,7 +93,6 @@ import {
 import type { Provider } from '@nestjs/common';
 import type { DataSource } from 'typeorm';
 
-
 const $inboxRuleRepository: Provider = {
 	provide: DI.inboxRuleRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiInboxRule),

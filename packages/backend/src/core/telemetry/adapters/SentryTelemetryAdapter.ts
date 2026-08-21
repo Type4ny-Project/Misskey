@@ -3,14 +3,19 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import type { Config } from '@/config.js';
-import type { TelemetryAdapter, TelemetryCaptureMessageOptions } from './TelemetryAdapter.js';
+import type { LogTraceContext } from '@/logging/types.js';
+import type * as SentryNode from '@sentry/node';
+import type { NodeOptions } from '@sentry/node';
+import type { SentryBackendConfig, TelemetryAdapter, TelemetryCaptureMessageOptions } from './TelemetryAdapter.js';
 
-type SentryIntegrationsOption = NonNullable<import('@sentry/node').NodeOptions['integrations']>;
+// Sentryのtransportが詰まってもプロセス終了を妨げないようにする。
+const DEFAULT_SHUTDOWN_TIMEOUT = 5000;
+
+type SentryIntegrationsOption = NonNullable<NodeOptions['integrations']>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SentryIntegrationFactory = Extract<SentryIntegrationsOption, (integrations: any[]) => any[]>;
 type SentryIntegration = Parameters<SentryIntegrationFactory>[0][number];
-type SentryNodeOptions = import('@sentry/node').NodeOptions;
+type SentryNodeOptions = NodeOptions;
 
 type BuildSentryIntegrationsOptions = {
 	disabledIntegrations?: string[];
@@ -37,7 +42,7 @@ export function buildSentryIntegrations(options: BuildSentryIntegrationsOptions)
 }
 
 export function buildSentryNodeOptions(
-	config: NonNullable<Config['sentryForBackend']>,
+	config: SentryBackendConfig,
 	nodeProfilingIntegration?: () => SentryIntegration,
 ): SentryNodeOptions {
 	return {
@@ -65,11 +70,11 @@ export function buildSentryNodeOptions(
 
 export class SentryTelemetryAdapter implements TelemetryAdapter {
 	private constructor(
-		private readonly Sentry: typeof import('@sentry/node'),
+		private readonly Sentry: typeof SentryNode,
 	) {
 	}
 
-	public static async create(config: NonNullable<Config['sentryForBackend']>): Promise<SentryTelemetryAdapter> {
+	public static async create(config: SentryBackendConfig): Promise<SentryTelemetryAdapter> {
 		const Sentry = await import('@sentry/node');
 		const { nodeProfilingIntegration } = await import('@sentry/profiling-node');
 
@@ -86,11 +91,21 @@ export class SentryTelemetryAdapter implements TelemetryAdapter {
 		});
 	}
 
+	/** activeなSpanの識別子を、Logging基盤で扱える形式へ変換します。 */
+	public getActiveTraceContext(): LogTraceContext | undefined {
+		const activeSpan = this.Sentry.getActiveSpan();
+		if (activeSpan == null) return undefined;
+
+		const { traceId, spanId, traceFlags } = activeSpan.spanContext();
+		return { traceId, spanId, traceFlags };
+	}
+
 	public startSpan<T>(name: string, fn: () => T): T {
 		return this.Sentry.startSpan({ name }, fn);
 	}
 
 	public async shutdown(): Promise<void> {
-		await this.Sentry.close();
+		// timeout未指定だとtransportのflushが詰まった際にプロセス終了を妨げるため、上限時間を設ける。
+		await this.Sentry.close(DEFAULT_SHUTDOWN_TIMEOUT);
 	}
 }

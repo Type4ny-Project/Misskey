@@ -16,6 +16,7 @@ import { GlobalEvents, GlobalEventService } from '@/core/GlobalEventService.js';
 import { bindThis } from '@/decorators.js';
 import type { MiLocalUser } from '@/models/User.js';
 import { RedisKVCache } from '@/misc/cache.js';
+import { IdentifiableError } from '@/misc/identifiable-error.js';
 
 @Injectable()
 export class ChannelFollowingService implements OnModuleInit {
@@ -105,7 +106,10 @@ export class ChannelFollowingService implements OnModuleInit {
 	): Promise<void> {
 		await this.db.transaction(async manager => {
 			await this.lockChannel(manager, targetChannel.id);
-			await this.insertFollowing(manager, requestUser.id, targetChannel.id);
+			const inserted = await this.insertFollowing(manager, requestUser.id, targetChannel.id);
+			if (!inserted) {
+				throw new IdentifiableError('6e335e39-0203-4418-a936-b3f2dc987845', 'already following');
+			}
 			await manager.getRepository(MiChannelFollowRequest).delete({
 				followerId: requestUser.id,
 				channelId: targetChannel.id,
@@ -133,7 +137,9 @@ export class ChannelFollowingService implements OnModuleInit {
 					followeeId: channel.id,
 				},
 			});
-			if (isFollowing) return 'following' as const;
+			if (isFollowing) {
+				throw new IdentifiableError('6e335e39-0203-4418-a936-b3f2dc987845', 'already following');
+			}
 
 			if (!channel.isFollowApprovalRequired || bypassApproval) {
 				await this.insertFollowing(manager, requestUser.id, channel.id);

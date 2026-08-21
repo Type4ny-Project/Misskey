@@ -134,7 +134,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					if (channel.userId !== me.id && !iAmModerator) {
 						throw new ApiError(meta.errors.accessDenied);
 					}
-					const users = await this.usersRepository.findBy({
+					const users = requestedCollaboratorIds.length === 0 ? [] : await this.usersRepository.findBy({
 						id: In(requestedCollaboratorIds),
 					});
 					if (users.length !== requestedCollaboratorIds.length) {
@@ -159,7 +159,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...(ps.pinnedNoteIds ? { pinnedNoteIds: ps.pinnedNoteIds } : {}),
 				...(ps.color ? { color: ps.color } : {}),
 				...(typeof ps.isArchived === 'boolean' ? { isArchived: ps.isArchived } : {}),
-				...(banner ? { bannerId: banner.id } : {}),
+				...(banner !== undefined ? { bannerId: banner?.id ?? null } : {}),
 				...(typeof ps.isSensitive === 'boolean' ? { isSensitive: ps.isSensitive } : {}),
 				...(typeof ps.allowRenoteToExternal === 'boolean' ? { allowRenoteToExternal: ps.allowRenoteToExternal } : {}),
 				...(ps.isLocalOnly !== undefined ? { isLocalOnly: ps.isLocalOnly } : {}),

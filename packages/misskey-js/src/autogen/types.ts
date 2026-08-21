@@ -4969,6 +4969,7 @@ export type components = {
                 color: string;
                 isSensitive: boolean;
                 allowRenoteToExternal: boolean;
+                isLocalOnly: boolean;
                 userId: string | null;
             } | null;
             localOnly: boolean;

@@ -1338,7 +1338,10 @@ async function openAccountMenu(ev: PointerEvent) {
 				replyTargetNote.value = draft.reply;
 				reactionAcceptance.value = draft.reactionAcceptance;
 				scheduledAt.value = draft.scheduledAt ?? null;
-				if (draft.channel) targetChannel.value = draft.channel as unknown as Misskey.entities.Channel;
+				if (draft.channel) {
+					targetChannel.value = draft.channel as unknown as Misskey.entities.Channel;
+					applyChannelPostDefaults();
+				}
 
 				visibleUsers.value = [];
 				draft.visibleUserIds?.forEach(uid => {

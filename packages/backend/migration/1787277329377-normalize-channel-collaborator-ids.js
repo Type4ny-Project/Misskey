@@ -22,11 +22,24 @@ export class NormalizeChannelCollaboratorIds1787277329377 {
 
                 IF collaborator_ids_type = 'ARRAY' THEN
                     UPDATE "channel"
-                    SET "collaboratorIdsNormalized" = COALESCE("collaboratorIds"::text[], '{}');
+                    SET "collaboratorIdsNormalized" = CASE
+                        WHEN "collaboratorIds" IS NULL OR EXISTS (
+                            SELECT 1
+                            FROM unnest("collaboratorIds"::text[]) AS element
+                            WHERE element IS NULL OR length(element) > 32
+                        ) THEN '{}'
+                        ELSE "collaboratorIds"::text[]
+                    END;
                 ELSIF collaborator_ids_type IN ('json', 'jsonb') THEN
                     UPDATE "channel"
                     SET "collaboratorIdsNormalized" = CASE
                         WHEN "collaboratorIds" IS NULL OR jsonb_typeof("collaboratorIds"::jsonb) <> 'array' THEN '{}'
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements("collaboratorIds"::jsonb) AS element
+                            WHERE jsonb_typeof(element) <> 'string'
+                               OR length(element #>> '{}') > 32
+                        ) THEN '{}'
                         ELSE ARRAY(SELECT jsonb_array_elements_text("collaboratorIds"::jsonb))
                     END;
                 END IF;

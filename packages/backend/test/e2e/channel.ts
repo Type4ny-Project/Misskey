@@ -55,6 +55,16 @@ describe('Channel', () => {
 			assert.strictEqual(res.status, 400);
 			assert.strictEqual(castAsError(res.body).error.code, 'ACCESS_DENIED');
 		});
+
+		test('所有者が共同管理者を全員削除できる', async () => {
+			const res = await api('channels/update', {
+				channelId: channel.id,
+				collaboratorIds: [],
+			}, alice);
+
+			assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+			assert.deepStrictEqual(res.body.collaboratorIds, []);
+		});
 	});
 
 	describe('Federation', () => {

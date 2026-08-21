@@ -259,6 +259,9 @@ watch(() => props.channelId, async () => {
 	}
 
 	channel.value = _channel;
+	if (!headerTabs.value.some(headerTab => headerTab.key === tab.value)) {
+		tab.value = 'overview';
+	}
 	await refreshPendingFollowRequests();
 }, { immediate: true });
 
@@ -612,12 +615,12 @@ const headerTabs = computed(() => [{
 	key: 'events',
 	title: i18n.ts._events.eventCalendar,
 	icon: 'ti ti-calendar-event',
-}, ...(canManageChannelFollowers.value ? [{
+}, ...(canManageChannelFollowers.value && channel.value?.isFollowApprovalRequired ? [{
 		key: 'followRequests',
 		title: i18n.ts._channel.followRequests,
 		icon: 'ti ti-user-check',
 		indicate: hasPendingChannelFollowRequests.value,
-	}, {
+}] : []), ...(canManageChannelFollowers.value ? [{
 		key: 'followerManagement',
 		title: i18n.ts._channel.followerManagement,
 		icon: 'ti ti-users',

@@ -122,4 +122,29 @@ describe('チャンネルのフォロー承認', () => {
 		assert.strictEqual(approvalDisabledShow.body.hasPendingFollowRequest, false);
 		assert.strictEqual(approvalDisabledShow.body.followersCount, 2);
 	});
+
+	test('承認制ではないチャンネルでも既存フォロワーを管理できる', async () => {
+		const openChannel = await channel(owner, {
+			name: 'open-channel',
+			isFollowApprovalRequired: false,
+		});
+
+		const follow = await api('channels/follow', { channelId: openChannel.id }, follower);
+		assert.strictEqual(follow.status, 200);
+		assert.strictEqual(follow.body.state, 'following');
+
+		const openChannelFollowers = await api('channels/followers', { channelId: openChannel.id }, owner);
+		assert.strictEqual(openChannelFollowers.status, 200);
+		assert.strictEqual(openChannelFollowers.body.some(following => following.user.id === follower.id), true);
+
+		const removeFromOpenChannel = await api('channels/followers/remove', {
+			channelId: openChannel.id,
+			userId: follower.id,
+		}, owner);
+		assert.strictEqual(removeFromOpenChannel.status, 204);
+
+		const removedFromOpenChannelShow = await api('channels/show', { channelId: openChannel.id }, follower);
+		assert.strictEqual(removedFromOpenChannelShow.body.isFollowing, false);
+		assert.strictEqual(removedFromOpenChannelShow.body.followersCount, 0);
+	});
 });

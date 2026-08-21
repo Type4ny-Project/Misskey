@@ -5,6 +5,7 @@
 
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promises as fsp } from 'node:fs';
@@ -15,6 +16,8 @@ const rootDir = resolve(dirname(_filename), '..');
 const configDir = resolve(rootDir, '.config');
 const sourceConfigPath = resolve(configDir, 'example.yml');
 const generatedConfigPath = resolve(configDir, 'default.yml');
+const portlessEnvPath = resolve(configDir, 'codex-portless.env');
+const portlessStateDir = resolve(configDir, 'portless');
 const require = createRequire(resolve(rootDir, 'packages/backend/package.json'));
 const { Client } = require('pg');
 const Redis = require('ioredis');
@@ -29,6 +32,7 @@ const databasePort = Number(process.env.MISSKEY_CODEX_DB_PORT ?? 5432);
 const redisHost = process.env.MISSKEY_CODEX_REDIS_HOST ?? '127.0.0.1';
 const redisPort = Number(process.env.MISSKEY_CODEX_REDIS_PORT ?? 6379);
 const redisDb = Number(process.env.MISSKEY_CODEX_REDIS_DB ?? 1);
+const preferredPortlessPort = 10000 + (Number.parseInt(environmentId.slice(0, 8), 16) % 50000);
 
 if (!/^[a-zA-Z_][a-zA-Z0-9_]{0,62}$/.test(databaseName)) {
 	throw new Error(`Invalid PostgreSQL database name: ${databaseName}`);
@@ -45,6 +49,7 @@ if (!Number.isInteger(redisPort) || redisPort <= 0 || redisPort > 65535) {
 if (!Number.isInteger(redisDb) || redisDb < 0) {
 	throw new Error(`Invalid Redis database number: ${redisDb}`);
 }
+
 const databaseCredentialCandidates = process.env.MISSKEY_CODEX_DB_USER
 	? [{
 		user: process.env.MISSKEY_CODEX_DB_USER,
@@ -115,6 +120,23 @@ try {
 	await redis.quit();
 }
 
+const canListen = async (port) => await new Promise(resolveAvailable => {
+	const server = createServer();
+	server.once('error', () => resolveAvailable(false));
+	server.listen(port, '0.0.0.0', () => {
+		server.close(() => resolveAvailable(true));
+	});
+});
+
+let portlessPort = preferredPortlessPort;
+
+while (!(await canListen(portlessPort))) {
+	portlessPort = portlessPort === 59999 ? 10000 : portlessPort + 1;
+	if (portlessPort === preferredPortlessPort) {
+		throw new Error('Could not find an available Portless proxy port.');
+	}
+}
+
 const config = yaml.load(await fsp.readFile(sourceConfigPath, 'utf-8')) ?? {};
 config.url = 'https://misskey.local/';
 config.db = {
@@ -133,5 +155,12 @@ config.redis = {
 };
 
 await fsp.writeFile(generatedConfigPath, yaml.dump(config), { mode: 0o600 });
+await fsp.writeFile(portlessEnvPath, [
+	`export PORTLESS_STATE_DIR='${portlessStateDir.replaceAll("'", "'\\''")}'`,
+	`export PORTLESS_PORT=${portlessPort}`,
+	'export PORTLESS_LAN=1',
+	'export PORTLESS_HTTPS=1',
+	'',
+].join('\n'), { mode: 0o600 });
 
-console.log(`Codex environment configured with PostgreSQL database ${databaseName} and Redis DB ${redisDb}.`);
+console.log(`Codex environment configured with PostgreSQL database ${databaseName}, Redis DB ${redisDb}, and Portless proxy port ${portlessPort}.`);

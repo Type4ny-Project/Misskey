@@ -237,14 +237,20 @@ export class ChannelFollowingService implements OnModuleInit {
 			await this.lockChannel(manager, targetChannel.id);
 
 			if (!required) {
-				const requests = await manager.getRepository(MiChannelFollowRequest).findBy({
-					channelId: targetChannel.id,
-				});
-				for (const request of requests) {
-					await this.insertFollowing(manager, request.followerId, targetChannel.id);
-				}
-				await manager.getRepository(MiChannelFollowRequest).delete({ channelId: targetChannel.id });
-				approvedFollowerIds = requests.map(request => request.followerId);
+				const approvedFollowers = await manager.query(`
+					WITH requests AS (
+						DELETE FROM "channel_follow_request"
+						WHERE "channelId" = $1
+						RETURNING "id", "followerId", "channelId"
+					), inserted AS (
+						INSERT INTO "channel_following" ("id", "followerId", "followeeId")
+						SELECT "id", "followerId", "channelId" FROM requests
+						ON CONFLICT ("followerId", "followeeId") DO NOTHING
+						RETURNING "followerId"
+					)
+					SELECT "followerId" FROM inserted
+				`, [targetChannel.id]) as { followerId: MiUser['id'] }[];
+				approvedFollowerIds = approvedFollowers.map(following => following.followerId);
 			}
 
 			await manager.getRepository(MiChannel).update(targetChannel.id, {

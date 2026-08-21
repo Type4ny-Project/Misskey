@@ -269,7 +269,7 @@ function save() {
 			...params,
 			channelId: props.channelId,
 			pinnedNoteIds: pinnedNoteIds.value,
-			collaboratorIds: collaboratorUsers.value.map(x => x.id),
+			...(isRoot.value ? { collaboratorIds: collaboratorUsers.value.map(x => x.id) } : {}),
 		});
 	} else {
 		os.apiWithDialog('channels/create', params).then(created => {

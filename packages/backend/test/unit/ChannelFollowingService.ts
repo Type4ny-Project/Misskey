@@ -248,6 +248,16 @@ describe('ChannelFollowingService', () => {
 			expect(await fetchChannelFollowRequests()).toHaveLength(0);
 		});
 
+		test('reports when the channel is already followed', async () => {
+			await service.followOrRequest(alice, channel1, false);
+
+			const state = await service.followOrRequest(alice, channel1, false);
+
+			expect(state).toBe('alreadyFollowing');
+			expect(await fetchChannelFollowing()).toHaveLength(1);
+			expect(await fetchFollowersCount()).toBe(1);
+		});
+
 		test('creates a request for a channel that requires approval', async () => {
 			await channelsRepository.update(channel1.id, { isFollowApprovalRequired: true });
 

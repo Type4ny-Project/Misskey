@@ -127,7 +127,7 @@ export class ChannelFollowingService implements OnModuleInit {
 		requestUser: MiLocalUser,
 		targetChannel: MiChannel,
 		bypassApproval: boolean,
-	): Promise<'following' | 'pending'> {
+	): Promise<'following' | 'pending' | 'alreadyFollowing'> {
 		let followed = false;
 		const state = await this.db.transaction(async manager => {
 			const channel = await this.lockChannel(manager, targetChannel.id);
@@ -137,12 +137,11 @@ export class ChannelFollowingService implements OnModuleInit {
 					followeeId: channel.id,
 				},
 			});
-			if (isFollowing) {
-				throw new IdentifiableError('6e335e39-0203-4418-a936-b3f2dc987845', 'already following');
-			}
+			if (isFollowing) return 'alreadyFollowing' as const;
 
 			if (!channel.isFollowApprovalRequired || bypassApproval) {
-				await this.insertFollowing(manager, requestUser.id, channel.id);
+				const inserted = await this.insertFollowing(manager, requestUser.id, channel.id);
+				if (!inserted) return 'alreadyFollowing' as const;
 				await manager.getRepository(MiChannelFollowRequest).delete({
 					followerId: requestUser.id,
 					channelId: channel.id,

@@ -75,6 +75,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			try {
 				const canManage = this.channelService.isChannelManager(channel, me);
 				const state = await this.channelFollowingService.followOrRequest(me, channel, canManage);
+				if (state === 'alreadyFollowing') throw new ApiError(meta.errors.alreadyFollowing);
 
 				return { state };
 			} catch (e) {

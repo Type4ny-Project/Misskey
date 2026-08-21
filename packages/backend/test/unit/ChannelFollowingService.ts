@@ -89,6 +89,10 @@ describe('ChannelFollowingService', () => {
 		return await channelFollowRequestsRepository.findBy({});
 	}
 
+	async function fetchFollowersCount() {
+		return (await channelsRepository.findOneByOrFail({ id: channel1.id })).followersCount;
+	}
+
 	async function createDriveFile(data: Partial<MiDriveFile> = {}) {
 		return await driveFilesRepository
 			.insert({
@@ -226,6 +230,10 @@ describe('ChannelFollowingService', () => {
 			expect(followings).toHaveLength(1);
 			expect(followings[0].followeeId).toBe(channel1.id);
 			expect(followings[0].followerId).toBe(alice.id);
+			expect(await fetchFollowersCount()).toBe(1);
+
+			await service.follow(alice, channel1);
+			expect(await fetchFollowersCount()).toBe(1);
 		});
 	});
 
@@ -245,6 +253,7 @@ describe('ChannelFollowingService', () => {
 
 			expect(state).toBe('pending');
 			expect(await fetchChannelFollowing()).toHaveLength(0);
+			expect(await fetchFollowersCount()).toBe(0);
 			const requests = await fetchChannelFollowRequests();
 			expect(requests).toHaveLength(1);
 			expect(requests[0].channelId).toBe(channel1.id);
@@ -281,6 +290,7 @@ describe('ChannelFollowingService', () => {
 			const followings = await fetchChannelFollowing();
 			expect(followings).toHaveLength(1);
 			expect(followings[0].followerId).toBe(bob.id);
+			expect(await fetchFollowersCount()).toBe(1);
 		});
 
 		test('rejects a request without creating a following', async () => {
@@ -302,6 +312,7 @@ describe('ChannelFollowingService', () => {
 
 				expect(await fetchChannelFollowRequests()).toHaveLength(0);
 				expect(await fetchChannelFollowing()).toHaveLength(0);
+				expect(await fetchFollowersCount()).toBe(0);
 			}
 		});
 
@@ -314,18 +325,20 @@ describe('ChannelFollowingService', () => {
 			const followings = await fetchChannelFollowing();
 			expect(followings).toHaveLength(1);
 			expect(followings[0].followerId).toBe(bob.id);
+			expect(await fetchFollowersCount()).toBe(1);
 		});
 	});
 
 	describe('unfollow', () => {
 		test('default', async () => {
-			await createChannelFollowing({ followerId: alice.id, followeeId: channel1.id });
+			await service.follow(alice, channel1);
 
 			await service.unfollow(alice, channel1);
 
 			const followings = await fetchChannelFollowing();
 
 			expect(followings).toHaveLength(0);
+			expect(await fetchFollowersCount()).toBe(0);
 		});
 
 		test('cancels a pending follow request', async () => {

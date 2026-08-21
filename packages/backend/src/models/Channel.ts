@@ -89,6 +89,12 @@ export class MiChannel {
 	})
 	public usersCount: number;
 
+	@Column('integer', {
+		default: 0,
+		comment: 'The count of followers.',
+	})
+	public followersCount: number;
+
 	@Column('boolean', {
 		default: false,
 	})

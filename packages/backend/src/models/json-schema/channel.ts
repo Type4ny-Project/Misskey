@@ -65,6 +65,10 @@ export const packedChannelSchema = {
 			type: 'number',
 			nullable: false, optional: false,
 		},
+		followersCount: {
+			type: 'number',
+			nullable: false, optional: false,
+		},
 		notesCount: {
 			type: 'number',
 			nullable: false, optional: false,

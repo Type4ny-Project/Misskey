@@ -61,6 +61,7 @@ describe('チャンネルのフォロー承認', () => {
 		const pendingShow = await api('channels/show', { channelId: targetChannel.id }, follower);
 		assert.strictEqual(pendingShow.body.isFollowing, false);
 		assert.strictEqual(pendingShow.body.hasPendingFollowRequest, true);
+		assert.strictEqual(pendingShow.body.followersCount, 0);
 
 		const unauthorizedList = await api('channels/follow-requests/list', { channelId: targetChannel.id }, outsider);
 		assert.strictEqual(unauthorizedList.status, 400);
@@ -68,6 +69,8 @@ describe('チャンネルのフォロー承認', () => {
 		const collaboratorFollow = await api('channels/follow', { channelId: targetChannel.id }, collaborator);
 		assert.strictEqual(collaboratorFollow.status, 200);
 		assert.strictEqual(collaboratorFollow.body.state, 'following');
+		const collaboratorFollowingShow = await api('channels/show', { channelId: targetChannel.id }, collaborator);
+		assert.strictEqual(collaboratorFollowingShow.body.followersCount, 1);
 		const removeCollaborator = await api('channels/followers/remove', {
 			channelId: targetChannel.id,
 			userId: collaborator.id,
@@ -88,6 +91,7 @@ describe('チャンネルのフォロー承認', () => {
 		const approvedShow = await api('channels/show', { channelId: targetChannel.id }, follower);
 		assert.strictEqual(approvedShow.body.isFollowing, true);
 		assert.strictEqual(approvedShow.body.hasPendingFollowRequest, false);
+		assert.strictEqual(approvedShow.body.followersCount, 2);
 
 		const followers = await api('channels/followers', { channelId: targetChannel.id }, collaborator);
 		assert.strictEqual(followers.status, 200);
@@ -102,6 +106,7 @@ describe('チャンネルのフォロー承認', () => {
 
 		const removedShow = await api('channels/show', { channelId: targetChannel.id }, follower);
 		assert.strictEqual(removedShow.body.isFollowing, false);
+		assert.strictEqual(removedShow.body.followersCount, 1);
 
 		const secondFollow = await api('channels/follow', { channelId: targetChannel.id }, follower);
 		assert.strictEqual(secondFollow.body.state, 'pending');
@@ -115,5 +120,6 @@ describe('チャンネルのフォロー承認', () => {
 		assert.strictEqual(approvalDisabledShow.body.isFollowApprovalRequired, false);
 		assert.strictEqual(approvalDisabledShow.body.isFollowing, true);
 		assert.strictEqual(approvalDisabledShow.body.hasPendingFollowRequest, false);
+		assert.strictEqual(approvalDisabledShow.body.followersCount, 2);
 	});
 });

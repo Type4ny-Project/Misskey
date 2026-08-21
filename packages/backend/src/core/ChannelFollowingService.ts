@@ -169,10 +169,13 @@ export class ChannelFollowingService implements OnModuleInit {
 	): Promise<void> {
 		await this.db.transaction(async manager => {
 			await this.lockChannel(manager, targetChannel.id);
-			await manager.getRepository(MiChannelFollowing).delete({
+			const deleteResult = await manager.getRepository(MiChannelFollowing).delete({
 				followerId: requestUser.id,
 				followeeId: targetChannel.id,
 			});
+			if ((deleteResult.affected ?? 0) > 0) {
+				await this.decrementFollowersCount(manager, targetChannel.id);
+			}
 			await manager.getRepository(MiChannelFollowRequest).delete({
 				followerId: requestUser.id,
 				channelId: targetChannel.id,
@@ -251,6 +254,9 @@ export class ChannelFollowingService implements OnModuleInit {
 					SELECT "followerId" FROM inserted
 				`, [targetChannel.id]) as { followerId: MiUser['id'] }[];
 				approvedFollowerIds = approvedFollowers.map(following => following.followerId);
+				if (approvedFollowerIds.length > 0) {
+					await manager.getRepository(MiChannel).increment({ id: targetChannel.id }, 'followersCount', approvedFollowerIds.length);
+				}
 			}
 
 			await manager.getRepository(MiChannel).update(targetChannel.id, {
@@ -274,8 +280,8 @@ export class ChannelFollowingService implements OnModuleInit {
 		manager: EntityManager,
 		followerId: MiUser['id'],
 		channelId: MiChannel['id'],
-	): Promise<void> {
-		await manager.getRepository(MiChannelFollowing).createQueryBuilder()
+	): Promise<boolean> {
+		const result = await manager.getRepository(MiChannelFollowing).createQueryBuilder()
 			.insert()
 			.values({
 				id: this.idService.gen(),
@@ -283,6 +289,20 @@ export class ChannelFollowingService implements OnModuleInit {
 				followeeId: channelId,
 			})
 			.orIgnore()
+			.returning('id')
+			.execute();
+		const inserted = Array.isArray(result.raw) && result.raw.length > 0;
+		if (inserted) {
+			await manager.getRepository(MiChannel).increment({ id: channelId }, 'followersCount', 1);
+		}
+		return inserted;
+	}
+
+	private async decrementFollowersCount(manager: EntityManager, channelId: MiChannel['id']): Promise<void> {
+		await manager.getRepository(MiChannel).createQueryBuilder()
+			.update()
+			.set({ followersCount: () => 'GREATEST("followersCount" - 1, 0)' })
+			.where('id = :channelId', { channelId })
 			.execute();
 	}
 

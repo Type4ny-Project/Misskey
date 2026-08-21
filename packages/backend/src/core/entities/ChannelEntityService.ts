@@ -131,6 +131,7 @@ export class ChannelEntityService {
 			color: channel.color,
 			isArchived: channel.isArchived,
 			usersCount: channel.usersCount,
+			followersCount: channel.followersCount,
 			notesCount: channel.notesCount,
 			isSensitive: channel.isSensitive,
 			allowRenoteToExternal: channel.allowRenoteToExternal,

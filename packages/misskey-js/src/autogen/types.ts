@@ -5441,6 +5441,7 @@ export type components = {
             color: string;
             isArchived: boolean;
             usersCount: number;
+            followersCount: number;
             notesCount: number;
             isSensitive: boolean;
             allowRenoteToExternal: boolean;

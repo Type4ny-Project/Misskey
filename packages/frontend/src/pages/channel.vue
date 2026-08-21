@@ -142,10 +142,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 		<div v-else-if="tab === 'followRequests' && canManageChannelFollowers" class="_gaps">
-			<ChannelFollowRequests :channelId="channelId" @resolved="handleFollowRequestResolved"/>
+			<ChannelFollowRequests :key="channelId" :channelId="channelId" @resolved="handleFollowRequestResolved"/>
 		</div>
 		<div v-else-if="tab === 'followerManagement' && canManageChannelFollowers" class="_gaps">
-			<ChannelFollowers :channelId="channelId" :managerIds="channelManagerIds" @removed="adjustFollowersCount(-1)"/>
+			<ChannelFollowers :key="channelId" :channelId="channelId" :managerIds="channelManagerIds" @removed="adjustFollowersCount(-1)"/>
 		</div>
 	</div>
 	<template #footer>
@@ -401,12 +401,12 @@ function isChannelCollaborator(targetChannel: Misskey.entities.Channel, userId: 
 
 function updateFollowersCount(count: number): void {
 	if (channel.value == null) return;
-	channel.value.usersCount = count;
+	channel.value.followersCount = count;
 }
 
 function adjustFollowersCount(delta: number): void {
 	if (channel.value == null) return;
-	channel.value.usersCount = Math.max(0, channel.value.usersCount + delta);
+	channel.value.followersCount = Math.max(0, channel.value.followersCount + delta);
 }
 
 async function handleFollowRequestResolved(approved: boolean): Promise<void> {

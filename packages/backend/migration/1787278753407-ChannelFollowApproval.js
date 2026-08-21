@@ -15,6 +15,9 @@ export class ChannelFollowApproval1787278753407 {
         await queryRunner.query(`COMMENT ON COLUMN "channel"."isUnlisted" IS 'Whether the channel is hidden from channel discovery surfaces.'`);
         await queryRunner.query(`ALTER TABLE "channel" ADD "isFollowApprovalRequired" boolean NOT NULL DEFAULT false`);
         await queryRunner.query(`COMMENT ON COLUMN "channel"."isFollowApprovalRequired" IS 'Whether following this channel requires approval.'`);
+        await queryRunner.query(`ALTER TABLE "channel" ADD "followersCount" integer NOT NULL DEFAULT 0`);
+        await queryRunner.query(`COMMENT ON COLUMN "channel"."followersCount" IS 'The count of followers.'`);
+        await queryRunner.query(`UPDATE "channel" SET "followersCount" = (SELECT COUNT(*) FROM "channel_following" WHERE "channel_following"."followeeId" = "channel"."id")`);
         await queryRunner.query(`CREATE INDEX "IDX_01d715841fcb2cc4b679950773" ON "channel" ("isUnlisted")`);
         await queryRunner.query(`ALTER TABLE "channel_follow_request" ADD CONSTRAINT "FK_37dba759526d0abee0a34c8f4ed" FOREIGN KEY ("channelId") REFERENCES "channel"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "channel_follow_request" ADD CONSTRAINT "FK_d84a54e9f624e81d0eeb1984a09" FOREIGN KEY ("followerId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
@@ -24,6 +27,8 @@ export class ChannelFollowApproval1787278753407 {
         await queryRunner.query(`ALTER TABLE "channel_follow_request" DROP CONSTRAINT "FK_d84a54e9f624e81d0eeb1984a09"`);
         await queryRunner.query(`ALTER TABLE "channel_follow_request" DROP CONSTRAINT "FK_37dba759526d0abee0a34c8f4ed"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_01d715841fcb2cc4b679950773"`);
+        await queryRunner.query(`COMMENT ON COLUMN "channel"."followersCount" IS 'The count of followers.'`);
+        await queryRunner.query(`ALTER TABLE "channel" DROP COLUMN "followersCount"`);
         await queryRunner.query(`COMMENT ON COLUMN "channel"."isFollowApprovalRequired" IS 'Whether following this channel requires approval.'`);
         await queryRunner.query(`ALTER TABLE "channel" DROP COLUMN "isFollowApprovalRequired"`);
         await queryRunner.query(`COMMENT ON COLUMN "channel"."isUnlisted" IS 'Whether the channel is hidden from channel discovery surfaces.'`);

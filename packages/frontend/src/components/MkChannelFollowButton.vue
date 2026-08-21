@@ -49,7 +49,7 @@ const emit = defineEmits<{
 
 const isFollowing = ref(props.channel.isFollowing);
 const hasPendingFollowRequest = ref(props.channel.hasPendingFollowRequest ?? false);
-const followersCount = ref(props.channel.usersCount);
+const followersCount = ref(props.channel.followersCount);
 const wait = ref(false);
 
 async function onClick() {

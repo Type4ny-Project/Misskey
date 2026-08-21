@@ -38,6 +38,7 @@ export function channel(id = 'somechannelid', name = 'Some Channel', bannerUrl: 
 		color: '#000',
 		isArchived: false,
 		usersCount: 1,
+		followersCount: 1,
 		notesCount: 1,
 		isSensitive: false,
 		allowRenoteToExternal: false,

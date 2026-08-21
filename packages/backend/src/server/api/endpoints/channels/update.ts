@@ -125,20 +125,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			if (ps.collaboratorIds !== undefined) {
-				if (channel.userId !== me.id && !iAmModerator) {
-					throw new ApiError(meta.errors.accessDenied);
-				}
-				const users = await this.usersRepository.findBy({
-					id: In(ps.collaboratorIds),
-				});
-				if (users.length !== ps.collaboratorIds.length) {
-					throw new ApiError({
-						message: 'One or more collaborator user IDs are invalid.',
-						code: 'INVALID_COLLABORATOR_USER_IDS',
-						id: '3e7c9a2b-4f8c-4d1e-9b7a-3f6e8c7d9a1b',
+				const requestedCollaboratorIds = ps.collaboratorIds;
+				const currentCollaboratorIds = Array.isArray(channel.collaboratorIds) ? channel.collaboratorIds : [];
+				const collaboratorsChanged = currentCollaboratorIds.length !== requestedCollaboratorIds.length ||
+					currentCollaboratorIds.some(id => !requestedCollaboratorIds.includes(id));
+
+				if (collaboratorsChanged) {
+					if (channel.userId !== me.id && !iAmModerator) {
+						throw new ApiError(meta.errors.accessDenied);
+					}
+					const users = await this.usersRepository.findBy({
+						id: In(requestedCollaboratorIds),
 					});
+					if (users.length !== requestedCollaboratorIds.length) {
+						throw new ApiError({
+							message: 'One or more collaborator user IDs are invalid.',
+							code: 'INVALID_COLLABORATOR_USER_IDS',
+							id: '3e7c9a2b-4f8c-4d1e-9b7a-3f6e8c7d9a1b',
+						});
+					}
+					await this.channelService.setCollaborators(channel, requestedCollaboratorIds);
 				}
-				await this.channelService.setCollaborators(channel, ps.collaboratorIds);
 			}
 
 			if (ps.isLocalOnly !== undefined) channel.isLocalOnly = ps.isLocalOnly;
@@ -159,7 +166,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...(ps.isUnlisted !== undefined ? { isUnlisted: ps.isUnlisted } : {}),
 				...(ps.transferAdminUserId !== undefined && channel.userId === ps.transferAdminUserId ? { userId: ps.transferAdminUserId } : {}),
 			};
-			if (Object.keys(updates).length > 0) await this.channelsRepository.update(channel.id, updates);
+			if (Object.keys(updates).length > 0) {
+				await this.channelsRepository.update(channel.id, updates);
+			}
 			if (ps.isFollowApprovalRequired !== undefined) {
 				await this.channelFollowingService.setFollowApprovalRequired(channel, ps.isFollowApprovalRequired);
 			}

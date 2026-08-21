@@ -8,7 +8,9 @@ import { In } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type {
 	ChannelFavoritesRepository,
-	ChannelFollowingsRepository, ChannelMutingRepository,
+	ChannelFollowingsRepository,
+	ChannelFollowRequestsRepository,
+	ChannelMutingRepository,
 	ChannelsRepository,
 	DriveFilesRepository,
 	MiDriveFile,
@@ -30,6 +32,8 @@ export class ChannelEntityService {
 		private channelsRepository: ChannelsRepository,
 		@Inject(DI.channelFollowingsRepository)
 		private channelFollowingsRepository: ChannelFollowingsRepository,
+		@Inject(DI.channelFollowRequestsRepository)
+		private channelFollowRequestsRepository: ChannelFollowRequestsRepository,
 		@Inject(DI.channelFavoritesRepository)
 		private channelFavoritesRepository: ChannelFavoritesRepository,
 		@Inject(DI.channelMutingRepository)
@@ -52,6 +56,7 @@ export class ChannelEntityService {
 		opts?: {
 			bannerFiles?: Map<MiDriveFile['id'], MiDriveFile>;
 			followings?: Set<MiChannel['id']>;
+			followRequests?: Set<MiChannel['id']>;
 			favorites?: Set<MiChannel['id']>;
 			muting?: Set<MiChannel['id']>;
 			pinnedNotes?: Map<MiNote['id'], MiNote>;
@@ -66,6 +71,7 @@ export class ChannelEntityService {
 		}
 
 		let isFollowing = false;
+		let hasPendingFollowRequest = false;
 		let isFavorited = false;
 		let isMuting = false;
 		if (me) {
@@ -73,6 +79,13 @@ export class ChannelEntityService {
 				where: {
 					followerId: me.id,
 					followeeId: channel.id,
+				},
+			});
+
+			hasPendingFollowRequest = opts?.followRequests?.has(channel.id) ?? await this.channelFollowRequestsRepository.exists({
+				where: {
+					followerId: me.id,
+					channelId: channel.id,
 				},
 			});
 
@@ -118,14 +131,18 @@ export class ChannelEntityService {
 			color: channel.color,
 			isArchived: channel.isArchived,
 			usersCount: channel.usersCount,
+			followersCount: channel.followersCount,
 			notesCount: channel.notesCount,
 			isSensitive: channel.isSensitive,
 			allowRenoteToExternal: channel.allowRenoteToExternal,
 			isLocalOnly: channel.isLocalOnly,
+			isUnlisted: channel.isUnlisted,
+			isFollowApprovalRequired: channel.isFollowApprovalRequired,
 			collaboratorIds,
 
 			...(me ? {
 				isFollowing,
+				hasPendingFollowRequest,
 				isFavorited,
 				isMuting,
 				hasUnreadNote: false, // 後方互換性のため
@@ -169,6 +186,15 @@ export class ChannelEntityService {
 				.then(it => new Set(it.map(it => it.followeeId)))
 			: new Set<MiChannel['id']>();
 
+		const followRequests = me
+			? await this.channelFollowRequestsRepository
+				.findBy({
+					followerId: me.id,
+					channelId: In(channels.map(it => it.id)),
+				})
+				.then(it => new Set(it.map(it => it.channelId)))
+			: new Set<MiChannel['id']>();
+
 		const favorites = me
 			? await this.channelFavoritesRepository
 				.findBy({
@@ -198,6 +224,7 @@ export class ChannelEntityService {
 		return Promise.all(channels.map(it => this.pack(it, me, detailed, {
 			bannerFiles,
 			followings,
+			followRequests,
 			favorites,
 			muting,
 			pinnedNotes,

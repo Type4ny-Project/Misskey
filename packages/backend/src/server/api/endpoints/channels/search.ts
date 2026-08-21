@@ -65,6 +65,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				} else {
 					query.andWhere('channel.name ILIKE :q', { q: `%${ sqlLikeEscape(ps.query) }%` });
 				}
+			} else {
+				query.andWhere('channel.isUnlisted = FALSE');
 			}
 
 			const channels = await query

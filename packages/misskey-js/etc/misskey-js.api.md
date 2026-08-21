@@ -1038,7 +1038,31 @@ type ChannelsFollowedRequest = operations['channels___followed']['requestBody'][
 type ChannelsFollowedResponse = operations['channels___followed']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type ChannelsFollowersRemoveRequest = operations['channels___followers___remove']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChannelsFollowersRequest = operations['channels___followers']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChannelsFollowersResponse = operations['channels___followers']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type ChannelsFollowRequest = operations['channels___follow']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChannelsFollowRequestsApproveRequest = operations['channels___follow-requests___approve']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChannelsFollowRequestsListRequest = operations['channels___follow-requests___list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChannelsFollowRequestsListResponse = operations['channels___follow-requests___list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type ChannelsFollowRequestsRejectRequest = operations['channels___follow-requests___reject']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChannelsFollowResponse = operations['channels___follow']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type ChannelsMuteCreateRequest = operations['channels___mute___create']['requestBody']['content']['application/json'];
@@ -1886,8 +1910,16 @@ declare namespace entities {
         ChannelsFavoriteRequest,
         ChannelsFeaturedResponse,
         ChannelsFollowRequest,
+        ChannelsFollowResponse,
+        ChannelsFollowRequestsApproveRequest,
+        ChannelsFollowRequestsListRequest,
+        ChannelsFollowRequestsListResponse,
+        ChannelsFollowRequestsRejectRequest,
         ChannelsFollowedRequest,
         ChannelsFollowedResponse,
+        ChannelsFollowersRequest,
+        ChannelsFollowersResponse,
+        ChannelsFollowersRemoveRequest,
         ChannelsMuteCreateRequest,
         ChannelsMuteDeleteRequest,
         ChannelsMuteListResponse,

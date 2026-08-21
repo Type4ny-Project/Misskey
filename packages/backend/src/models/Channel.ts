@@ -89,6 +89,12 @@ export class MiChannel {
 	})
 	public usersCount: number;
 
+	@Column('integer', {
+		default: 0,
+		comment: 'The count of followers.',
+	})
+	public followersCount: number;
+
 	@Column('boolean', {
 		default: false,
 	})
@@ -104,6 +110,19 @@ export class MiChannel {
 		comment: 'Whether the channel is local only',
 	})
 	public isLocalOnly: boolean;
+
+	@Index()
+	@Column('boolean', {
+		default: false,
+		comment: 'Whether the channel is hidden from channel discovery surfaces.',
+	})
+	public isUnlisted: boolean;
+
+	@Column('boolean', {
+		default: false,
+		comment: 'Whether following this channel requires approval.',
+	})
+	public isFollowApprovalRequired: boolean;
 
 	@Column({
 		...id(),

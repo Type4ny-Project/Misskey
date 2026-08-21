@@ -45,10 +45,14 @@ export const Default = {
 		const canvas = within(canvasElement);
 		const buttonElement = canvas.getByRole<HTMLButtonElement>('button');
 		await expect(buttonElement).toHaveTextContent(i18n.ts.follow);
+		await expect(buttonElement).toHaveTextContent('1');
 		await userEvent.click(buttonElement);
 		await sleep(1000);
 		await expect(buttonElement).toHaveTextContent(i18n.ts.unfollow);
+		await expect(buttonElement).toHaveTextContent('2');
 		await userEvent.click(buttonElement);
+		await sleep(1000);
+		await expect(buttonElement).toHaveTextContent('1');
 	},
 	parameters: {
 		layout: 'centered',
@@ -57,7 +61,43 @@ export const Default = {
 				...commonHandlers,
 				http.post('/api/channels/follow', async ({ request }) => {
 					action('POST /api/channels/follow')(await request.json());
+					return HttpResponse.json({ state: 'following' });
+				}),
+				http.post('/api/channels/unfollow', async ({ request }) => {
+					action('POST /api/channels/unfollow')(await request.json());
 					return HttpResponse.json({});
+				}),
+			],
+		},
+	},
+} satisfies StoryObj<typeof MkChannelFollowButton>;
+
+export const ApprovalRequired = {
+	...Default,
+	args: {
+		channel: {
+			...channel(),
+			isFollowApprovalRequired: true,
+		},
+		full: true,
+	},
+	async play({ canvasElement }) {
+		const canvas = within(canvasElement);
+		const buttonElement = canvas.getByRole<HTMLButtonElement>('button');
+		await expect(buttonElement).toHaveTextContent(i18n.ts.follow);
+		await userEvent.click(buttonElement);
+		await sleep(1000);
+		await expect(buttonElement).toHaveTextContent(i18n.ts.followRequestPending);
+		await expect(buttonElement).toHaveTextContent('1');
+	},
+	parameters: {
+		...Default.parameters,
+		msw: {
+			handlers: [
+				...commonHandlers,
+				http.post('/api/channels/follow', async ({ request }) => {
+					action('POST /api/channels/follow')(await request.json());
+					return HttpResponse.json({ state: 'pending' });
 				}),
 				http.post('/api/channels/unfollow', async ({ request }) => {
 					action('POST /api/channels/unfollow')(await request.json());

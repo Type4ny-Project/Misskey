@@ -9209,6 +9209,42 @@ export interface Locale extends ILocale {
          */
         "isLocalOnly": string;
         /**
+         * チャンネル一覧に掲載しない
+         */
+        "isUnlisted": string;
+        /**
+         * チャンネル一覧・トレンドには表示されません。検索やURLからは引き続き閲覧できます。
+         */
+        "isUnlistedDescription": string;
+        /**
+         * フォローを承認制にする
+         */
+        "isFollowApprovalRequired": string;
+        /**
+         * 共同管理者またはチャンネル管理者が承認するまで、フォローは申請中になります。
+         */
+        "isFollowApprovalRequiredDescription": string;
+        /**
+         * フォロワー管理
+         */
+        "followerManagement": string;
+        /**
+         * フォロー申請
+         */
+        "followRequests": string;
+        /**
+         * フォロワーはいません
+         */
+        "noFollowers": string;
+        /**
+         * {name}をこのチャンネルのフォロワーから削除しますか？
+         */
+        "removeFollowerConfirm": ParameterizedString<"name">;
+        /**
+         * {name}へのフォロー申請をキャンセルしますか？
+         */
+        "cancelFollowRequestConfirm": ParameterizedString<"name">;
+        /**
          * 共同管理者を追加
          */
         "addCollaborator": string;

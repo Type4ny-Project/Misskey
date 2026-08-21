@@ -26,10 +26,13 @@ describe('Channel', () => {
 
 		test('フォローしているチャンネルを再度フォローするとALREADY_FOLLOWINGエラーになる', async () => {
 			const res1 = await api('channels/follow', { channelId: channel.id }, alice);
-			assert.strictEqual(res1.status, 204);
+			assert.strictEqual(res1.status, 200);
+			assert.strictEqual(res1.body.state, 'following');
+			const followedChannel = await api('channels/show', { channelId: channel.id }, alice);
+			assert.strictEqual(followedChannel.body.isFollowing, true, JSON.stringify(followedChannel.body));
 
 			const res2 = await api('channels/follow', { channelId: channel.id }, alice);
-			assert.strictEqual(res2.status, 400);
+			assert.strictEqual(res2.status, 400, JSON.stringify(res2.body));
 			assert.strictEqual(castAsError(res2.body as any).error.code, 'ALREADY_FOLLOWING');
 		});
 	});

@@ -23,6 +23,7 @@ import { MiAvatarDecoration } from '@/models/AvatarDecoration.js';
 import { MiAuthSession } from '@/models/AuthSession.js';
 import { MiBlocking } from '@/models/Blocking.js';
 import { MiChannelFollowing } from '@/models/ChannelFollowing.js';
+import { MiChannelFollowRequest } from '@/models/ChannelFollowRequest.js';
 import { MiChannelFavorite } from '@/models/ChannelFavorite.js';
 import { MiChannelMuting } from '@/models/ChannelMuting.js';
 import { MiClip } from '@/models/Clip.js';
@@ -239,6 +240,7 @@ export const entities = [
 	MiRelay,
 	MiChannel,
 	MiChannelFollowing,
+	MiChannelFollowRequest,
 	MiChannelFavorite,
 	MiChannelMuting,
 	MiRegistryItem,

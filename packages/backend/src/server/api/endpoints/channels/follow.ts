@@ -8,6 +8,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { ChannelsRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
 import { ChannelFollowingService } from '@/core/ChannelFollowingService.js';
+import { ChannelService } from '@/core/ChannelService.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { ApiError } from '../../error.js';
 
@@ -19,6 +20,18 @@ export const meta = {
 	prohibitMoved: true,
 
 	kind: 'write:channels',
+
+	res: {
+		type: 'object',
+		optional: false, nullable: false,
+		properties: {
+			state: {
+				type: 'string',
+				optional: false, nullable: false,
+				enum: ['following', 'pending'],
+			},
+		},
+	},
 
 	errors: {
 		noSuchChannel: {
@@ -48,6 +61,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.channelsRepository)
 		private channelsRepository: ChannelsRepository,
 		private channelFollowingService: ChannelFollowingService,
+		private channelService: ChannelService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const channel = await this.channelsRepository.findOneBy({
@@ -59,7 +73,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			try {
-				await this.channelFollowingService.follow(me, channel);
+				const canManage = this.channelService.isChannelManager(channel, me);
+				const state = await this.channelFollowingService.followOrRequest(me, channel, canManage);
+				if (state === 'alreadyFollowing') throw new ApiError(meta.errors.alreadyFollowing);
+
+				return { state };
 			} catch (e) {
 				if (e instanceof IdentifiableError) {
 					if (e.id === '6e335e39-0203-4418-a936-b3f2dc987845') throw new ApiError(meta.errors.alreadyFollowing);

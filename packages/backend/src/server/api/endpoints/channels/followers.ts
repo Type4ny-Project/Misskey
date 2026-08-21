@@ -1,0 +1,81 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+import { Inject, Injectable } from '@nestjs/common';
+import { ChannelService } from '@/core/ChannelService.js';
+import { IdService } from '@/core/IdService.js';
+import { QueryService } from '@/core/QueryService.js';
+import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import { DI } from '@/di-symbols.js';
+import type { ChannelFollowingsRepository, ChannelsRepository } from '@/models/_.js';
+import { Endpoint } from '@/server/api/endpoint-base.js';
+import { ApiError } from '@/server/api/error.js';
+
+export const meta = {
+	tags: ['channels', 'account'],
+	requireCredential: true,
+	kind: 'read:channels',
+	res: {
+		type: 'array', optional: false, nullable: false,
+		items: {
+			type: 'object', optional: false, nullable: false,
+			properties: {
+				id: { type: 'string', format: 'id', optional: false, nullable: false },
+				createdAt: { type: 'string', format: 'date-time', optional: false, nullable: false },
+				user: { type: 'object', ref: 'UserLite', optional: false, nullable: false },
+			},
+		},
+	},
+	errors: {
+		noSuchChannel: { message: 'No such channel.', code: 'NO_SUCH_CHANNEL', id: 'd662d052-7760-46d1-83cc-60f857c88c4f' },
+		accessDenied: { message: 'You do not have permission to manage this channel.', code: 'ACCESS_DENIED', id: 'd9c62aa5-3331-41fe-8f73-666b549b895d' },
+	},
+} as const;
+
+export const paramDef = {
+	type: 'object',
+	properties: {
+		channelId: { type: 'string', format: 'misskey:id' },
+		sinceId: { type: 'string', format: 'misskey:id' },
+		untilId: { type: 'string', format: 'misskey:id' },
+		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+	},
+	required: ['channelId'],
+} as const;
+
+@Injectable()
+export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
+	constructor(
+		@Inject(DI.channelsRepository)
+		private channelsRepository: ChannelsRepository,
+		@Inject(DI.channelFollowingsRepository)
+		private channelFollowingsRepository: ChannelFollowingsRepository,
+		private channelService: ChannelService,
+		private queryService: QueryService,
+		private userEntityService: UserEntityService,
+		private idService: IdService,
+	) {
+		super(meta, paramDef, async (ps, me) => {
+			const channel = await this.channelsRepository.findOneBy({ id: ps.channelId });
+			if (channel == null) throw new ApiError(meta.errors.noSuchChannel);
+			if (!this.channelService.isChannelManager(channel, me)) throw new ApiError(meta.errors.accessDenied);
+
+			const query = this.queryService.makePaginationQuery(
+				this.channelFollowingsRepository.createQueryBuilder('following'),
+				ps.sinceId,
+				ps.untilId,
+			).andWhere('following.followeeId = :channelId', { channelId: channel.id });
+			const followings = await query.limit(ps.limit).getMany();
+			const users = await this.userEntityService.packMany(followings.map(following => following.followerId), me);
+			const usersById = new Map(users.map(user => [user.id, user]));
+
+			return followings.map(following => ({
+				id: following.id,
+				createdAt: this.idService.parse(following.id).date.toISOString(),
+				user: usersById.get(following.followerId)!,
+			}));
+		});
+	}
+}

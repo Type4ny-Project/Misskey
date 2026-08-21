@@ -1296,6 +1296,33 @@ export type paths = {
          */
         post: operations['channels___follow'];
     };
+    '/channels/follow-requests/approve': {
+        /**
+         * channels/follow-requests/approve
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:channels*
+         */
+        post: operations['channels___follow-requests___approve'];
+    };
+    '/channels/follow-requests/list': {
+        /**
+         * channels/follow-requests/list
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:channels*
+         */
+        post: operations['channels___follow-requests___list'];
+    };
+    '/channels/follow-requests/reject': {
+        /**
+         * channels/follow-requests/reject
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:channels*
+         */
+        post: operations['channels___follow-requests___reject'];
+    };
     '/channels/followed': {
         /**
          * channels/followed
@@ -1304,6 +1331,24 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:channels*
          */
         post: operations['channels___followed'];
+    };
+    '/channels/followers': {
+        /**
+         * channels/followers
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:channels*
+         */
+        post: operations['channels___followers'];
+    };
+    '/channels/followers/remove': {
+        /**
+         * channels/followers/remove
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:channels*
+         */
+        post: operations['channels___followers___remove'];
     };
     '/channels/mute/create': {
         /**
@@ -5400,11 +5445,14 @@ export type components = {
             isSensitive: boolean;
             allowRenoteToExternal: boolean;
             isFollowing?: boolean;
+            hasPendingFollowRequest?: boolean;
             isFavorited?: boolean;
             isMuting?: boolean;
             pinnedNotes?: components['schemas']['Note'][];
             collaboratorIds?: string[];
             isLocalOnly: boolean;
+            isUnlisted: boolean;
+            isFollowApprovalRequired: boolean;
         };
         QueueCount: {
             waiting: number;
@@ -16218,6 +16266,10 @@ export interface operations {
                     allowRenoteToExternal?: boolean | null;
                     /** @default false */
                     isLocalOnly?: boolean;
+                    /** @default false */
+                    isUnlisted?: boolean;
+                    /** @default false */
+                    isFollowApprovalRequired?: boolean;
                 };
             };
         };
@@ -16418,6 +16470,220 @@ export interface operations {
             };
         };
         responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** @enum {string} */
+                        state: 'following' | 'pending';
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'channels___follow-requests___approve': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    channelId: string;
+                    /** Format: misskey:id */
+                    userId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'channels___follow-requests___list': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    channelId: string;
+                    /** Format: misskey:id */
+                    sinceId?: string;
+                    /** Format: misskey:id */
+                    untilId?: string;
+                    /** @default 10 */
+                    limit?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** Format: id */
+                        id: string;
+                        /** Format: date-time */
+                        createdAt: string;
+                        user: components['schemas']['UserLite'];
+                    }[];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'channels___follow-requests___reject': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    channelId: string;
+                    /** Format: misskey:id */
+                    userId: string;
+                };
+            };
+        };
+        responses: {
             /** @description OK (without any results) */
             204: {
                 headers: {
@@ -16494,6 +16760,149 @@ export interface operations {
                 };
                 content: {
                     'application/json': components['schemas']['Channel'][];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    channels___followers: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    channelId: string;
+                    /** Format: misskey:id */
+                    sinceId?: string;
+                    /** Format: misskey:id */
+                    untilId?: string;
+                    /** @default 10 */
+                    limit?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** Format: id */
+                        id: string;
+                        /** Format: date-time */
+                        createdAt: string;
+                        user: components['schemas']['UserLite'];
+                    }[];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    channels___followers___remove: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    channelId: string;
+                    /** Format: misskey:id */
+                    userId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
                 };
             };
             /** @description Client error */
@@ -17221,6 +17630,8 @@ export interface operations {
                     isSensitive?: boolean | null;
                     allowRenoteToExternal?: boolean | null;
                     isLocalOnly?: boolean;
+                    isUnlisted?: boolean;
+                    isFollowApprovalRequired?: boolean;
                     /** Format: misskey:id */
                     transferAdminUserId?: string;
                     collaboratorIds?: string[];

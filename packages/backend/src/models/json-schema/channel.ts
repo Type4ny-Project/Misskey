@@ -81,6 +81,10 @@ export const packedChannelSchema = {
 			type: 'boolean',
 			optional: true, nullable: false,
 		},
+		hasPendingFollowRequest: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
 		isFavorited: {
 			type: 'boolean',
 			optional: true, nullable: false,
@@ -107,6 +111,14 @@ export const packedChannelSchema = {
 			},
 		},
 		isLocalOnly: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		isUnlisted: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		isFollowApprovalRequired: {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},

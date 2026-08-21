@@ -42,6 +42,8 @@ export function channel(id = 'somechannelid', name = 'Some Channel', bannerUrl: 
 		isSensitive: false,
 		allowRenoteToExternal: false,
 		isLocalOnly: false,
+		isUnlisted: false,
+		isFollowApprovalRequired: false,
 	};
 }
 

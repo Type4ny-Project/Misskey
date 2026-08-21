@@ -6,12 +6,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <button
 	class="_button"
-	:class="[$style.root, { [$style.wait]: wait, [$style.active]: isFollowing, [$style.full]: full }]"
+	:class="[$style.root, { [$style.wait]: wait, [$style.active]: isFollowing || hasPendingFollowRequest, [$style.full]: full }]"
 	:disabled="wait"
 	@click="onClick"
 >
 	<template v-if="!wait">
-		<template v-if="isFollowing">
+		<template v-if="hasPendingFollowRequest">
+			<span v-if="full" :class="$style.text">{{ i18n.ts.followRequestPending }}</span><i class="ti ti-hourglass-empty"></i>
+		</template>
+		<template v-else-if="isFollowing">
 			<span v-if="full" :class="$style.text">{{ i18n.ts.unfollow }}</span><i class="ti ti-minus"></i>
 		</template>
 		<template v-else>
@@ -29,6 +32,7 @@ import { ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
+import * as os from '@/os.js';
 
 const props = withDefaults(defineProps<{
 	channel: Misskey.entities.Channel;
@@ -38,22 +42,32 @@ const props = withDefaults(defineProps<{
 });
 
 const isFollowing = ref(props.channel.isFollowing);
+const hasPendingFollowRequest = ref(props.channel.hasPendingFollowRequest ?? false);
 const wait = ref(false);
 
 async function onClick() {
 	wait.value = true;
 
 	try {
-		if (isFollowing.value) {
+		if (isFollowing.value || hasPendingFollowRequest.value) {
+			if (hasPendingFollowRequest.value) {
+				const { canceled } = await os.confirm({
+					type: 'question',
+					text: i18n.tsx._channel.cancelFollowRequestConfirm({ name: props.channel.name }),
+				});
+				if (canceled) return;
+			}
 			await misskeyApi('channels/unfollow', {
 				channelId: props.channel.id,
 			});
 			isFollowing.value = false;
+			hasPendingFollowRequest.value = false;
 		} else {
-			await misskeyApi('channels/follow', {
+			const result = await misskeyApi('channels/follow', {
 				channelId: props.channel.id,
 			});
-			isFollowing.value = true;
+			isFollowing.value = result.state === 'following';
+			hasPendingFollowRequest.value = result.state === 'pending';
 		}
 	} catch (err) {
 		console.error(err);

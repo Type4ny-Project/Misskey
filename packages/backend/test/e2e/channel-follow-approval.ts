@@ -1,0 +1,89 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+process.env.NODE_ENV = 'test';
+
+import * as assert from 'node:assert';
+import { beforeAll, describe, test } from 'vitest';
+import { api, channel, signup } from '../utils.js';
+import type * as Misskey from 'misskey-js';
+
+describe('チャンネルのフォロー承認', () => {
+	let owner: Misskey.entities.SignupResponse;
+	let collaborator: Misskey.entities.SignupResponse;
+	let follower: Misskey.entities.SignupResponse;
+	let outsider: Misskey.entities.SignupResponse;
+	let targetChannel: Misskey.entities.Channel;
+
+	beforeAll(async () => {
+		owner = await signup({ username: 'owner' });
+		collaborator = await signup({ username: 'collaborator' });
+		follower = await signup({ username: 'follower' });
+		outsider = await signup({ username: 'outsider' });
+		targetChannel = await channel(owner, {
+			name: 'private-channel',
+			isUnlisted: true,
+			isFollowApprovalRequired: true,
+		});
+
+		const update = await api('channels/update', {
+			channelId: targetChannel.id,
+			name: targetChannel.name,
+			collaboratorIds: [collaborator.id],
+		}, owner);
+		assert.strictEqual(update.status, 200, JSON.stringify(update.body));
+	}, 1000 * 60 * 2);
+
+	test('非掲載チャンネルを共同管理者が承認し、フォロワーを削除できる', async () => {
+		const search = await api('channels/search', { query: 'private-channel' }, follower);
+		assert.strictEqual(search.status, 200);
+		assert.strictEqual(search.body.some(channel => channel.id === targetChannel.id), false);
+
+		const directShow = await api('channels/show', { channelId: targetChannel.id }, follower);
+		assert.strictEqual(directShow.status, 200);
+		assert.strictEqual(directShow.body.isUnlisted, true);
+		assert.strictEqual(directShow.body.isFollowApprovalRequired, true);
+
+		const follow = await api('channels/follow', { channelId: targetChannel.id }, follower);
+		assert.strictEqual(follow.status, 200);
+		assert.strictEqual(follow.body.state, 'pending');
+
+		const pendingShow = await api('channels/show', { channelId: targetChannel.id }, follower);
+		assert.strictEqual(pendingShow.body.isFollowing, false);
+		assert.strictEqual(pendingShow.body.hasPendingFollowRequest, true);
+
+		const unauthorizedList = await api('channels/follow-requests/list', { channelId: targetChannel.id }, outsider);
+		assert.strictEqual(unauthorizedList.status, 400);
+
+		const requests = await api('channels/follow-requests/list', { channelId: targetChannel.id }, collaborator);
+		assert.strictEqual(requests.status, 200);
+		assert.strictEqual(requests.body.length, 1);
+		assert.strictEqual(requests.body[0].user.id, follower.id);
+
+		const approve = await api('channels/follow-requests/approve', {
+			channelId: targetChannel.id,
+			userId: follower.id,
+		}, collaborator);
+		assert.strictEqual(approve.status, 204);
+
+		const approvedShow = await api('channels/show', { channelId: targetChannel.id }, follower);
+		assert.strictEqual(approvedShow.body.isFollowing, true);
+		assert.strictEqual(approvedShow.body.hasPendingFollowRequest, false);
+
+		const followers = await api('channels/followers', { channelId: targetChannel.id }, collaborator);
+		assert.strictEqual(followers.status, 200);
+		assert.strictEqual(followers.body.length, 1);
+		assert.strictEqual(followers.body[0].user.id, follower.id);
+
+		const remove = await api('channels/followers/remove', {
+			channelId: targetChannel.id,
+			userId: follower.id,
+		}, collaborator);
+		assert.strictEqual(remove.status, 204);
+
+		const removedShow = await api('channels/show', { channelId: targetChannel.id }, follower);
+		assert.strictEqual(removedShow.body.isFollowing, false);
+	});
+});

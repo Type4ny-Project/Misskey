@@ -105,6 +105,19 @@ export class MiChannel {
 	})
 	public isLocalOnly: boolean;
 
+	@Index()
+	@Column('boolean', {
+		default: false,
+		comment: 'Whether the channel is hidden from channel discovery surfaces.',
+	})
+	public isUnlisted: boolean;
+
+	@Column('boolean', {
+		default: false,
+		comment: 'Whether following this channel requires approval.',
+	})
+	public isFollowApprovalRequired: boolean;
+
 	@Column({
 		...id(),
 		array: true, default: '{}',

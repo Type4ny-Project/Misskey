@@ -65,6 +65,8 @@ export const paramDef = {
 		isSensitive: { type: 'boolean', nullable: true },
 		allowRenoteToExternal: { type: 'boolean', nullable: true },
 		isLocalOnly: { type: 'boolean', optional: true },
+		isUnlisted: { type: 'boolean', optional: true },
+		isFollowApprovalRequired: { type: 'boolean', optional: true },
 		transferAdminUserId: { type: 'string', format: 'misskey:id', optional: true },
 		collaboratorIds: {
 			type: 'array',
@@ -152,6 +154,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...(typeof ps.isSensitive === 'boolean' ? { isSensitive: ps.isSensitive } : {}),
 				...(typeof ps.allowRenoteToExternal === 'boolean' ? { allowRenoteToExternal: ps.allowRenoteToExternal } : {}),
 				...(ps.isLocalOnly !== undefined ? { isLocalOnly: ps.isLocalOnly } : {}),
+				...(ps.isUnlisted !== undefined ? { isUnlisted: ps.isUnlisted } : {}),
+				...(ps.isFollowApprovalRequired !== undefined ? { isFollowApprovalRequired: ps.isFollowApprovalRequired } : {}),
 				...(ps.transferAdminUserId !== undefined && channel.userId === ps.transferAdminUserId ? { userId: ps.transferAdminUserId } : {}),
 			});
 

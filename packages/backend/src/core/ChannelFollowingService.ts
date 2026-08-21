@@ -5,9 +5,12 @@
 
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import Redis from 'ioredis';
+import type { DataSource } from 'typeorm';
 import { DI } from '@/di-symbols.js';
-import type { ChannelFollowingsRepository, ChannelsRepository, MiUser } from '@/models/_.js';
+import type { ChannelFollowingsRepository, ChannelFollowRequestsRepository, ChannelsRepository, MiUser } from '@/models/_.js';
 import { MiChannel } from '@/models/_.js';
+import { MiChannelFollowing } from '@/models/ChannelFollowing.js';
+import { MiChannelFollowRequest } from '@/models/ChannelFollowRequest.js';
 import { IdService } from '@/core/IdService.js';
 import { GlobalEvents, GlobalEventService } from '@/core/GlobalEventService.js';
 import { bindThis } from '@/decorators.js';
@@ -19,6 +22,8 @@ export class ChannelFollowingService implements OnModuleInit {
 	public userFollowingChannelsCache: RedisKVCache<Set<string>>;
 
 	constructor(
+		@Inject(DI.db)
+		private db: DataSource,
 		@Inject(DI.redis)
 		private redisClient: Redis.Redis,
 		@Inject(DI.redisForSub)
@@ -27,6 +32,8 @@ export class ChannelFollowingService implements OnModuleInit {
 		private channelsRepository: ChannelsRepository,
 		@Inject(DI.channelFollowingsRepository)
 		private channelFollowingsRepository: ChannelFollowingsRepository,
+		@Inject(DI.channelFollowRequestsRepository)
+		private channelFollowRequestsRepository: ChannelFollowRequestsRepository,
 		private idService: IdService,
 		private globalEventService: GlobalEventService,
 	) {
@@ -93,13 +100,22 @@ export class ChannelFollowingService implements OnModuleInit {
 
 	@bindThis
 	public async follow(
-		requestUser: MiLocalUser,
+		requestUser: Pick<MiUser, 'id'>,
 		targetChannel: MiChannel,
 	): Promise<void> {
-		await this.channelFollowingsRepository.insert({
-			id: this.idService.gen(),
+		await this.channelFollowingsRepository.createQueryBuilder()
+			.insert()
+			.values({
+				id: this.idService.gen(),
+				followerId: requestUser.id,
+				followeeId: targetChannel.id,
+			})
+			.orIgnore()
+			.execute();
+
+		await this.channelFollowRequestsRepository.delete({
 			followerId: requestUser.id,
-			followeeId: targetChannel.id,
+			channelId: targetChannel.id,
 		});
 
 		this.globalEventService.publishInternalEvent('followChannel', {
@@ -109,19 +125,103 @@ export class ChannelFollowingService implements OnModuleInit {
 	}
 
 	@bindThis
-	public async unfollow(
+	public async followOrRequest(
 		requestUser: MiLocalUser,
 		targetChannel: MiChannel,
-	): Promise<void> {
-		await this.channelFollowingsRepository.delete({
-			followerId: requestUser.id,
-			followeeId: targetChannel.id,
+		bypassApproval: boolean,
+	): Promise<'following' | 'pending'> {
+		const isFollowing = await this.channelFollowingsRepository.exists({
+			where: {
+				followerId: requestUser.id,
+				followeeId: targetChannel.id,
+			},
 		});
+		if (isFollowing) return 'following';
+
+		if (!targetChannel.isFollowApprovalRequired || bypassApproval) {
+			await this.follow(requestUser, targetChannel);
+			return 'following';
+		}
+
+		await this.channelFollowRequestsRepository.createQueryBuilder()
+			.insert()
+			.values({
+				id: this.idService.gen(),
+				followerId: requestUser.id,
+				channelId: targetChannel.id,
+			})
+			.orIgnore()
+			.execute();
+
+		return 'pending';
+	}
+
+	@bindThis
+	public async unfollow(
+		requestUser: Pick<MiUser, 'id'>,
+		targetChannel: MiChannel,
+	): Promise<void> {
+		await Promise.all([
+			this.channelFollowingsRepository.delete({
+				followerId: requestUser.id,
+				followeeId: targetChannel.id,
+			}),
+			this.channelFollowRequestsRepository.delete({
+				followerId: requestUser.id,
+				channelId: targetChannel.id,
+			}),
+		]);
 
 		this.globalEventService.publishInternalEvent('unfollowChannel', {
 			userId: requestUser.id,
 			channelId: targetChannel.id,
 		});
+	}
+
+	@bindThis
+	public async approveRequest(
+		follower: Pick<MiUser, 'id'>,
+		targetChannel: MiChannel,
+	): Promise<boolean> {
+		let approved = false;
+		await this.db.transaction(async manager => {
+			const requestDeleteResult = await manager.getRepository(MiChannelFollowRequest).delete({
+				followerId: follower.id,
+				channelId: targetChannel.id,
+			});
+			if ((requestDeleteResult.affected ?? 0) === 0) return;
+
+			await manager.getRepository(MiChannelFollowing).createQueryBuilder()
+				.insert()
+				.values({
+					id: this.idService.gen(),
+					followerId: follower.id,
+					followeeId: targetChannel.id,
+				})
+				.orIgnore()
+				.execute();
+			approved = true;
+		});
+
+		if (approved) {
+			this.globalEventService.publishInternalEvent('followChannel', {
+				userId: follower.id,
+				channelId: targetChannel.id,
+			});
+		}
+		return approved;
+	}
+
+	@bindThis
+	public async rejectRequest(
+		follower: Pick<MiUser, 'id'>,
+		targetChannel: MiChannel,
+	): Promise<boolean> {
+		const result = await this.channelFollowRequestsRepository.delete({
+			followerId: follower.id,
+			channelId: targetChannel.id,
+		});
+		return (result.affected ?? 0) > 0;
 	}
 
 	@bindThis

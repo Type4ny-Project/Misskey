@@ -4,41 +4,22 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { Endpoint } from '@/server/api/endpoint-base.js';
-import type { ChannelsRepository } from '@/models/_.js';
-import { DI } from '@/di-symbols.js';
 import { ChannelFollowingService } from '@/core/ChannelFollowingService.js';
 import { ChannelService } from '@/core/ChannelService.js';
 import { RoleService } from '@/core/RoleService.js';
-import { ApiError } from '../../error.js';
+import { DI } from '@/di-symbols.js';
+import type { ChannelsRepository } from '@/models/_.js';
+import { Endpoint } from '@/server/api/endpoint-base.js';
+import { ApiError } from '@/server/api/error.js';
 
 export const meta = {
 	tags: ['channels'],
-
 	requireCredential: true,
-
 	prohibitMoved: true,
-
 	kind: 'write:channels',
-
-	res: {
-		type: 'object',
-		optional: false, nullable: false,
-		properties: {
-			state: {
-				type: 'string',
-				optional: false, nullable: false,
-				enum: ['following', 'pending'],
-			},
-		},
-	},
-
 	errors: {
-		noSuchChannel: {
-			message: 'No such channel.',
-			code: 'NO_SUCH_CHANNEL',
-			id: 'c0031718-d573-4e85-928e-10039f1fbb68',
-		},
+		noSuchChannel: { message: 'No such channel.', code: 'NO_SUCH_CHANNEL', id: '0426c4c2-11e0-4c62-8004-97e5b42b9bee' },
+		accessDenied: { message: 'You do not have permission to manage this channel.', code: 'ACCESS_DENIED', id: '450ed3ae-138c-4ab3-8538-92fb50c9dec7' },
 	},
 } as const;
 
@@ -46,8 +27,9 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		channelId: { type: 'string', format: 'misskey:id' },
+		userId: { type: 'string', format: 'misskey:id' },
 	},
-	required: ['channelId'],
+	required: ['channelId', 'userId'],
 } as const;
 
 @Injectable()
@@ -55,24 +37,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	constructor(
 		@Inject(DI.channelsRepository)
 		private channelsRepository: ChannelsRepository,
-		private channelFollowingService: ChannelFollowingService,
 		private channelService: ChannelService,
+		private channelFollowingService: ChannelFollowingService,
 		private roleService: RoleService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
-			const channel = await this.channelsRepository.findOneBy({
-				id: ps.channelId,
-			});
-
-			if (channel == null) {
-				throw new ApiError(meta.errors.noSuchChannel);
-			}
-
+			const channel = await this.channelsRepository.findOneBy({ id: ps.channelId });
+			if (channel == null) throw new ApiError(meta.errors.noSuchChannel);
 			const isModerator = await this.roleService.isModerator(me);
-			const canManage = await this.channelService.canEditChannel(channel, me, isModerator);
-			const state = await this.channelFollowingService.followOrRequest(me, channel, canManage);
-
-			return { state };
+			if (!await this.channelService.canEditChannel(channel, me, isModerator)) throw new ApiError(meta.errors.accessDenied);
+			await this.channelFollowingService.unfollow({ id: ps.userId }, channel);
 		});
 	}
 }

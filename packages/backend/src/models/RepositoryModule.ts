@@ -20,6 +20,7 @@ import {
 	MiBubbleGameRecord,
 	MiChannel,
 	MiChannelFavorite,
+	MiChannelFollowRequest,
 	MiChannelFollowing,
 	MiChannelMuting,
 	MiClip,
@@ -441,6 +442,12 @@ const $channelFollowingsRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $channelFollowRequestsRepository: Provider = {
+	provide: DI.channelFollowRequestsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiChannelFollowRequest).extend(miRepository as MiRepository<MiChannelFollowRequest>),
+	inject: [DI.db],
+};
+
 const $channelFavoritesRepository: Provider = {
 	provide: DI.channelFavoritesRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiChannelFavorite).extend(miRepository as MiRepository<MiChannelFavorite>),
@@ -635,6 +642,7 @@ const $eventsRepository: Provider = {
 		$relaysRepository,
 		$channelsRepository,
 		$channelFollowingsRepository,
+		$channelFollowRequestsRepository,
 		$channelFavoritesRepository,
 		$channelMutingRepository,
 		$registryItemsRepository,
@@ -717,6 +725,7 @@ const $eventsRepository: Provider = {
 		$relaysRepository,
 		$channelsRepository,
 		$channelFollowingsRepository,
+		$channelFollowRequestsRepository,
 		$channelFavoritesRepository,
 		$channelMutingRepository,
 		$registryItemsRepository,

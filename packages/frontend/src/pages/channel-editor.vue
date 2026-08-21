@@ -31,6 +31,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template #label>{{ i18n.ts._channel.isLocalOnly }}</template>
 			</MkSwitch>
 
+			<MkSwitch v-model="isUnlisted">
+				<template #label>{{ i18n.ts._channel.isUnlisted }}</template>
+				<template #caption>{{ i18n.ts._channel.isUnlistedDescription }}</template>
+			</MkSwitch>
+
+			<MkSwitch v-model="isFollowApprovalRequired">
+				<template #label>{{ i18n.ts._channel.isFollowApprovalRequired }}</template>
+				<template #caption>{{ i18n.ts._channel.isFollowApprovalRequiredDescription }}</template>
+			</MkSwitch>
+
 			<div>
 				<MkButton v-if="bannerId == null" @click="setBannerImage"><i class="ti ti-plus"></i> {{ i18n.ts._channel.setBanner }}</MkButton>
 				<div v-else-if="bannerUrl">
@@ -79,6 +89,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
+			<ChannelEditorFollowers v-if="channelId != null" :channelId="channelId"/>
+
 			<MkFolder v-if="isRoot">
 				<template #label>{{ i18n.ts._channel.dangerSettings }}</template>
 
@@ -116,6 +128,7 @@ import { useRouter } from '@/router.js';
 import { $i, iAmModerator } from '@/i.js';
 import { userPage } from '@/filters/user.js';
 import MkUserCardMini from '@/components/MkUserCardMini.vue';
+import ChannelEditorFollowers from '@/pages/channel-editor.followers.vue';
 
 const router = useRouter();
 
@@ -132,6 +145,8 @@ const color = ref('#000');
 const isSensitive = ref(false);
 const allowRenoteToExternal = ref(true);
 const isLocalOnly = ref(false);
+const isUnlisted = ref(false);
+const isFollowApprovalRequired = ref(false);
 const pinnedNoteIds = ref<Misskey.entities.Note['id'][]>([]);
 const isRoot = ref(false);
 const collaboratorUsers = ref<Misskey.entities.User[]>([]);
@@ -162,6 +177,8 @@ async function fetchChannel() {
 	color.value = result.color;
 	allowRenoteToExternal.value = result.allowRenoteToExternal;
 	isLocalOnly.value = result.isLocalOnly;
+	isUnlisted.value = result.isUnlisted;
+	isFollowApprovalRequired.value = result.isFollowApprovalRequired;
 	if (result.collaboratorIds && result.collaboratorIds.length > 0) {
 		try {
 			const users = await misskeyApi('users/show', { userIds: result.collaboratorIds });
@@ -246,6 +263,8 @@ function save() {
 		isSensitive: isSensitive.value,
 		allowRenoteToExternal: allowRenoteToExternal.value,
 		isLocalOnly: isLocalOnly.value,
+		isUnlisted: isUnlisted.value,
+		isFollowApprovalRequired: isFollowApprovalRequired.value,
 	} satisfies Misskey.entities.ChannelsCreateRequest;
 
 	if (props.channelId != null) {

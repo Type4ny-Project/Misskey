@@ -24,6 +24,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<template v-else>
 		<span v-if="full" :class="$style.text">{{ i18n.ts.processing }}</span><MkLoading :em="true"/>
 	</template>
+	<span v-if="full" :class="$style.followersCount" :aria-label="`${i18n.ts.followersCount}: ${followersCount}`">
+		<i class="ti ti-users"></i>{{ followersCount }}
+	</span>
 </button>
 </template>
 
@@ -40,9 +43,13 @@ const props = withDefaults(defineProps<{
 }>(), {
 	full: false,
 });
+const emit = defineEmits<{
+	followersCountChanged: [count: number];
+}>();
 
 const isFollowing = ref(props.channel.isFollowing);
 const hasPendingFollowRequest = ref(props.channel.hasPendingFollowRequest ?? false);
+const followersCount = ref(props.channel.usersCount);
 const wait = ref(false);
 
 async function onClick() {
@@ -50,6 +57,7 @@ async function onClick() {
 
 	try {
 		if (isFollowing.value || hasPendingFollowRequest.value) {
+			const wasFollowing = isFollowing.value;
 			if (hasPendingFollowRequest.value) {
 				const { canceled } = await os.confirm({
 					type: 'question',
@@ -62,12 +70,20 @@ async function onClick() {
 			});
 			isFollowing.value = false;
 			hasPendingFollowRequest.value = false;
+			if (wasFollowing) {
+				followersCount.value = Math.max(0, followersCount.value - 1);
+				emit('followersCountChanged', followersCount.value);
+			}
 		} else {
 			const result = await misskeyApi('channels/follow', {
 				channelId: props.channel.id,
 			});
 			isFollowing.value = result.state === 'following';
 			hasPendingFollowRequest.value = result.state === 'pending';
+			if (isFollowing.value) {
+				followersCount.value++;
+				emit('followersCountChanged', followersCount.value);
+			}
 		}
 	} catch (err) {
 		console.error(err);
@@ -135,5 +151,15 @@ async function onClick() {
 
 .text {
 	margin-right: 6px;
+}
+
+.followersCount {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: 8px;
+	padding-left: 8px;
+	border-left: solid 1px currentColor;
+	font-variant-numeric: tabular-nums;
 }
 </style>

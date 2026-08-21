@@ -45,10 +45,14 @@ export const Default = {
 		const canvas = within(canvasElement);
 		const buttonElement = canvas.getByRole<HTMLButtonElement>('button');
 		await expect(buttonElement).toHaveTextContent(i18n.ts.follow);
+		await expect(buttonElement).toHaveTextContent('1');
 		await userEvent.click(buttonElement);
 		await sleep(1000);
 		await expect(buttonElement).toHaveTextContent(i18n.ts.unfollow);
+		await expect(buttonElement).toHaveTextContent('2');
 		await userEvent.click(buttonElement);
+		await sleep(1000);
+		await expect(buttonElement).toHaveTextContent('1');
 	},
 	parameters: {
 		layout: 'centered',
@@ -84,6 +88,7 @@ export const ApprovalRequired = {
 		await userEvent.click(buttonElement);
 		await sleep(1000);
 		await expect(buttonElement).toHaveTextContent(i18n.ts.followRequestPending);
+		await expect(buttonElement).toHaveTextContent('1');
 	},
 	parameters: {
 		...Default.parameters,

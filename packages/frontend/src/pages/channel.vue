@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div class="_spacer" :style="spacerStyle">
 		<div v-if="channel && tab === 'overview'" class="_gaps">
 			<div class="_panel" :class="$style.bannerContainer">
-				<XChannelFollowButton :channel="channel" :full="true" :class="$style.subscribe"/>
+				<XChannelFollowButton :channel="channel" :full="true" :class="$style.subscribe" @followersCountChanged="updateFollowersCount"/>
 				<MkButton v-if="favorited" v-tooltip="i18n.ts.unfavorite" asLike class="button" rounded primary :class="$style.favorite" @click="unfavorite()"><i class="ti ti-star"></i></MkButton>
 				<MkButton v-else v-tooltip="i18n.ts.favorite" asLike class="button" rounded :class="$style.favorite" @click="favorite()"><i class="ti ti-star"></i></MkButton>
 				<div :style="{ backgroundImage: channel.bannerUrl ? `url(${channel.bannerUrl})` : undefined }" :class="$style.banner">
@@ -141,8 +141,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 		</div>
-		<div v-else-if="tab === 'followers' && canManageChannelFollowers" class="_gaps">
-			<ChannelFollowers :channelId="channelId"/>
+		<div v-else-if="tab === 'followRequests' && canManageChannelFollowers" class="_gaps">
+			<ChannelFollowRequests :channelId="channelId" @resolved="handleFollowRequestResolved"/>
+		</div>
+		<div v-else-if="tab === 'followerManagement' && canManageChannelFollowers" class="_gaps">
+			<ChannelFollowers :channelId="channelId" :managerIds="channelManagerIds" @removed="adjustFollowersCount(-1)"/>
 		</div>
 	</div>
 	<template #footer>
@@ -190,6 +193,7 @@ import { notesSearchAvailable } from '@/utility/check-permissions.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { useRouter } from '@/router.js';
 import { Paginator } from '@/utility/paginator.js';
+import ChannelFollowRequests from '@/pages/channel.follow-requests.vue';
 import ChannelFollowers from '@/pages/channel.followers.vue';
 
 const router = useRouter();
@@ -214,6 +218,8 @@ const tab = ref('overview');
 const channel = ref<Misskey.entities.Channel | null>(null);
 const canManageChannelEvents = computed(() => hasChannelEventManagePermission(channel.value));
 const canManageChannelFollowers = computed(() => isChannelManager(channel.value));
+const channelManagerIds = computed(() => channel.value == null ? [] : [channel.value.userId, ...(channel.value.collaboratorIds ?? [])].filter((id): id is string => id != null));
+const hasPendingChannelFollowRequests = ref(false);
 const favorited = ref(false);
 const searchQuery = ref('');
 const searchPaginator = shallowRef();
@@ -253,7 +259,13 @@ watch(() => props.channelId, async () => {
 	}
 
 	channel.value = _channel;
+	await refreshPendingFollowRequests();
 }, { immediate: true });
+
+useInterval(refreshPendingFollowRequests, 30000, {
+	immediate: false,
+	afterMounted: true,
+});
 
 watch(tab, (newTab) => {
 	if ((newTab === 'events' || newTab === 'manage') && channelEvents.value.length === 0) {
@@ -385,6 +397,38 @@ function isChannelManager(targetChannel: Misskey.entities.Channel | null): boole
 
 function isChannelCollaborator(targetChannel: Misskey.entities.Channel, userId: string): boolean {
 	return Array.isArray(targetChannel.collaboratorIds) && targetChannel.collaboratorIds.includes(userId);
+}
+
+function updateFollowersCount(count: number): void {
+	if (channel.value == null) return;
+	channel.value.usersCount = count;
+}
+
+function adjustFollowersCount(delta: number): void {
+	if (channel.value == null) return;
+	channel.value.usersCount = Math.max(0, channel.value.usersCount + delta);
+}
+
+async function handleFollowRequestResolved(approved: boolean): Promise<void> {
+	if (approved) adjustFollowersCount(1);
+	await refreshPendingFollowRequests();
+}
+
+async function refreshPendingFollowRequests(): Promise<void> {
+	if (!isChannelManager(channel.value)) {
+		hasPendingChannelFollowRequests.value = false;
+		return;
+	}
+
+	try {
+		const requests = await misskeyApi('channels/follow-requests/list', {
+			channelId: props.channelId,
+			limit: 1,
+		});
+		hasPendingChannelFollowRequests.value = requests.length > 0;
+	} catch (error) {
+		console.error(error);
+	}
 }
 
 // Channel events
@@ -568,9 +612,14 @@ const headerTabs = computed(() => [{
 	title: i18n.ts._events.eventCalendar,
 	icon: 'ti ti-calendar-event',
 }, ...(canManageChannelFollowers.value ? [{
-		key: 'followers',
+		key: 'followRequests',
 		title: i18n.ts._channel.followRequests,
 		icon: 'ti ti-user-check',
+		indicate: hasPendingChannelFollowRequests.value,
+	}, {
+		key: 'followerManagement',
+		title: i18n.ts._channel.followerManagement,
+		icon: 'ti ti-users',
 }] : []), ...(canManageChannelEvents.value ? [{
 		key: 'manage',
 		title: i18n.ts.manage,
@@ -582,7 +631,7 @@ const headerTabs = computed(() => [{
 }]);
 
 const spacerStyle = computed(() => {
-	const wide = tab.value === 'events' || tab.value === 'manage' || tab.value === 'followers';
+	const wide = tab.value === 'events' || tab.value === 'manage' || tab.value === 'followRequests' || tab.value === 'followerManagement';
 	return {
 		'--MI_SPACER-w': wide ? '1040px' : '700px',
 	};

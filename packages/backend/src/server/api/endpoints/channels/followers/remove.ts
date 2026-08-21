@@ -43,6 +43,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const channel = await this.channelsRepository.findOneBy({ id: ps.channelId });
 			if (channel == null) throw new ApiError(meta.errors.noSuchChannel);
 			if (!this.channelService.isChannelManager(channel, me)) throw new ApiError(meta.errors.accessDenied);
+			if (this.channelService.isChannelManager(channel, { id: ps.userId })) throw new ApiError(meta.errors.accessDenied);
 			await this.channelFollowingService.unfollow({ id: ps.userId }, channel);
 		});
 	}

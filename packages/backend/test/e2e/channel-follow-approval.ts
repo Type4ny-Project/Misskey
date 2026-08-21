@@ -65,6 +65,15 @@ describe('チャンネルのフォロー承認', () => {
 		const unauthorizedList = await api('channels/follow-requests/list', { channelId: targetChannel.id }, outsider);
 		assert.strictEqual(unauthorizedList.status, 400);
 
+		const collaboratorFollow = await api('channels/follow', { channelId: targetChannel.id }, collaborator);
+		assert.strictEqual(collaboratorFollow.status, 200);
+		assert.strictEqual(collaboratorFollow.body.state, 'following');
+		const removeCollaborator = await api('channels/followers/remove', {
+			channelId: targetChannel.id,
+			userId: collaborator.id,
+		}, owner);
+		assert.strictEqual(removeCollaborator.status, 400);
+
 		const requests = await api('channels/follow-requests/list', { channelId: targetChannel.id }, collaborator);
 		assert.strictEqual(requests.status, 200);
 		assert.strictEqual(requests.body.length, 1);
@@ -82,8 +91,8 @@ describe('チャンネルのフォロー承認', () => {
 
 		const followers = await api('channels/followers', { channelId: targetChannel.id }, collaborator);
 		assert.strictEqual(followers.status, 200);
-		assert.strictEqual(followers.body.length, 1);
-		assert.strictEqual(followers.body[0].user.id, follower.id);
+		assert.strictEqual(followers.body.some(following => following.user.id === follower.id), true);
+		assert.strictEqual(followers.body.some(following => following.user.id === collaborator.id), true);
 
 		const remove = await api('channels/followers/remove', {
 			channelId: targetChannel.id,

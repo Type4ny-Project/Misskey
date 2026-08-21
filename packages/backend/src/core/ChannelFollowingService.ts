@@ -189,6 +189,19 @@ export class ChannelFollowingService implements OnModuleInit {
 	}
 
 	@bindThis
+	public async unfollowAll(requestUser: Pick<MiUser, 'id'>): Promise<void> {
+		const followings = await this.channelFollowingsRepository.find({
+			where: { followerId: requestUser.id },
+			select: { followeeId: true },
+		});
+
+		for (const following of followings) {
+			const channel = await this.channelsRepository.findOneBy({ id: following.followeeId });
+			if (channel != null) await this.unfollow(requestUser, channel);
+		}
+	}
+
+	@bindThis
 	public async approveRequest(
 		follower: Pick<MiUser, 'id'>,
 		targetChannel: MiChannel,

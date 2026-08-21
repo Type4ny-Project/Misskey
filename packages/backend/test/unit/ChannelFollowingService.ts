@@ -89,8 +89,8 @@ describe('ChannelFollowingService', () => {
 		return await channelFollowRequestsRepository.findBy({});
 	}
 
-	async function fetchFollowersCount() {
-		return (await channelsRepository.findOneByOrFail({ id: channel1.id })).followersCount;
+	async function fetchFollowersCount(channel = channel1) {
+		return (await channelsRepository.findOneByOrFail({ id: channel.id })).followersCount;
 	}
 
 	async function createDriveFile(data: Partial<MiDriveFile> = {}) {
@@ -353,6 +353,21 @@ describe('ChannelFollowingService', () => {
 			await service.unfollow(alice, channel1);
 
 			expect(await fetchChannelFollowRequests()).toHaveLength(0);
+		});
+	});
+
+	describe('unfollowAll', () => {
+		test('removes all channel followings and updates their counts', async () => {
+			await service.follow(alice, channel1);
+			await service.follow(alice, channel2);
+			expect(await fetchFollowersCount(channel1)).toBe(1);
+			expect(await fetchFollowersCount(channel2)).toBe(1);
+
+			await service.unfollowAll(alice);
+
+			expect(await fetchChannelFollowing()).toHaveLength(0);
+			expect(await fetchFollowersCount(channel1)).toBe(0);
+			expect(await fetchFollowersCount(channel2)).toBe(0);
 		});
 	});
 });

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { CallsMediaAccessError } from '@/core/calls/CallsMediaService.js';
+import { CallsConnectionExistsError, CallsMediaAccessError } from '@/core/calls/CallsMediaService.js';
 import { CallsMediaBindingNotFoundError } from '@/core/calls/CallsMediaBindingService.js';
 import { StaleCallsConnectionError } from '@/core/calls/CallsLiveConnectionService.js';
 import { CloudflareRealtimeClientError, CloudflareRealtimeNotConfiguredError } from '@/core/calls/CloudflareRealtimeClient.js';
@@ -18,6 +18,7 @@ import { callsApiError, callsErrors } from './_shared.js';
 
 export const callsMediaErrors = {
 	...callsErrors,
+	connectionExists: { message: 'The call is connected on another device. Confirm before replacing it.', code: 'CALLS_CONNECTION_EXISTS', id: 'd294d953-2447-41cb-8dbe-ea069d6cfce0' },
 	mediaAccessDenied: { message: 'The media operation is not authorized.', code: 'CALLS_MEDIA_ACCESS_DENIED', id: 'c44f18b1-e904-4fd3-9115-31cfaac7a143' },
 	staleConnection: { message: 'The Calls connection generation is stale.', code: 'CALLS_STALE_CONNECTION', id: 'df4889f6-b1d2-4a65-8834-b2fe00d86d91' },
 	providerUnavailable: { message: 'The Calls media provider is unavailable.', code: 'CALLS_PROVIDER_UNAVAILABLE', id: '389e18c6-95bf-49f7-8467-af3969375ba3' },
@@ -68,6 +69,7 @@ export function sanitizeNegotiation(response: CloudflareRealtimeTracksResponse) 
 }
 
 export function callsMediaApiError(error: unknown): never {
+	if (error instanceof CallsConnectionExistsError) throw new ApiError(callsMediaErrors.connectionExists);
 	if (error instanceof InvalidCallsMediaCredentialError) throw new ApiError(callsMediaErrors.invalidCredential);
 	if (error instanceof CallsOperationInProgressError) throw new ApiError(callsMediaErrors.operationInProgress);
 	if (error instanceof CallsOperationRateLimitError) throw new ApiError(callsMediaErrors.rateLimited);

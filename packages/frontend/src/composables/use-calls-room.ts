@@ -11,6 +11,7 @@ import { $i } from '@/i.js';
 
 type Snapshot = Misskey.entities.CallsRoomsShowResponse;
 type EventBase = { sequence: number; roomRevision: number };
+export type CallsRevokedEvent = Parameters<Misskey.Channels['callsRoom']['events']['revoked']>[0];
 
 export function createCallsRoomConnection(roomId: string) {
 	const room = shallowRef<Snapshot['room'] | null>(null);
@@ -22,7 +23,7 @@ export function createCallsRoomConnection(roomId: string) {
 	const stream = useStream();
 	const channel = stream.useChannel('callsRoom', { roomId });
 	const trackListeners = new Set<() => void>();
-	const revocationListeners = new Set<(reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation') => void>();
+	const revocationListeners = new Set<(event: CallsRevokedEvent) => void>();
 	let ownParticipantId: string | null = null;
 	let eventQueue = Promise.resolve();
 
@@ -82,7 +83,7 @@ export function createCallsRoomConnection(roomId: string) {
 		if (event.participantId != null && ownParticipantId == null) await refresh();
 		if (event.participantId != null && event.participantId !== ownParticipantId) return;
 		if (event.participantId == null) connected.value = false;
-		for (const listener of revocationListeners) listener(event.reason);
+		for (const listener of revocationListeners) listener(event);
 	}));
 	connected.value = stream.state === 'connected';
 	stream.on('_disconnected_', onStreamDisconnected);
@@ -100,7 +101,7 @@ export function createCallsRoomConnection(roomId: string) {
 		setSpeaking(speaking: boolean) { channel.send('speaking', speaking); },
 		heartbeat(connectionId: string, generation: number) { channel.send('heartbeat', { connectionId, generation }); },
 		onTrackChange(listener: () => void) { trackListeners.add(listener); return () => trackListeners.delete(listener); },
-		onRevoked(listener: (reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation') => void) { revocationListeners.add(listener); return () => revocationListeners.delete(listener); },
+		onRevoked(listener: (event: CallsRevokedEvent) => void) { revocationListeners.add(listener); return () => revocationListeners.delete(listener); },
 		dispose,
 	};
 }

@@ -11,6 +11,8 @@ import { CallsMediaController } from '@/utility/calls-media.js';
 import type { CallsMediaFailure, CallsMediaState } from '@/utility/calls-media.js';
 import { detectCallsMediaCapabilities } from '@/utility/calls-media-core.js';
 import { miLocalStorage } from '@/local-storage.js';
+import { i18n } from '@/i18n.js';
+import { confirm, toast } from '@/os.js';
 import { misskeyApi, misskeyApiKeepalive } from '@/utility/misskey-api.js';
 
 type CallsRoomConnection = ReturnType<typeof createCallsRoomConnection>;
@@ -49,10 +51,13 @@ const mediaState = ref<CallsMediaState>('idle');
 const mediaFailure = ref<CallsMediaFailure | null>(null);
 const muted = ref(false);
 const joining = ref(false);
+const replacedRoomId = ref<string | null>(null);
 const selectedMicrophone = ref('');
 const microphones = ref<MediaDeviceInfo[]>([]);
 const needsAudioResume = ref(false);
 const reconnectCandidate = ref<CallsReconnectCandidate | null>(null);
+const reconnectRoomState = ref<'checking' | 'open' | 'unavailable'>('checking');
+const reconnectSecondsRemaining = ref(0);
 const speakerRequestResult = ref<'rejected' | null>(null);
 const usersById = shallowRef(new Map<string, Misskey.entities.UserLite>());
 const remoteAudio = new Set<HTMLAudioElement>();
@@ -61,13 +66,47 @@ let removeTrackListener: (() => void) | null = null;
 let removeRevokedListener: (() => void) | null = null;
 let sessionGeneration = 0;
 let reconnectExpiryTimer: number | null = null;
+let reconnectCountdownTimer: number | null = null;
+let reconnectConnection: CallsRoomConnection | null = null;
+let stopReconnectRoomWatch: (() => void) | null = null;
 let cancelingSpeakerRequest = false;
+
+function disposeReconnectConnection(): void {
+	stopReconnectRoomWatch?.();
+	stopReconnectRoomWatch = null;
+	reconnectConnection?.dispose();
+	reconnectConnection = null;
+}
+
+function updateReconnectCountdown(candidate: CallsReconnectCandidate): void {
+	reconnectSecondsRemaining.value = Math.max(0, Math.ceil((candidate.expiresAt - Date.now()) / 1000));
+}
 
 function setReconnectCandidate(candidate: CallsReconnectCandidate | null): void {
 	if (reconnectExpiryTimer != null) window.clearTimeout(reconnectExpiryTimer);
+	if (reconnectCountdownTimer != null) window.clearInterval(reconnectCountdownTimer);
+	disposeReconnectConnection();
 	reconnectCandidate.value = candidate;
+	reconnectSecondsRemaining.value = 0;
+	reconnectRoomState.value = 'checking';
 	if (candidate == null) return;
+
+	updateReconnectCountdown(candidate);
 	reconnectExpiryTimer = window.setTimeout(() => dismissReconnectCandidate(), Math.max(0, candidate.expiresAt - Date.now()));
+	reconnectCountdownTimer = window.setInterval(() => updateReconnectCountdown(candidate), 1000);
+	reconnectConnection = createCallsRoomConnection(candidate.roomId);
+	stopReconnectRoomWatch = watch(reconnectConnection.room, room => {
+		if (room == null) return;
+		if (room.state !== 'open') {
+			dismissReconnectCandidate();
+			return;
+		}
+		reconnectRoomState.value = 'open';
+	}, { immediate: true });
+	void reconnectConnection.refresh().catch(() => {
+		reconnectRoomState.value = 'unavailable';
+		dismissReconnectCandidate();
+	});
 }
 
 setReconnectCandidate(loadReconnectCandidate());
@@ -108,13 +147,16 @@ function addRemoteTrack(track: MediaStreamTrack): void {
 async function loadMicrophones(): Promise<void> {
 	if (navigator.mediaDevices?.enumerateDevices == null) return;
 	microphones.value = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'audioinput');
+	if (!microphones.value.some(device => device.deviceId === selectedMicrophone.value)) {
+		selectedMicrophone.value = microphones.value[0]?.deviceId ?? '';
+	}
 }
 
 async function prepareMicrophones(): Promise<void> {
 	await loadMicrophones();
 }
 
-async function connectMedia(generation: number): Promise<void> {
+async function connectMedia(generation: number, previousConnection?: { connectionId: string; generation: number }, replaceExisting = false): Promise<void> {
 	const participant = myParticipant.value;
 	const targetRoomId = currentRoomId.value;
 	if (participant == null || targetRoomId == null) return;
@@ -130,10 +172,13 @@ async function connectMedia(generation: number): Promise<void> {
 		},
 		addRemoteTrack,
 		(_stats, speaking) => connection.value?.setSpeaking(speaking),
+		previousConnection,
+		replaceExisting,
 	);
 	media.value = controller;
+	controller.setMuted(muted.value);
 	await controller.connect(selectedMicrophone.value || undefined);
-	controller.setMuted(participant.isMuted);
+	controller.setMuted(muted.value);
 	if (generation !== sessionGeneration || media.value !== controller) {
 		await controller.close().catch(() => undefined);
 		return;
@@ -145,7 +190,6 @@ async function clearSession(): Promise<void> {
 	sessionGeneration += 1;
 	const controller = media.value;
 	media.value = null;
-	await controller?.close().catch(() => undefined);
 	disposeConnection();
 	currentRoomId.value = null;
 	mediaState.value = 'idle';
@@ -155,6 +199,8 @@ async function clearSession(): Promise<void> {
 	usersById.value = new Map();
 	for (const audio of remoteAudio) audio.remove();
 	remoteAudio.clear();
+	needsAudioResume.value = false;
+	await controller?.close().catch(() => undefined);
 }
 
 function attachConnection(roomId: string): CallsRoomConnection {
@@ -162,7 +208,18 @@ function attachConnection(roomId: string): CallsRoomConnection {
 	const next = createCallsRoomConnection(roomId);
 	connection.value = next;
 	removeTrackListener = next.onTrackChange(() => { void media.value?.reconcile(); });
-	removeRevokedListener = next.onRevoked(reason => {
+	removeRevokedListener = next.onRevoked(event => {
+		const identity = media.value?.connectionIdentity;
+		if (event.connectionId != null && (identity?.connectionId !== event.connectionId || identity.generation !== event.generation)) return;
+		const reason = event.reason;
+		if (reason === 'replaced') {
+			replacedRoomId.value = roomId;
+			setReconnectCandidate(null);
+			safeRemoveReconnectCandidate();
+			void clearSession();
+			toast(i18n.ts._calls.connectedOnAnotherDevice);
+			return;
+		}
 		if (reason === 'stale-generation') void reconnectMedia();
 		else if (reason === 'moderation' && myParticipant.value?.role === 'listener' && room.value?.state === 'open') void reconnectMedia();
 		else void clearSession();
@@ -170,7 +227,7 @@ function attachConnection(roomId: string): CallsRoomConnection {
 	return next;
 }
 
-async function join(roomId: string, alreadyParticipant: boolean, reconnectToken?: string): Promise<void> {
+async function join(roomId: string, alreadyParticipant: boolean, reconnectToken?: string, startMuted = false): Promise<void> {
 	if (joining.value) return;
 	const capabilities = detectCallsMediaCapabilities();
 	if (!capabilities.secureContext || !capabilities.peerConnection || !capabilities.transceiver) {
@@ -194,7 +251,26 @@ async function join(roomId: string, alreadyParticipant: boolean, reconnectToken?
 			await next.refresh();
 		}
 		if (myParticipant.value == null) throw new Error('Calls participant state was not created');
-		await connectMedia(generation);
+		muted.value = myParticipant.value.isMuted;
+		if (startMuted && myParticipant.value.role === 'host' && !muted.value) {
+			muted.value = true;
+		}
+		try {
+			await connectMedia(generation);
+		} catch (error) {
+			if (typeof error !== 'object' || error == null || !('code' in error) || error.code !== 'CALLS_CONNECTION_EXISTS') throw error;
+			mediaFailure.value = null;
+			const { canceled } = await confirm({ type: 'warning', text: i18n.ts._calls.switchDeviceConfirm });
+			if (generation !== sessionGeneration) return;
+			if (canceled) {
+				await clearSession();
+				return;
+			}
+			await connectMedia(generation, undefined, true);
+		}
+		if (generation !== sessionGeneration) return;
+		replacedRoomId.value = null;
+		if (startMuted && myParticipant.value?.role === 'host') next.setMuted(true);
 		setReconnectCandidate(null);
 		safeRemoveReconnectCandidate();
 	} catch (error) {
@@ -211,30 +287,33 @@ async function reconnectMedia(): Promise<void> {
 	if (!isActive.value) return;
 	const generation = ++sessionGeneration;
 	const controller = media.value;
+	const identity = controller?.connectionIdentity ?? undefined;
 	media.value = null;
 	await controller?.close().catch(() => undefined);
 	if (generation !== sessionGeneration) return;
-	await connectMedia(generation).catch(() => undefined);
+	await connectMedia(generation, identity).catch(() => undefined);
 }
 
 async function leave(): Promise<void> {
 	const targetRoom = room.value;
 	const targetRoomId = currentRoomId.value;
 	const targetIsHost = isHost.value;
+	const identity = media.value?.connectionIdentity;
 	if (targetRoomId == null) return;
 	setReconnectCandidate(null);
 	safeRemoveReconnectCandidate();
 	await clearSession();
+	if (identity == null) return;
 	if (targetIsHost && targetRoom?.state === 'open') {
-		await misskeyApi('calls/rooms/end', { roomId: targetRoomId, expectedRevision: targetRoom.revision }).catch(() => undefined);
+		await misskeyApi('calls/rooms/end', { roomId: targetRoomId, expectedRevision: targetRoom.revision, ...identity }).catch(() => undefined);
 	} else {
-		await misskeyApi('calls/rooms/leave', { roomId: targetRoomId }).catch(() => undefined);
+		await misskeyApi('calls/rooms/leave', { roomId: targetRoomId, ...identity }).catch(() => undefined);
 	}
 }
 
 async function resumeRecentRoom(): Promise<void> {
 	const candidate = reconnectCandidate.value;
-	if (candidate == null) return;
+	if (candidate == null || reconnectRoomState.value !== 'open') return;
 	if (candidate.expiresAt <= Date.now()) {
 		dismissReconnectCandidate();
 		return;
@@ -349,6 +428,7 @@ export function useCallsSession() {
 		isHost,
 		isSpeaker,
 		joining,
+		replacedRoomId,
 		mediaState,
 		mediaFailure,
 		muted,
@@ -356,6 +436,8 @@ export function useCallsSession() {
 		microphones,
 		needsAudioResume,
 		reconnectCandidate,
+		reconnectRoomState,
+		reconnectSecondsRemaining,
 		speakerRequestResult,
 		usersById,
 		join,

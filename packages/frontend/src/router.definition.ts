@@ -75,6 +75,9 @@ export const ROUTE_DEF = [{
 }, {
 	path: '/calls/:roomId',
 	component: page(() => import('@/pages/calls/room.vue')),
+	query: {
+		join: 'join',
+	},
 	loginRequired: true,
 }, {
 	path: '/instance-info/:host',

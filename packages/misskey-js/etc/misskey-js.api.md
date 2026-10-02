@@ -1215,7 +1215,9 @@ export type Channels = {
             }) => void;
             revoked: (payload: CallsRoomEventBase & {
                 participantId?: string;
-                reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation';
+                connectionId?: string;
+                generation?: number;
+                reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation' | 'replaced';
             }) => void;
         };
         receives: {

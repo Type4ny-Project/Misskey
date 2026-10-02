@@ -14,7 +14,7 @@ export const meta = { tags: ['calls'], stability: 'experimental', requireCredent
 	sessionDescription: { ...sessionDescriptionParam, optional: false, nullable: true },
 	mediaCredential: { type: 'string', optional: false, nullable: false }, credentialExpiresAt: { type: 'string', format: 'date-time', optional: false, nullable: false },
 } } } as const;
-export const paramDef = { type: 'object', properties: { roomId: { type: 'string', format: 'misskey:id' }, connectionId: { type: 'string', minLength: 8, maxLength: 128 }, operationId: operationIdParam, sessionDescription: sessionDescriptionParam }, required: ['roomId', 'connectionId', 'operationId'] } as const;
+export const paramDef = { type: 'object', properties: { roomId: { type: 'string', format: 'misskey:id' }, connectionId: { type: 'string', minLength: 8, maxLength: 128 }, operationId: operationIdParam, sessionDescription: sessionDescriptionParam, expectedGeneration: { type: 'integer', minimum: 1 }, replaceExisting: { type: 'boolean', default: false } }, required: ['roomId', 'connectionId', 'operationId'] } as const;
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(service: CallsMediaService, credentials: CallsMediaCredentialService, guard: CallsOperationGuardService) {

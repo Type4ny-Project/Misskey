@@ -10239,6 +10239,17 @@ export interface Locale extends ILocale {
          */
         "newCallDescription": string;
         /**
+         * ノートする
+         */
+        "noteIt": string;
+        /**
+         * Misskey Callsで音声通話を楽しんでいます！
+         * 気軽に参加できる通話ルームを作れるので、よかったら遊びに来てください♪
+         *
+         * {url}
+         */
+        "noteText": ParameterizedString<"url">;
+        /**
          * 作成するとすぐに通話が始まります。
          */
         "startsImmediately": string;
@@ -10407,6 +10418,10 @@ export interface Locale extends ILocale {
          */
         "resumePreviousCallDescription": string;
         /**
+         * あと{seconds}秒以内に戻れます
+         */
+        "resumePreviousCallExpiresIn": ParameterizedString<"seconds">;
+        /**
          * 現在の通話から退出して、この通話に参加しますか？
          */
         "switchRoomConfirm": string;
@@ -10439,7 +10454,7 @@ export interface Locale extends ILocale {
          */
         "selectMicrophone": string;
         /**
-         * リスナーとして参加する場合、マイク権限は要求されません。
+         * 聴くだけで参加する場合、マイクの許可は不要です。
          */
         "listenerDoesNotNeedMicrophone": string;
         /**
@@ -10503,7 +10518,7 @@ export interface Locale extends ILocale {
          */
         "cancelled": string;
         /**
-         * このブラウザはMisskey Callsに必要な標準WebRTC APIをサポートしていません。
+         * このブラウザでは音声通話を利用できません。
          */
         "unsupportedBrowser": string;
         /**
@@ -10519,23 +10534,31 @@ export interface Locale extends ILocale {
          */
         "deviceNotFound": string;
         /**
-         * 音声接続に失敗しました。再試行できます。
+         * ルームに接続できませんでした。もう一度お試しください。
          */
         "mediaFailed": string;
         /**
-         * 音声接続を復旧しています…
+         * ルームに再接続しています…
          */
         "reconnecting": string;
         /**
-         * ルームには参加済みです。音声へ接続しています…
+         * ルームに接続中です…
          */
         "roomConnectedMediaConnecting": string;
+        /**
+         * 別の端末で通話に接続したため、この端末の接続を終了しました。
+         */
+        "connectedOnAnotherDevice": string;
+        /**
+         * 他の端末を切断して、この端末で通話に参加しますか？
+         */
+        "switchDeviceConfirm": string;
         /**
          * 音声再生を再開
          */
         "resumeAudio": string;
         /**
-         * リアルタイム更新が切断されました。再接続を待っています。
+         * ルームの更新が途切れました。再接続しています…
          */
         "websocketDisconnected": string;
     };

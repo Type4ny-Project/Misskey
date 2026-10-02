@@ -16812,6 +16812,9 @@ export interface operations {
                         type: 'offer' | 'answer';
                         sdp: string;
                     };
+                    expectedGeneration?: number;
+                    /** @default false */
+                    replaceExisting?: boolean;
                 };
             };
         };
@@ -17506,6 +17509,8 @@ export interface operations {
                     /** Format: misskey:id */
                     roomId: string;
                     expectedRevision: number;
+                    connectionId?: string;
+                    generation?: number;
                 };
             };
         };

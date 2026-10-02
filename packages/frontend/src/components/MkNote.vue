@@ -56,7 +56,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-if="appearNote.channel" :class="$style.colorBar" :style="{ background: appearNote.channel.color }"></div>
 		<div :class="[$style.avatarWrap, prefer.s.useStickyIcons ? $style.useSticky : null]">
 			<MkAvatar :class="$style.avatar" :user="appearNote.user" :link="!mock" :preview="!mock" :callsIndicator="!mock"/>
-			<button v-if="!mock && callsRoomId != null" type="button" class="_button" :class="$style.callsButton" :aria-label="i18n.ts._calls.joinRoom" @click.stop="openCallsRoom"><i class="ti ti-broadcast"></i></button>
+			<button v-if="!mock && callsRoomId != null" type="button" class="_button" :class="$style.callsButton" :aria-label="i18n.ts._calls.joinRoom" @click.stop="openCallsRoom"><i class="ti ti-wave-sine" aria-hidden="true"></i></button>
 		</div>
 		<div :class="$style.main">
 			<MkNoteHeader :note="appearNote" :mini="true"/>

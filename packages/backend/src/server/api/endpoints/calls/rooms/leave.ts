@@ -14,9 +14,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	constructor(service: CallsRoomService) {
 		super(meta, paramDef, async (ps, me) => {
 			try {
-				const reconnectFieldCount = [ps.reconnectToken, ps.connectionId, ps.generation].filter(value => value != null).length;
-				if (reconnectFieldCount !== 0 && reconnectFieldCount !== 3) throw new CallsRoomError('invalid-state');
-				await service.leave(me, ps.roomId, reconnectFieldCount === 3 ? { token: ps.reconnectToken!, connectionId: ps.connectionId!, generation: ps.generation! } : undefined);
+				if ((ps.connectionId != null) !== (ps.generation != null) || (ps.reconnectToken != null && ps.connectionId == null)) throw new CallsRoomError('invalid-state');
+				await service.leave(me, ps.roomId, ps.connectionId != null ? { token: ps.reconnectToken, connectionId: ps.connectionId, generation: ps.generation! } : undefined);
 			} catch (error) {
 				callsApiError(error);
 			}

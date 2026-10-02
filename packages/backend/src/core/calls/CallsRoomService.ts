@@ -27,7 +27,7 @@ import { ChatService } from '@/core/ChatService.js';
 import { IdService } from '@/core/IdService.js';
 import { RoleService } from '@/core/RoleService.js';
 import { CallsEventService } from './CallsEventService.js';
-import { CallsLiveConnectionService } from './CallsLiveConnectionService.js';
+import { CallsLiveConnectionService, type CallsConnectionIdentity } from './CallsLiveConnectionService.js';
 import { CallsMediaRevocationService } from './CallsMediaRevocationService.js';
 import { CallsTelemetryService } from './CallsTelemetryService.js';
 import type { Config } from '@/config.js';
@@ -257,8 +257,12 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 	}
 
 	@bindThis
-	public async end(host: MiUser, roomId: string, expectedRevision: number): Promise<MiCallsRoom> {
-		return this.transition(host, roomId, expectedRevision, 'open', 'ended');
+	public async end(host: MiUser, roomId: string, expectedRevision: number, identity?: CallsConnectionIdentity): Promise<MiCallsRoom> {
+		if (identity == null) return this.transition(host, roomId, expectedRevision, 'open', 'ended');
+		return this.callsLiveConnectionService.withRoomLock(roomId, async () => {
+			await this.assertCurrentConnection(host, roomId, identity);
+			return this.transition(host, roomId, expectedRevision, 'open', 'ended');
+		});
 	}
 
 	@bindThis
@@ -355,15 +359,15 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 	}
 
 	@bindThis
-	public async leave(user: MiUser, roomId: string, reconnect?: { token: string; connectionId: string; generation: number }): Promise<void> {
-		if (reconnect != null) {
+	public async leave(user: MiUser, roomId: string, identity?: CallsConnectionIdentity & { token?: string }): Promise<void> {
+		if (identity?.token != null) {
 			return this.callsLiveConnectionService.withRoomLock(roomId, async () => {
-				if (await this.callsLiveConnectionService.isReconnectTokenConsumed(reconnect.token)) return;
+				if (await this.callsLiveConnectionService.isReconnectTokenConsumed(identity.token!)) return;
 				const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
 				if (participant == null) return;
 				const connection = await this.callsLiveConnectionService.get(participant.id);
-				if (connection == null || connection.connectionId !== reconnect.connectionId || connection.generation !== reconnect.generation) return;
-				if (!(await this.callsLiveConnectionService.clear(participant.id, reconnect.connectionId, reconnect.generation))) return;
+				if (connection == null || connection.connectionId !== identity.connectionId || connection.generation !== identity.generation) return;
+				if (!(await this.callsLiveConnectionService.clear(participant.id, identity.connectionId, identity.generation))) return;
 				const now = new Date();
 				await this.callsParticipantsRepository.update(participant.id, { state: 'left', leftAt: now, updatedAt: now });
 				const revision = await this.bumpRevision(roomId);
@@ -372,6 +376,23 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 				this.callsTelemetryService.lifecycle({ action: 'participant-left', roomId, participantId: participant.id, reason: 'reload' });
 			});
 		}
+		if (identity != null) {
+			return this.callsLiveConnectionService.withRoomLock(roomId, async () => {
+				await this.assertCurrentConnection(user, roomId, identity);
+				await this.leaveParticipant(user, roomId);
+			});
+		}
+		await this.leaveParticipant(user, roomId);
+	}
+
+	private async assertCurrentConnection(user: MiUser, roomId: string, identity: CallsConnectionIdentity): Promise<void> {
+		const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
+		if (participant == null) throw new CallsRoomError('participant-not-found');
+		const current = await this.callsLiveConnectionService.get(participant.id);
+		if (current == null || current.connectionId !== identity.connectionId || current.generation !== identity.generation) throw new CallsRoomError('invalid-state');
+	}
+
+	private async leaveParticipant(user: MiUser, roomId: string): Promise<void> {
 		const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
 		if (participant == null) throw new CallsRoomError('participant-not-found');
 		if (participant.role === 'host') throw new CallsRoomError('invalid-state');

@@ -47,14 +47,14 @@ export class CallsMediaRevocationService {
 		await this.closeProviderPublications(publications);
 	}
 
-	public async revokeLostGeneration(participant: MiCallsParticipant, generation: number, roomRevision: number): Promise<void> {
+	public async revokeLostGeneration(participant: MiCallsParticipant, generation: number, roomRevision: number, connectionId: string): Promise<void> {
 		const publications = await this.bindings.clearGeneration(participant.id, generation);
 		await this.closeProviderPublications(publications);
 		for (const applicationId of new Set(publications.map(publication => publication.applicationId))) {
 			await this.quota.release(applicationId, participant.id);
 		}
 		await this.turnCredentials.revokeParticipant(participant.id);
-		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason: 'stale-generation' });
+		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason: 'stale-generation', connectionId, generation });
 	}
 
 	public async revokeDisconnectedGeneration(participant: MiCallsParticipant, connection: CallsLiveConnection, roomRevision: number): Promise<void> {

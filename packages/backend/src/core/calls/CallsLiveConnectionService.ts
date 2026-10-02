@@ -20,6 +20,8 @@ export type CallsLiveConnection = {
 
 export class StaleCallsConnectionError extends Error {}
 
+export type CallsConnectionIdentity = Pick<CallsLiveConnection, 'connectionId' | 'generation'>;
+
 @Injectable()
 export class CallsLiveConnectionService {
 	public static readonly ttlSeconds = 90;

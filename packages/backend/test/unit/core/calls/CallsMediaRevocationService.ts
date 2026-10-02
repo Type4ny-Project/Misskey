@@ -57,11 +57,11 @@ describe('CallsMediaRevocationService', () => {
 		const quota = { release: vi.fn().mockResolvedValue(undefined) };
 		const service = new CallsMediaRevocationService({} as never, {} as never, {} as never, bindings as never, provider as never, events as never, turn as never, quota as never);
 
-		await service.revokeLostGeneration(participant, 7, 9);
+		await service.revokeLostGeneration(participant, 7, 9, 'connection-a');
 
 		expect(provider.closeTracks).toHaveBeenCalledWith('session-a', [{ mid: '0' }], true);
 		expect(quota.release).toHaveBeenCalledWith('app-a', participant.id);
-		expect(events.publish).toHaveBeenCalledWith(participant.roomId, 9, 'revoked', { participantId: participant.id, reason: 'stale-generation' });
+		expect(events.publish).toHaveBeenCalledWith(participant.roomId, 9, 'revoked', { participantId: participant.id, reason: 'stale-generation', connectionId: 'connection-a', generation: 7 });
 	});
 
 	test('revokes current media immediately after ChatRoom membership loss', async () => {

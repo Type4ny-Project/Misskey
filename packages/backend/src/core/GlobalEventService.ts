@@ -40,7 +40,7 @@ export interface CallsRoomEventTypes {
 	mute: CallsRoomEventBase & { participantId: string; isMuted: boolean };
 	speaking: CallsRoomEventBase & { participantIds: string[] };
 	track: CallsRoomEventBase & { participantId: string; publicationId: string; available: boolean; mediaKind: 'audio' };
-	revoked: CallsRoomEventBase & { participantId?: string; reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation' };
+	revoked: CallsRoomEventBase & { participantId?: string; connectionId?: string; generation?: number; reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation' | 'replaced' };
 }
 
 export interface CallsRoomsEventTypes {

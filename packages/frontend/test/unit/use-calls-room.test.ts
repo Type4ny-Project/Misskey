@@ -86,7 +86,7 @@ describe('useCallsRoom streaming reconciliation', () => {
 		await vi.waitFor(() => expect(fixture.api).toHaveBeenCalledWith('calls/media/reconcile', { roomId: 'room-a' }));
 
 		fixture.channelHandlers.get('revoked')?.({ sequence: 1, roomRevision: 2, reason: 'access' });
-		await vi.waitFor(() => expect(revoked).toHaveBeenCalledWith('access'));
+		await vi.waitFor(() => expect(revoked).toHaveBeenCalledWith(expect.objectContaining({ reason: 'access' })));
 		expect(calls.connected.value).toBe(false);
 	});
 });

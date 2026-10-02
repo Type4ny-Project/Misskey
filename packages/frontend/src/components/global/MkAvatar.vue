@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkImgWithBlurhash v-if="prefer.s.enableHighQualityImagePlaceholders" :class="$style.inner" :src="url" :hash="user.avatarBlurhash" :cover="true" :onlyAvgColor="true"/>
 	<img v-else :class="$style.inner" :src="url" alt="" decoding="async" style="pointer-events: none;"/>
 	<MkUserOnlineIndicator v-if="indicator" :class="$style.indicator" :user="user"/>
-	<span v-if="callsIndicator && callsRoomId != null" :class="$style.callsIndicator" aria-hidden="true"><i class="ti ti-broadcast"></i></span>
+	<span v-if="callsIndicator && callsRoomId != null" :class="$style.callsIndicator" aria-hidden="true"><i class="ti ti-wave-sine"></i></span>
 	<div v-if="user.isCat" :class="[$style.ears]">
 		<div :class="$style.earLeft">
 			<div v-if="false" :class="$style.layer">

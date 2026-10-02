@@ -18,6 +18,7 @@ import { CallsApplicationQuotaService } from './CallsApplicationQuotaService.js'
 import { CallsTelemetryService } from './CallsTelemetryService.js';
 
 export class CallsMediaAccessError extends Error {}
+export class CallsConnectionExistsError extends Error {}
 
 @Injectable()
 export class CallsMediaService {
@@ -38,15 +39,25 @@ export class CallsMediaService {
 		roomId: string;
 		connectionId: string;
 		applicationId: string;
+		expectedGeneration?: number;
+		replaceExisting?: boolean;
 		sessionDescription?: CloudflareRealtimeSessionDescription;
 	}): Promise<{ participantId: string; generation: number; canPublish: boolean; sessionDescription?: CloudflareRealtimeSessionDescription }> {
 		const authorizedParticipant = await this.authorizeParticipant(user, input.roomId);
-		await this.quotaService.reserveSession(input.applicationId, authorizedParticipant.id);
 		let locked: { participant: MiCallsParticipant; replacement: Awaited<ReturnType<CallsLiveConnectionService['replace']>> };
+		let quotaReserved = false;
 		try {
 			locked = await this.liveConnectionService.withRoomLock(input.roomId, async (assertLockHeld) => {
 				const lockedParticipant = await this.authorizeParticipant(user, input.roomId);
+				const current = await this.liveConnectionService.get(lockedParticipant.id);
+				if (input.expectedGeneration != null) {
+					if (current != null && (current.connectionId !== input.connectionId || current.generation !== input.expectedGeneration)) throw new StaleCallsConnectionError();
+				} else if (current != null && current.connectionId !== input.connectionId && !input.replaceExisting) {
+					throw new CallsConnectionExistsError();
+				}
 				await assertLockHeld();
+				await this.quotaService.reserveSession(input.applicationId, lockedParticipant.id);
+				quotaReserved = true;
 				await this.liveConnectionService.clearRoomEmptySince(input.roomId);
 				return {
 					participant: lockedParticipant,
@@ -54,13 +65,17 @@ export class CallsMediaService {
 				};
 			});
 		} catch (error) {
-			await this.quotaService.releaseSession(input.applicationId, authorizedParticipant.id);
+			if (quotaReserved) await this.quotaService.releaseSession(input.applicationId, authorizedParticipant.id);
 			throw error;
 		}
 		const { participant, replacement } = locked;
 		const createdGeneration: { connectionId: string; generation: number } = replacement.current;
 		try {
 			if (replacement.previous != null) {
+				if (replacement.previous.connectionId !== input.connectionId) {
+					const room = await this.roomService.getRoom(input.roomId);
+					await this.eventService.publish(input.roomId, room.revision, 'revoked', { participantId: participant.id, reason: 'replaced', connectionId: replacement.previous.connectionId, generation: replacement.previous.generation });
+				}
 				await this.revocationService.closeGeneration(participant.id, replacement.previous.generation);
 				if (replacement.previous.applicationId !== input.applicationId) await this.quotaService.release(replacement.previous.applicationId, participant.id);
 			}
@@ -173,10 +188,16 @@ export class CallsMediaService {
 		} catch (error) {
 			if (!(error instanceof StaleCallsConnectionError)) throw error;
 			const room = await this.roomService.getRoom(roomId);
-			await this.revocationService.revokeLostGeneration(participant, generation, room.revision);
+			const current = await this.liveConnectionService.get(participant.id);
+			if (current != null) {
+				if (current.connectionId !== connectionId) await this.eventService.publish(roomId, room.revision, 'revoked', { participantId: participant.id, reason: 'replaced', connectionId, generation });
+			} else {
+				await this.revocationService.revokeLostGeneration(participant, generation, room.revision, connectionId);
+			}
 			throw error;
 		}
 		await this.liveConnectionService.heartbeat(participant.id, connectionId, generation);
+		await this.bindingService.heartbeat(roomId, participant.id, generation);
 		await this.quotaService.touch(connection.applicationId, participant.id);
 	}
 

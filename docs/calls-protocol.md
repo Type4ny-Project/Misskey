@@ -22,6 +22,8 @@ Call `calls/capabilities` before joining. A 1.x client requires protocol major 1
 
 If a heartbeat detects lost live state, the server emits `revoked` with reason `stale-generation`. Tear down the old peer connection and create a new media session/generation before republishing or resubscribing. Other revoke reasons are terminal for the current access decision and must not be retried without rejoining or refreshing authorization.
 
+Only one device may hold a participant's audio connection. A fresh `calls/media/session/create` request returns `CALLS_CONNECTION_EXISTS` if another device is connected. Ask the user before retrying with `replaceExisting: true`. Recovery requests must retain their `connectionId` and send `expectedGeneration`; they cannot replace another device. A `revoked` event with reason `replaced` addresses the old `connectionId` and `generation`. That device must stop locally without calling room leave or end; other connections ignore the event. Include the current `connectionId` and `generation` in explicit room leave/end requests so delayed actions from an old device cannot affect the new connection.
+
 Example event:
 
 ```json

@@ -17,7 +17,7 @@ export class CallsMediaController {
 	public participantId: string | null = null;
 	public localTrack: MediaStreamTrack | null = null;
 	private peer: RTCPeerConnection | null = null;
-	private connectionId = crypto.randomUUID();
+	private connectionId: string = crypto.randomUUID();
 	private queue = Promise.resolve();
 	private reconnectTimer: number | null = null;
 	private publications = new Set<string>();
@@ -30,6 +30,7 @@ export class CallsMediaController {
 	private lastStatsBytes = 0;
 	private lastStatsAt = 0;
 	private speaking = false;
+	private muted = false;
 	private reconnectReason: CallsNormalizedStats['reconnectReason'] = null;
 	private reconnectStartedAt = 0;
 	private recoveryTimeMs: number | null = null;
@@ -44,7 +45,14 @@ export class CallsMediaController {
 		private onState?: (state: CallsMediaState, failure: CallsMediaFailure | null) => void,
 		private onRemoteTrack?: (track: MediaStreamTrack) => void,
 		private onStats?: (stats: CallsNormalizedStats, speaking: boolean) => void,
-	) {}
+		previousConnection?: { connectionId: string; generation: number },
+		private replaceExisting = false,
+	) {
+		if (previousConnection != null) {
+			this.connectionId = previousConnection.connectionId;
+			this.generation = previousConnection.generation;
+		}
+	}
 
 	public async connect(deviceId?: string): Promise<void> {
 		const capabilities = detectCallsMediaCapabilities();
@@ -56,6 +64,7 @@ export class CallsMediaController {
 			if (this.role !== 'listener') await this.acquireMicrophone(deviceId);
 			await this.enqueue(() => this.createConnection());
 		} catch (error) {
+			if (this.isClosed()) return;
 			if (error instanceof DOMException && error.name === 'AbortError') {
 				this.setState('idle');
 				return;
@@ -98,6 +107,7 @@ export class CallsMediaController {
 		});
 		this.localTrack = stream.getAudioTracks()[0] ?? null;
 		if (this.localTrack == null) throw new DOMException('No audio track', 'NotFoundError');
+		this.localTrack.enabled = !this.muted;
 		this.localTrack.addEventListener('ended', () => void this.recoverFromDeviceLoss());
 	}
 
@@ -108,9 +118,17 @@ export class CallsMediaController {
 	}
 
 	private async createConnection(): Promise<void> {
+		if (this.isClosed()) return;
 		this.cleanupPeer(false);
 		this.setState(this.generation === 0 ? 'creating-session' : 'reconnecting');
+		const session = await misskeyApi('calls/media/session/create', { roomId: this.roomId, connectionId: this.connectionId, expectedGeneration: this.generation || undefined, replaceExisting: this.replaceExisting, operationId: crypto.randomUUID() });
+		if (this.isClosed()) return;
+		this.generation = session.generation;
+		this.participantId = session.participantId;
+		this.mediaCredential = session.mediaCredential;
+		this.credentialExpiresAt = Date.parse(session.credentialExpiresAt);
 		const turn = await misskeyApi('calls/media/turn-credentials', { roomId: this.roomId }).catch(() => null);
+		if (this.isClosed()) return;
 		const peer = new RTCPeerConnection({ iceServers: turn?.iceServers ?? [{ urls: ['stun:stun.cloudflare.com:3478'] }] });
 		this.peer = peer;
 		if (turn != null) this.scheduleTurnRefresh(Date.parse(turn.expiresAt));
@@ -138,11 +156,7 @@ export class CallsMediaController {
 		}
 		if (this.localTrack != null) await sendTransceiver.sender.replaceTrack(this.localTrack);
 
-		const session = await misskeyApi('calls/media/session/create', { roomId: this.roomId, connectionId: this.connectionId, operationId: crypto.randomUUID() });
-		this.generation = session.generation;
-		this.participantId = session.participantId;
-		this.mediaCredential = session.mediaCredential;
-		this.credentialExpiresAt = Date.parse(session.credentialExpiresAt);
+		if (this.peer !== peer) return;
 		if (session.sessionDescription != null) await peer.setRemoteDescription(session.sessionDescription);
 
 		if (this.localTrack != null) {
@@ -242,7 +256,10 @@ export class CallsMediaController {
 		throw new Error('Publisher is not actually sending audio packets');
 	}
 
-	public setMuted(muted: boolean): void { if (this.localTrack != null) this.localTrack.enabled = !muted; }
+	public setMuted(muted: boolean): void {
+		this.muted = muted;
+		if (this.localTrack != null) this.localTrack.enabled = !muted;
+	}
 
 	public async switchMicrophone(deviceId: string): Promise<void> {
 		const oldTrack = this.localTrack;
@@ -264,23 +281,25 @@ export class CallsMediaController {
 
 	public async close(): Promise<void> {
 		this.setState('leaving');
+		this.cleanupPeer(true);
 		await this.ensureCredential().catch(() => undefined);
 		for (const publicationId of this.publications) {
 			await misskeyApi('calls/media/tracks/close', { roomId: this.roomId, participantId: this.participantId!, connectionId: this.connectionId, generation: this.generation, operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential!, publicationId }).catch(() => undefined);
 		}
 		this.publications.clear();
 		this.subscribedPublications.clear();
-		this.cleanupPeer(true);
 		this.setState('closed');
 	}
 
+	private isClosed(): boolean { return this.state === 'leaving' || this.state === 'closed'; }
+
 	private scheduleReconnect(reason: Exclude<CallsNormalizedStats['reconnectReason'], null>): void {
-		if (this.state === 'leaving' || this.state === 'closed' || this.state === 'reconnecting') return;
+		if (this.isClosed() || this.state === 'reconnecting') return;
 		this.reconnectReason = reason;
 		this.reconnectStartedAt = performance.now();
 		this.recoveryTimeMs = null;
 		this.setState('reconnecting');
-		void this.enqueue(() => this.createConnection()).catch(() => this.fail('negotiation-failed'));
+		void this.enqueue(() => this.createConnection()).catch(() => { if (!this.isClosed()) this.fail('negotiation-failed'); });
 	}
 
 	private async ensureCredential(): Promise<void> {

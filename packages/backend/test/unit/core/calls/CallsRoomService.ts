@@ -24,7 +24,53 @@ function createAccessFixture(options?: { enabled?: boolean; chatMember?: boolean
 const viewer = { id: 'viewer-a', host: null } as MiUser;
 const baseRoom = { id: 'room-a', ownerUserId: 'owner-a', attachmentType: 'personal', visibility: 'specified', visibleUserIds: [] } as unknown as MiCallsRoom;
 
+function createConnectionFixture(role: 'host' | 'listener') {
+	const room = { ...baseRoom, state: 'open', revision: 1 } as MiCallsRoom;
+	const participant = { id: 'participant-a', roomId: room.id, userId: 'owner-a', role, state: 'active' };
+	const update = vi.fn();
+	const execute = vi.fn(async () => ({ affected: 1, raw: [{ ...room, state: 'ended', revision: 2 }] }));
+	const queryBuilder = { update: () => queryBuilder, set: () => queryBuilder, where: () => queryBuilder, returning: () => queryBuilder, execute };
+	const live = { get: vi.fn().mockResolvedValue({ connectionId: 'new-device', generation: 2 }), withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() };
+	const revokeRoom = vi.fn();
+	const revokeParticipant = vi.fn();
+	const service = new CallsRoomService(
+		{ cloudflareRealtime: { enabled: true } } as Config,
+		{ findOneBy: async () => room, createQueryBuilder: () => queryBuilder } as never,
+		{ findOneBy: async () => participant, update } as never,
+		{} as never, {} as never, {} as never, {} as never, {} as never,
+		{ isModerator: async () => false } as never, live as never,
+		{ publish: vi.fn(), publishRoomsList: vi.fn() } as never,
+		{ revokeRoom, revokeParticipant } as never, { lifecycle: vi.fn() } as never,
+	);
+	return { service, room, live, update, execute, revokeRoom, revokeParticipant };
+}
+
 describe('CallsRoomService lifecycle', () => {
+	test.each(['host', 'listener'] as const)('an old %s device cannot end or leave the current call', async role => {
+		const fixture = createConnectionFixture(role);
+		const identity = { connectionId: 'old-device', generation: 1 };
+		const user = { id: 'owner-a' } as MiUser;
+		const operation = role === 'host' ? fixture.service.end(user, fixture.room.id, 1, identity) : fixture.service.leave(user, fixture.room.id, identity);
+		await expect(operation).rejects.toMatchObject({ code: 'invalid-state' });
+		expect(fixture.update).not.toHaveBeenCalled();
+		expect(fixture.execute).not.toHaveBeenCalled();
+		expect(fixture.revokeRoom).not.toHaveBeenCalled();
+		expect(fixture.revokeParticipant).not.toHaveBeenCalled();
+	});
+
+	test.each(['host', 'listener'] as const)('the current %s device can end or leave the call', async role => {
+		const fixture = createConnectionFixture(role);
+		const identity = { connectionId: 'new-device', generation: 2 };
+		const user = { id: 'owner-a' } as MiUser;
+		if (role === 'host') {
+			await fixture.service.end(user, fixture.room.id, 1, identity);
+			expect(fixture.revokeRoom).toHaveBeenCalledWith(fixture.room.id, 2, 'room-ended');
+		} else {
+			await fixture.service.leave(user, fixture.room.id, identity);
+			expect(fixture.update).toHaveBeenCalledWith('participant-a', expect.objectContaining({ state: 'left' }));
+			expect(fixture.revokeParticipant).toHaveBeenCalled();
+		}
+	});
 	test.each([
 		['scheduled', 'open'],
 		['scheduled', 'cancelled'],

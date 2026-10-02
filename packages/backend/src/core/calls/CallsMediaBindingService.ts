@@ -53,6 +53,17 @@ export class CallsMediaBindingService {
 		return JSON.parse(value) as CallsPublicationBinding;
 	}
 
+	public async heartbeat(roomId: string, participantId: string, generation: number): Promise<void> {
+		const key = this.generationKey(participantId, generation);
+		const ids = await this.redis.smembers(key);
+		if (ids.length === 0) return;
+		const pipeline = this.redis.pipeline();
+		for (const id of ids) pipeline.expire(this.publicationKey(id), CallsMediaBindingService.ttlSeconds);
+		pipeline.expire(key, CallsMediaBindingService.ttlSeconds);
+		pipeline.expire(this.roomKey(roomId), CallsMediaBindingService.ttlSeconds);
+		await pipeline.exec();
+	}
+
 	public async listRoomPublications(roomId: string): Promise<CallsPublicationBinding[]> {
 		const ids = await this.redis.smembers(this.roomKey(roomId));
 		if (ids.length === 0) return [];

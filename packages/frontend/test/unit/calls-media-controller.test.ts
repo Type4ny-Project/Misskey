@@ -78,6 +78,23 @@ describe('CallsMediaController', () => {
 		expect(controller.state).toBe('connected');
 	});
 
+	test('recovery identifies the connection generation it is replacing', async () => {
+		installBrowserMedia(vi.fn());
+		const controller = new CallsMediaController('room-a', 'listener', undefined, undefined, undefined, { connectionId: 'existing-device', generation: 7 });
+		await controller.connect();
+		expect(apiMock).toHaveBeenCalledWith('calls/media/session/create', expect.objectContaining({ connectionId: 'existing-device', expectedGeneration: 7, replaceExisting: false }));
+		await controller.close();
+	});
+
+	test('an unconfirmed handoff does not rotate the existing device TURN credentials', async () => {
+		installBrowserMedia(vi.fn());
+		apiMock.mockRejectedValue({ code: 'CALLS_CONNECTION_EXISTS' });
+		const controller = new CallsMediaController('room-a', 'listener');
+		await expect(controller.connect()).rejects.toMatchObject({ code: 'CALLS_CONNECTION_EXISTS' });
+		expect(apiMock).not.toHaveBeenCalledWith('calls/media/turn-credentials', expect.anything());
+		expect(FakePeerConnection.instances).toHaveLength(0);
+	});
+
 	test('does not subscribe to the same remote publication twice', async () => {
 		installBrowserMedia(vi.fn());
 		apiMock.mockImplementation(async (endpoint: string) => {
@@ -149,6 +166,25 @@ describe('CallsMediaController', () => {
 		expect(apiMock).not.toHaveBeenCalledWith('calls/media/session/create', expect.anything());
 	});
 
+	test('closing during a session request prevents queued recovery from reconnecting', async () => {
+		installBrowserMedia(vi.fn());
+		let resolveSession!: (value: unknown) => void;
+		apiMock.mockImplementation(async (endpoint: string) => {
+			if (endpoint === 'calls/media/turn-credentials') return null;
+			if (endpoint === 'calls/media/session/create') return new Promise(resolve => { resolveSession = resolve; });
+			throw new Error(`unexpected endpoint: ${endpoint}`);
+		});
+		const controller = new CallsMediaController('room-a', 'listener');
+		const connecting = controller.connect();
+		const queued = controller.connect();
+		await vi.waitFor(() => expect(resolveSession).toBeTypeOf('function'));
+		await controller.close();
+		resolveSession({ participantId: 'participant-a', generation: 1 });
+		await Promise.all([connecting, queued]);
+		expect(controller.state).toBe('closed');
+		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/session/create')).toHaveLength(1);
+	});
+
 	test('switches microphone with replaceTrack and stops the previous device', async () => {
 		const oldTrack = { kind: 'audio', enabled: true, stop: vi.fn(), addEventListener: vi.fn() } as unknown as MediaStreamTrack;
 		const newTrack = { kind: 'audio', enabled: true, stop: vi.fn(), addEventListener: vi.fn() } as unknown as MediaStreamTrack;
@@ -163,11 +199,14 @@ describe('CallsMediaController', () => {
 			throw new Error(`unexpected endpoint: ${endpoint}`);
 		});
 		const controller = new CallsMediaController('room-a', 'speaker');
+		controller.setMuted(true);
 		await controller.connect();
+		expect(oldTrack.enabled).toBe(false);
 		await controller.switchMicrophone('new-device');
 
 		expect(FakePeerConnection.instances[0]?.sender.track).toBe(newTrack);
 		expect(oldTrack.stop).toHaveBeenCalled();
+		expect(newTrack.enabled).toBe(false);
 		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: expect.objectContaining({ deviceId: { exact: 'new-device' } }) }));
 	});
 

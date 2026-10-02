@@ -2670,6 +2670,18 @@ _permissions:
   "write:calls": "Misskey Callsへの参加と音声通話を操作する"
 
 _calls:
+  viewRoom: "ルームを見る"
+  peopleInRoom: "{count}人が参加中"
+  camera: "カメラ"
+  selectCamera: "カメラを選択"
+  startCamera: "カメラをオン"
+  stopCamera: "カメラをオフ"
+  screenSharing: "画面共有"
+  startScreenSharing: "画面を共有"
+  stopScreenSharing: "共有を停止"
+  videoPermissionDenied: "カメラへのアクセスを許可してください。"
+  cameraNotFound: "カメラが見つかりません。"
+  videoFailed: "映像の接続に失敗しました。もう一度お試しください。"
   title: "Misskey Calls"
   live: "LIVE"
   speakingNow: "発話中"

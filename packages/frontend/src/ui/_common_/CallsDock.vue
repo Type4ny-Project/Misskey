@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:leaveActiveClass="$style.dockLeaveActive"
 		:leaveToClass="$style.dockLeaveTo"
 	>
-		<div v-if="session.isActive.value && room != null" ref="rootEl" :class="$style.root">
+		<div v-if="session.isActive.value && room != null && !isRoomPage" ref="rootEl" :class="$style.root">
 			<Transition
 				:enterActiveClass="$style.panelEnterActive"
 				:enterFromClass="$style.panelEnterFrom"
@@ -28,18 +28,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<button type="button" class="_button" :class="$style.circleButton" :aria-label="i18n.ts.close" @click="expanded = false"><i class="ti ti-chevron-down"></i></button>
 					</header>
 
-					<div :class="$style.quickActions">
-						<button v-if="session.isSpeaker.value" type="button" class="_button" :class="[$style.quickAction, session.muted.value && $style.quickActionActive]" :disabled="session.joining.value" @click="session.toggleMute()">
-							<i :class="session.muted.value ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i>
-							<span>{{ session.muted.value ? i18n.ts._calls.unmute : i18n.ts._calls.mute }}</span>
-						</button>
-						<button v-else-if="room?.mode === 'stage'" type="button" class="_button" :class="[$style.quickAction, session.myParticipant.value?.speakerRequestedAt != null && $style.quickActionActive]" :disabled="session.joining.value" @click="session.myParticipant.value?.speakerRequestedAt != null ? session.cancelSpeakerRequest() : session.requestSpeaker()">
-							<i class="ti ti-hand-stop"></i>
-							<span>{{ session.myParticipant.value?.speakerRequestedAt != null ? i18n.ts._calls.cancelSpeakerRequest : i18n.ts._calls.requestSpeaker }}</span>
-						</button>
-						<button type="button" class="_button" :class="$style.quickAction" @click="openRoom"><i class="ti ti-layout-dashboard"></i><span>{{ i18n.ts.details }}</span></button>
-						<button type="button" class="_button" :class="[$style.quickAction, $style.quickActionDanger]" :disabled="session.joining.value" @click="leaveRoom"><i class="ti ti-door-exit"></i><span>{{ session.isHost.value ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom }}</span></button>
-					</div>
+					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="session.toggleVideo('camera')" @screen="session.toggleVideo('screen')" @microphoneSettings="session.openDeviceMenu('microphone', $event)" @cameraSettings="session.openDeviceMenu('camera', $event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveRoom">
+						<button type="button" class="_button" :class="$style.detailsButton" :aria-label="i18n.ts.details" :title="i18n.ts.details" @click="openRoom"><i class="ti ti-layout-dashboard"></i></button>
+					</MkCallsControls>
 
 					<section v-if="room?.mode === 'stage' && session.isHost.value && pendingRequests.length > 0" :class="$style.section">
 						<strong :class="$style.sectionLabel">{{ i18n.ts._calls.requestSpeaker }}</strong>
@@ -63,7 +54,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
 									<small>{{ participant.role === 'host' ? i18n.ts._calls.host : participant.isMuted ? i18n.ts._calls.mutedStatus : session.speakingParticipantIds.value.has(participant.id) ? i18n.ts._calls.speakingNow : i18n.ts._calls.microphoneOn }}</small>
 								</div>
-								<button v-if="room?.mode === 'stage' && session.isHost.value && participant.role !== 'host'" type="button" class="_button" :class="$style.inlineAction" :title="i18n.ts._calls.demoteListener" @click="setRole(participant.id, 'listener')"><i class="ti ti-microphone-off"></i></button>
+								<button v-if="room?.mode === 'stage' && session.isHost.value && participant.role !== 'host'" type="button" class="_button" :class="$style.inlineAction" :aria-label="i18n.ts._calls.demoteListener" :title="i18n.ts._calls.demoteListener" @click="setRole(participant.id, 'listener')"><i class="ti ti-microphone-off"></i></button>
 							</div>
 						</div>
 					</section>
@@ -122,6 +113,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import type * as Misskey from 'misskey-js';
+import MkCallsControls from '@/components/MkCallsControls.vue';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { mainRouter } from '@/router.js';
@@ -130,6 +122,7 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 
 const session = useCallsSession();
 const expanded = ref(false);
+const isRoomPage = computed(() => mainRouter.currentRef.value.route.path === '/calls/:roomId' && mainRouter.currentRef.value.props.get('roomId') === session.currentRoomId.value);
 const rootEl = ref<HTMLElement | null>(null);
 const room = computed(() => session.room.value);
 const participants = computed(() => session.participants.value);
@@ -197,10 +190,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .panelMeta { display: flex; gap: 8px; margin-top: 4px; font-size: 0.78rem; opacity: 0.72; }
 .panelMeta > :first-child, .live { color: var(--MI_THEME-accent); font-weight: 800; letter-spacing: 0.08em; }
 .circleButton { width: 32px; height: 32px; border-radius: 999px; }
-.quickActions { display: flex; flex-wrap: wrap; gap: 8px; }
-.quickAction { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 999px; background: color(from var(--MI_THEME-bg) srgb r g b / 0.36); font-size: 0.85rem; }
-.quickActionActive { color: var(--MI_THEME-accent); background: var(--MI_THEME-accentedBg); }
-.quickActionDanger { color: var(--MI_THEME-error); }
+.detailsButton { width: 40px; height: 48px; border-radius: 14px; font-size: 20px; }
 .section { display: flex; flex-direction: column; gap: 8px; }
 .sectionLabel { font-size: 0.78rem; letter-spacing: 0.04em; opacity: 0.72; text-transform: uppercase; }
 .userList { display: flex; flex-direction: column; gap: 6px; }
@@ -232,9 +222,9 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .actionDanger { color: var(--MI_THEME-error); }
 .expandIcon { transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
 .expandIconExpanded { transform: rotate(180deg); }
-.main, .action, .circleButton, .quickAction, .inlineAction, .userRow { transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.22s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
+.main, .action, .circleButton, .inlineAction, .userRow { transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.22s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
 .mainExpanded { box-shadow: 0 8px 22px color(from var(--MI_THEME-bg) srgb r g b / 0.2); transform: translateY(1px); }
-.main:active, .action:active, .circleButton:active, .quickAction:active, .inlineAction:active { transform: scale(0.96); }
+.main:active, .action:active, .circleButton:active, .inlineAction:active { transform: scale(0.96); }
 .dockEnterActive { transform-origin: bottom right; transition: opacity 0.22s ease-out, transform 0.34s cubic-bezier(0.22, 1, 0.36, 1); }
 .dockLeaveActive { transform-origin: bottom right; transition: opacity 0.16s ease-in, transform 0.2s ease-in; }
 .dockEnterFrom, .dockLeaveTo { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.94); }
@@ -247,7 +237,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .panelEnterActive > :nth-child(n + 3) { animation-delay: 0.15s; }
 
 @media (hover: hover) {
-	.main:hover, .action:hover, .circleButton:hover, .quickAction:hover, .inlineAction:hover { transform: translateY(-1px); }
+	.main:hover, .action:hover, .circleButton:hover, .inlineAction:hover { transform: translateY(-1px); }
 	.userRow:hover { background: color(from var(--MI_THEME-bg) srgb r g b / 0.4); }
 }
 
@@ -269,9 +259,9 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 
 @media (prefers-reduced-motion: reduce) {
 	.userAvatarLive, .avatarRingActive::before, .avatarRingActive::after { animation: none; }
-	.dockEnterActive, .dockLeaveActive, .panelEnterActive, .panelLeaveActive, .expandIcon, .main, .action, .circleButton, .quickAction, .inlineAction, .userRow { transition-duration: 0.01ms; }
+	.dockEnterActive, .dockLeaveActive, .panelEnterActive, .panelLeaveActive, .expandIcon, .main, .action, .circleButton, .inlineAction, .userRow { transition-duration: 0.01ms; }
 	.panelEnterActive > * { animation: none; }
-	.main, .mainExpanded, .main:hover, .main:active, .action:hover, .action:active, .circleButton:hover, .circleButton:active, .quickAction:hover, .quickAction:active, .inlineAction:hover, .inlineAction:active, .expandIconExpanded { transform: none; }
+	.main, .mainExpanded, .main:hover, .main:active, .action:hover, .action:active, .circleButton:hover, .circleButton:active, .inlineAction:hover, .inlineAction:active, .expandIconExpanded { transform: none; }
 }
 
 @media (max-width: 500px) {

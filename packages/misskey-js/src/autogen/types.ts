@@ -16479,8 +16479,8 @@ export interface operations {
                     'application/json': {
                         protocolVersion: string;
                         enabled: boolean;
-                        mediaKinds: 'audio'[];
-                        codecs: ('opus' | 'pcma' | 'pcmu')[];
+                        mediaKinds: ('audio' | 'video')[];
+                        codecs: ('opus' | 'pcma' | 'pcmu' | 'vp8' | 'h264' | 'vp9' | 'av1')[];
                         roles: ('host' | 'speaker' | 'listener')[];
                         limits: {
                             speakers: number;
@@ -16649,7 +16649,9 @@ export interface operations {
                             /** Format: id */
                             participantId: string;
                             /** @enum {string} */
-                            mediaKind: 'audio';
+                            mediaSource: 'microphone' | 'camera' | 'screen';
+                            /** @enum {string} */
+                            mediaKind: 'audio' | 'video';
                         }[];
                     };
                 };
@@ -17003,6 +17005,11 @@ export interface operations {
                     generation: number;
                     operationId: string;
                     mediaCredential: string;
+                    /**
+                     * @default microphone
+                     * @enum {string}
+                     */
+                    mediaSource?: 'microphone' | 'camera' | 'screen';
                     mid: string;
                     sessionDescription: {
                         /** @enum {string} */
@@ -17128,6 +17135,11 @@ export interface operations {
                             index: number;
                             code: string;
                             description: string | null;
+                        }[];
+                        subscriptions: {
+                            /** Format: id */
+                            publicationId: string;
+                            mid: string;
                         }[];
                     };
                 };

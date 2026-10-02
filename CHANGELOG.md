@@ -4,6 +4,7 @@
 -
 
 ### Client
+- Feat: Callsでカメラと画面共有を利用できるようにし、ルーム画面・一覧・操作メニューを改善
 - Feat: WebSocketとWebRTCを利用したMisskey Calls音声ルームを追加
 - Enhance: Misskey Callsで同じ開催場所の既存通話へ戻れるように
 - Enhance: Misskey Callsの発話中表示をアバター外周のインジケーターに統一

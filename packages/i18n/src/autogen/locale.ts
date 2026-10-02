@@ -10175,6 +10175,54 @@ export interface Locale extends ILocale {
     };
     "_calls": {
         /**
+         * ルームを見る
+         */
+        "viewRoom": string;
+        /**
+         * {count}人が参加中
+         */
+        "peopleInRoom": ParameterizedString<"count">;
+        /**
+         * カメラ
+         */
+        "camera": string;
+        /**
+         * カメラを選択
+         */
+        "selectCamera": string;
+        /**
+         * カメラをオン
+         */
+        "startCamera": string;
+        /**
+         * カメラをオフ
+         */
+        "stopCamera": string;
+        /**
+         * 画面共有
+         */
+        "screenSharing": string;
+        /**
+         * 画面を共有
+         */
+        "startScreenSharing": string;
+        /**
+         * 共有を停止
+         */
+        "stopScreenSharing": string;
+        /**
+         * カメラへのアクセスを許可してください。
+         */
+        "videoPermissionDenied": string;
+        /**
+         * カメラが見つかりません。
+         */
+        "cameraNotFound": string;
+        /**
+         * 映像の接続に失敗しました。もう一度お試しください。
+         */
+        "videoFailed": string;
+        /**
          * Misskey Calls
          */
         "title": string;

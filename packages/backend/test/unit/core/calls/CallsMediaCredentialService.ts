@@ -20,7 +20,8 @@ describe('CallsMediaCredentialService', () => {
 	test('binds the credential to every media security boundary', () => {
 		const service = new CallsMediaCredentialService(config);
 		const { credential } = service.issue(input);
-		expect(service.verify(credential, { ...input, publish: true })).toMatchObject(input);
+		expect(service.verify(credential, { ...input, publish: true, mediaKind: 'audio' })).toMatchObject({ ...input, mediaKinds: ['audio', 'video'] });
+		expect(service.verify(credential, { ...input, publish: true, mediaKind: 'video' })).toMatchObject(input);
 		for (const changed of [
 			{ roomId: 'room-b' }, { userId: 'user-b' }, { applicationId: 'app-b' },
 			{ participantId: 'participant-b' }, { connectionId: 'connection-b' }, { generation: 3 },

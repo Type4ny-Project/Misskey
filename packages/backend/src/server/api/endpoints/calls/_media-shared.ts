@@ -109,8 +109,8 @@ export function verifyCallsMediaCredential(
 	credential: string,
 	user: MiUser,
 	token: MiAccessToken | null,
-	input: { roomId: string; participantId: string; connectionId: string; generation: number },
+	input: { roomId: string; participantId: string; connectionId: string; generation: number; mediaSource?: 'microphone' | 'camera' | 'screen' },
 	publish = false,
 ): void {
-	service.verify(credential, { ...input, userId: user.id, applicationId: callsApplicationId(token, user), publish });
+	service.verify(credential, { ...input, userId: user.id, applicationId: callsApplicationId(token, user), publish, mediaKind: publish ? input.mediaSource == null || input.mediaSource === 'microphone' ? 'audio' : 'video' : undefined });
 }

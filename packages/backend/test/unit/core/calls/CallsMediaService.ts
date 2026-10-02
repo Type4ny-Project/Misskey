@@ -28,7 +28,7 @@ function createFixture(role: MiCallsParticipant['role'] = 'speaker') {
 		clear: vi.fn().mockResolvedValue(true),
 		heartbeat: vi.fn(),
 	};
-	const bindings = { getPublication: vi.fn(), createPublication: vi.fn(), removePublication: vi.fn(), listRoomPublications: vi.fn(), heartbeat: vi.fn() };
+	const bindings = { getPublication: vi.fn(), createPublication: vi.fn(), removePublication: vi.fn(), listRoomPublications: vi.fn().mockResolvedValue([]), heartbeat: vi.fn() };
 	const provider = { createSession: vi.fn().mockResolvedValue({ sessionId: 'session-a' }), addTracks: vi.fn(), closeTracks: vi.fn(), renegotiate: vi.fn() };
 	const events = { publish: vi.fn() };
 	const revocation = { closeGeneration: vi.fn(), revokeLostGeneration: vi.fn() };
@@ -46,6 +46,34 @@ describe('CallsMediaService authorization boundaries', () => {
 		await expect(fixture.service.publish(user, { roomId: room.id, connectionId: 'connection-a', generation: 2, mid: '0', sessionDescription: { type: 'offer', sdp: 'offer' } })).rejects.toBeInstanceOf(CallsMediaAccessError);
 		expect(fixture.live.assertCurrent).not.toHaveBeenCalled();
 		expect(fixture.provider.addTracks).not.toHaveBeenCalled();
+	});
+
+	test.each(['microphone', 'camera', 'screen'] as const)('publishes %s with its media kind, source and separate quota', async mediaSource => {
+		const fixture = createFixture();
+		fixture.provider.addTracks.mockResolvedValue({ tracks: [{ mid: '1' }] });
+		fixture.bindings.createPublication.mockResolvedValue({ id: 'public-id' });
+		await fixture.service.publish(user, { roomId: room.id, connectionId: 'connection-a', generation: 2, mid: '1', mediaSource, sessionDescription: { type: 'offer', sdp: 'offer' } });
+		const mediaKind = mediaSource === 'microphone' ? 'audio' : 'video';
+		expect(fixture.provider.addTracks).toHaveBeenCalledWith('session-a', [expect.objectContaining({ kind: mediaKind, trackName: `${mediaSource}-participant-a-2-1` })], expect.anything());
+		expect(fixture.bindings.createPublication).toHaveBeenCalledWith(expect.objectContaining({ mediaKind, mediaSource }));
+		expect(fixture.quota.reserveTrack).toHaveBeenCalledWith('app-a', `${mediaSource}-participant-a-2-1`);
+	});
+
+	test('maps subscription mids to public IDs even when provider results are reordered', async () => {
+		const fixture = createFixture('listener');
+		const publications = [
+			{ id: 'audio-id', roomId: room.id, participantId: 'publisher', providerSessionId: 'private-session', providerTrackName: 'private-audio', mediaKind: 'audio' },
+			{ id: 'screen-id', roomId: room.id, participantId: 'publisher', providerSessionId: 'private-session', providerTrackName: 'private-screen', mediaKind: 'video' },
+		];
+		fixture.bindings.getPublication.mockImplementation(async id => publications.find(publication => publication.id === id));
+		fixture.participants.findBy.mockResolvedValue([{ id: 'publisher', state: 'active', role: 'speaker' }] as never);
+		fixture.provider.addTracks.mockResolvedValue({ tracks: [
+			{ sessionId: 'private-session', trackName: 'private-screen', mid: '2' },
+			{ sessionId: 'private-session', trackName: 'private-audio', mid: '1' },
+		] });
+		const result = await fixture.service.subscribe(user, { roomId: room.id, connectionId: 'connection-a', generation: 2, publicationIds: ['audio-id', 'screen-id'] });
+		expect(result.subscriptions).toEqual([{ publicationId: 'screen-id', mid: '2' }, { publicationId: 'audio-id', mid: '1' }]);
+		expect(fixture.provider.addTracks).toHaveBeenCalledWith('session-a', [expect.objectContaining({ kind: 'audio' }), expect.objectContaining({ kind: 'video' })]);
 	});
 
 	test('cross-room publication cannot be subscribed', async () => {

@@ -18,7 +18,8 @@ export type CallsPublicationBinding = {
 	providerSessionId: string;
 	providerTrackName: string;
 	providerMid: string | null;
-	mediaKind: 'audio';
+	mediaKind: 'audio' | 'video';
+	mediaSource?: 'microphone' | 'camera' | 'screen';
 	createdAt: string;
 };
 

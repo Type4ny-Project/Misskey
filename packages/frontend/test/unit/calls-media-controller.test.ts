@@ -15,23 +15,32 @@ class FakePeerConnection extends EventTarget {
 	public connectionState = 'connected';
 	public iceGatheringState = 'complete';
 	public localDescription: RTCSessionDescriptionInit | null = null;
+	public transceivers: RTCRtpTransceiver[] = [];
+	public signalingState = 'stable';
 	public sender = {
 		track: null as MediaStreamTrack | null,
 		replaceTrack: vi.fn(async (track: MediaStreamTrack | null) => { this.sender.track = track; }),
 	};
 	constructor() { super(); FakePeerConnection.instances.push(this); }
-	public addTransceiver() {
-		return {
-			mid: '0',
-			sender: this.sender,
-			setCodecPreferences: vi.fn(),
+	public addTransceiver(trackOrKind: MediaStreamTrack | string) {
+		const sender = this.transceivers.length === 0 ? this.sender : {
+			track: typeof trackOrKind === 'string' ? null : trackOrKind,
+			replaceTrack: vi.fn(async (track: MediaStreamTrack | null) => { sender.track = track; }),
 		};
+		const transceiver = {
+			mid: String(this.transceivers.length), sender,
+			receiver: { track: { stop: vi.fn() } },
+			setCodecPreferences: vi.fn(), stop: vi.fn(),
+		} as unknown as RTCRtpTransceiver;
+		this.transceivers.push(transceiver);
+		return transceiver;
 	}
-	public getSenders() { return [this.sender]; }
+	public getSenders() { return this.transceivers.map(transceiver => transceiver.sender); }
+	public getTransceivers() { return this.transceivers; }
 	public getConfiguration() { return {}; }
 	public close() {}
 	public async setRemoteDescription() {}
-	public async setLocalDescription(description: RTCSessionDescriptionInit) { this.localDescription = description; }
+	public async setLocalDescription(description: RTCSessionDescriptionInit) { this.localDescription = description; this.signalingState = description.type === 'offer' ? 'have-local-offer' : 'stable'; }
 	public async createOffer() { return { type: 'offer' as const, sdp: 'offer' }; }
 	public getStats() {
 		return Promise.resolve(new Map([
@@ -42,11 +51,11 @@ class FakePeerConnection extends EventTarget {
 	public setConfiguration() {}
 }
 
-function installBrowserMedia(getUserMedia: ReturnType<typeof vi.fn>) {
+function installBrowserMedia(getUserMedia: ReturnType<typeof vi.fn>, getDisplayMedia = vi.fn()) {
 	Object.defineProperty(globalThis, 'isSecureContext', { configurable: true, value: true });
 	Object.defineProperty(navigator, 'mediaDevices', {
 		configurable: true,
-		value: { getUserMedia, enumerateDevices: vi.fn().mockResolvedValue([]), addEventListener: vi.fn(), removeEventListener: vi.fn() },
+		value: { getUserMedia, getDisplayMedia, enumerateDevices: vi.fn().mockResolvedValue([]), addEventListener: vi.fn(), removeEventListener: vi.fn() },
 	});
 	vi.stubGlobal('RTCPeerConnection', FakePeerConnection);
 	vi.stubGlobal('RTCRtpReceiver', { getCapabilities: vi.fn().mockReturnValue({ codecs: [{ mimeType: 'audio/opus', clockRate: 48_000 }] }) });
@@ -60,8 +69,120 @@ describe('CallsMediaController', () => {
 			if (endpoint === 'calls/media/turn-credentials') return null;
 			if (endpoint === 'calls/media/session/create') return { participantId: 'participant-a', generation: 1, canPublish: false, mediaCredential: 'credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
 			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: [] };
+			if (endpoint === 'calls/media/tracks/publish') return { publicationId: `publication-${apiMock.mock.calls.length}`, negotiation: { requiresImmediateRenegotiation: false, sessionDescription: null, trackErrors: [] } };
+			if (endpoint === 'calls/media/tracks/close') return { requiresImmediateRenegotiation: false, sessionDescription: null, trackErrors: [] };
 			throw new Error(`unexpected endpoint: ${endpoint}`);
 		});
+	});
+
+	function makeTrack(kind: 'audio' | 'video'): MediaStreamTrack {
+		return Object.assign(new EventTarget(), { kind, enabled: true, readyState: 'live', stop: vi.fn(), contentHint: '' }) as unknown as MediaStreamTrack;
+	}
+
+	function stream(track: MediaStreamTrack): MediaStream {
+		return { getAudioTracks: () => track.kind === 'audio' ? [track] : [], getVideoTracks: () => track.kind === 'video' ? [track] : [], getTracks: () => [track] } as MediaStream;
+	}
+
+	test('publishes camera and screen separately and browser stop sharing preserves camera and microphone', async () => {
+		const audio = makeTrack('audio');
+		const camera = makeTrack('video');
+		const screen = makeTrack('video');
+		const getUserMedia = vi.fn().mockResolvedValueOnce(stream(audio)).mockResolvedValueOnce(stream(camera));
+		const getDisplayMedia = vi.fn().mockResolvedValue(stream(screen));
+		installBrowserMedia(getUserMedia, getDisplayMedia);
+		const localTrack = vi.fn();
+		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, undefined, undefined, false, { localTrack, remoteRemoved: vi.fn(), error: vi.fn() });
+		await controller.connect();
+		expect(getUserMedia).toHaveBeenCalledTimes(1);
+		expect(getDisplayMedia).not.toHaveBeenCalled();
+		await controller.startVideo('camera');
+		await controller.startVideo('screen');
+		expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/publish', expect.objectContaining({ mediaSource: 'camera', mid: '1' }));
+		expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/publish', expect.objectContaining({ mediaSource: 'screen', mid: '2' }));
+		screen.dispatchEvent(new Event('ended'));
+		await vi.waitFor(() => expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/close', expect.anything()));
+		expect(localTrack).toHaveBeenCalledWith('screen', null);
+		expect(camera.stop).not.toHaveBeenCalled();
+		expect(audio.stop).not.toHaveBeenCalled();
+		await controller.close();
+		expect(camera.stop).toHaveBeenCalled();
+		expect(audio.stop).toHaveBeenCalled();
+	});
+
+	test('switches the active camera without republishing or interrupting microphone audio', async () => {
+		const audio = makeTrack('audio');
+		const camera = makeTrack('video');
+		const replacement = makeTrack('video');
+		const localTrack = vi.fn();
+		const getUserMedia = vi.fn().mockResolvedValueOnce(stream(audio)).mockResolvedValueOnce(stream(camera)).mockResolvedValueOnce(stream(replacement));
+		installBrowserMedia(getUserMedia);
+		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, undefined, undefined, false, { localTrack, remoteRemoved: vi.fn(), error: vi.fn() });
+		await controller.connect();
+		await controller.startVideo('camera');
+		await controller.switchCamera('camera-b');
+		expect(FakePeerConnection.instances[0].transceivers[1].sender.track).toBe(replacement);
+		expect(camera.stop).toHaveBeenCalled();
+		expect(audio.stop).not.toHaveBeenCalled();
+		expect(localTrack).toHaveBeenLastCalledWith('camera', replacement);
+		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish')).toHaveLength(2);
+		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ video: expect.objectContaining({ deviceId: { exact: 'camera-b' } }), audio: false }));
+		await controller.close();
+		expect(replacement.stop).toHaveBeenCalled();
+	});
+
+	test('stops capture granted after leaving without publishing it', async () => {
+		const audio = makeTrack('audio');
+		const camera = makeTrack('video');
+		let grantCapture!: (value: MediaStream) => void;
+		installBrowserMedia(vi.fn().mockResolvedValueOnce(stream(audio)).mockImplementationOnce(() => new Promise(resolve => { grantCapture = resolve; })));
+		const controller = new CallsMediaController('room-a', 'speaker');
+		await controller.connect();
+		const starting = controller.startVideo('camera');
+		await controller.close();
+		grantCapture(stream(camera));
+		await starting;
+		expect(camera.stop).toHaveBeenCalled();
+		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish')).toHaveLength(1);
+	});
+
+	test('video publication failure stops capture and leaves microphone usable', async () => {
+		const audio = makeTrack('audio');
+		const camera = makeTrack('video');
+		installBrowserMedia(vi.fn().mockResolvedValueOnce(stream(audio)).mockResolvedValueOnce(stream(camera)));
+		const controller = new CallsMediaController('room-a', 'speaker');
+		await controller.connect();
+		apiMock.mockRejectedValueOnce(new Error('video unavailable'));
+		await expect(controller.startVideo('camera')).rejects.toThrow('video unavailable');
+		expect(camera.stop).toHaveBeenCalled();
+		expect(audio.stop).not.toHaveBeenCalled();
+		expect(FakePeerConnection.instances[0]?.signalingState).toBe('stable');
+		await controller.close();
+	});
+
+	test('routes remote video through the negotiated mid and removes a closed publication', async () => {
+		installBrowserMedia(vi.fn());
+		const remote = makeTrack('video');
+		const publication = { id: 'screen-id', participantId: 'participant-b', mediaKind: 'video', mediaSource: 'screen' };
+		let available = true;
+		const fallback = apiMock.getMockImplementation()!;
+		apiMock.mockImplementation(async (endpoint, input) => {
+			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: available ? [publication] : [] };
+			if (endpoint === 'calls/media/tracks/subscribe') return { subscriptions: [{ publicationId: 'screen-id', mid: '7' }], sessionDescription: { type: 'answer', sdp: 'answer' }, requiresImmediateRenegotiation: false, trackErrors: [] };
+			return fallback(endpoint, input);
+		});
+		const description = vi.spyOn(FakePeerConnection.prototype, 'setRemoteDescription').mockImplementation(async function (this: FakePeerConnection) {
+			this.dispatchEvent(Object.assign(new Event('track'), { track: remote, transceiver: { mid: '7' } }));
+		});
+		const onRemoteTrack = vi.fn();
+		const remoteRemoved = vi.fn();
+		const controller = new CallsMediaController('room-a', 'listener', undefined, onRemoteTrack, undefined, undefined, false, { localTrack: vi.fn(), remoteRemoved, error: vi.fn() });
+		await controller.connect();
+		expect(onRemoteTrack).toHaveBeenCalledWith(remote, publication);
+		available = false;
+		await controller.reconcile();
+		expect(remoteRemoved).toHaveBeenCalledWith('screen-id');
+		await controller.close();
+		description.mockRestore();
 	});
 
 	test('listener connects without requesting microphone permission', async () => {
@@ -101,7 +222,7 @@ describe('CallsMediaController', () => {
 			if (endpoint === 'calls/media/turn-credentials') return null;
 			if (endpoint === 'calls/media/session/create') return { participantId: 'participant-a', generation: 1, canPublish: false, mediaCredential: 'credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
 			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: [{ id: 'publication-b', participantId: 'participant-b' }] };
-			if (endpoint === 'calls/media/tracks/subscribe') return { requiresImmediateRenegotiation: false, sessionDescription: null, trackErrors: [] };
+			if (endpoint === 'calls/media/tracks/subscribe') return { subscriptions: [{ publicationId: 'publication-b', mid: '1' }], requiresImmediateRenegotiation: false, sessionDescription: null, trackErrors: [] };
 			throw new Error(`unexpected endpoint: ${endpoint}`);
 		});
 		const controller = new CallsMediaController('room-a', 'listener');
@@ -178,9 +299,10 @@ describe('CallsMediaController', () => {
 		const connecting = controller.connect();
 		const queued = controller.connect();
 		await vi.waitFor(() => expect(resolveSession).toBeTypeOf('function'));
-		await controller.close();
+		const closing = controller.close();
+		expect(controller.state).toBe('leaving');
 		resolveSession({ participantId: 'participant-a', generation: 1 });
-		await Promise.all([connecting, queued]);
+		await Promise.all([connecting, queued, closing]);
 		expect(controller.state).toBe('closed');
 		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/session/create')).toHaveLength(1);
 	});

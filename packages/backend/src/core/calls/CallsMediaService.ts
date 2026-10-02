@@ -95,16 +95,19 @@ export class CallsMediaService {
 		connectionId: string;
 		generation: number;
 		mid: string;
+		mediaSource?: 'microphone' | 'camera' | 'screen';
 		sessionDescription: CloudflareRealtimeSessionDescription;
 	}): Promise<{ publicationId: string; negotiation: CloudflareRealtimeTracksResponse }> {
 		const participant = await this.authorizeParticipant(user, input.roomId);
 		if (participant.role === 'listener') throw new CallsMediaAccessError();
 		const connection = await this.liveConnectionService.assertCurrent(participant.id, input.connectionId, input.generation);
 		if (connection.sessionId == null) throw new CallsMediaAccessError();
-		await this.quotaService.reserveTrack(connection.applicationId, participant.id);
+		const mediaSource = input.mediaSource ?? 'microphone';
+		const mediaKind = mediaSource === 'microphone' ? 'audio' : 'video';
+		const trackName = `${mediaSource}-${participant.id}-${input.generation}-${input.mid}`;
+		await this.quotaService.reserveTrack(connection.applicationId, trackName);
 		try {
-			const trackName = `audio-${participant.id}-${input.generation}`;
-			const response = await this.provider.addTracks(connection.sessionId, [{ location: 'local', mid: input.mid, trackName, kind: 'audio' }], input.sessionDescription);
+			const response = await this.provider.addTracks(connection.sessionId, [{ location: 'local', mid: input.mid, trackName, kind: mediaKind }], input.sessionDescription);
 			const track = response.tracks?.[0];
 			if (track?.errorCode != null) throw new CallsMediaAccessError();
 			const publication = await this.bindingService.createPublication({
@@ -116,14 +119,14 @@ export class CallsMediaService {
 				providerSessionId: connection.sessionId,
 				providerTrackName: track?.trackName ?? trackName,
 				providerMid: track?.mid ?? input.mid,
-				mediaKind: 'audio',
+				mediaKind, mediaSource,
 			});
 			const room = await this.roomService.getRoom(input.roomId);
-			await this.eventService.publish(input.roomId, room.revision, 'track', { participantId: participant.id, publicationId: publication.id, available: true, mediaKind: 'audio' });
+			await this.eventService.publish(input.roomId, room.revision, 'track', { participantId: participant.id, publicationId: publication.id, available: true, mediaKind, mediaSource });
 			this.telemetry.lifecycle({ action: 'track-published', roomId: input.roomId, participantId: participant.id, generation: input.generation, applicationId: connection.applicationId });
 			return { publicationId: publication.id, negotiation: response };
 		} catch (error) {
-			await this.quotaService.releaseTrack(connection.applicationId, participant.id);
+			await this.quotaService.releaseTrack(connection.applicationId, trackName);
 			throw error;
 		}
 	}
@@ -133,7 +136,7 @@ export class CallsMediaService {
 		connectionId: string;
 		generation: number;
 		publicationIds: string[];
-	}): Promise<CloudflareRealtimeTracksResponse> {
+	}): Promise<CloudflareRealtimeTracksResponse & { subscriptions: Array<{ publicationId: string; mid: string }> }> {
 		const participant = await this.authorizeParticipant(user, input.roomId);
 		const connection = await this.liveConnectionService.assertCurrent(participant.id, input.connectionId, input.generation);
 		if (connection.sessionId == null) throw new CallsMediaAccessError();
@@ -143,12 +146,17 @@ export class CallsMediaService {
 		const publishers = await this.participantsRepository.findBy({ id: In(publications.map(binding => binding.participantId)) });
 		const authorizedIds = new Set(publishers.filter(publisher => publisher.state === 'active' && publisher.role !== 'listener').map(publisher => publisher.id));
 		if (publications.some(binding => !authorizedIds.has(binding.participantId))) throw new CallsMediaAccessError();
-		return this.provider.addTracks(connection.sessionId, publications.map(binding => ({
+		const response = await this.provider.addTracks(connection.sessionId, publications.map(binding => ({
 			location: 'remote' as const,
 			sessionId: binding.providerSessionId,
 			trackName: binding.providerTrackName,
-			kind: 'audio',
+			kind: binding.mediaKind,
 		})));
+		const subscriptions = (response.tracks ?? []).flatMap(track => {
+			const publication = publications.find(binding => binding.providerTrackName === track.trackName && binding.providerSessionId === track.sessionId);
+			return publication == null || track.mid == null || track.errorCode != null ? [] : [{ publicationId: publication.id, mid: track.mid }];
+		});
+		return { ...response, subscriptions };
 	}
 
 	public async renegotiate(user: MiUser, input: { roomId: string; connectionId: string; generation: number; sessionDescription: CloudflareRealtimeSessionDescription }): Promise<CloudflareRealtimeTracksResponse> {
@@ -166,18 +174,18 @@ export class CallsMediaService {
 		if (binding.roomId !== input.roomId || binding.participantId !== participant.id || binding.generation !== input.generation) throw new CallsMediaAccessError();
 		const response = await this.provider.closeTracks(binding.providerSessionId, [{ mid: binding.providerMid ?? undefined }], true);
 		await this.bindingService.removePublication(binding.id);
-		await this.quotaService.releaseTrack(binding.applicationId, participant.id);
+		await this.quotaService.releaseTrack(binding.applicationId, binding.providerTrackName);
 		const room = await this.roomService.getRoom(input.roomId);
-		await this.eventService.publish(input.roomId, room.revision, 'track', { participantId: participant.id, publicationId: binding.id, available: false, mediaKind: 'audio' });
+		await this.eventService.publish(input.roomId, room.revision, 'track', { participantId: participant.id, publicationId: binding.id, available: false, mediaKind: binding.mediaKind, mediaSource: binding.mediaSource ?? 'microphone' });
 		this.telemetry.lifecycle({ action: 'track-closed', roomId: input.roomId, participantId: participant.id, generation: input.generation, applicationId: binding.applicationId });
 		return response;
 	}
 
-	public async reconcile(user: MiUser, roomId: string): Promise<{ roomRevision: number; publications: Array<{ id: string; participantId: string; mediaKind: 'audio' }> }> {
+	public async reconcile(user: MiUser, roomId: string): Promise<{ roomRevision: number; publications: Array<{ id: string; participantId: string; mediaKind: 'audio' | 'video'; mediaSource: 'microphone' | 'camera' | 'screen' }> }> {
 		const snapshot = await this.roomService.snapshot(user, roomId);
 		const activeSpeakers = new Set(snapshot.participants.filter(p => p.role !== 'listener').map(p => p.id));
 		const publications = (await this.bindingService.listRoomPublications(roomId)).filter(binding => activeSpeakers.has(binding.participantId));
-		return { roomRevision: snapshot.room.revision, publications: publications.map(binding => ({ id: binding.id, participantId: binding.participantId, mediaKind: binding.mediaKind })) };
+		return { roomRevision: snapshot.room.revision, publications: publications.map(binding => ({ id: binding.id, participantId: binding.participantId, mediaKind: binding.mediaKind, mediaSource: binding.mediaSource ?? 'microphone' })) };
 	}
 
 	public async heartbeat(user: MiUser, roomId: string, connectionId: string, generation: number): Promise<void> {
@@ -198,7 +206,8 @@ export class CallsMediaService {
 		}
 		await this.liveConnectionService.heartbeat(participant.id, connectionId, generation);
 		await this.bindingService.heartbeat(roomId, participant.id, generation);
-		await this.quotaService.touch(connection.applicationId, participant.id);
+		const publications = (await this.bindingService.listRoomPublications(roomId)).filter(binding => binding.participantId === participant.id && binding.generation === generation);
+		await this.quotaService.touch(connection.applicationId, participant.id, publications.map(binding => binding.providerTrackName));
 	}
 
 	private async authorizeParticipant(user: MiUser, roomId: string): Promise<MiCallsParticipant> {

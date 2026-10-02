@@ -30,11 +30,15 @@ export class CallsApplicationQuotaService {
 		await this.reserve(this.trackKey(applicationId), participantId, this.providerConfig().maxPublishedTracksPerApplication);
 	}
 
-	public async touch(applicationId: string, participantId: string): Promise<void> {
+	public async touch(applicationId: string, participantId: string, trackNames: string[] = []): Promise<void> {
 		this.assertApplicationEnabled(applicationId);
 		const now = Date.now();
 		await this.redis.zadd(this.sessionKey(applicationId), now, participantId);
 		await this.redis.expire(this.sessionKey(applicationId), 180);
+		if (trackNames.length > 0) {
+			await this.redis.zadd(this.trackKey(applicationId), ...trackNames.flatMap(name => [now, name]));
+			await this.redis.expire(this.trackKey(applicationId), 180);
+		}
 	}
 
 	public async release(applicationId: string, participantId: string): Promise<void> {

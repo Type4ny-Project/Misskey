@@ -90,7 +90,7 @@ export class CallsReferenceClient {
 	private async reconcile(roomId: string): Promise<void> {
 		if (this.peer == null || this.participantId == null) return;
 		const state = await this.api.request('calls/media/reconcile', { roomId });
-		const publicationIds = state.publications.filter(publication => publication.participantId !== this.participantId).map(publication => publication.id);
+		const publicationIds = state.publications.filter(publication => publication.participantId !== this.participantId && publication.mediaKind === 'audio').map(publication => publication.id);
 		if (publicationIds.length === 0) return;
 		const negotiation = await this.api.request('calls/media/tracks/subscribe', {
 			roomId, participantId: this.participantId, connectionId: this.connectionId, generation: this.generation,

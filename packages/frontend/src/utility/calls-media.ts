@@ -3,9 +3,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { misskeyApi } from '@/utility/misskey-api.js';
-import type { CallsNormalizedStats } from './calls-media-core.js';
 import { detectCallsMediaCapabilities, normalizeCallsMediaError, normalizeCallsStats, preferOpus } from './calls-media-core.js';
+import type { CallsNormalizedStats } from './calls-media-core.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
+
+export type CallsVideoSource = 'camera' | 'screen';
+export type CallsRemotePublication = { id: string; participantId: string; mediaKind: 'audio' | 'video'; mediaSource: 'microphone' | CallsVideoSource };
 
 export type CallsMediaState = 'idle' | 'acquiring-media' | 'creating-session' | 'negotiating' | 'connected' | 'reconnecting' | 'leaving' | 'closed' | 'failed';
 export type CallsMediaFailure = 'unsupported' | 'permission-denied' | 'device-not-found' | 'hardware-failure' | 'constraint-mismatch' | 'permission-pending' | 'negotiation-failed';
@@ -17,6 +20,8 @@ export class CallsMediaController {
 	public participantId: string | null = null;
 	public localTrack: MediaStreamTrack | null = null;
 	private peer: RTCPeerConnection | null = null;
+	private localVideos = new Map<CallsVideoSource, { track: MediaStreamTrack; publicationId?: string; transceiver?: RTCRtpTransceiver }>();
+	private remotePublications = new Map<string, CallsRemotePublication>();
 	private connectionId: string = crypto.randomUUID();
 	private queue = Promise.resolve();
 	private reconnectTimer: number | null = null;
@@ -43,10 +48,15 @@ export class CallsMediaController {
 		private roomId: string,
 		private role: 'host' | 'speaker' | 'listener',
 		private onState?: (state: CallsMediaState, failure: CallsMediaFailure | null) => void,
-		private onRemoteTrack?: (track: MediaStreamTrack) => void,
+		private onRemoteTrack?: (track: MediaStreamTrack, publication: CallsRemotePublication) => void,
 		private onStats?: (stats: CallsNormalizedStats, speaking: boolean) => void,
 		previousConnection?: { connectionId: string; generation: number },
 		private replaceExisting = false,
+		private videoCallbacks?: {
+			localTrack: (source: CallsVideoSource, track: MediaStreamTrack | null) => void;
+			remoteRemoved: (publicationId: string) => void;
+			error: (error: unknown) => void;
+		},
 	) {
 		if (previousConnection != null) {
 			this.connectionId = previousConnection.connectionId;
@@ -120,6 +130,7 @@ export class CallsMediaController {
 	private async createConnection(): Promise<void> {
 		if (this.isClosed()) return;
 		this.cleanupPeer(false);
+		this.publications.clear();
 		this.setState(this.generation === 0 ? 'creating-session' : 'reconnecting');
 		const session = await misskeyApi('calls/media/session/create', { roomId: this.roomId, connectionId: this.connectionId, expectedGeneration: this.generation || undefined, replaceExisting: this.replaceExisting, operationId: crypto.randomUUID() });
 		if (this.isClosed()) return;
@@ -132,7 +143,10 @@ export class CallsMediaController {
 		const peer = new RTCPeerConnection({ iceServers: turn?.iceServers ?? [{ urls: ['stun:stun.cloudflare.com:3478'] }] });
 		this.peer = peer;
 		if (turn != null) this.scheduleTurnRefresh(Date.parse(turn.expiresAt));
-		peer.addEventListener('track', event => this.onRemoteTrack?.(event.track));
+		peer.addEventListener('track', event => {
+			const publication = this.remotePublications.get(event.transceiver.mid ?? '');
+			if (publication != null) this.onRemoteTrack?.(event.track, publication);
+		});
 		peer.addEventListener('connectionstatechange', () => {
 			if (peer !== this.peer) return;
 			if (peer.connectionState === 'connected') {
@@ -175,6 +189,11 @@ export class CallsMediaController {
 			await this.applyNegotiation(result.negotiation);
 			await this.waitUntilPublishing(peer);
 		}
+		for (const [source, video] of this.localVideos) {
+			if (video.track.readyState === 'ended') continue;
+			video.publicationId = undefined;
+			await this.publishVideo(source, video);
+		}
 		const subscribed = await this.reconcileNow();
 		if (this.role === 'listener' && !subscribed && this.peer === peer) this.setState('connected');
 	}
@@ -189,7 +208,15 @@ export class CallsMediaController {
 		const authoritative = await misskeyApi('calls/media/reconcile', { roomId: this.roomId });
 		const authoritativeRemoteIds = new Set(authoritative.publications.filter(publication => publication.participantId !== this.participantId).map(publication => publication.id));
 		for (const publicationId of this.subscribedPublications) {
-			if (!authoritativeRemoteIds.has(publicationId)) this.subscribedPublications.delete(publicationId);
+			if (!authoritativeRemoteIds.has(publicationId)) {
+				this.subscribedPublications.delete(publicationId);
+				for (const [mid, publication] of this.remotePublications) {
+					if (publication.id !== publicationId) continue;
+					this.peer.getTransceivers().find(transceiver => transceiver.mid === mid)?.receiver.track.stop();
+					this.remotePublications.delete(mid);
+				}
+				this.videoCallbacks?.remoteRemoved(publicationId);
+			}
 		}
 		const remoteIds = [...authoritativeRemoteIds].filter(publicationId => !this.subscribedPublications.has(publicationId));
 		if (remoteIds.length === 0) return false;
@@ -198,8 +225,12 @@ export class CallsMediaController {
 			operationId: crypto.randomUUID(),
 			participantId: this.participantId!, mediaCredential: this.mediaCredential!,
 		});
+		for (const subscription of negotiation.subscriptions ?? []) {
+			const publication = authoritative.publications.find(item => item.id === subscription.publicationId);
+			if (publication != null) this.remotePublications.set(subscription.mid, publication);
+		}
 		await this.applyNegotiation(negotiation);
-		for (const publicationId of remoteIds) this.subscribedPublications.add(publicationId);
+		for (const subscription of negotiation.subscriptions) this.subscribedPublications.add(subscription.publicationId);
 		return true;
 	}
 
@@ -256,6 +287,98 @@ export class CallsMediaController {
 		throw new Error('Publisher is not actually sending audio packets');
 	}
 
+	public async startVideo(source: CallsVideoSource, deviceId?: string): Promise<void> {
+		if (this.role === 'listener' || this.isClosed() || this.peer == null || this.localVideos.has(source)) return;
+		// Call directly from the click handler so screen capture retains user activation.
+		const stream = source === 'camera'
+			? await navigator.mediaDevices.getUserMedia({ video: { deviceId: deviceId == null ? undefined : { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } }, audio: false })
+			: await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 30 } }, audio: false });
+		const track = stream.getVideoTracks()[0];
+		for (const extra of stream.getTracks()) if (extra !== track) extra.stop();
+		if (this.isClosed() || this.peer == null) { track?.stop(); return; }
+		if (track == null) throw new DOMException('No video track', 'NotFoundError');
+		track.contentHint = source === 'screen' ? 'detail' : 'motion';
+		const video = { track };
+		this.localVideos.set(source, video);
+		this.videoCallbacks?.localTrack(source, track);
+		track.addEventListener('ended', () => {
+			if (this.localVideos.get(source)?.track === track) void this.stopVideo(source).catch(error => this.videoCallbacks?.error(error));
+		}, { once: true });
+		try {
+			await this.enqueue(() => this.publishVideo(source, video));
+		} catch (error) {
+			await this.stopVideo(source).catch(() => undefined);
+			throw error;
+		}
+	}
+
+	private async publishVideo(source: CallsVideoSource, video: { track: MediaStreamTrack; publicationId?: string; transceiver?: RTCRtpTransceiver }): Promise<void> {
+		const peer = this.peer;
+		if (peer == null || this.isClosed() || video.track.readyState === 'ended') return;
+		await this.ensureCredential();
+		const transceiver = peer.addTransceiver(video.track, { direction: 'sendonly' });
+		video.transceiver = transceiver;
+		const offer = await peer.createOffer();
+		await peer.setLocalDescription(offer);
+		await this.waitForIceGathering(peer);
+		if (this.peer !== peer || this.isClosed()) return;
+		try {
+			const result = await misskeyApi('calls/media/tracks/publish', {
+				roomId: this.roomId, participantId: this.participantId!, connectionId: this.connectionId,
+				generation: this.generation, operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential!,
+				mediaSource: source, mid: transceiver.mid!, sessionDescription: { type: 'offer', sdp: peer.localDescription?.sdp ?? offer.sdp ?? '' },
+			});
+			video.publicationId = result.publicationId;
+			this.publications.add(result.publicationId);
+			if (this.peer === peer) await this.applyNegotiation(result.negotiation);
+		} catch (error) {
+			if (this.peer === peer && peer.signalingState === 'have-local-offer') await peer.setLocalDescription({ type: 'rollback' });
+			transceiver.stop();
+			throw error;
+		}
+	}
+
+	public async switchCamera(deviceId: string): Promise<void> {
+		const video = this.localVideos.get('camera');
+		if (video == null) return;
+		const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } }, audio: false });
+		const track = stream.getVideoTracks()[0];
+		for (const extra of stream.getTracks()) if (extra !== track) extra.stop();
+		if (track == null) throw new DOMException('No video track', 'NotFoundError');
+		if (this.isClosed() || this.localVideos.get('camera') !== video) { track.stop(); return; }
+		try {
+			await this.enqueue(async () => {
+				if (this.isClosed() || this.localVideos.get('camera') !== video) { track.stop(); return; }
+				await video.transceiver?.sender.replaceTrack(track);
+				video.track.stop();
+				video.track = track;
+				track.contentHint = 'motion';
+				this.videoCallbacks?.localTrack('camera', track);
+				track.addEventListener('ended', () => {
+					if (video.track === track) void this.stopVideo('camera').catch(error => this.videoCallbacks?.error(error));
+				}, { once: true });
+			});
+		} catch (error) { track.stop(); throw error; }
+	}
+
+	public async stopVideo(source: CallsVideoSource): Promise<void> {
+		const video = this.localVideos.get(source);
+		if (video == null) return;
+		video.track.stop();
+		this.localVideos.delete(source);
+		this.videoCallbacks?.localTrack(source, null);
+		await this.enqueue(async () => {
+			await video.transceiver?.sender.replaceTrack(null);
+			if (video.publicationId == null || this.isClosed()) return;
+			await this.ensureCredential();
+			await misskeyApi('calls/media/tracks/close', {
+				roomId: this.roomId, participantId: this.participantId!, connectionId: this.connectionId,
+				generation: this.generation, operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential!, publicationId: video.publicationId,
+			});
+			this.publications.delete(video.publicationId);
+		});
+	}
+
 	public setMuted(muted: boolean): void {
 		this.muted = muted;
 		if (this.localTrack != null) this.localTrack.enabled = !muted;
@@ -282,6 +405,7 @@ export class CallsMediaController {
 	public async close(): Promise<void> {
 		this.setState('leaving');
 		this.cleanupPeer(true);
+		await this.queue;
 		await this.ensureCredential().catch(() => undefined);
 		for (const publicationId of this.publications) {
 			await misskeyApi('calls/media/tracks/close', { roomId: this.roomId, participantId: this.participantId!, connectionId: this.connectionId, generation: this.generation, operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential!, publicationId }).catch(() => undefined);
@@ -380,6 +504,15 @@ export class CallsMediaController {
 		this.peer?.close();
 		this.peer = null;
 		this.subscribedPublications.clear();
+		for (const publication of this.remotePublications.values()) this.videoCallbacks?.remoteRemoved(publication.id);
+		this.remotePublications.clear();
+		if (stopTrack) {
+			for (const [source, video] of this.localVideos) {
+				video.track.stop();
+				this.videoCallbacks?.localTrack(source, null);
+			}
+			this.localVideos.clear();
+		}
 		if (stopTrack) { this.localTrack?.stop(); this.localTrack = null; }
 	}
 

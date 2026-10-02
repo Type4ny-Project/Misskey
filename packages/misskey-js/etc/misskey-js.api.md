@@ -1211,7 +1211,8 @@ export type Channels = {
                 participantId: string;
                 publicationId: string;
                 available: boolean;
-                mediaKind: 'audio';
+                mediaKind: 'audio' | 'video';
+                mediaSource?: 'microphone' | 'camera' | 'screen';
             }) => void;
             revoked: (payload: CallsRoomEventBase & {
                 participantId?: string;

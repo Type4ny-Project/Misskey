@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 # Misskey Calls protocol 1.0
 
-Misskey Calls is a provider-neutral audio-room protocol. Applications use the public Misskey HTTP API for commands and Cloudflare WebRTC negotiation, and the `callsRoom` WebSocket channel for authoritative room events. Provider session and track identifiers are never exposed.
+Misskey Calls is a provider-neutral audio/video room protocol. Applications use the public Misskey HTTP API for commands and Cloudflare WebRTC negotiation, and the `callsRoom` WebSocket channel for authoritative room events. Provider session and track identifiers are never exposed.
 
 ## Compatibility and authentication
 
@@ -22,7 +22,9 @@ Call `calls/capabilities` before joining. A 1.x client requires protocol major 1
 
 If a heartbeat detects lost live state, the server emits `revoked` with reason `stale-generation`. Tear down the old peer connection and create a new media session/generation before republishing or resubscribing. Other revoke reasons are terminal for the current access decision and must not be retried without rejoining or refreshing authorization.
 
-Only one device may hold a participant's audio connection. A fresh `calls/media/session/create` request returns `CALLS_CONNECTION_EXISTS` if another device is connected. Ask the user before retrying with `replaceExisting: true`. Recovery requests must retain their `connectionId` and send `expectedGeneration`; they cannot replace another device. A `revoked` event with reason `replaced` addresses the old `connectionId` and `generation`. That device must stop locally without calling room leave or end; other connections ignore the event. Include the current `connectionId` and `generation` in explicit room leave/end requests so delayed actions from an old device cannot affect the new connection.
+Protocol 1.1 supports camera and screen video alongside microphone audio. Publish `mediaSource: microphone | camera | screen` (omitting it selects microphone). Camera and screen map to `mediaKind: video`; the speaker/host authorization applies to all three sources. Reconcile returns each publication's media kind and source. Subscribe returns `subscriptions: [{ publicationId, mid }]` for successful tracks; associate incoming WebRTC transceiver mids with these public publication IDs before applying the returned SDP. Provider identifiers remain private. Stop capture and close the publication on toggle-off, browser capture-ended, or leaving; camera and screen capture must only begin after a user action.
+
+Only one device may hold a participant's media connection. A fresh `calls/media/session/create` request returns `CALLS_CONNECTION_EXISTS` if another device is connected. Ask the user before retrying with `replaceExisting: true`. Recovery requests must retain their `connectionId` and send `expectedGeneration`; they cannot replace another device. A `revoked` event with reason `replaced` addresses the old `connectionId` and `generation`. That device must stop locally without calling room leave or end; other connections ignore the event. Include the current `connectionId` and `generation` in explicit room leave/end requests so delayed actions from an old device cannot affect the new connection.
 
 Example event:
 

@@ -23,7 +23,7 @@ describe('CallsMediaRevocationService', () => {
 		const provider = { closeTracks: vi.fn().mockResolvedValue({}) };
 		const events = { publish: vi.fn().mockResolvedValue(undefined) };
 		const turn = { revokeParticipant: vi.fn().mockResolvedValue(undefined) };
-		const quota = { release: vi.fn().mockResolvedValue(undefined) };
+		const quota = { releaseTrack: vi.fn().mockResolvedValue(undefined), release: vi.fn().mockResolvedValue(undefined) };
 		const service = new CallsMediaRevocationService(rooms as never, participants as never, live as never, bindings as never, provider as never, events as never, turn as never, quota as never);
 
 		await service.revokeParticipant(participant, 8, 'moderation');
@@ -54,7 +54,7 @@ describe('CallsMediaRevocationService', () => {
 		const provider = { closeTracks: vi.fn().mockResolvedValue({}) };
 		const events = { publish: vi.fn().mockResolvedValue(undefined) };
 		const turn = { revokeParticipant: vi.fn().mockResolvedValue(undefined) };
-		const quota = { release: vi.fn().mockResolvedValue(undefined) };
+		const quota = { releaseTrack: vi.fn().mockResolvedValue(undefined), release: vi.fn().mockResolvedValue(undefined) };
 		const service = new CallsMediaRevocationService({} as never, {} as never, {} as never, bindings as never, provider as never, events as never, turn as never, quota as never);
 
 		await service.revokeLostGeneration(participant, 7, 9, 'connection-a');

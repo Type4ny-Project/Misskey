@@ -87,6 +87,7 @@ export class CallsMediaRevocationService {
 	}
 
 	private async closeProviderPublications(publications: CallsPublicationBinding[]): Promise<void> {
+		await Promise.all(publications.map(publication => this.quota.releaseTrack(publication.applicationId, publication.providerTrackName)));
 		const bySession = Map.groupBy(publications, publication => publication.providerSessionId);
 		await Promise.allSettled([...bySession].map(([sessionId, sessionPublications]) => this.provider.closeTracks(
 			sessionId,

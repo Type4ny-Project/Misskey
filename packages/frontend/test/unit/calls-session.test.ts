@@ -117,6 +117,16 @@ describe('Calls session device handoff', () => {
 		expect(fixture.toast).not.toHaveBeenCalled();
 	});
 
+	test('reconnecting clears stopped video previews and pending video controls', async () => {
+		await session.join('room-a', true);
+		session.localVideos.value = new Map([['camera', {} as MediaStream], ['screen', {} as MediaStream]]);
+		session.videoBusy.value = true;
+		fixture.revoked[0]({ reason: 'stale-generation', ...fixture.controllers[0].connectionIdentity });
+		await vi.waitFor(() => expect(fixture.controllers).toHaveLength(2));
+		expect(session.localVideos.value.size).toBe(0);
+		expect(session.videoBusy.value).toBe(false);
+	});
+
 	test('lost live state recovers with the existing connection identity', async () => {
 		await session.join('room-a', true);
 		const identity = fixture.controllers[0].connectionIdentity;

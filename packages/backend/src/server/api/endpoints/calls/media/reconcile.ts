@@ -9,7 +9,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { callsMediaApiError, callsMediaErrors } from '../_media-shared.js';
 export const meta = { tags: ['calls'], stability: 'experimental', requireCredential: true, kind: 'read:calls', errors: callsMediaErrors, res: { type: 'object', optional: false, nullable: false, properties: {
 	roomRevision: { type: 'integer', optional: false, nullable: false },
-	publications: { type: 'array', optional: false, nullable: false, items: { type: 'object', properties: { id: { type: 'string', format: 'id', optional: false, nullable: false }, participantId: { type: 'string', format: 'id', optional: false, nullable: false }, mediaKind: { type: 'string', enum: ['audio'], optional: false, nullable: false } } } },
+	publications: { type: 'array', optional: false, nullable: false, items: { type: 'object', properties: { id: { type: 'string', format: 'id', optional: false, nullable: false }, participantId: { type: 'string', format: 'id', optional: false, nullable: false }, mediaSource: { type: 'string', enum: ['microphone', 'camera', 'screen'], optional: false, nullable: false }, mediaKind: { type: 'string', enum: ['audio', 'video'], optional: false, nullable: false } } } },
 } } } as const;
 export const paramDef = { type: 'object', properties: { roomId: { type: 'string', format: 'misskey:id' } }, required: ['roomId'] } as const;
 @Injectable()

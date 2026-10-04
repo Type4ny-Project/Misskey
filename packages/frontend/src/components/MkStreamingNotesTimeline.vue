@@ -251,7 +251,9 @@ watch(() => props.compact, async () => {
 	await nextTick();
 	const updatedAnchor = root.querySelector<HTMLElement>(`[data-scroll-anchor="${CSS.escape(anchorId)}"]`);
 	if (updatedAnchor == null) return;
-	const delta = updatedAnchor.getBoundingClientRect().top - previousTop;
+	const updatedRect = updatedAnchor.getBoundingClientRect();
+	const targetTop = previousTop + updatedRect.height > viewportTop ? previousTop : viewportTop;
+	const delta = updatedRect.top - targetTop;
 	if (container) {
 		container.scrollBy({ top: delta, behavior: 'instant' });
 	} else {

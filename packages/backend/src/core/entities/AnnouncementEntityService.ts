@@ -27,6 +27,19 @@ export class AnnouncementEntityService {
 	}
 
 	@bindThis
+	public async getReactions(announcementId: MiAnnouncement['id']): Promise<Record<string, number>> {
+		const reactions: Record<string, number> = {};
+		const counts = await this.announcementReactionsRepository.createQueryBuilder('reaction')
+			.select('reaction.reaction', 'reaction')
+			.addSelect('COUNT(*)', 'count')
+			.where('reaction.announcementId = :announcementId', { announcementId })
+			.groupBy('reaction.reaction')
+			.getRawMany<{ reaction: string; count: string }>();
+		for (const count of counts) reactions[count.reaction] = Number(count.count);
+		return reactions;
+	}
+
+	@bindThis
 	public async pack(
 		src: MiAnnouncement['id'] | MiAnnouncement & { isRead?: boolean | null },
 		me?: { id: MiUser['id'] } | null | undefined,
@@ -49,13 +62,7 @@ export class AnnouncementEntityService {
 		const reactions: Record<string, number> = {};
 		let myReaction: string | null = null;
 		if (announcement.reactionsEnabled && (announcement.userId == null || announcement.userId === me?.id)) {
-			const counts = await this.announcementReactionsRepository.createQueryBuilder('reaction')
-				.select('reaction.reaction', 'reaction')
-				.addSelect('COUNT(*)', 'count')
-				.where('reaction.announcementId = :announcementId', { announcementId: announcement.id })
-				.groupBy('reaction.reaction')
-				.getRawMany<{ reaction: string; count: string }>();
-			for (const count of counts) reactions[count.reaction] = Number(count.count);
+			Object.assign(reactions, await this.getReactions(announcement.id));
 			if (me) {
 				myReaction = (await this.announcementReactionsRepository.findOneBy({
 					announcementId: announcement.id,

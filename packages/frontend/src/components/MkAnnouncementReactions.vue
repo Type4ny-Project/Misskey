@@ -5,37 +5,40 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div v-if="announcement.reactionsEnabled && (Object.keys(announcement.reactions).length > 0 || (interactive && $i))" :class="$style.root">
-	<template v-for="(count, reaction) in announcement.reactions" :key="reaction">
+	<div :class="$style.reactions">
+		<template v-for="(count, reaction) in announcement.reactions" :key="reaction">
+			<button
+				v-if="interactive && $i"
+				type="button"
+				class="_button"
+				:class="[$style.reaction, { [$style.reacted]: announcement.myReaction === reaction }]"
+				:disabled="pending"
+				:aria-label="`${reaction} (${count})`"
+				:aria-pressed="announcement.myReaction === reaction"
+				@click="react(announcement.myReaction === reaction ? null : reaction)"
+			>
+				<MkReactionIcon :reaction="reaction"/>
+				<span>{{ count }}</span>
+			</button>
+			<span v-else :class="[$style.reaction, { [$style.reacted]: announcement.myReaction === reaction }]">
+				<MkReactionIcon :reaction="reaction"/>
+				<span>{{ count }}</span>
+			</span>
+		</template>
 		<button
 			v-if="interactive && $i"
+			ref="pickerButton"
 			type="button"
 			class="_button"
-			:class="[$style.reaction, { [$style.reacted]: announcement.myReaction === reaction }]"
+			:class="$style.reaction"
 			:disabled="pending"
-			:aria-label="`${reaction} (${count})`"
-			:aria-pressed="announcement.myReaction === reaction"
-			@click="react(announcement.myReaction === reaction ? null : reaction)"
+			:aria-label="i18n.ts.doReaction"
+			@click="choose"
 		>
-			<MkReactionIcon :reaction="reaction"/>
-			<span>{{ count }}</span>
+			<i class="ti ti-mood-plus"></i>
 		</button>
-		<span v-else :class="[$style.reaction, { [$style.reacted]: announcement.myReaction === reaction }]">
-			<MkReactionIcon :reaction="reaction"/>
-			<span>{{ count }}</span>
-		</span>
-	</template>
-	<button
-		v-if="interactive && $i"
-		ref="pickerButton"
-		type="button"
-		class="_button"
-		:class="$style.reaction"
-		:disabled="pending"
-		:aria-label="i18n.ts.doReaction"
-		@click="choose"
-	>
-		<i class="ti ti-mood-plus"></i>
-	</button>
+	</div>
+	<div v-if="interactive && $i && !announcement.isRead" :class="$style.description">{{ i18n.ts._announcement.reactionReadDescription }}</div>
 </div>
 </template>
 
@@ -43,15 +46,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { ref, useTemplateRef } from 'vue';
 import type * as Misskey from 'misskey-js';
 import MkReactionIcon from '@/components/MkReactionIcon.vue';
+import { updateCurrentAccountPartial } from '@/accounts.js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { reactionPicker } from '@/utility/reaction-picker.js';
 
-type ReactionState = Pick<Misskey.entities.Announcement, 'reactions' | 'myReaction'>;
+type ReactionState = Pick<Misskey.entities.Announcement, 'reactions' | 'myReaction' | 'isRead'>;
 
 const props = defineProps<{
-	announcement: Misskey.entities.Announcement;
+	announcement: Pick<Misskey.entities.Announcement, 'id' | 'title' | 'reactionsEnabled' | 'needConfirmationToRead' | 'isRead' | 'reactions' | 'myReaction'>;
 	interactive?: boolean;
 }>();
 
@@ -66,11 +70,24 @@ async function react(reaction: string | null) {
 	if (!$i || !props.interactive || pending.value) return;
 	pending.value = true;
 	try {
+		if (reaction != null && !props.announcement.isRead && props.announcement.needConfirmationToRead) {
+			const { canceled } = await os.confirm({
+				type: 'question',
+				title: i18n.ts._announcement.readConfirmTitle,
+				text: i18n.tsx._announcement.reactionReadConfirmText({ title: props.announcement.title }),
+			});
+			if (canceled) return;
+		}
 		const updated = await os.apiWithDialog('announcements/react', {
 			announcementId: props.announcement.id,
 			reaction,
 		});
-		emit('update', { reactions: updated.reactions, myReaction: updated.myReaction });
+		emit('update', { reactions: updated.reactions, myReaction: updated.myReaction, isRead: updated.isRead });
+		if (updated.isRead) {
+			updateCurrentAccountPartial({
+				unreadAnnouncements: $i.unreadAnnouncements.filter(a => a.id !== props.announcement.id),
+			});
+		}
 	} catch {
 		// apiWithDialog displays the error; keep the last confirmed reaction state.
 	} finally {
@@ -88,10 +105,19 @@ function choose() {
 
 <style lang="scss" module>
 .root {
+	margin-top: 16px;
+}
+
+.description {
+	margin-top: 8px;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.reactions {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
-	margin-top: 16px;
 }
 
 .reaction {

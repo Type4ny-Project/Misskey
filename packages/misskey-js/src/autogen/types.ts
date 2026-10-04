@@ -7494,6 +7494,9 @@ export interface operations {
                         needConfirmationToRead: boolean;
                         userId: string | null;
                         imageUrl: string | null;
+                        reactions: {
+                            [key: string]: number;
+                        };
                         reads: number;
                     }[];
                 };

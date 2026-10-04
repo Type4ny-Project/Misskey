@@ -40,13 +40,13 @@ describe('Endpoints', () => {
 			return res.body.id;
 		}
 
-		test('追加・変更・取消と再取得の集計が一致し、リアクションでは既読にしない', async () => {
+		test('追加・変更・取消と再取得の集計が一致し、リアクションで既読にする', async () => {
 			const announcementId = await createAnnouncement({ needConfirmationToRead: true });
 			for (const [user, reaction] of [[bob, '👍'], [carol, '👍'], [bob, '🎉']] as const) {
 				const res = await api('announcements/react', { announcementId, reaction }, user);
 				expect(res.status).toBe(200);
 				expect(res.body.myReaction).toBe(reaction);
-				expect(res.body.isRead).toBe(false);
+				expect(res.body.isRead).toBe(true);
 			}
 			const detail = await api('announcements/show', { announcementId }, bob);
 			expect(detail.body.reactions).toEqual({ '👍': 1, '🎉': 1 });
@@ -54,12 +54,14 @@ describe('Endpoints', () => {
 			const list = await api('announcements', {}, bob);
 			expect(list.body.find(a => a.id === announcementId)?.reactions).toEqual(detail.body.reactions);
 			const me = await api('i', {}, bob);
-			expect(me.body.unreadAnnouncements.find(a => a.id === announcementId)?.myReaction).toBe('🎉');
+			expect(me.body.unreadAnnouncements.some(a => a.id === announcementId)).toBe(false);
+			const adminList = await api('admin/announcements/list', {}, alice);
+			expect(adminList.body.find(a => a.id === announcementId)?.reactions).toEqual(detail.body.reactions);
 			const cancel = await api('announcements/react', { announcementId, reaction: null }, bob);
 			expect(cancel.status).toBe(200);
 			expect(cancel.body.reactions).toEqual({ '👍': 1 });
 			expect(cancel.body.myReaction).toBeNull();
-			expect(cancel.body.isRead).toBe(false);
+			expect(cancel.body.isRead).toBe(true);
 			await api('i/read-announcement', { announcementId }, bob);
 			expect((await api('announcements/show', { announcementId }, bob)).body.isRead).toBe(true);
 		});
@@ -85,7 +87,7 @@ describe('Endpoints', () => {
 			expect((await api('announcements/show', { announcementId }, bob)).body.reactionsEnabled).toBe(false);
 		});
 
-		test('個人向けの集計は対象者だけが閲覧・操作でき、確認後も残る', async () => {
+		test('個人向けはリアクションでアーカイブされ、管理者も集計を閲覧できる', async () => {
 			const announcementId = await createAnnouncement({ userId: bob.id, needConfirmationToRead: true });
 			expect((await api('announcements/react', { announcementId, reaction: '👍' }, bob)).status).toBe(200);
 			for (const user of [carol, undefined]) {
@@ -99,7 +101,10 @@ describe('Endpoints', () => {
 				expect(castAsError(res.body).error.code).toBe('NO_SUCH_ANNOUNCEMENT');
 			}
 			expect((await api('announcements/react', { announcementId, reaction: '🎉' })).status).toBe(401);
-			await api('i/read-announcement', { announcementId }, bob);
+			expect((await api('announcements', {}, bob)).body.some(a => a.id === announcementId)).toBe(false);
+			const adminList = await api('admin/announcements/list', { userId: bob.id, status: 'archived' }, alice);
+			expect(adminList.body.find(a => a.id === announcementId)).toMatchObject({ reactions: { '👍': 1 }, reads: 1 });
+			expect((await api('admin/announcements/list', { userId: bob.id, status: 'archived' }, carol)).status).toBe(403);
 			const archived = await api('announcements', { isActive: false }, bob);
 			expect(archived.body.find(a => a.id === announcementId)?.myReaction).toBe('👍');
 		});
@@ -109,6 +114,7 @@ describe('Endpoints', () => {
 			await api('announcements/react', { announcementId, reaction: '👍' }, bob);
 			await api('admin/announcements/update', { id: announcementId, text: 'Updated', reactionsEnabled: false }, alice);
 			expect((await api('announcements/show', { announcementId }, bob)).body.reactions).toEqual({});
+			expect((await api('admin/announcements/list', {}, alice)).body.find(a => a.id === announcementId)?.reactions).toEqual({ '👍': 1 });
 			expect(castAsError((await api('announcements/react', { announcementId, reaction: '🎉' }, bob)).body).error.code).toBe('REACTIONS_DISABLED');
 			await api('admin/announcements/update', { id: announcementId, reactionsEnabled: true }, alice);
 			expect((await api('announcements/show', { announcementId }, bob)).body.myReaction).toBe('👍');
@@ -143,6 +149,13 @@ describe('Endpoints', () => {
 			} finally {
 				await db.destroy();
 			}
+		});
+
+		test('無効な反応と未読時の取消では既読にしない', async () => {
+			const announcementId = await createAnnouncement();
+			expect(castAsError((await api('announcements/react', { announcementId, reaction: 'invalid' }, bob)).body).error.code).toBe('INVALID_REACTION');
+			const canceled = await api('announcements/react', { announcementId, reaction: null }, bob);
+			expect(canceled.body).toMatchObject({ isRead: false, reactions: {}, myReaction: null });
 		});
 
 		test.each(['not-an-emoji', ':missing:', ':remote@example.com:'])('無効な絵文字 %s は拒否し、現在の反応を維持する', async reaction => {

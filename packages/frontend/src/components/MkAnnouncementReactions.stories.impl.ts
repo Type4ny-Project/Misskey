@@ -17,7 +17,7 @@ export const Default = {
 			components: { MkAnnouncementReactions },
 			setup() {
 				const announcement = ref({ ...args.announcement });
-				return { args, announcement, onUpdate: (state: Pick<Misskey.entities.Announcement, 'reactions' | 'myReaction'>) => {
+				return { args, announcement, onUpdate: (state: Pick<Misskey.entities.Announcement, 'reactions' | 'myReaction' | 'isRead'>) => {
 					Object.assign(announcement.value, state);
 					action('update')(state);
 				} };
@@ -28,15 +28,7 @@ export const Default = {
 	args: {
 		announcement: {
 			id: 'announcement',
-			createdAt: new Date().toISOString(),
-			updatedAt: null,
 			title: 'Title',
-			text: 'Text',
-			imageUrl: null,
-			icon: 'info',
-			display: 'normal',
-			forYou: false,
-			silence: false,
 			needConfirmationToRead: false,
 			reactionsEnabled: true,
 			reactions: { '👍': 12, '🎉': 3 },
@@ -61,7 +53,12 @@ export const Interactive = {
 	parameters: {
 		msw: { handlers: [http.post('/api/announcements/react', async ({ request }) => {
 			const { reaction } = await request.json() as Misskey.entities.AnnouncementsReactRequest;
-			return HttpResponse.json({ reactions: reaction == null ? {} : { [reaction]: 1 }, myReaction: reaction });
+			return HttpResponse.json({ reactions: reaction == null ? {} : { [reaction]: 1 }, myReaction: reaction, isRead: true });
 		})] },
 	},
+} satisfies StoryObj<typeof MkAnnouncementReactions>;
+
+export const ConfirmationRequired = {
+	...Interactive,
+	args: { ...Interactive.args, announcement: { ...Interactive.args.announcement, myReaction: null, isRead: false, needConfirmationToRead: true } },
 } satisfies StoryObj<typeof MkAnnouncementReactions>;

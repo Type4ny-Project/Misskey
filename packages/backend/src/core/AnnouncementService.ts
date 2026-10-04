@@ -240,8 +240,9 @@ export class AnnouncementService {
 				userId: user.id,
 				reaction,
 			}, ['userId', 'announcementId']);
+			await this.read(user, announcementId);
 		}
-		return this.announcementEntityService.pack(announcement, user);
+		return this.getAnnouncement(announcementId, user);
 	}
 
 	@bindThis

@@ -6785,6 +6785,14 @@ export interface Locale extends ILocale {
          */
         "tooManyActiveAnnouncementDescription": string;
         /**
+         * リアクションすると、このお知らせは既読になります。
+         */
+        "reactionReadDescription": string;
+        /**
+         * 「{title}」にリアクションすると、このお知らせは既読になります。
+         */
+        "reactionReadConfirmText": ParameterizedString<"title">;
+        /**
          * 既読にしますか？
          */
         "readConfirmTitle": string;

@@ -5,10 +5,10 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import type { AnnouncementsRepository, AnnouncementReadsRepository } from '@/models/_.js';
-import type { MiAnnouncement } from '@/models/Announcement.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { QueryService } from '@/core/QueryService.js';
 import { DI } from '@/di-symbols.js';
+import { AnnouncementEntityService } from '@/core/entities/AnnouncementEntityService.js';
 import { IdService } from '@/core/IdService.js';
 
 export const meta = {
@@ -87,6 +87,11 @@ export const meta = {
 					type: 'string',
 					optional: false, nullable: true,
 				},
+				reactions: {
+					type: 'object',
+					optional: false, nullable: false,
+					additionalProperties: { type: 'number' },
+				},
 				reads: {
 					type: 'number',
 					optional: false, nullable: false,
@@ -121,6 +126,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private queryService: QueryService,
 		private idService: IdService,
+		private announcementEntityService: AnnouncementEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const query = this.queryService.makePaginationQuery(this.announcementsRepository.createQueryBuilder('announcement'), ps.sinceId, ps.untilId, ps.sinceDate, ps.untilDate);
@@ -139,15 +145,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const announcements = await query.limit(ps.limit).getMany();
 
-			const reads = new Map<MiAnnouncement, number>();
-
-			for (const announcement of announcements) {
-				reads.set(announcement, await this.announcementReadsRepository.countBy({
-					announcementId: announcement.id,
-				}));
-			}
-
-			return announcements.map(announcement => ({
+			return Promise.all(announcements.map(async announcement => ({
 				id: announcement.id,
 				createdAt: this.idService.parse(announcement.id).date.toISOString(),
 				updatedAt: announcement.updatedAt?.toISOString() ?? null,
@@ -162,8 +160,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				needConfirmationToRead: announcement.needConfirmationToRead,
 				reactionsEnabled: announcement.reactionsEnabled,
 				userId: announcement.userId,
-				reads: reads.get(announcement)!,
-			}));
+				reads: await this.announcementReadsRepository.countBy({ announcementId: announcement.id }),
+				reactions: await this.announcementEntityService.getReactions(announcement.id),
+			})));
 		});
 	}
 }

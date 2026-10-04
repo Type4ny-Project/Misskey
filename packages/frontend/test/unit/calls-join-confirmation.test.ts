@@ -4,7 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { cleanup, render, waitFor } from '@testing-library/vue';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/vue';
 import { ref } from 'vue';
 import MkCallsRoomWindow from '@/components/MkCallsRoomWindow.vue';
 
@@ -33,11 +33,25 @@ beforeEach(() => {
 		isActive: ref(false), joining: ref(false), videos: ref([]), screenWindowStream: ref(null), mediaState: ref('idle'), mediaFailure: ref(null),
 		speakerRequestResult: ref(null), replacedRoomId: ref(null), needsAudioResume: ref(false), controls: ref({}),
 		refresh: vi.fn().mockResolvedValue(undefined), prepareMicrophones: vi.fn(), join: vi.fn().mockResolvedValue(undefined),
+		getParticipantVolume: vi.fn().mockReturnValue(100), setParticipantVolume: vi.fn(),
 	};
 });
 afterEach(cleanup);
 
 describe('Calls participation confirmation', () => {
+	test('a listener can adjust the host volume and has no volume control for themselves', async () => {
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		fixture.session.participants.value.push({ id: 'viewer-participant', userId: 'viewer', role: 'listener', isMuted: true });
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		const slider = view.getByRole('slider') as HTMLInputElement;
+		expect(slider.value).toBe('100');
+		await waitFor(() => expect(slider.getAttribute('aria-label')).toContain('Host'));
+		await fireEvent.input(slider, { target: { value: '25' } });
+		expect(fixture.session.setParticipantVolume).toHaveBeenCalledWith('host', 25);
+		expect(view.getAllByRole('slider')).toHaveLength(1);
+	});
+
 	test.each([true, false])('opening another user’s room joins only after consent (cancelled: %s)', async canceled => {
 		let respond!: (result: { canceled: boolean }) => void;
 		fixture.confirm.mockImplementation(() => new Promise(resolve => { respond = resolve; }));

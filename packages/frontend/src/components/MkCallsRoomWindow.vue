@@ -49,6 +49,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<button v-if="canKick && participant.role !== 'host' && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
 									</div>
 									<small :class="speakingParticipantIds.has(participant.id) && $style.speakingLabel">{{ speakingParticipantIds.has(participant.id) ? i18n.ts._calls.speakingNow : participant.role === 'host' ? i18n.ts._calls.host : room.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.vcModerator : i18n.ts._calls.speaker }}</small>
+									<label v-if="sessionIsCurrent && participant.userId !== $i?.id" :class="$style.personVolume">
+										<span>{{ i18n.ts.volume }} · {{ session.getParticipantVolume(participant.userId) }}%</span>
+										<input type="range" min="0" max="100" step="1" :value="session.getParticipantVolume(participant.userId)" :aria-label="`${i18n.ts.volume}: ${videoLabel(participant.id)}`" @input="session.setParticipantVolume(participant.userId, ($event.target as HTMLInputElement).valueAsNumber)">
+									</label>
 								</div>
 							</TransitionGroup>
 						</section>
@@ -405,6 +409,8 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 .personMenu { flex: 0 0 28px; height: 28px; border-radius: 50%; }
 .person > small { grid-column: 2; font-size: 0.75rem; color: var(--MI_THEME-fgTransparentWeak); }
 .person > .speakingLabel { color: var(--MI_THEME-accent); }
+.personVolume { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; width: 100%; margin-top: 4px; font-size: 0.75rem; }
+.personVolume > input { width: 100%; min-width: 0; margin: 0; accent-color: var(--MI_THEME-accent); }
 .personMove { transition: transform 0.2s ease; }
 .videoGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 12px; align-content: start; }
 .videoGridFocused { grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); }

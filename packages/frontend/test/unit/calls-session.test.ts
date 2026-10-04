@@ -4,6 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import type { CallsRemotePublication } from '@/utility/calls-media.js';
 
 const fixture = vi.hoisted(() => ({
 	api: vi.fn(),
@@ -21,6 +22,7 @@ const fixture = vi.hoisted(() => ({
 	role: 'listener' as 'listener' | 'host',
 	revoked: [] as Array<(event: { reason: string; connectionId?: string; generation?: number }) => void>,
 	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null } }>,
+	remoteTrackCallbacks: [] as Array<(track: MediaStreamTrack, publication: CallsRemotePublication) => void>,
 	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
 }));
 
@@ -66,9 +68,10 @@ vi.mock('@/utility/calls-media.js', () => ({
 			this.onState('connected');
 		});
 		public setMuted = vi.fn();
-		constructor(_roomId: string, _role: string, private onState: (state: string) => void, _onRemoteTrack: unknown, _onStats: unknown, previousConnection?: { connectionId: string; generation: number }, public replaceExisting = false) {
+		constructor(_roomId: string, _role: string, private onState: (state: string) => void, onRemoteTrack: typeof fixture.remoteTrackCallbacks[number], _onStats: unknown, previousConnection?: { connectionId: string; generation: number }, public replaceExisting = false) {
 			this.connectionIdentity = previousConnection ?? { connectionId: `device-${fixture.controllers.length}`, generation: 1 };
 			fixture.controllers.push(this);
+			fixture.remoteTrackCallbacks.push(onRemoteTrack);
 		}
 	},
 }));
@@ -95,8 +98,49 @@ describe('Calls session device handoff', () => {
 		fixture.revoked.length = 0;
 		fixture.controllers.length = 0;
 		fixture.connections.length = 0;
+		fixture.remoteTrackCallbacks.length = 0;
 		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { enumerateDevices: async () => [] } });
 		session = (await import('@/utility/calls-session.js')).useCallsSession();
+	});
+
+	test('adjusts only the selected user audio, retains volume for replacement tracks and clears it on leaving', async () => {
+		const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+		const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+		try {
+			await session.join('room-a', false);
+			session.participants.value.push(
+				{ ...session.participants.value[0], id: 'participant-b', userId: 'user-b' },
+				{ ...session.participants.value[0], id: 'participant-c', userId: 'user-c' },
+			);
+			const receive = (id: string, participantId: string) => {
+				const track = Object.assign(new EventTarget(), { kind: 'audio' }) as MediaStreamTrack;
+				fixture.remoteTrackCallbacks[0](track, { id, participantId, mediaKind: 'audio', mediaSource: 'microphone' });
+				return document.querySelectorAll('audio')[document.querySelectorAll('audio').length - 1];
+			};
+			const audioB = receive('publication-b', 'participant-b');
+			const audioC = receive('publication-c', 'participant-c');
+			expect(audioB.volume).toBe(1);
+			session.setParticipantVolume('user-b', 25);
+			expect(audioB.volume).toBe(0.25);
+			expect(audioC.volume).toBe(1);
+			const replacementB = receive('publication-b', 'participant-b');
+			expect(replacementB.volume).toBe(0.25);
+			expect(audioB.isConnected).toBe(false);
+			session.setParticipantVolume('user-b', 0);
+			expect(audioC.volume).toBe(1);
+			expect(session.getParticipantVolume('user-b')).toBe(0);
+			expect(replacementB.volume).toBe(0);
+			await session.resumeAudio();
+			expect(replacementB.volume).toBe(0);
+			session.setParticipantVolume('user-b', 100);
+			expect(replacementB.volume).toBe(1);
+			await session.leave();
+			expect(document.querySelector('audio')).toBeNull();
+			expect(session.getParticipantVolume('user-b')).toBe(100);
+		} finally {
+			play.mockRestore();
+			pause.mockRestore();
+		}
 	});
 
 	test('sends a heartbeat with the current connection every 30 seconds and stops after leaving', async () => {

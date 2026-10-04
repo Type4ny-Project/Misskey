@@ -65,7 +65,8 @@ const reconnectRoomState = ref<'checking' | 'open' | 'unavailable'>('checking');
 const reconnectSecondsRemaining = ref(0);
 const speakerRequestResult = ref<'rejected' | null>(null);
 const usersById = shallowRef(new Map<string, Misskey.entities.UserLite>());
-const remoteAudio = new Map<string, HTMLAudioElement>();
+const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement }>();
+const participantVolumes = shallowRef(new Map<string, number>());
 const localVideos = shallowRef(new Map<CallsVideoSource, MediaStream>());
 const remoteVideos = shallowRef(new Map<string, { participantId: string; source: CallsVideoSource; stream: MediaStream }>());
 const videoBusy = ref(false);
@@ -153,12 +154,28 @@ function disposeConnection(): void {
 }
 
 function removeRemoteTrack(publicationId: string): void {
-	const audio = remoteAudio.get(publicationId);
+	const audio = remoteAudio.get(publicationId)?.element;
 	if (audio != null) { audio.pause(); audio.srcObject = null; audio.remove(); }
 	remoteAudio.delete(publicationId);
 	const next = new Map(remoteVideos.value);
 	next.delete(publicationId);
 	remoteVideos.value = next;
+}
+
+function getParticipantVolume(userId: string): number {
+	return participantVolumes.value.get(userId) ?? 100;
+}
+
+function applyParticipantVolumes(): void {
+	for (const { participantId, element } of remoteAudio.values()) {
+		const participant = participants.value.find(item => item.id === participantId);
+		element.volume = participant == null ? 1 : getParticipantVolume(participant.userId) / 100;
+	}
+}
+
+function setParticipantVolume(userId: string, volume: number): void {
+	participantVolumes.value = new Map(participantVolumes.value).set(userId, Math.max(0, Math.min(100, volume)));
+	applyParticipantVolumes();
 }
 
 function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublication): void {
@@ -173,7 +190,8 @@ function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublica
 	audio.autoplay = true;
 	audio.hidden = true;
 	audio.srcObject = new MediaStream([track]);
-	remoteAudio.set(publication.id, audio);
+	remoteAudio.set(publication.id, { participantId: publication.participantId, element: audio });
+	applyParticipantVolumes();
 	window.document.body.append(audio);
 	void audio.play().catch(() => { needsAudioResume.value = true; });
 	track.addEventListener('ended', () => {
@@ -262,6 +280,7 @@ async function clearSession(): Promise<void> {
 	usersById.value = new Map();
 	for (const id of remoteAudio.keys()) removeRemoteTrack(id);
 	remoteAudio.clear();
+	participantVolumes.value = new Map();
 	localVideos.value = new Map();
 	remoteVideos.value = new Map();
 	needsAudioResume.value = false;
@@ -569,13 +588,15 @@ function openScreenSettings(event: MouseEvent): void {
 }
 
 async function resumeAudio(): Promise<void> {
-	await Promise.all([...remoteAudio.values()].map(audio => audio.play()));
+	await Promise.all([...remoteAudio.values()].map(({ element }) => element.play()));
 	needsAudioResume.value = false;
 }
 
 watch(videos, current => {
 	if (callsScreenWindowStream.value != null && !current.some(video => video.stream === callsScreenWindowStream.value)) clearCallsScreenWindow();
 });
+
+watch(participants, applyParticipantVolumes);
 
 watch(() => participants.value.filter(participant => participant.role !== 'listener').map(participant => participant.id).join(','), () => {
 	void media.value?.reconcile().catch(error => {
@@ -669,6 +690,8 @@ export function useCallsSession() {
 		switchMicrophone,
 		prepareMicrophones,
 		resumeAudio,
+		getParticipantVolume,
+		setParticipantVolume,
 		resumeRecentRoom,
 		dismissReconnectCandidate,
 		refresh() { return connection.value?.refresh() ?? Promise.resolve(); },

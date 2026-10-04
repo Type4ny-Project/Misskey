@@ -371,12 +371,11 @@ async function join(roomId: string, alreadyParticipant: boolean, reconnectToken?
 		generation = ++sessionGeneration;
 		currentRoomId.value = roomId;
 		const next = attachConnection(roomId);
-		await next.refresh();
 		if (!alreadyParticipant) {
 			await misskeyApi('calls/rooms/join', { roomId, reconnectToken });
 			joinedNow = true;
-			await next.refresh();
 		}
+		await next.refresh();
 		if (myParticipant.value == null) throw new Error('Calls participant state was not created');
 		muted.value = myParticipant.value.isMuted;
 		if (startMuted && myParticipant.value.role === 'host' && !muted.value) {

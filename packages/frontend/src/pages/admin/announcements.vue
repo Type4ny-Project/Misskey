@@ -73,6 +73,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkSwitch v-model="announcement.silence" :helpText="i18n.ts._announcement.silenceDescription">
 							{{ i18n.ts._announcement.silence }}
 						</MkSwitch>
+						<MkSwitch v-model="announcement.reactionsEnabled">
+							{{ i18n.ts._announcement.reactionsEnabled }}
+						</MkSwitch>
+						<div v-if="announcement.id != null">
+							<div>{{ i18n.ts.reactions }}</div>
+							<MkAnnouncementReactions :announcement="{ ...announcement, id: announcement.id, reactionsEnabled: true, myReaction: null }"/>
+							<div v-if="Object.keys(announcement.reactions ?? {}).length === 0">{{ i18n.ts.nothing }}</div>
+						</div>
 						<MkSwitch v-model="announcement.needConfirmationToRead" :helpText="i18n.ts._announcement.needConfirmationToReadDescription">
 							{{ i18n.ts._announcement.needConfirmationToRead }}
 						</MkSwitch>
@@ -95,6 +103,7 @@ import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
+import MkAnnouncementReactions from '@/components/MkAnnouncementReactions.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
 import MkRadios from '@/components/MkRadios.vue';
 import MkInfo from '@/components/MkInfo.vue';
@@ -150,6 +159,8 @@ function add() {
 		forExistingUsers: false,
 		silence: false,
 		needConfirmationToRead: false,
+		reactionsEnabled: false,
+		reactions: {},
 		userId: null,
 	});
 }

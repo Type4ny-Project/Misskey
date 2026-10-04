@@ -5,7 +5,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
-import type { AnnouncementsRepository, AnnouncementReadsRepository, MiAnnouncement, MiUser } from '@/models/_.js';
+import type { AnnouncementsRepository, AnnouncementReadsRepository, AnnouncementReactionsRepository, MiAnnouncement, MiUser } from '@/models/_.js';
 import type { Packed } from '@/misc/json-schema.js';
 import { bindThis } from '@/decorators.js';
 import { IdService } from '@/core/IdService.js';
@@ -19,8 +19,24 @@ export class AnnouncementEntityService {
 		@Inject(DI.announcementReadsRepository)
 		private announcementReadsRepository: AnnouncementReadsRepository,
 
+		@Inject(DI.announcementReactionsRepository)
+		private announcementReactionsRepository: AnnouncementReactionsRepository,
+
 		private idService: IdService,
 	) {
+	}
+
+	@bindThis
+	public async getReactions(announcementId: MiAnnouncement['id']): Promise<Record<string, number>> {
+		const reactions: Record<string, number> = {};
+		const counts = await this.announcementReactionsRepository.createQueryBuilder('reaction')
+			.select('reaction.reaction', 'reaction')
+			.addSelect('COUNT(*)', 'count')
+			.where('reaction.announcementId = :announcementId', { announcementId })
+			.groupBy('reaction.reaction')
+			.getRawMany<{ reaction: string; count: string }>();
+		for (const count of counts) reactions[count.reaction] = Number(count.count);
+		return reactions;
 	}
 
 	@bindThis
@@ -43,6 +59,18 @@ export class AnnouncementEntityService {
 				.then((count: number) => count > 0);
 		}
 
+		const reactions: Record<string, number> = {};
+		let myReaction: string | null = null;
+		if (announcement.reactionsEnabled && (announcement.userId == null || announcement.userId === me?.id)) {
+			Object.assign(reactions, await this.getReactions(announcement.id));
+			if (me) {
+				myReaction = (await this.announcementReactionsRepository.findOneBy({
+					announcementId: announcement.id,
+					userId: me.id,
+				}))?.reaction ?? null;
+			}
+		}
+
 		return {
 			id: announcement.id,
 			createdAt: this.idService.parse(announcement.id).date.toISOString(),
@@ -55,6 +83,9 @@ export class AnnouncementEntityService {
 			forYou: announcement.userId === me?.id,
 			needConfirmationToRead: announcement.needConfirmationToRead,
 			silence: announcement.silence,
+			reactionsEnabled: announcement.reactionsEnabled,
+			reactions,
+			myReaction,
 			isRead: announcement.isRead !== null ? announcement.isRead : undefined,
 		};
 	}

@@ -43,6 +43,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 				>
 					<template #label>{{ i18n.ts.display }}</template>
 				</MkRadios>
+				<MkSwitch v-model="reactionsEnabled">
+					{{ i18n.ts._announcement.reactionsEnabled }}
+				</MkSwitch>
+				<div v-if="announcement">
+					<div>{{ i18n.ts.reactions }}</div>
+					<MkAnnouncementReactions :announcement="{ ...announcement, reactionsEnabled: true, reactions: announcement.reactions ?? {}, myReaction: null }"/>
+					<div v-if="Object.keys(announcement.reactions ?? {}).length === 0">{{ i18n.ts.nothing }}</div>
+				</div>
 				<MkSwitch v-model="needConfirmationToRead">
 					{{ i18n.ts._announcement.needConfirmationToRead }}
 					<template #caption>{{ i18n.ts._announcement.needConfirmationToReadDescription }}</template>
@@ -67,6 +75,7 @@ import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import MkTextarea from '@/components/MkTextarea.vue';
+import MkAnnouncementReactions from '@/components/MkAnnouncementReactions.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
 import MkRadios from '@/components/MkRadios.vue';
 
@@ -74,7 +83,7 @@ type AdminAnnouncementType = Misskey.entities.AdminAnnouncementsCreateRequest & 
 
 const props = defineProps<{
 	user: Misskey.entities.User,
-	announcement?: Required<AdminAnnouncementType>,
+	announcement?: Required<AdminAnnouncementType> & { reactions?: Record<string, number> },
 }>();
 
 const emit = defineEmits<{
@@ -87,6 +96,7 @@ const title = ref(props.announcement ? props.announcement.title : '');
 const text = ref(props.announcement ? props.announcement.text : '');
 const icon = ref(props.announcement ? props.announcement.icon : 'info');
 const display = ref(props.announcement ? props.announcement.display : 'dialog');
+const reactionsEnabled = ref(props.announcement?.reactionsEnabled ?? false);
 const needConfirmationToRead = ref(props.announcement ? props.announcement.needConfirmationToRead : false);
 
 async function done() {
@@ -97,6 +107,7 @@ async function done() {
 		imageUrl: null,
 		display: display.value,
 		needConfirmationToRead: needConfirmationToRead.value,
+		reactionsEnabled: reactionsEnabled.value,
 		userId: props.user.id,
 	} satisfies Misskey.entities.AdminAnnouncementsCreateRequest;
 

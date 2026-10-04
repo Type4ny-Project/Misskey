@@ -33,6 +33,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</MkA>
 					</div>
+					<MkAnnouncementReactions :announcement="announcement"/>
 					<div v-if="tab !== 'past' && $i != null && !announcement.silence && !announcement.isRead" :class="$style.footer">
 						<MkButton primary @click="read(announcement)"><i class="ti ti-check"></i> {{ i18n.ts.gotIt }}</MkButton>
 					</div>
@@ -48,6 +49,7 @@ import { ref, computed, markRaw } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkPagination from '@/components/MkPagination.vue';
 import MkButton from '@/components/MkButton.vue';
+import MkAnnouncementReactions from '@/components/MkAnnouncementReactions.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';

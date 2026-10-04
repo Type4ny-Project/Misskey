@@ -6753,6 +6753,14 @@ export interface Locale extends ILocale {
     };
     "_announcement": {
         /**
+         * リアクションを有効にする
+         */
+        "reactionsEnabled": string;
+        /**
+         * 詳細を開いてリアクションする
+         */
+        "reactInDetail": string;
+        /**
          * 既存ユーザーのみ
          */
         "forExistingUsers": string;
@@ -6776,6 +6784,14 @@ export interface Locale extends ILocale {
          * アクティブなお知らせが多いため、UXが低下する可能性があります。終了したお知らせはアーカイブすることを検討してください。
          */
         "tooManyActiveAnnouncementDescription": string;
+        /**
+         * リアクションすると、このお知らせは既読になります。
+         */
+        "reactionReadDescription": string;
+        /**
+         * 「{title}」にリアクションすると、このお知らせは既読になります。
+         */
+        "reactionReadConfirmText": ParameterizedString<"title">;
         /**
          * 既読にしますか？
          */

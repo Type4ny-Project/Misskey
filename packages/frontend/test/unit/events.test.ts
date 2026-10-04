@@ -16,11 +16,13 @@ vi.mock('@/router.js', () => ({ useRouter: () => ({ push: fixture.push }) }));
 vi.mock('@/os.js', () => ({ alert: fixture.alert }));
 vi.mock('@/i.js', () => ({ $i: null, iAmModerator: false }));
 vi.mock('@/cache.js', () => ({}));
+vi.mock('@/instance.js', () => ({ instance: {} }));
 
 const global = { stubs: {
 	PageWithHeader: { template: '<main><slot/></main>' },
 	MkButton: { props: ['disabled'], template: '<button :disabled="disabled"><slot/></button>' },
 	MkLoading: { template: '<div data-testid="loading"/>' },
+	MkSystemIcon: { props: ['type'], template: '<div data-testid="result-icon" :data-type="type"/>' },
 	MkTime: true,
 	MkAvatar: true,
 	Mfm: true,
@@ -44,6 +46,7 @@ describe('Event failure presentation', () => {
 		fixture.api.mockRejectedValue({ code: 'NO_SUCH_EVENT' });
 		const view = render(component, { props: { eventId: 'missing' }, global });
 		await waitFor(() => expect(view.getByText(i18n.ts._events.eventNotFound)).toBeTruthy());
+		expect(view.getByTestId('result-icon').getAttribute('data-type')).toBe('question');
 		expect(view.queryByTestId('loading')).toBeNull();
 		expect(fixture.api).toHaveBeenCalledWith('events/show', { eventId: 'missing' });
 	});
@@ -52,6 +55,7 @@ describe('Event failure presentation', () => {
 		fixture.api.mockRejectedValue(new Error('Network error'));
 		const view = render(component, { props: { eventId: 'event' }, global });
 		await waitFor(() => expect(view.getByText(i18n.ts._events.unknownError)).toBeTruthy());
+		expect(view.getByTestId('result-icon').getAttribute('data-type')).toBe('error');
 		expect(view.queryByText(i18n.ts._events.eventNotFound)).toBeNull();
 		expect(view.queryByTestId('loading')).toBeNull();
 	});

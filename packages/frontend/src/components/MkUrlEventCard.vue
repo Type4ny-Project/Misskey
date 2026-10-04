@@ -99,7 +99,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </article>
 <article v-else :class="$style.root" role="status">
 	<MkLoading v-if="loading"/>
-	<div v-else><i class="ti ti-calendar-off" aria-hidden="true"></i> {{ loadError }}</div>
+	<MkResult v-else :type="notFound ? 'notFound' : 'error'" :text="loadError ?? undefined"/>
 </article>
 </template>
 
@@ -108,6 +108,7 @@ import { computed, ref, onMounted, toRef } from 'vue';
 import type * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkLink from '@/components/MkLink.vue';
+import MkResult from '@/components/global/MkResult.vue';
 import { i18n } from '@/i18n.js';
 import { useRouter } from '@/router.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -123,6 +124,7 @@ const eventData = ref<Misskey.entities.Event | null>(null);
 const channelName = ref<string | null>(null);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
+const notFound = ref(false);
 
 onMounted(async () => {
 	try {
@@ -133,7 +135,8 @@ onMounted(async () => {
 				.then(channel => channel.name).catch(() => null);
 		}
 	} catch (error) {
-		loadError.value = (error as { code?: string }).code === 'NO_SUCH_EVENT'
+		notFound.value = (error as { code?: string }).code === 'NO_SUCH_EVENT';
+		loadError.value = notFound.value
 			? i18n.ts._events.eventNotFound
 			: i18n.ts._events.unknownError;
 	} finally {

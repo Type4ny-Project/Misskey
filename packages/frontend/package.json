@@ -23,6 +23,7 @@
 		"@misskey-dev/browser-image-resizer": "2024.1.0",
 		"@misskey-dev/emoji-data": "17.0.3",
 		"@misskey-dev/tagcanvas-es": "0.1.2",
+		"@sapphi-red/web-noise-suppressor": "0.4.1",
 		"@sentry/vue": "10.72.0",
 		"@simplewebauthn/browser": "13.3.0",
 		"@syuilo/aiscript": "1.2.1",

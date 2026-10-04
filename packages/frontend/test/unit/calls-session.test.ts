@@ -68,7 +68,7 @@ vi.mock('@/utility/calls-media.js', () => ({
 		public startVideo = vi.fn().mockResolvedValue(undefined);
 		public close = vi.fn().mockResolvedValue(undefined);
 		public setVideoQuality = vi.fn().mockResolvedValue(undefined);
-		public setNoiseSuppression = vi.fn().mockResolvedValue(undefined);
+		public setNoiseSuppression = vi.fn();
 		public reconcile = vi.fn().mockResolvedValue(undefined);
 		public connect = vi.fn(async () => {
 			if (fixture.connectionExists && !this.replaceExisting) throw Object.assign(new Error('Connection exists'), { code: 'CALLS_CONNECTION_EXISTS' });
@@ -358,12 +358,24 @@ describe('Calls session device handoff', () => {
 		expect(fixture.controllers[0].setNoiseSuppression).toHaveBeenLastCalledWith(false);
 		const error = new Error('Unsupported audio constraint');
 		const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		fixture.controllers[0].setNoiseSuppression.mockRejectedValueOnce(error);
+		fixture.controllers[0].setNoiseSuppression.mockImplementationOnce(() => { throw error; });
 		toggle.ref.value = true;
 		await vi.waitFor(() => expect(fixture.alert).toHaveBeenCalledWith({ type: 'error', text: 'Something went wrong' }));
 		expect(toggle.ref.value).toBe(false);
 		expect(log).toHaveBeenCalledWith('[Calls] Noise suppression change failed', error);
 		log.mockRestore();
+	});
+
+	test('microphone suppression switch reflects rapid toggles immediately', async () => {
+		fixture.role = 'host';
+		await session.join('room-a', true);
+		await session.openDeviceMenu('microphone', new MouseEvent('click'));
+		const toggle = fixture.popupMenu.mock.calls[0][0].at(-1);
+		for (const enabled of [false, true, false, true]) {
+			toggle.ref.value = enabled;
+			expect(toggle.ref.value).toBe(enabled);
+			expect(fixture.controllers[0].setNoiseSuppression).toHaveBeenLastCalledWith(enabled);
+		}
 	});
 
 	test('screen quality menu updates the sender and retains the previous selection on failure', async () => {

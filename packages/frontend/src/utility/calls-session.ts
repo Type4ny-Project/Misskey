@@ -256,6 +256,9 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 		previousConnection,
 		replaceExisting,
 		{
+			noiseSuppressionChanged(enabled) {
+				if (generation === sessionGeneration && media.value === controller) noiseSuppression.value = enabled;
+			},
 			localTrack(source, track) {
 				if (generation !== sessionGeneration || media.value !== controller) return;
 				const next = new Map(localVideos.value);
@@ -273,7 +276,7 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 	);
 	media.value = controller;
 	controller.setMuted(muted.value);
-	await controller.setNoiseSuppression(noiseSuppression.value);
+	controller.setNoiseSuppression(noiseSuppression.value);
 	await controller.connect(selectedMicrophone.value || undefined);
 	if (generation !== sessionGeneration || media.value !== controller) {
 		await controller.close().catch(() => undefined);
@@ -575,17 +578,17 @@ async function openDeviceMenu(kind: 'microphone' | 'camera', event: MouseEvent):
 				}
 			},
 		})),
-		...(kind === 'camera' ? [null, ...videoQualityMenu('camera')] : [null, { type: 'switch' as const, text: i18n.ts._calls.noiseSuppression, ref: computed({ get: () => noiseSuppression.value, set: value => { void setNoiseSuppression(value); } }) }]),
+		...(kind === 'camera' ? [null, ...videoQualityMenu('camera')] : [null, { type: 'switch' as const, text: i18n.ts._calls.noiseSuppression, ref: computed({ get: () => noiseSuppression.value, set: value => { setNoiseSuppression(value); } }) }]),
 	], target);
 }
 
-async function setNoiseSuppression(enabled: boolean): Promise<void> {
+function setNoiseSuppression(enabled: boolean): void {
 	try {
-		await media.value?.setNoiseSuppression(enabled);
+		media.value?.setNoiseSuppression(enabled);
 		noiseSuppression.value = enabled;
 	} catch (error) {
 		console.error('[Calls] Noise suppression change failed', error);
-		await alert({ type: 'error', text: i18n.ts.somethingHappened });
+		void alert({ type: 'error', text: i18n.ts.somethingHappened });
 	}
 }
 

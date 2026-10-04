@@ -211,7 +211,9 @@ if (props.initialVisibleUsers) {
 	props.initialVisibleUsers.forEach(u => pushVisibleUser(u));
 }
 const reactionAcceptance = ref(store.s.reactionAcceptance);
-const effectiveReactionAcceptance = computed(() => $i.policies.canChangeReactionAcceptance === false ? null : reactionAcceptance.value);
+const postAccount = ref<Misskey.entities.MeDetailed | null>(null);
+const canChangeReactionAcceptance = computed(() => (postAccount.value ?? $i).policies.canChangeReactionAcceptance !== false);
+const effectiveReactionAcceptance = computed(() => canChangeReactionAcceptance.value ? reactionAcceptance.value : null);
 const scheduledAt = ref<number | null>(null);
 const draghover = ref(false);
 const quoteId = ref<string | null>(null);
@@ -617,7 +619,7 @@ async function toggleLocalOnly() {
 }
 
 async function toggleReactionAcceptance() {
-	if ($i.policies.canChangeReactionAcceptance === false) return;
+	if (!canChangeReactionAcceptance.value) return;
 	const select = await os.select({
 		title: i18n.ts.reactionAcceptance,
 		items: [
@@ -671,8 +673,8 @@ function showOtherSettings() {
 	}, { type: 'divider' }, {
 		icon: reactionAcceptanceIcon,
 		text: i18n.ts.reactionAcceptance,
-		caption: $i.policies.canChangeReactionAcceptance === false ? i18n.ts.reactionAcceptanceLockedByRole : reactionAcceptanceCaption,
-		disabled: $i.policies.canChangeReactionAcceptance === false,
+		caption: canChangeReactionAcceptance.value ? reactionAcceptanceCaption : i18n.ts.reactionAcceptanceLockedByRole,
+		disabled: !canChangeReactionAcceptance.value,
 		action: () => {
 			toggleReactionAcceptance();
 		},
@@ -1300,8 +1302,6 @@ function showActions(ev: PointerEvent) {
 		},
 	})), ev.currentTarget ?? ev.target);
 }
-
-const postAccount = ref<Misskey.entities.UserDetailed | null>(null);
 
 async function openAccountMenu(ev: PointerEvent) {
 	if (props.mock) return;

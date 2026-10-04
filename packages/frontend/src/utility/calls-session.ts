@@ -15,7 +15,6 @@ import { i18n } from '@/i18n.js';
 import { alert, confirm, popup, popupMenu, toast } from '@/os.js';
 import { misskeyApi, misskeyApiKeepalive } from '@/utility/misskey-api.js';
 import { callsScreenWindows, clearCallsScreenWindow, clearCallsScreenWindows, showCallsScreenWindow } from '@/utility/calls-screen-window.js';
-import { callsUsersById as usersById, loadCallsUsers as loadParticipantUsers } from '@/utility/calls-users.js';
 
 type CallsRoomConnection = ReturnType<typeof createCallsRoomConnection>;
 type CallsReconnectCandidate = { roomId: string; title: string; userId: string; reconnectToken: string; expiresAt: number };
@@ -642,10 +641,6 @@ watch(() => room.value?.state, state => {
 	}
 });
 
-watch(() => participants.value.map(participant => participant.userId).join(','), userIds => {
-	void loadParticipantUsers(userIds === '' ? [] : userIds.split(','));
-});
-
 window.addEventListener('pagehide', onPageHide);
 window.addEventListener('storage', onReconnectStorage);
 
@@ -689,8 +684,6 @@ export function useCallsSession() {
 		reconnectRoomState,
 		reconnectSecondsRemaining,
 		speakerRequestResult,
-		usersById,
-		loadParticipantUsers,
 		join,
 		leave,
 		toggleMute,

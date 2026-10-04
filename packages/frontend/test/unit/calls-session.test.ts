@@ -87,7 +87,7 @@ describe('Calls session device handoff', () => {
 	beforeEach(async () => {
 		vi.resetModules();
 		vi.useFakeTimers();
-		fixture.api.mockReset().mockImplementation(async (endpoint: string) => endpoint === 'users/show' ? [] : {});
+		fixture.api.mockReset().mockResolvedValue({});
 		fixture.toast.mockClear();
 		fixture.alert.mockClear();
 		fixture.popupMenu.mockClear();
@@ -131,35 +131,13 @@ describe('Calls session device handoff', () => {
 		expect(secondWindow.dispose).toHaveBeenCalledOnce();
 	});
 
-	test('fetches each participant once while requests are pending and displays completed users immediately', async () => {
-		let resolveUsers!: (users: { id: string; username: string }[]) => void;
-		fixture.api.mockImplementation((endpoint: string, { userIds }: { userIds?: string[] }) => {
-			if (endpoint !== 'users/show') return Promise.resolve({});
-			if (userIds?.includes('user-a')) return new Promise(resolve => { resolveUsers = resolve; });
-			return Promise.resolve(userIds?.map(id => ({ id, username: id })));
-		});
+	test('does not fetch user profiles on joining or participant updates', async () => {
 		await session.join('room-a', false);
 		const connection = fixture.connections[0];
 		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, isMuted: false }));
-		await nextTick();
 		connection.participants.value.push({ id: 'participant-b', userId: 'user-b', role: 'listener', isMuted: true });
 		await nextTick();
-		await nextTick();
-		expect(fixture.api.mock.calls.filter(([endpoint, params]) => endpoint === 'users/show' && params.userIds.includes('user-a'))).toHaveLength(1);
-		await vi.waitFor(() => expect(session.usersById.value.get('user-b')?.username).toBe('user-b'));
-		resolveUsers([{ id: 'user-a', username: 'Alice' }]);
-		await vi.waitFor(() => expect(session.usersById.value.get('user-a')?.username).toBe('Alice'));
-	});
-
-	test('does not retry a failed user lookup on mute or snapshot updates with unchanged users', async () => {
-		fixture.api.mockImplementation((endpoint: string) => endpoint === 'users/show' ? Promise.reject(new Error('Unavailable')) : Promise.resolve({}));
-		await session.join('room-a', false);
-		await nextTick();
-		await nextTick();
-		const connection = fixture.connections[0];
-		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, isMuted: false }));
-		await nextTick();
-		expect(fixture.api.mock.calls.filter(([endpoint]) => endpoint === 'users/show')).toHaveLength(1);
+		expect(fixture.api.mock.calls.filter(([endpoint]) => endpoint === 'users/show')).toHaveLength(0);
 	});
 
 	test('joins with zero capture devices muted and retries capture when unmuting', async () => {

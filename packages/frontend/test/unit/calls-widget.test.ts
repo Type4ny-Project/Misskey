@@ -28,10 +28,10 @@ beforeEach(() => {
 	fixture.dispose.mockClear();
 	fixture.open.mockClear();
 	fixture.snapshot = {
-		room: ref(room), participants: ref([{ id: 'host-p', userId: 'host', role: 'host', state: 'active' }, { id: 'friend-p', userId: 'friend', role: 'listener', state: 'active' }]),
+		room: ref(room), participants: ref([{ id: 'host-p', userId: 'host', role: 'host', state: 'active', user: { id: 'host', name: 'Host' } }, { id: 'friend-p', userId: 'friend', role: 'listener', state: 'active', user: { id: 'friend', name: 'Friend', isFollowing: true } }]),
 		speakingParticipantIds: ref(new Set()), load: vi.fn().mockResolvedValue(undefined), dispose: vi.fn(),
 	};
-	fixture.api.mockImplementation(async (endpoint, params) => endpoint === 'calls/rooms/list' ? [room] : params.userIds.map((id: string) => ({ id, name: id, isFollowing: id === 'friend' })));
+	fixture.api.mockResolvedValue([room]);
 });
 afterEach(cleanup);
 

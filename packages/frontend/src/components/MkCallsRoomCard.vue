@@ -49,7 +49,6 @@ import { computed, onUnmounted, shallowRef, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
 import { i18n } from '@/i18n.js';
 import { openCallsRoom } from '@/utility/calls-window.js';
-import { callsUsersById as participantUsers, loadCallsUsers } from '@/utility/calls-users.js';
 import { retainCallsRoomConnection } from '@/composables/use-calls-room.js';
 
 const props = defineProps<{
@@ -62,9 +61,9 @@ const room = computed(() => connection.value?.room.value ?? props.room);
 const participants = computed(() => room.value.state === 'open' ? (connection.value?.participants.value ?? []).filter(participant => participant.state === 'active') : []);
 const hostUser = computed(() => {
 	const host = participants.value.find(participant => participant.role === 'host');
-	return host == null ? null : participantUsers.value.get(host.userId) ?? null;
+	return host?.user ?? null;
 });
-const sortedParticipants = computed(() => participants.value.map(participant => ({ participant, user: participantUsers.value.get(participant.userId) ?? null })).sort((a, b) => {
+const sortedParticipants = computed(() => participants.value.map(participant => ({ participant, user: participant.user })).sort((a, b) => {
 	const priority = (item: typeof a) => item.participant.role === 'host' ? 0 : item.user?.isFollowing && item.user?.isFollowed ? 1 : 2;
 	return priority(a) - priority(b);
 }));
@@ -79,9 +78,6 @@ async function connectRoom(roomId: string): Promise<void> {
 }
 
 watch(() => props.room.id, roomId => void connectRoom(roomId), { immediate: true });
-watch(() => participants.value.map(participant => participant.userId).join(','), userIds => {
-	void loadCallsUsers(userIds === '' ? [] : userIds.split(','));
-}, { immediate: true });
 onUnmounted(() => connection.value?.dispose());
 </script>
 

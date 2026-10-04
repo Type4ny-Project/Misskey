@@ -32,9 +32,12 @@ import type { EventEmitter } from 'events';
 
 //#region Stream type-body definitions
 type CallsRoomEventBase = { sequence: number; roomRevision: number; occurredAt: string };
+type CallsParticipantWithUser = Packed<'CallsParticipant'> & {
+	user: (Packed<'UserLite'> & { isFollowing: boolean; isFollowed: boolean }) | null;
+};
 export interface CallsRoomEventTypes {
 	lifecycle: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled'; reason?: 'host-timeout' };
-	participant: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' | 'updated' };
+	participant: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' | 'updated'; participant?: CallsParticipantWithUser; moderatorUserIds?: string[] };
 	role: CallsRoomEventBase & { participantId: string; role: 'host' | 'speaker' | 'listener' };
 	speakerRequest: CallsRoomEventBase & { participantId: string; requested: boolean };
 	mute: CallsRoomEventBase & { participantId: string; isMuted: boolean };

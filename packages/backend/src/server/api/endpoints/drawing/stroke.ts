@@ -10,7 +10,7 @@ import { drawingApiError, drawingErrors, strokeSchema } from './_shared.js';
 
 export const meta = {
 	tags: ['calls'], requireCredential: true, prohibitMoved: true, kind: 'write:calls',
-	limit: { duration: 1000 * 60, max: 300 }, errors: drawingErrors,
+	limit: { duration: 1000 * 60, max: 600 }, errors: drawingErrors,
 } as const;
 export const paramDef = { type: 'object', properties: { roomId: { type: 'string', format: 'misskey:id' }, canvasId: { type: 'string', pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' }, stroke: strokeSchema }, required: ['roomId', 'canvasId', 'stroke'] } as const;
 

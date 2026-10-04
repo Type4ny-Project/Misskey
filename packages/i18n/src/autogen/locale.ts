@@ -14630,6 +14630,10 @@ export interface Locale extends ILocale {
          */
         "removeConfirm": string;
         /**
+         * 500文字まで
+         */
+        "messageLimit": string;
+        /**
          * 絵チャに参加できません。利用権限・参加範囲・空き人数を確認してください。画像の閲覧と保存は引き続きできます。
          */
         "cannotJoin": string;

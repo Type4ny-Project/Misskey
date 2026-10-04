@@ -52,8 +52,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span>{{ message.text }}</span>
 				</div>
 				<form :class="$style.toolbar" @submit.prevent="sendMessage">
-					<MkInput v-model="text" :disabled="!canDraw || busy" :max="500"><template #label>{{ i18n.ts.inputMessageHere }}</template></MkInput>
-					<MkButton :disabled="!canDraw || busy || !text.trim()" type="submit">{{ i18n.ts.send }}</MkButton>
+					<MkInput v-model="text" :disabled="!canDraw || busy"><template #label>{{ i18n.ts.inputMessageHere }}</template><template #caption>{{ i18n.ts._drawing.messageLimit }}</template></MkInput>
+					<MkButton :disabled="!canSend" type="submit">{{ i18n.ts.send }}</MkButton>
 				</form>
 			</div>
 		</template>
@@ -107,6 +107,7 @@ const connected = ref(stream.state === 'connected');
 const isHost = computed(() => room.value?.attachment.ownerUserId === $i.id);
 const joined = computed(() => state.value?.participantIds.includes($i.id) === true);
 const canDraw = computed(() => joined.value && state.value?.ended === false && connected.value && !error.value);
+const canSend = computed(() => canDraw.value && !busy.value && text.value.trim().length > 0 && [...text.value].length <= 500);
 let channel: Misskey.IChannelConnection<Misskey.Channels['drawing']> | null = null;
 let chatChannel: Misskey.IChannelConnection<Misskey.Channels['chatRoom']> | null = null;
 let poll: number | undefined;
@@ -135,9 +136,14 @@ function showError(cause: unknown) {
 		console.error(cause);
 	} else if (failure.code === 'DRAWING_CANVAS_FULL') {
 		void os.alert({ type: 'warning', text: i18n.ts._drawing.canvasFull });
-	} else {
+	} else if (failure.code === 'DRAWING_INVALID_STATE') {
+		void refresh();
+	} else if (['DRAWING_ACCESS_DENIED', 'CALLS_ACCESS_DENIED', 'CALLS_ROOM_NOT_FOUND', 'CALLS_ATTACHMENT_NOT_FOUND', 'CALLS_FEATURE_DISABLED', 'FORBIDDEN'].includes(failure.code)) {
 		error.value = i18n.ts._drawing.unavailable;
 		stopPointer();
+	} else {
+		stopPointer();
+		void os.alert({ type: 'warning', text: i18n.ts.somethingHappened });
 	}
 }
 
@@ -154,10 +160,11 @@ async function refresh() {
 	try {
 		const { canvas: snapshot } = await misskeyApi('drawing/show', { roomId: props.roomId });
 		if (!active) return;
+		const recovered = error.value !== '' || !connected.value;
+		error.value = '';
+		connected.value = stream.state === 'connected';
 		if (snapshot && (!state.value || snapshot.version >= state.value.version)) {
-			const changed = state.value?.version !== snapshot.version || error.value !== '' || !connected.value;
-			error.value = '';
-			connected.value = stream.state === 'connected';
+			const changed = state.value?.version !== snapshot.version || recovered;
 			state.value = snapshot;
 			await nextTick();
 			if (changed) drawSnapshot();
@@ -167,16 +174,18 @@ async function refresh() {
 }
 
 async function update(action: 'join' | 'leave' | 'clear' | 'end' | 'kick' | 'message', params: { userId?: string; text?: string } = {}) {
-	if (!state.value) return;
+	if (!state.value) return false;
 	busy.value = true;
 	if (action === 'join') participationError.value = '';
 	try {
 		await misskeyApi(`drawing/${action}`, { roomId: props.roomId, canvasId: state.value.canvasId, ...params } as never);
 		await refresh();
+		return true;
 	} catch (cause) {
 		if (action === 'join' && (cause as { code?: string })?.code) {
 			participationError.value = i18n.ts._drawing.cannotJoin;
 		} else { showError(cause); }
+		return false;
 	} finally { busy.value = false; }
 }
 
@@ -201,7 +210,7 @@ async function end() { if (!(await os.confirm({ type: 'warning', text: i18n.ts._
 
 async function kick(userId: string) { if (!(await os.confirm({ type: 'warning', text: i18n.ts._drawing.removeConfirm })).canceled) await update('kick', { userId }); }
 
-async function sendMessage() { await update('message', { text: text.value }); if (!error.value) text.value = ''; }
+async function sendMessage() { if (canSend.value && await update('message', { text: text.value })) text.value = ''; }
 
 function point(event: PointerEvent) {
 	const rect = canvas.value!.getBoundingClientRect();
@@ -294,6 +303,13 @@ async function activate() {
 			chatChannel = stream.useChannel('chatRoom', { roomId: chat.id });
 			chatChannel.on('message', message => { chatMessages.value.push(message as Misskey.entities.ChatMessage); });
 			chatChannel.on('deleted', id => { chatMessages.value = chatMessages.value.filter(message => message.id !== id); });
+			chatChannel.on('react', event => {
+				chatMessages.value.find(message => message.id === event.messageId)?.reactions.push({ reaction: event.reaction, user: event.user! });
+			});
+			chatChannel.on('unreact', event => {
+				const message = chatMessages.value.find(message => message.id === event.messageId);
+				if (message) message.reactions = message.reactions.filter(reaction => reaction.reaction !== event.reaction || reaction.user.id !== event.user!.id);
+			});
 		}
 		await refresh();
 		await nextTick();

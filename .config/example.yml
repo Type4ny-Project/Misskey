@@ -386,6 +386,21 @@ proxyBypassHosts:
   - hcaptcha.com
   - challenges.cloudflare.com
 
+# Cloudflare Realtime SFU configuration. Keep all values server-side.
+#cloudflareRealtime:
+#  enabled: false
+#  appId: example-app-id
+#  appSecret: example-app-secret
+#  maxSessionsPerApplication: 10
+#  maxPublishedTracksPerApplication: 8
+#  disabledApplicationIds: []
+#  # Cloudflare Realtime TURN credentials. These are the dashboard's
+#  # "Turn Token ID" and its API token, not RealtimeKit credentials.
+#  turn:
+#    tokenId: example-turn-token-id
+#    apiToken: example-turn-api-token
+#    ttl: 3600
+
 # Proxy for SMTP/SMTPS
 #proxySmtp: http://127.0.0.1:3128   # use HTTP/1.1 CONNECT
 #proxySmtp: socks4://127.0.0.1:1080 # use SOCKS4

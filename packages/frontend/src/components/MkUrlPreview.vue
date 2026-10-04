@@ -43,6 +43,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</MkButton>
 	</div>
 </template>
+<template v-else-if="localCallsRoomId !== null">
+	<MkUrlCallsCard :roomId="localCallsRoomId"/>
+</template>
 <template v-else-if="localEventId !== null">
 	<MkUrlEventCard :eventId="localEventId"/>
 </template>
@@ -89,16 +92,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { defineAsyncComponent, onDeactivated, onMounted, onUnmounted, ref } from 'vue';
 import { url as local } from '@@/js/config.js';
 import { versatileLang } from '@@/js/intl-const.js';
+import { maybeMakeRelative } from '@@/js/url.js';
 import type { SummalyResult } from '@misskey-dev/summaly';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { deviceKind } from '@/utility/device-kind.js';
 import MkButton from '@/components/MkButton.vue';
 import MkUrlEventCard from '@/components/MkUrlEventCard.vue';
-import { getLocalEventId, transformPlayerUrl } from '@/utility/url-preview.js';
+import MkUrlCallsCard from '@/components/MkUrlCallsCard.vue';
+import { getLocalCallsRoomId, getLocalEventId, transformPlayerUrl } from '@/utility/url-preview.js';
 import { store } from '@/store.js';
 import { prefer } from '@/preferences.js';
-import { maybeMakeRelative } from '@@/js/url.js';
 
 const props = withDefaults(defineProps<{
 	url: string;
@@ -153,6 +157,7 @@ onMounted(() => {
 const requestUrl = new URL(props.url, local);
 if (!['http:', 'https:'].includes(requestUrl.protocol)) throw new Error('invalid url');
 const localEventId = getLocalEventId(requestUrl.href);
+const localCallsRoomId = getLocalCallsRoomId(requestUrl.href);
 
 if (requestUrl.hostname === 'twitter.com' || requestUrl.hostname === 'mobile.twitter.com' || requestUrl.hostname === 'x.com' || requestUrl.hostname === 'mobile.x.com') {
 	const m = requestUrl.pathname.match(/^\/.+\/status(?:es)?\/(\d+)/);
@@ -165,7 +170,7 @@ if (requestUrl.hostname === 'music.youtube.com' && requestUrl.pathname.match('^/
 
 requestUrl.hash = '';
 
-if (localEventId == null) {
+if (localEventId == null && localCallsRoomId == null) {
 	window.fetch(`/url?url=${encodeURIComponent(requestUrl.href)}&lang=${versatileLang}`)
 		.then(res => {
 			if (!res.ok) {

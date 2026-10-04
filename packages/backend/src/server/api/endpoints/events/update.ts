@@ -19,6 +19,11 @@ export const meta = {
 	kind: 'write:account',
 
 	errors: {
+		invalidEventTimeRange: {
+			message: 'The end date must not be before the start date.',
+			code: 'INVALID_EVENT_TIME_RANGE',
+			id: '3bc56e0b-7784-4415-b58d-6b2112065d50',
+		},
 		noSuchEvent: {
 			message: 'No such event.',
 			code: 'NO_SUCH_EVENT',
@@ -78,6 +83,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					channelId: ps.channelId,
 				});
 			} catch (e) {
+				if (e instanceof EventService.InvalidEventTimeRangeError) {
+					throw new ApiError(meta.errors.invalidEventTimeRange);
+				}
 				if (e instanceof EventService.NoSuchEventError) {
 					throw new ApiError(meta.errors.noSuchEvent);
 				}

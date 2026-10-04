@@ -1,0 +1,28 @@
+{
+	id: '4da6bfe7-5628-4361-88a3-4ffb377c6e4f',
+
+	name: 'Material Purple Dark',
+	author: 'Type4ny Project',
+	desc: 'Material UI purple palette (dark)',
+
+	base: 'dark',
+
+	props: {
+		accent: '#ce93d8',
+		bg: '#121212',
+		fg: '#f5f5f5',
+		fgHighlighted: '#ffffff',
+		fgOnAccent: '#121212',
+		fgOnWhite: '#7b1fa2',
+		divider: '#383838',
+		panel: '#1e1e1e',
+		navBg: '@panel',
+		link: '@accent',
+		hashtag: '@link',
+		mention: '@link',
+		renote: '#66bb6a',
+		love: '#f06292',
+		buttonGradateB: '@accent',
+		badge: '@accent',
+	},
+}

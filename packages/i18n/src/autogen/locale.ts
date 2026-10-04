@@ -10256,6 +10256,551 @@ export interface Locale extends ILocale {
          * ダイレクトメッセージを閲覧する
          */
         "read:chat": string;
+        /**
+         * Misskey Callsのルームと参加者を閲覧する
+         */
+        "read:calls": string;
+        /**
+         * Misskey Callsへの参加と音声通話を操作する
+         */
+        "write:calls": string;
+    };
+    "_calls": {
+        /**
+         * カメラの設定
+         */
+        "cameraSettings": string;
+        /**
+         * 画面共有の設定
+         */
+        "screenSettings": string;
+        /**
+         * 解像度
+         */
+        "videoResolution": string;
+        /**
+         * ソース画質
+         */
+        "videoSourceQuality": string;
+        /**
+         * フレームレート
+         */
+        "videoFrameRate": string;
+        /**
+         * {height}p
+         */
+        "videoResolutionValue": ParameterizedString<"height">;
+        /**
+         * {fps}fps
+         */
+        "videoFrameRateValue": ParameterizedString<"fps">;
+        /**
+         * 別ウィンドウを開けませんでした。ブラウザーでポップアップを許可してください。
+         */
+        "popoutBlocked": string;
+        /**
+         * 発言できるユーザー
+         */
+        "whoCanSpeak": string;
+        /**
+         * 参加者全員
+         */
+        "everyoneCanSpeak": string;
+        /**
+         * ホストが許可したユーザーのみ
+         */
+        "approvedSpeakersOnly": string;
+        /**
+         * この映像を大きく表示
+         */
+        "focusVideo": string;
+        /**
+         * 映像一覧に戻る
+         */
+        "showVideoGrid": string;
+        /**
+         * 映像を再生
+         */
+        "resumeVideo": string;
+        /**
+         * ルームを見る
+         */
+        "viewRoom": string;
+        /**
+         * {count}人が参加中
+         */
+        "peopleInRoom": ParameterizedString<"count">;
+        /**
+         * カメラ
+         */
+        "camera": string;
+        /**
+         * カメラのプレビュー
+         */
+        "cameraPreview": string;
+        /**
+         * 映像を確認してから配信を開始します。このプレビューは自分にだけ表示されています。
+         */
+        "cameraPreviewDescription": string;
+        /**
+         * この通話ルームは表示できません。
+         */
+        "roomUnavailable": string;
+        /**
+         * カメラを選択
+         */
+        "selectCamera": string;
+        /**
+         * カメラをオン
+         */
+        "startCamera": string;
+        /**
+         * カメラをオフ
+         */
+        "stopCamera": string;
+        /**
+         * 画面共有
+         */
+        "screenSharing": string;
+        /**
+         * 画面を共有
+         */
+        "startScreenSharing": string;
+        /**
+         * 共有を停止
+         */
+        "stopScreenSharing": string;
+        /**
+         * カメラへのアクセスを許可してください。
+         */
+        "videoPermissionDenied": string;
+        /**
+         * カメラが見つかりません。
+         */
+        "cameraNotFound": string;
+        /**
+         * 映像の接続に失敗しました。もう一度お試しください。
+         */
+        "videoFailed": string;
+        /**
+         * Misskey Calls
+         */
+        "title": string;
+        /**
+         * LIVE
+         */
+        "live": string;
+        /**
+         * 発話中
+         */
+        "speakingNow": string;
+        /**
+         * 現在話している人
+         */
+        "nowSpeaking": string;
+        /**
+         * マイクON
+         */
+        "microphoneOn": string;
+        /**
+         * ミュート中
+         */
+        "mutedStatus": string;
+        /**
+         * {count}人が発話中
+         */
+        "peopleSpeaking": ParameterizedString<"count">;
+        /**
+         * 接続済み
+         */
+        "connected": string;
+        /**
+         * 接続中…
+         */
+        "connecting": string;
+        /**
+         * 再接続中…
+         */
+        "reconnectingShort": string;
+        /**
+         * 接続に失敗
+         */
+        "connectionFailed": string;
+        /**
+         * 切断済み
+         */
+        "disconnected": string;
+        /**
+         * 通話に参加しました
+         */
+        "joinedCall": string;
+        /**
+         * 通話から退出しました
+         */
+        "leftCall": string;
+        /**
+         * 新しい通話
+         */
+        "newCall": string;
+        /**
+         * 音声ルームを作成して、すぐに通話を始めます。
+         */
+        "newCallDescription": string;
+        /**
+         * ノートする
+         */
+        "noteIt": string;
+        /**
+         * Misskey Callsで音声通話を楽しんでいます！
+         * 気軽に参加できる通話ルームを作れるので、よかったら遊びに来てください♪
+         *
+         * {url}
+         */
+        "noteText": ParameterizedString<"url">;
+        /**
+         * 作成するとすぐに通話が始まります。
+         */
+        "startsImmediately": string;
+        /**
+         * 指定した日時の通話予定を作成します。
+         */
+        "createsSchedule": string;
+        /**
+         * 通話を開始
+         */
+        "startCall": string;
+        /**
+         * 予定を作成
+         */
+        "scheduleCall": string;
+        /**
+         * 詳細設定
+         */
+        "advancedSettings": string;
+        /**
+         * 通話中のルーム
+         */
+        "activeRooms": string;
+        /**
+         * 開始予定のルーム
+         */
+        "scheduledRooms": string;
+        /**
+         * 現在通話中のルームはありません
+         */
+        "noActiveRooms": string;
+        /**
+         * 説明はありません
+         */
+        "noDescription": string;
+        /**
+         * 自分をホストにして通話を始めます
+         */
+        "personalRoomDescription": string;
+        /**
+         * 既存のチャットルームに通話を追加します
+         */
+        "chatRoomDescription": string;
+        /**
+         * このチャットルームのメンバーと音声で話せます。
+         */
+        "chatRoomCallDescription": string;
+        /**
+         * 空欄の場合は作成後すぐに通話を開始します。
+         */
+        "scheduledAtDescription": string;
+        /**
+         * 通話ルームを作成
+         */
+        "createRoom": string;
+        /**
+         * ルーム名
+         */
+        "roomTitle": string;
+        /**
+         * 説明
+         */
+        "roomDescription": string;
+        /**
+         * 通話モード
+         */
+        "callMode": string;
+        /**
+         * オープン通話
+         */
+        "openCall": string;
+        /**
+         * 参加者全員がいつでも話せます。
+         */
+        "openCallDescription": string;
+        /**
+         * ステージ
+         */
+        "stageCall": string;
+        /**
+         * ホストが発言できる参加者を管理します。
+         */
+        "stageCallDescription": string;
+        /**
+         * 開催場所
+         */
+        "attachmentType": string;
+        /**
+         * 通話ルーム
+         */
+        "personalRoom": string;
+        /**
+         * チャットルーム
+         */
+        "chatRoom": string;
+        /**
+         * チャットルームID
+         */
+        "chatRoomId": string;
+        /**
+         * 公開範囲
+         */
+        "visibility": string;
+        /**
+         * 参加を許可するユーザーID
+         */
+        "specifiedUserIds": string;
+        /**
+         * ユーザーIDを空白またはカンマ区切りで入力してください。
+         */
+        "specifiedUserIdsDescription": string;
+        /**
+         * 開始予定日時
+         */
+        "scheduledAt": string;
+        /**
+         * 公開
+         */
+        "public": string;
+        /**
+         * フォロワーのみ
+         */
+        "followers": string;
+        /**
+         * 指定したユーザーのみ
+         */
+        "specified": string;
+        /**
+         * 通話を開始
+         */
+        "openRoom": string;
+        /**
+         * 通話を終了
+         */
+        "endRoom": string;
+        /**
+         * 予定を中止
+         */
+        "cancelRoom": string;
+        /**
+         * ルームに参加
+         */
+        "joinRoom": string;
+        /**
+         * この通話に参加しますか？
+         */
+        "joinRoomConfirm": string;
+        /**
+         * フォロー中の人が参加しています
+         */
+        "followingParticipating": string;
+        /**
+         * フォロー中の人が開催・参加している通話はありません
+         */
+        "noFollowingRooms": string;
+        /**
+         * 最初はミュートで参加します
+         */
+        "joinMutedHint": string;
+        /**
+         * この通話に参加中
+         */
+        "alreadyJoined": string;
+        /**
+         * この開催場所には、通話中または開始予定のルームがあります。新しいルームを作らず、既存のルームを確認できます。
+         */
+        "activeAttachmentExists": string;
+        /**
+         * ノイズキャンセル
+         */
+        "noiseSuppression": string;
+        /**
+         * VCモデレーター
+         */
+        "vcModerator": string;
+        /**
+         * VCモデレーターに指定
+         */
+        "assignVcModerator": string;
+        /**
+         * VCモデレーターを解除
+         */
+        "removeVcModerator": string;
+        /**
+         * 既存のルームを見る
+         */
+        "returnToCall": string;
+        /**
+         * さっきの部屋に参加する
+         */
+        "resumePreviousCall": string;
+        /**
+         * リロード前の通話へ戻れます
+         */
+        "resumePreviousCallDescription": string;
+        /**
+         * あと{seconds}秒以内に戻れます
+         */
+        "resumePreviousCallExpiresIn": ParameterizedString<"seconds">;
+        /**
+         * 現在の通話から退出して、この通話に参加しますか？
+         */
+        "switchRoomConfirm": string;
+        /**
+         * 退出
+         */
+        "leaveRoom": string;
+        /**
+         * 音声に接続
+         */
+        "connectAudio": string;
+        /**
+         * 音声を切断
+         */
+        "disconnectAudio": string;
+        /**
+         * ミュート
+         */
+        "mute": string;
+        /**
+         * ミュート解除
+         */
+        "unmute": string;
+        /**
+         * マイク
+         */
+        "microphone": string;
+        /**
+         * 使用するマイク
+         */
+        "selectMicrophone": string;
+        /**
+         * 聴くだけで参加する場合、マイクの許可は不要です。
+         */
+        "listenerDoesNotNeedMicrophone": string;
+        /**
+         * 発言をリクエスト
+         */
+        "requestSpeaker": string;
+        /**
+         * 発言をリクエスト済み
+         */
+        "speakerRequested": string;
+        /**
+         * 発言リクエストを取り消す
+         */
+        "cancelSpeakerRequest": string;
+        /**
+         * 発言リクエストが拒否されました。
+         */
+        "speakerRequestRejected": string;
+        /**
+         * ほか{count}人…
+         */
+        "moreParticipants": ParameterizedString<"count">;
+        /**
+         * スピーカーにする
+         */
+        "promoteSpeaker": string;
+        /**
+         * リスナーに戻す
+         */
+        "demoteListener": string;
+        /**
+         * 参加者から削除
+         */
+        "removeParticipant": string;
+        /**
+         * ホスト
+         */
+        "host": string;
+        /**
+         * スピーカー
+         */
+        "speaker": string;
+        /**
+         * リスナー
+         */
+        "listener": string;
+        /**
+         * 開始前
+         */
+        "scheduled": string;
+        /**
+         * 通話中
+         */
+        "open": string;
+        /**
+         * 終了
+         */
+        "ended": string;
+        /**
+         * 中止
+         */
+        "cancelled": string;
+        /**
+         * このブラウザでは音声通話を利用できません。
+         */
+        "unsupportedBrowser": string;
+        /**
+         * マイクの使用が許可されませんでした。ブラウザ設定から許可して再試行してください。
+         */
+        "permissionDenied": string;
+        /**
+         * マイクの許可を確認できませんでした。ブラウザの許可画面を確認して再試行してください。
+         */
+        "permissionPending": string;
+        /**
+         * 利用できるマイクが見つかりません。
+         */
+        "deviceNotFound": string;
+        /**
+         * ルームに接続できませんでした。もう一度お試しください。
+         */
+        "mediaFailed": string;
+        /**
+         * ルームに再接続しています…
+         */
+        "reconnecting": string;
+        /**
+         * ホストが退出したため、通話ルームは終了しました。
+         */
+        "hostLeftRoomEnded": string;
+        /**
+         * ルームに接続中です…
+         */
+        "roomConnectedMediaConnecting": string;
+        /**
+         * 別の端末で通話に接続したため、この端末の接続を終了しました。
+         */
+        "connectedOnAnotherDevice": string;
+        /**
+         * 他の端末を切断して、この端末で通話に参加しますか？
+         */
+        "switchDeviceConfirm": string;
+        /**
+         * 音声再生を再開
+         */
+        "resumeAudio": string;
+        /**
+         * ルームの更新が途切れました。再接続しています…
+         */
+        "websocketDisconnected": string;
     };
     "_auth": {
         /**
@@ -10486,6 +11031,10 @@ export interface Locale extends ILocale {
          * ダイレクトメッセージ
          */
         "chat": string;
+        /**
+         * 通話
+         */
+        "calls": string;
     };
     "_widgetOptions": {
         /**
@@ -13923,6 +14472,10 @@ export interface Locale extends ILocale {
          */
         "eventDetail": string;
         /**
+         * 存在しないイベントです
+         */
+        "eventNotFound": string;
+        /**
          * 自分の投稿
          */
         "mySubmissions": string;
@@ -13942,6 +14495,10 @@ export interface Locale extends ILocale {
          * 終了日時
          */
         "endAt": string;
+        /**
+         * 終了日時は開始日時以降にしてください
+         */
+        "endBeforeStart": string;
         /**
          * 説明
          */

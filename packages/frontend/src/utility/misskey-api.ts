@@ -9,6 +9,19 @@ import { apiUrl } from '@@/js/config.js';
 import { $i } from '@/i.js';
 export const pendingApiRequestsCount = ref(0);
 
+export function misskeyApiKeepalive<E extends keyof Misskey.Endpoints>(endpoint: E, data: Misskey.Endpoints[E]['req']): void {
+	if (endpoint.includes('://')) throw new Error('invalid endpoint');
+	const body = { ...data, ...($i == null ? {} : { i: $i.token }) };
+	void window.fetch(`${apiUrl}/${endpoint}`, {
+		method: 'POST',
+		body: JSON.stringify(body),
+		credentials: 'omit',
+		cache: 'no-cache',
+		keepalive: true,
+		headers: { 'Content-Type': 'application/json' },
+	}).catch(() => undefined);
+}
+
 // Implements Misskey.api.ApiClient.request
 export function misskeyApi<
 	ResT = void,

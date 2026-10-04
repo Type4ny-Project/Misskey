@@ -1,0 +1,28 @@
+{
+	id: 'e2fd2481-8806-400e-a77b-5fe4f83d1473',
+
+	name: 'Apple Dark',
+	author: 'Type4ny Project',
+	desc: 'Apple-inspired neutral surfaces and blue accents (dark)',
+
+	base: 'dark',
+
+	props: {
+		accent: '#0a84ff',
+		bg: '#000000',
+		fg: '#f5f5f7',
+		fgHighlighted: '#ffffff',
+		fgOnAccent: '#000000',
+		fgOnWhite: '#0066cc',
+		divider: '#38383a',
+		panel: '#1c1c1e',
+		navBg: '@panel',
+		link: '@accent',
+		hashtag: '@link',
+		mention: '@link',
+		renote: '#30d158',
+		love: '#ff375f',
+		buttonGradateB: '@accent',
+		badge: '@accent',
+	},
+}

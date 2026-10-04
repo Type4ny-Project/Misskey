@@ -1,0 +1,113 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+import { Inject, Injectable } from '@nestjs/common';
+import { DI } from '@/di-symbols.js';
+import type { CallsParticipantsRepository, CallsRoomsRepository, MiCallsParticipant } from '@/models/_.js';
+import { CallsEventService } from './CallsEventService.js';
+import { CallsLiveConnectionService, type CallsLiveConnection } from './CallsLiveConnectionService.js';
+import { CallsMediaBindingService, type CallsPublicationBinding, type CallsSubscriptionBinding } from './CallsMediaBindingService.js';
+import { CloudflareRealtimeClient } from './CloudflareRealtimeClient.js';
+import { CallsTurnCredentialStoreService } from './CallsTurnCredentialStoreService.js';
+import { CallsApplicationQuotaService } from './CallsApplicationQuotaService.js';
+
+export type CallsRevocationReason = 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation';
+
+@Injectable()
+export class CallsMediaRevocationService {
+	constructor(
+		@Inject(DI.callsRoomsRepository)
+		private roomsRepository: CallsRoomsRepository,
+		@Inject(DI.callsParticipantsRepository)
+		private participantsRepository: CallsParticipantsRepository,
+		private liveConnections: CallsLiveConnectionService,
+		private bindings: CallsMediaBindingService,
+		private provider: CloudflareRealtimeClient,
+		private events: CallsEventService,
+		private turnCredentials: CallsTurnCredentialStoreService,
+		private quota: CallsApplicationQuotaService,
+	) {}
+
+	public async revokeParticipant(participant: MiCallsParticipant, roomRevision: number, reason: CallsRevocationReason): Promise<void> {
+		const connection = await this.liveConnections.get(participant.id);
+		if (connection != null) {
+			// Invalidate first so an in-flight media operation cannot retain new tracks.
+			await this.liveConnections.clear(participant.id, connection.connectionId, connection.generation);
+			await this.closeGeneration(participant.id, connection.generation);
+			await this.quota.release(connection.applicationId, participant.id);
+		} else {
+			// The live connection expires before its media bindings, so an absent host may still be publishing.
+			const publications = (await this.bindings.listRoomPublications(participant.roomId)).filter(binding => binding.participantId === participant.id);
+			for (const generation of new Set(publications.map(binding => binding.generation))) await this.closeGeneration(participant.id, generation);
+			for (const applicationId of new Set(publications.map(binding => binding.applicationId))) await this.quota.release(applicationId, participant.id);
+		}
+		await this.turnCredentials.revokeParticipant(participant.id);
+		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason });
+	}
+
+	public async closeGeneration(participantId: string, generation: number): Promise<void> {
+		const publications = await this.bindings.listGenerationPublications(participantId, generation);
+		const subscriptions = await this.bindings.listSubscriptions(participantId, generation);
+		await this.closeProviderPublications(publications, subscriptions);
+		await this.bindings.clearGeneration(participantId, generation);
+		await this.bindings.clearSubscriptions(participantId, generation);
+	}
+
+	public async revokeLostGeneration(participant: MiCallsParticipant, generation: number, roomRevision: number, connectionId: string): Promise<void> {
+		const publications = await this.bindings.listGenerationPublications(participant.id, generation);
+		await this.closeGeneration(participant.id, generation);
+		for (const applicationId of new Set(publications.map(publication => publication.applicationId))) {
+			await this.quota.release(applicationId, participant.id);
+		}
+		await this.turnCredentials.revokeParticipant(participant.id);
+		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason: 'stale-generation', connectionId, generation });
+	}
+
+	public async revokeDisconnectedGeneration(participant: MiCallsParticipant, connection: CallsLiveConnection, roomRevision: number): Promise<{ participantId: string; generation: number }> {
+		await this.quota.release(connection.applicationId, participant.id);
+		await this.turnCredentials.revokeParticipant(participant.id);
+		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason: 'access', connectionId: connection.connectionId, generation: connection.generation });
+		return { participantId: participant.id, generation: connection.generation };
+	}
+
+	public async revokeRoom(roomId: string, roomRevision: number, reason: CallsRevocationReason): Promise<void> {
+		const participants = await this.participantsRepository.findBy({ roomId, state: 'active' });
+		await Promise.all(participants.map(participant => this.revokeParticipant(participant, roomRevision, reason)));
+	}
+
+	public async revokeChatRoomUser(chatRoomId: string, userId: string): Promise<void> {
+		const rooms = await this.roomsRepository.findBy({ chatRoomId, attachmentType: 'chatRoom', state: 'open' });
+		for (const room of rooms) {
+			const participant = await this.participantsRepository.findOneBy({ roomId: room.id, userId, state: 'active' });
+			if (participant != null) await this.revokeParticipant(participant, room.revision, 'access');
+		}
+	}
+
+	public async revokeChatRoom(chatRoomId: string): Promise<void> {
+		const rooms = await this.roomsRepository.findBy({ chatRoomId, attachmentType: 'chatRoom', state: 'open' });
+		for (const room of rooms) {
+			await this.revokeRoom(room.id, room.revision, 'room-ended');
+			this.events.publishRoomsList('updated', { roomId: room.id, action: 'ended' });
+		}
+	}
+
+	public async revokeUser(userId: string, reason: CallsRevocationReason): Promise<void> {
+		const participants = await this.participantsRepository.findBy({ userId, state: 'active' });
+		for (const participant of participants) {
+			const room = await this.roomsRepository.findOneBy({ id: participant.roomId });
+			if (room != null) await this.revokeParticipant(participant, room.revision, reason);
+		}
+	}
+
+	public async closeProviderPublications(publications: CallsPublicationBinding[], subscriptions: CallsSubscriptionBinding[] = []): Promise<void> {
+		const bySession = Map.groupBy([...publications, ...subscriptions], publication => publication.providerSessionId);
+		await Promise.all([...bySession].map(([sessionId, sessionPublications]) => this.provider.closeTracks(
+			sessionId,
+			sessionPublications.map(publication => ({ mid: publication.providerMid ?? undefined })),
+			true,
+		)));
+		await Promise.all(publications.map(publication => this.quota.releaseTrack(publication.applicationId, publication.providerTrackName)));
+	}
+}

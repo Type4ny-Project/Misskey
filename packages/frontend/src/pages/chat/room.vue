@@ -555,4 +555,5 @@ definePage(computed(() => {
 	padding: 0.5em 1em;
 	margin: 0 auto;
 }
+
 </style>

@@ -18,6 +18,7 @@ import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { CustomEmojiService } from '@/core/CustomEmojiService.js';
 import { RoleService } from '@/core/RoleService.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
+import { isDuplicateKeyValueError } from '@/misc/is-duplicate-key-value-error.js';
 
 const unicodeReactions = new Set(emojilist.flatMap(([emoji]) => [emoji, emoji.includes('\u200d') ? emoji : emoji.replace(/\ufe0f/g, '')]));
 
@@ -214,7 +215,8 @@ export class AnnouncementService {
 	@bindThis
 	public async react(user: MiUser, announcementId: MiAnnouncement['id'], reaction: string | null): Promise<Packed<'Announcement'>> {
 		const announcement = await this.announcementsRepository.findOneByOrFail({ id: announcementId });
-		if (announcement.userId != null && announcement.userId !== user.id) {
+		if ((announcement.userId != null && announcement.userId !== user.id) ||
+			(announcement.forExistingUsers && announcement.id <= user.id)) {
 			throw new EntityNotFoundError(this.announcementsRepository.metadata.target, { id: announcementId });
 		}
 		if (!announcement.reactionsEnabled) throw new IdentifiableError('REACTIONS_DISABLED');
@@ -253,8 +255,8 @@ export class AnnouncementService {
 				announcementId: announcementId,
 				userId: user.id,
 			});
-		} catch (_) {
-			return;
+		} catch (err) {
+			if (!isDuplicateKeyValueError(err)) throw err;
 		}
 
 		const announcement = await this.announcementsRepository.findOneBy({ id: announcementId });

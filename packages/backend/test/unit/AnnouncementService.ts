@@ -14,6 +14,7 @@ import { AnnouncementService } from '@/core/AnnouncementService.js';
 import { AnnouncementEntityService } from '@/core/entities/AnnouncementEntityService.js';
 import type {
 	AnnouncementReadsRepository,
+	AnnouncementReactionsRepository,
 	AnnouncementsRepository,
 	MiAnnouncement,
 	MiUser,
@@ -34,6 +35,7 @@ describe('AnnouncementService', () => {
 	let usersRepository: UsersRepository;
 	let announcementsRepository: AnnouncementsRepository;
 	let announcementReadsRepository: AnnouncementReadsRepository;
+	let announcementReactionsRepository: AnnouncementReactionsRepository;
 	let globalEventService: Mocked<GlobalEventService>;
 	let moderationLogService: Mocked<ModerationLogService>;
 
@@ -93,11 +95,13 @@ describe('AnnouncementService', () => {
 		usersRepository = app.get<UsersRepository>(DI.usersRepository);
 		announcementsRepository = app.get<AnnouncementsRepository>(DI.announcementsRepository);
 		announcementReadsRepository = app.get<AnnouncementReadsRepository>(DI.announcementReadsRepository);
+		announcementReactionsRepository = app.get<AnnouncementReactionsRepository>(DI.announcementReactionsRepository);
 		globalEventService = app.get<GlobalEventService>(GlobalEventService) as Mocked<GlobalEventService>;
 		moderationLogService = app.get<ModerationLogService>(ModerationLogService) as Mocked<ModerationLogService>;
 	});
 
 	afterEach(async () => {
+		vi.restoreAllMocks();
 		await Promise.all([
 			app.get(DI.metasRepository).createQueryBuilder().delete().execute(),
 			usersRepository.createQueryBuilder().delete().execute(),
@@ -205,8 +209,44 @@ describe('AnnouncementService', () => {
 		});
 	});
 
-	describe.todo('read', () => {
-		// TODO
+	describe('react', () => {
+		test('既読保存の失敗を成功として返さない', async () => {
+			const user = await createUser();
+			const announcement = await createAnnouncement({ reactionsEnabled: true });
+			const error = new Error('read insert failed');
+			vi.spyOn(announcementReadsRepository, 'insert').mockRejectedValueOnce(error);
+
+			await expect(announcementService.react(user, announcement.id, '👍')).rejects.toBe(error);
+			expect(await announcementReadsRepository.countBy({ announcementId: announcement.id })).toBe(0);
+			expect(globalEventService.publishMainStream).not.toHaveBeenCalled();
+		});
+
+		test('リアクション保存に失敗したら既読にしない', async () => {
+			const user = await createUser();
+			const announcement = await createAnnouncement({ reactionsEnabled: true });
+			const error = new Error('reaction upsert failed');
+			vi.spyOn(announcementReactionsRepository, 'upsert').mockRejectedValueOnce(error);
+
+			await expect(announcementService.react(user, announcement.id, '👍')).rejects.toBe(error);
+			expect(await announcementReadsRepository.countBy({ announcementId: announcement.id })).toBe(0);
+		});
+
+		test('個人向けのアーカイブ失敗後、既読レコードがあっても再試行を完了する', async () => {
+			const user = await createUser();
+			const announcement = await createAnnouncement({ reactionsEnabled: true, userId: user.id });
+			const error = new Error('archive update failed');
+			vi.spyOn(announcementsRepository, 'update').mockRejectedValueOnce(error);
+
+			await expect(announcementService.react(user, announcement.id, '👍')).rejects.toBe(error);
+			expect(await announcementReadsRepository.countBy({ announcementId: announcement.id })).toBe(1);
+			expect((await announcementsRepository.findOneByOrFail({ id: announcement.id })).isActive).toBe(true);
+			expect(globalEventService.publishMainStream).not.toHaveBeenCalled();
+
+			const result = await announcementService.react(user, announcement.id, '👍');
+			expect(result).toMatchObject({ isRead: true, myReaction: '👍', reactions: { '👍': 1 } });
+			expect(await announcementReadsRepository.countBy({ announcementId: announcement.id })).toBe(1);
+			expect((await announcementsRepository.findOneByOrFail({ id: announcement.id })).isActive).toBe(false);
+			expect(globalEventService.publishMainStream).toHaveBeenCalledWith(user.id, 'readAllAnnouncements');
+		});
 	});
 });
-

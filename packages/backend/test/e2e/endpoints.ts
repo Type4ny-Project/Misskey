@@ -78,6 +78,37 @@ describe('Endpoints', () => {
 			expect(second.body.myReaction).toBe(stored);
 		});
 
+		test('既存ユーザー限定では作成後に登録したユーザーの反応を拒否する', async () => {
+			const announcementId = await createAnnouncement({ forExistingUsers: true });
+			const laterUser = await signup({ username: 'lateruser' });
+			expect(laterUser.token).toBeDefined();
+			for (const reaction of ['👍', null]) {
+				const res = await api('announcements/react', { announcementId, reaction }, laterUser);
+				expect(castAsError(res.body).error.code).toBe('NO_SUCH_ANNOUNCEMENT');
+			}
+			expect((await api('announcements/show', { announcementId }, laterUser)).body)
+				.toMatchObject({ isRead: false, myReaction: null, reactions: {} });
+			expect((await api('announcements/react', { announcementId, reaction: '👍' }, bob)).status).toBe(200);
+			await api('admin/announcements/update', { id: announcementId, forExistingUsers: false }, alice);
+			expect((await api('announcements/react', { announcementId, reaction: '👍' }, laterUser)).status).toBe(200);
+		});
+
+		test('管理一覧はページ内の各お知らせに既読数とリアクションを集計する', async () => {
+			const first = await createAnnouncement();
+			const second = await createAnnouncement();
+			const empty = await createAnnouncement();
+			await api('announcements/react', { announcementId: first, reaction: '👍' }, bob);
+			await api('announcements/react', { announcementId: first, reaction: '👍' }, carol);
+			await api('announcements/react', { announcementId: second, reaction: '🎉' }, bob);
+			const list = await api('admin/announcements/list', { limit: 3 }, alice);
+			expect(list.status).toBe(200);
+			expect(list.body).toHaveLength(3);
+			expect(list.body.find(a => a.id === first)).toMatchObject({ reads: 2, reactions: { '👍': 2 } });
+			expect(list.body.find(a => a.id === second)).toMatchObject({ reads: 1, reactions: { '🎉': 1 } });
+			expect(list.body.find(a => a.id === empty)).toMatchObject({ reads: 0, reactions: {} });
+			expect((await api('admin/announcements/list', { sinceId: empty }, alice)).body).toEqual([]);
+		});
+
 		test('未設定は無効で、APIによる追加・取消も拒否する', async () => {
 			const announcementId = await createAnnouncement({ reactionsEnabled: undefined });
 			for (const reaction of ['👍', null]) {

@@ -4,11 +4,10 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import type { AnnouncementsRepository, AnnouncementReadsRepository } from '@/models/_.js';
+import type { AnnouncementsRepository, AnnouncementReadsRepository, AnnouncementReactionsRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { QueryService } from '@/core/QueryService.js';
 import { DI } from '@/di-symbols.js';
-import { AnnouncementEntityService } from '@/core/entities/AnnouncementEntityService.js';
 import { IdService } from '@/core/IdService.js';
 
 export const meta = {
@@ -124,9 +123,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.announcementReadsRepository)
 		private announcementReadsRepository: AnnouncementReadsRepository,
 
+		@Inject(DI.announcementReactionsRepository)
+		private announcementReactionsRepository: AnnouncementReactionsRepository,
+
 		private queryService: QueryService,
 		private idService: IdService,
-		private announcementEntityService: AnnouncementEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const query = this.queryService.makePaginationQuery(this.announcementsRepository.createQueryBuilder('announcement'), ps.sinceId, ps.untilId, ps.sinceDate, ps.untilDate);
@@ -144,8 +145,34 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			const announcements = await query.limit(ps.limit).getMany();
+			if (announcements.length === 0) return [];
 
-			return Promise.all(announcements.map(async announcement => ({
+			const announcementIds = announcements.map(announcement => announcement.id);
+			const [readCounts, reactionCounts] = await Promise.all([
+				this.announcementReadsRepository.createQueryBuilder('read')
+					.select('read.announcementId', 'announcementId')
+					.addSelect('COUNT(*)', 'count')
+					.where('read.announcementId IN (:...announcementIds)', { announcementIds })
+					.groupBy('read.announcementId')
+					.getRawMany<{ announcementId: string; count: string }>(),
+				this.announcementReactionsRepository.createQueryBuilder('reaction')
+					.select('reaction.announcementId', 'announcementId')
+					.addSelect('reaction.reaction', 'reaction')
+					.addSelect('COUNT(*)', 'count')
+					.where('reaction.announcementId IN (:...announcementIds)', { announcementIds })
+					.groupBy('reaction.announcementId')
+					.addGroupBy('reaction.reaction')
+					.getRawMany<{ announcementId: string; reaction: string; count: string }>(),
+			]);
+			const reads = new Map(readCounts.map(count => [count.announcementId, Number(count.count)]));
+			const reactions = new Map<string, Record<string, number>>();
+			for (const count of reactionCounts) {
+				const counts = reactions.get(count.announcementId) ?? {};
+				counts[count.reaction] = Number(count.count);
+				reactions.set(count.announcementId, counts);
+			}
+
+			return announcements.map(announcement => ({
 				id: announcement.id,
 				createdAt: this.idService.parse(announcement.id).date.toISOString(),
 				updatedAt: announcement.updatedAt?.toISOString() ?? null,
@@ -160,9 +187,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				needConfirmationToRead: announcement.needConfirmationToRead,
 				reactionsEnabled: announcement.reactionsEnabled,
 				userId: announcement.userId,
-				reads: await this.announcementReadsRepository.countBy({ announcementId: announcement.id }),
-				reactions: await this.announcementEntityService.getReactions(announcement.id),
-			})));
+				reads: reads.get(announcement.id) ?? 0,
+				reactions: reactions.get(announcement.id) ?? {},
+			}));
 		});
 	}
 }

@@ -143,6 +143,8 @@ const weekLabel = computed(() => {
 });
 
 const statsUrl = `${url}/:my/stats`;
+const statsInvitation = 'あなたも、自分のStatsを見てみませんか？';
+const statsLink = `[${statsInvitation}](${statsUrl})`;
 
 const metrics = computed(() => {
 	if (stats.value == null) return [];
@@ -201,7 +203,7 @@ async function shareStats(): Promise<void> {
 	const file = new File([blob], 'weekly-stats.png', { type: 'image/png' });
 	const shareDataWithFile: ShareData = {
 		title: 'Weekly Stats',
-		text: shareText.value,
+		text: `${shareText.value}\n\n${statsInvitation}`,
 		url: statsUrl,
 		files: [file],
 	};
@@ -213,7 +215,7 @@ async function shareStats(): Promise<void> {
 
 	const shareData: ShareData = {
 		title: 'Weekly Stats',
-		text: shareText.value,
+		text: `${shareText.value}\n\n${statsInvitation}`,
 		url: statsUrl,
 	};
 
@@ -222,7 +224,7 @@ async function shareStats(): Promise<void> {
 		return;
 	}
 
-	copyToClipboard(`${shareText.value}\n\n${statsUrl}`);
+	copyToClipboard(`${shareText.value}\n\n${statsLink}`);
 }
 
 async function shareWithNote(): Promise<void> {
@@ -240,7 +242,7 @@ async function shareWithNote(): Promise<void> {
 		const driveFile = await os.promiseDialog(filePromise);
 
 		await os.post({
-			initialText: `${shareText.value}\n\n${statsUrl}`,
+			initialText: `${shareText.value}\n\n${statsLink}`,
 			initialFiles: [driveFile],
 		});
 	} finally {

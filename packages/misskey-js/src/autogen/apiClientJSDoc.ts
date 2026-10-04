@@ -1813,6 +1813,17 @@ declare module '../api.js' {
     /**
      * No description provided.
      *
+     * **Credential required**: *Yes* / **Permission**: *write:calls*
+     */
+    request<E extends 'calls/rooms/update-title', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     *
      * **Credential required**: *Yes* / **Permission**: *read:calls*
      */
     request<E extends 'calls/users/active-rooms', P extends Endpoints[E]['req']>(

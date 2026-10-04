@@ -36,6 +36,7 @@ type CallsParticipantWithUser = Packed<'CallsParticipant'> & {
 	user: (Packed<'UserLite'> & { isFollowing: boolean; isFollowed: boolean }) | null;
 };
 export interface CallsRoomEventTypes {
+	title: CallsRoomEventBase & { title: string };
 	lifecycle: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled'; reason?: 'host-timeout' };
 	participant: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' | 'updated'; participant?: CallsParticipantWithUser; moderatorUserIds?: string[] };
 	role: CallsRoomEventBase & { participantId: string; role: 'host' | 'speaker' | 'listener' };
@@ -49,7 +50,7 @@ export interface CallsRoomEventTypes {
 
 export interface CallsRoomsEventTypes {
 	created: { roomId: MiCallsRoom['id'] };
-	updated: { roomId: MiCallsRoom['id']; action: 'open' | 'ended' | 'cancelled' | 'participants' };
+	updated: { roomId: MiCallsRoom['id']; action: 'open' | 'ended' | 'cancelled' | 'participants' | 'title' };
 }
 
 export interface BroadcastTypes {

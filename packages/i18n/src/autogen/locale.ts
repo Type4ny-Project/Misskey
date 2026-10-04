@@ -10530,6 +10530,10 @@ export interface Locale extends ILocale {
          */
         "roomTitle": string;
         /**
+         * タイトルを変更
+         */
+        "changeTitle": string;
+        /**
          * 説明
          */
         "roomDescription": string;

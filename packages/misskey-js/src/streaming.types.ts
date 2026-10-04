@@ -306,6 +306,7 @@ export type Channels = {
 			roomId: string;
 		};
 		events: {
+			title: (payload: CallsRoomEventBase & { title: string }) => void;
 			lifecycle: (payload: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled'; reason?: 'host-timeout' }) => void;
 			participant: (payload: CallsRoomEventBase & {
 				participantId: string;
@@ -331,7 +332,7 @@ export type Channels = {
 		params: null;
 		events: {
 			created: (payload: { action: 'created'; room: CallsRoom }) => void;
-			updated: (payload: { action: 'open' | 'ended' | 'cancelled' | 'participants'; room: CallsRoom }) => void;
+			updated: (payload: { action: 'open' | 'ended' | 'cancelled' | 'participants' | 'title'; room: CallsRoom }) => void;
 		};
 		receives: null;
 	};

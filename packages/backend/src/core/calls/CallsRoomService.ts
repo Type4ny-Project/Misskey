@@ -600,6 +600,24 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 	}
 
 	@bindThis
+	public async updateTitle(host: MiUser, roomId: string, title: string, expectedRevision: number): Promise<MiCallsRoom> {
+		const room = await this.getRoom(roomId);
+		if (room.ownerUserId !== host.id) throw new CallsRoomError('access-denied');
+		if (room.state !== 'scheduled' && room.state !== 'open') throw new CallsRoomError('invalid-state');
+		const sanitizedTitle = this.sanitizeMetadata(title);
+		if (sanitizedTitle.length === 0) throw new CallsRoomError('invalid-metadata');
+		const result = await this.callsRoomsRepository.createQueryBuilder().update()
+			.set({ title: sanitizedTitle, revision: () => '"revision" + 1', updatedAt: new Date() })
+			.where('id = :roomId AND revision = :expectedRevision AND state = :state', { roomId, expectedRevision, state: room.state })
+			.returning('*').execute();
+		if (result.affected !== 1) throw new CallsRoomError('stale-revision');
+		const updated = result.raw[0] as MiCallsRoom;
+		await this.callsEventService.publish(roomId, updated.revision, 'title', { title: updated.title });
+		this.callsEventService.publishRoomsList('updated', { roomId, action: 'title' });
+		return updated;
+	}
+
+	@bindThis
 	public async setModerator(host: MiUser, roomId: string, participantId: string, isModerator: boolean, expectedRevision: number): Promise<MiCallsRoom> {
 		const room = await this.getRoom(roomId);
 		if (room.ownerUserId !== host.id) throw new CallsRoomError('access-denied');

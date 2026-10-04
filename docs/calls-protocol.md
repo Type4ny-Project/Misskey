@@ -26,6 +26,8 @@ Protocol 1.1 supports camera and screen video alongside microphone audio. Publis
 
 Only one device may hold a participant's media connection. A fresh `calls/media/session/create` request returns `CALLS_CONNECTION_EXISTS` if another device is connected. Ask the user before retrying with `replaceExisting: true`. Recovery requests must retain their `connectionId` and send `expectedGeneration`; they cannot replace another device. A `revoked` event with reason `replaced` addresses the old `connectionId` and `generation`. That device must stop locally without calling room leave or end; other connections ignore the event. Include the current `connectionId` and `generation` in explicit room leave/end requests so delayed actions from an old device cannot affect the new connection. Only an explicit room end closes the room and revokes all media. A host leave, page close, reload, or lost connection keeps the room open so the host can rejoin. Hosts and other participants share the reload reconnect flow; after its short-lived candidate expires, the host can still join the existing open room.
 
+The host can change a scheduled or open room's title with `calls/rooms/update-title` (`roomId`, `title`, `expectedRevision`). Titles use the same 1–256 character limit and metadata sanitization as creation. Successful changes emit a `title` event containing the new `title` on `callsRoom`, and an `updated` event with action `title` on `callsRooms`.
+
 Example event:
 
 ```json

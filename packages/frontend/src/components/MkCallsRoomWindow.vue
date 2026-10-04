@@ -243,7 +243,11 @@ const videoGridStyle = computed(() => {
 });
 const failureText = computed(() => session.mediaFailure.value === 'unsupported' ? i18n.ts._calls.unsupportedBrowser : session.mediaFailure.value === 'permission-denied' ? i18n.ts._calls.permissionDenied : session.mediaFailure.value === 'device-not-found' ? i18n.ts._calls.deviceNotFound : session.mediaFailure.value === 'permission-pending' ? i18n.ts._calls.permissionPending : i18n.ts._calls.mediaFailed);
 
-const hasRoomMenu = computed(() => isHost.value && (room.value?.state === 'scheduled' || (room.value?.state === 'open' && !sessionIsCurrent.value && session.replacedRoomId.value !== props.roomId)));
+const hasRoomMenu = computed(() => isHost.value && (room.value?.state === 'scheduled' || room.value?.state === 'open'));
+
+watch(() => room.value?.title, title => {
+	if (popoutWindow != null) popoutWindow.document.title = title ?? i18n.ts._calls.title;
+});
 
 async function copyRoomLink(): Promise<void> {
 	if (popoutWindow != null) window.focus();
@@ -272,13 +276,36 @@ function toggleCamera(): void {
 function openRoomMenu(event: MouseEvent): void {
 	if (popoutWindow != null) window.focus();
 	if (session.joining.value || !hasRoomMenu.value) return;
-	os.popupMenu(room.value?.state === 'scheduled' ? [
-		{ text: i18n.ts._calls.cancelRoom, icon: 'ti ti-x', danger: true, action: cancelRoom },
-	] : [
-		{ text: i18n.ts._calls.endRoom, icon: 'ti ti-phone-off', danger: true, async action() {
-			if (!(await os.confirm({ type: 'warning', text: i18n.ts._calls.endRoom })).canceled) await endRoom();
-		} },
+	os.popupMenu([
+		{ text: i18n.ts._calls.changeTitle, icon: 'ti ti-pencil', action: changeTitle },
+		...(room.value?.state === 'scheduled' ? [
+			{ text: i18n.ts._calls.cancelRoom, icon: 'ti ti-x', danger: true, action: cancelRoom },
+		] : !sessionIsCurrent.value && session.replacedRoomId.value !== props.roomId ? [
+			{ text: i18n.ts._calls.endRoom, icon: 'ti ti-phone-off', danger: true, async action() {
+				if (!(await os.confirm({ type: 'warning', text: i18n.ts._calls.endRoom })).canceled) await endRoom();
+			} },
+		] : []),
 	], event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
+}
+
+async function changeTitle(): Promise<void> {
+	if (!hasRoomMenu.value || room.value == null) return;
+	const { canceled, result } = await os.inputText({
+		title: i18n.ts._calls.changeTitle,
+		default: room.value.title,
+		minLength: 1,
+		maxLength: 256,
+	});
+	if (canceled || !hasRoomMenu.value || room.value == null) return;
+	const title = result.trim();
+	if (title.length === 0 || title === room.value.title) return;
+	try {
+		await misskeyApi('calls/rooms/update-title', { roomId: props.roomId, title, expectedRevision: room.value.revision });
+		await refreshRoom();
+	} catch (error) {
+		console.error('[Calls] Title change failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
 }
 
 async function openParticipantMenu(participant: (typeof participants.value)[number], event: MouseEvent): Promise<void> {

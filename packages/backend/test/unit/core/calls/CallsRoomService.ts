@@ -353,6 +353,7 @@ function createModerationFixture() {
 	const stopParticipantVideo = vi.fn();
 	const insertLog = vi.fn();
 	const publish = vi.fn();
+	const publishRoomsList = vi.fn();
 	const config = { cloudflareRealtime: { enabled: true } } as Config;
 	const isModerator = vi.fn().mockResolvedValue(false);
 	const service = new CallsRoomService(
@@ -361,10 +362,49 @@ function createModerationFixture() {
 		{ findOneBy: async () => participant, existsBy, update } as never,
 		{ insert: insertLog } as never, {} as never, {} as never, {} as never,
 		{ gen: () => 'log-a' } as never, { isModerator, getUserPolicies: async () => ({ canJoinCalls: true }) } as never,
-		{} as never, { publish } as never, { revokeParticipant, stopParticipantVideo } as never, { lifecycle: vi.fn() } as never,
+		{} as never, { publish, publishRoomsList } as never, { revokeParticipant, stopParticipantVideo } as never, { lifecycle: vi.fn() } as never,
 	);
-	return { service, config, isModerator, room, participant, existsBy, update, set, execute, revokeParticipant, stopParticipantVideo, insertLog, publish };
+	return { service, config, isModerator, room, participant, existsBy, update, set, execute, revokeParticipant, stopParticipantVideo, insertLog, publish, publishRoomsList };
 }
+
+describe('Calls room titles', () => {
+	test.each(['scheduled', 'open'] as const)('the host can rename a %s room and notify viewers', async state => {
+		const fixture = createModerationFixture();
+		fixture.room.state = state;
+		fixture.execute.mockResolvedValue({ affected: 1, raw: [{ ...fixture.room, title: 'New title', revision: 2 }] });
+		await expect(fixture.service.updateTitle({ id: 'owner-a' } as MiUser, fixture.room.id, ' \u0000New title ', 1)).resolves.toMatchObject({ title: 'New title', revision: 2 });
+		expect(fixture.set).toHaveBeenCalledWith(expect.objectContaining({ title: 'New title' }));
+		expect(fixture.publish).toHaveBeenCalledWith(fixture.room.id, 2, 'title', { title: 'New title' });
+		expect(fixture.publishRoomsList).toHaveBeenCalledWith('updated', { roomId: fixture.room.id, action: 'title' });
+	});
+
+	test.each(['viewer-a', 'moderator-a'])('%s cannot change the title', async id => {
+		const fixture = createModerationFixture();
+		await expect(fixture.service.updateTitle({ id } as MiUser, fixture.room.id, 'New title', 1)).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fixture.execute).not.toHaveBeenCalled();
+	});
+
+	test.each(['ended', 'cancelled'] as const)('a %s room cannot be renamed', async state => {
+		const fixture = createModerationFixture();
+		fixture.room.state = state;
+		await expect(fixture.service.updateTitle({ id: 'owner-a' } as MiUser, fixture.room.id, 'New title', 1)).rejects.toMatchObject({ code: 'invalid-state' });
+		expect(fixture.execute).not.toHaveBeenCalled();
+	});
+
+	test('rejects a title that is empty after sanitizing', async () => {
+		const fixture = createModerationFixture();
+		await expect(fixture.service.updateTitle({ id: 'owner-a' } as MiUser, fixture.room.id, ' \u0000 ', 1)).rejects.toMatchObject({ code: 'invalid-metadata' });
+		expect(fixture.execute).not.toHaveBeenCalled();
+	});
+
+	test('a stale update does not publish a title change', async () => {
+		const fixture = createModerationFixture();
+		fixture.execute.mockResolvedValue({ affected: 0, raw: [] });
+		await expect(fixture.service.updateTitle({ id: 'owner-a' } as MiUser, fixture.room.id, 'New title', 0)).rejects.toMatchObject({ code: 'stale-revision' });
+		expect(fixture.publish).not.toHaveBeenCalled();
+		expect(fixture.publishRoomsList).not.toHaveBeenCalled();
+	});
+});
 
 describe('Calls VC moderators', () => {
 	test.each(['owner-a', 'moderator-a'])('%s can mute a speaker without changing their role', async id => {

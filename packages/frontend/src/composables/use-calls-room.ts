@@ -52,6 +52,9 @@ export function createCallsRoomConnection(roomId: string) {
 		connected.value = true;
 	}
 
+	channel.on('title', event => accept(event, () => {
+		if (room.value != null) room.value = { ...room.value, title: event.title };
+	}));
 	channel.on('lifecycle', event => accept(event, () => {
 		endReason.value = event.reason ?? null;
 		if (room.value != null) room.value = { ...room.value, state: event.state, revision: event.roomRevision };

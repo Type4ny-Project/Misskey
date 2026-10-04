@@ -877,6 +877,12 @@ type CallsRoomsShowResponse = operations['calls___rooms___show']['responses']['2
 type CallsRoomsStopParticipantVideoRequest = operations['calls___rooms___stop-participant-video']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
+type CallsRoomsUpdateTitleRequest = operations['calls___rooms___update-title']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsUpdateTitleResponse = operations['calls___rooms___update-title']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type CallsUsersActiveRoomsRequest = operations['calls___users___active-rooms']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -1203,6 +1209,9 @@ export type Channels = {
             roomId: string;
         };
         events: {
+            title: (payload: CallsRoomEventBase & {
+                title: string;
+            }) => void;
             lifecycle: (payload: CallsRoomEventBase & {
                 state: 'scheduled' | 'open' | 'ended' | 'cancelled';
                 reason?: 'host-timeout';
@@ -1268,7 +1277,7 @@ export type Channels = {
                 room: CallsRoom;
             }) => void;
             updated: (payload: {
-                action: 'open' | 'ended' | 'cancelled' | 'participants';
+                action: 'open' | 'ended' | 'cancelled' | 'participants' | 'title';
                 room: CallsRoom;
             }) => void;
         };
@@ -2205,6 +2214,8 @@ declare namespace entities {
         CallsRoomsShowRequest,
         CallsRoomsShowResponse,
         CallsRoomsStopParticipantVideoRequest,
+        CallsRoomsUpdateTitleRequest,
+        CallsRoomsUpdateTitleResponse,
         CallsUsersActiveRoomsRequest,
         CallsUsersActiveRoomsResponse,
         ChannelsCreateRequest,

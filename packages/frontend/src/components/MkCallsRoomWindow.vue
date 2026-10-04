@@ -329,6 +329,7 @@ async function openParticipantMenu(participant: (typeof participants.value)[numb
 			{ text: participant.role === 'listener' ? participant.speakerRequestedAt != null ? i18n.ts.approve : i18n.ts._calls.promoteSpeaker : i18n.ts._calls.demoteListener, icon: 'ti ti-microphone', action: () => setRole(participant.id, participant.role === 'listener' ? 'speaker' : 'listener') },
 			...(participant.speakerRequestedAt != null ? [{ text: i18n.ts.reject, icon: 'ti ti-x', action: () => setRole(participant.id, 'listener') }] : []),
 		] : []),
+		...(isHost.value ? [{ text: i18n.ts._calls.transferHost, icon: 'ti ti-crown', action: () => transferHost(participant.id) }] : []),
 		...(isHost.value ? [{ text: room.value.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.removeVcModerator : i18n.ts._calls.assignVcModerator, icon: 'ti ti-shield', action: () => setModerator(participant.id, !room.value!.moderatorUserIds.includes(participant.userId)) }] : []),
 		...(participant.role === 'speaker' && !participant.isMuted ? [{ text: i18n.ts._calls.mute, icon: 'ti ti-microphone-off', action: () => muteParticipant(participant.id) }] : []),
 		...(publications.some(publication => publication.participantId === participant.id && publication.mediaSource === 'camera') ? [{ text: i18n.ts._calls.stopCamera, icon: 'ti ti-camera-off', action: () => stopParticipantVideo(participant.id, 'camera') }] : []),
@@ -400,6 +401,19 @@ async function setRole(participantId: string, role: 'speaker' | 'listener'): Pro
 	if (room.value == null) return;
 	await misskeyApi('calls/rooms/set-role', { roomId: props.roomId, participantId, role, expectedRevision: room.value.revision });
 	await refreshRoom();
+}
+
+async function transferHost(participantId: string): Promise<void> {
+	if (!isHost.value || room.value == null) return;
+	const { canceled } = await os.confirm({ type: 'warning', title: videoLabel(participantId), text: i18n.ts._calls.transferHostConfirm });
+	if (canceled || !isHost.value || room.value == null) return;
+	try {
+		await misskeyApi('calls/rooms/transfer-host', { roomId: props.roomId, participantId, expectedRevision: room.value.revision });
+		await refreshRoom();
+	} catch (error) {
+		console.error('[Calls] Host transfer failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
 }
 
 async function setModerator(participantId: string, isModerator: boolean): Promise<void> {

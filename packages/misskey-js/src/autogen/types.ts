@@ -1494,6 +1494,15 @@ export type paths = {
          */
         post: operations['calls___rooms___stop-participant-video'];
     };
+    '/calls/rooms/transfer-host': {
+        /**
+         * calls/rooms/transfer-host
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:calls*
+         */
+        post: operations['calls___rooms___transfer-host'];
+    };
     '/calls/rooms/update-title': {
         /**
          * calls/rooms/update-title
@@ -18646,6 +18655,75 @@ export interface operations {
             204: {
                 headers: {
                     [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'calls___rooms___transfer-host': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    participantId: string;
+                    expectedRevision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['CallsRoom'];
                 };
             };
             /** @description Client error */

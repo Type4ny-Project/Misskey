@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
+import { QueryFailedError } from 'typeorm';
 import type { Config } from '@/config.js';
 import type { MiCallsRoom, MiUser } from '@/models/_.js';
 import { CallsMediaRevocationService } from '@/core/calls/CallsMediaRevocationService.js';
@@ -346,7 +347,7 @@ function createModerationFixture() {
 	const participant = { id: 'target-a', roomId: room.id, userId: 'target-user', role: 'speaker', isMuted: false };
 	const existsBy = vi.fn().mockResolvedValue(true);
 	const update = vi.fn();
-	const set = vi.fn(() => queryBuilder);
+	const set = vi.fn((_values: Record<string, unknown>) => queryBuilder);
 	const execute = vi.fn().mockResolvedValue({ affected: 1, raw: [{ ...room, revision: 2 }] });
 	const queryBuilder = { update: () => queryBuilder, set, where: () => queryBuilder, returning: () => queryBuilder, execute };
 	const revokeParticipant = vi.fn();
@@ -542,6 +543,66 @@ describe('Calls VC moderators', () => {
 		const fixture = createModerationFixture();
 		fixture.execute.mockResolvedValue({ affected: 0, raw: [] });
 		await expect(fixture.service.setModerator({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, true, 0)).rejects.toMatchObject({ code: 'stale-revision' });
+		expect(fixture.publish).not.toHaveBeenCalled();
+	});
+});
+
+function createHostTransferFixture(role: 'speaker' | 'listener' = 'speaker') {
+	const fixture = createModerationFixture();
+	Object.assign(fixture.participant, { role, state: 'active', speakerRequestedAt: new Date() });
+	const rooms = { findOneBy: async () => fixture.room, createQueryBuilder: () => builder };
+	const participants = { findOneBy: vi.fn().mockResolvedValue(fixture.participant), findBy: async () => [fixture.participant], update: fixture.update };
+	const where = vi.fn(() => builder);
+	const builder = { update: () => builder, set: fixture.set, where, returning: () => builder, execute: fixture.execute };
+	// The room builder's set method must continue with this transaction's builder.
+	fixture.set.mockImplementation(() => builder);
+	fixture.execute.mockImplementation(async () => ({ affected: 1, raw: [{ ...fixture.room, ...fixture.set.mock.calls[0][0], revision: 2 }] }));
+	const transaction = vi.fn(async (callback: (manager: unknown) => Promise<unknown>) => callback({ getRepository: (target: string) => target === 'rooms' ? rooms : participants }));
+	const touchHost = vi.fn();
+	Object.assign(fixture.service, {
+		callsRoomsRepository: { target: 'rooms', manager: { transaction } },
+		callsParticipantsRepository: { target: 'participants' },
+		callsLiveConnectionService: { withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback(), touchHost },
+	});
+	return { ...fixture, participants, transaction, touchHost, where };
+}
+
+describe('Calls host transfer', () => {
+	test.each(['speaker', 'listener'] as const)('transfers ownership to a %s and keeps the previous host as a speaker', async role => {
+		const fixture = createHostTransferFixture(role);
+		fixture.room.visibility = 'specified';
+		fixture.room.moderatorUserIds.push(fixture.participant.userId);
+		const updated = await fixture.service.transferHost({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, 1);
+		expect(updated).toMatchObject({ ownerUserId: fixture.participant.userId, revision: 2, moderatorUserIds: ['moderator-a'], visibleUserIds: ['owner-a', fixture.participant.userId] });
+		expect(fixture.update).toHaveBeenCalledWith({ roomId: fixture.room.id, userId: 'owner-a', role: 'host' }, expect.objectContaining({ role: 'speaker' }));
+		expect(fixture.update).toHaveBeenCalledWith(fixture.participant.id, expect.objectContaining({ role: 'host', speakerRequestedAt: null }));
+		expect(fixture.touchHost).toHaveBeenCalledWith(fixture.room.id);
+		expect(fixture.publish).toHaveBeenCalledWith(fixture.room.id, 2, 'participant', { participantId: fixture.participant.id, action: 'updated' });
+	});
+
+	test.each(['viewer-a', 'moderator-a'])('%s cannot transfer the host', async id => {
+		const fixture = createHostTransferFixture();
+		await expect(fixture.service.transferHost({ id } as MiUser, fixture.room.id, fixture.participant.id, 1)).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fixture.execute).not.toHaveBeenCalled();
+	});
+
+	test.each(['ended', 'missing-participant', 'stale'] as const)('rejects %s without changing roles', async failure => {
+		const fixture = createHostTransferFixture('listener');
+		if (failure === 'ended') fixture.room.state = 'ended';
+		if (failure === 'missing-participant') fixture.participants.findOneBy.mockResolvedValue(null);
+		if (failure === 'stale') fixture.execute.mockResolvedValue({ affected: 0, raw: [] });
+		await expect(fixture.service.transferHost({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, 1)).rejects.toMatchObject({ code: failure === 'ended' ? 'invalid-state' : failure === 'missing-participant' ? 'participant-not-found' : 'stale-revision' });
+		expect(fixture.update).not.toHaveBeenCalled();
+		expect(fixture.touchHost).not.toHaveBeenCalled();
+		expect(fixture.publish).not.toHaveBeenCalled();
+	});
+
+	test('rejects a target who already owns an active room without changing roles', async () => {
+		const fixture = createHostTransferFixture();
+		const error = new QueryFailedError('UPDATE', [], Object.assign(new Error('duplicate owner'), { code: '23505', constraint: 'IDX_calls_room_active_personal_owner' }));
+		fixture.execute.mockRejectedValue(error);
+		await expect(fixture.service.transferHost({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, 1)).rejects.toMatchObject({ code: 'active-attachment' });
+		expect(fixture.update).not.toHaveBeenCalled();
 		expect(fixture.publish).not.toHaveBeenCalled();
 	});
 });

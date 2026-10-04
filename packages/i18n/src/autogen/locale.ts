@@ -10750,6 +10750,14 @@ export interface Locale extends ILocale {
          */
         "removeParticipant": string;
         /**
+         * ホストを譲る
+         */
+        "transferHost": string;
+        /**
+         * この参加者にホストを譲りますか？あなたはスピーカーとして通話に残ります。
+         */
+        "transferHostConfirm": string;
+        /**
          * ホスト
          */
         "host": string;

@@ -39,6 +39,7 @@ export type CallsRoomErrorCode =
 	| 'invalid-metadata'
 	| 'participant-not-found'
 	| 'room-not-found'
+	| 'room-full'
 	| 'stale-revision';
 
 export class CallsFeatureDisabledError extends Error {}
@@ -295,6 +296,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 
 	@bindThis
 	public async open(host: MiUser, roomId: string, expectedRevision: number): Promise<MiCallsRoom> {
+		await this.assertCanJoin(host);
 		return this.transition(host, roomId, expectedRevision, 'scheduled', 'open');
 	}
 
@@ -359,8 +361,31 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 	}
 
 	@bindThis
-	public async assertCanJoin(user: MiUser): Promise<void> {
+	public async assertCanJoin(user: Pick<MiUser, 'id'>): Promise<void> {
 		if (!(await this.roleService.getUserPolicies(user.id)).canJoinCalls) throw new CallsRoomError('access-denied');
+	}
+
+	@bindThis
+	public async assertCanPublish(user: Pick<MiUser, 'id'>, mediaSource: 'microphone' | 'camera' | 'screen'): Promise<void> {
+		const policies = await this.roleService.getUserPolicies(user.id);
+		if (!policies.canJoinCalls || (mediaSource === 'microphone' && !policies.canSpeakInCalls)
+			|| (mediaSource === 'camera' && !policies.canPublishCallsVideo)
+			|| (mediaSource === 'screen' && !policies.canShareCallsScreen)) {
+			throw new CallsRoomError('access-denied');
+		}
+	}
+
+	private async assertCapacity(room: MiCallsRoom, role: CallsParticipantRole, excludingParticipantId?: string): Promise<void> {
+		const policies = await this.roleService.getUserPolicies(room.ownerUserId);
+		const limit = role === 'listener' ? policies.callsRoomListenerLimit : policies.callsRoomSpeakerLimit;
+		if (limit === 0) return;
+		const candidates = await this.callsParticipantsRepository.findBy({
+			roomId: room.id, state: 'active', role: role === 'listener' ? 'listener' : In(['host', 'speaker']),
+		});
+		const joiningSince = Date.now() - CallsLiveConnectionService.ttlSeconds * 1000;
+		const connected = await Promise.all(candidates.filter(participant => participant.id !== excludingParticipantId).map(async participant =>
+			participant.joinedAt.getTime() >= joiningSince || await this.callsLiveConnectionService.get(participant.id) != null));
+		if (connected.filter(Boolean).length >= limit) throw new CallsRoomError('room-full');
 	}
 
 	private async joinLocked(user: MiUser, roomId: string): Promise<MiCallsParticipant> {
@@ -371,6 +396,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		const current = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id });
 		if (current?.state === 'active') return current;
 		const role = current?.role === 'host' ? 'host' : room.mode === 'open' ? 'speaker' : 'listener';
+		await this.assertCapacity(room, role);
 
 		const now = new Date();
 		let joined: MiCallsParticipant;
@@ -456,7 +482,8 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 
 	@bindThis
 	public async setRole(host: MiUser, roomId: string, participantId: string, role: Exclude<CallsParticipantRole, 'host'>, expectedRevision: number): Promise<MiCallsParticipant> {
-		return this.moderateRole(host, roomId, participantId, role, expectedRevision, role === 'speaker' ? 'promote' : 'demote');
+		return this.callsLiveConnectionService.withRoomLock(roomId, () =>
+			this.moderateRole(host, roomId, participantId, role, expectedRevision, role === 'speaker' ? 'promote' : 'demote'));
 	}
 
 	private async moderateRole(host: MiUser, roomId: string, participantId: string, role: Exclude<CallsParticipantRole, 'host'>, expectedRevision: number, action: CallsModerationAction): Promise<MiCallsParticipant> {
@@ -465,6 +492,9 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		if (room.state !== 'open' || room.mode !== 'stage') throw new CallsRoomError('invalid-state');
 		const participant = await this.callsParticipantsRepository.findOneBy({ id: participantId, roomId, state: 'active' });
 		if (participant == null || participant.role === 'host') throw new CallsRoomError('participant-not-found');
+
+		if (role === 'speaker') await this.assertCanJoin({ id: participant.userId });
+		if (role === 'speaker' && participant.role !== role) await this.assertCapacity(room, role, participant.id);
 
 		const revisionResult = await this.callsRoomsRepository.createQueryBuilder()
 			.update()
@@ -505,6 +535,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 
 	@bindThis
 	public async requestSpeaker(user: MiUser, roomId: string): Promise<void> {
+		await this.assertCanPublish(user, 'microphone');
 		const room = await this.getRoom(roomId);
 		if (room.mode !== 'stage') throw new CallsRoomError('invalid-state');
 		const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active', role: 'listener' });
@@ -526,6 +557,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 
 	@bindThis
 	public async setMuted(user: MiUser, roomId: string, isMuted: boolean): Promise<void> {
+		if (!isMuted) await this.assertCanPublish(user, 'microphone');
 		const room = await this.getRoom(roomId);
 		await this.assertCanAccess(user, room);
 		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
@@ -591,6 +623,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 
 	@bindThis
 	public async reportSpeaking(user: MiUser, roomId: string, speaking: boolean): Promise<void> {
+		if (speaking) await this.assertCanPublish(user, 'microphone');
 		const room = await this.getRoom(roomId);
 		await this.assertCanAccess(user, room);
 		if (room.state !== 'open') return;

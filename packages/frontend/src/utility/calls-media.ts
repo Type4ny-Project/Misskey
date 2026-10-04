@@ -71,6 +71,7 @@ export class CallsMediaController {
 			remoteRemoved: (publicationId: string) => void;
 			error: (error: unknown) => void;
 		},
+		private canUseMicrophone = true,
 	) {
 		if (previousConnection != null) {
 			this.connectionId = previousConnection.connectionId;
@@ -85,7 +86,7 @@ export class CallsMediaController {
 			return;
 		}
 		try {
-			if (this.role !== 'listener' && capabilities.getUserMedia) {
+			if (this.role !== 'listener' && this.canUseMicrophone && capabilities.getUserMedia) {
 				this.setState('acquiring-media');
 				try {
 					await this.acquireMicrophone(deviceId);
@@ -453,6 +454,7 @@ export class CallsMediaController {
 	}
 
 	public async switchMicrophone(deviceId?: string, noiseSuppression = this.noiseSuppression): Promise<void> {
+		if (!this.canUseMicrophone) return;
 		const oldTrack = this.localTrack;
 		await this.acquireMicrophone(deviceId, noiseSuppression);
 		if (oldTrack == null && this.peer != null) {
@@ -471,7 +473,7 @@ export class CallsMediaController {
 	}
 
 	private async recoverFromDeviceLoss(): Promise<void> {
-		if (this.role === 'listener' || this.state === 'leaving' || this.state === 'closed') return;
+		if (this.role === 'listener' || !this.canUseMicrophone || this.state === 'leaving' || this.state === 'closed') return;
 		try {
 			await this.acquireMicrophone();
 			this.scheduleReconnect('failed');

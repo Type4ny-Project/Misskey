@@ -216,6 +216,34 @@ export const packedRolePoliciesSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		canSpeakInCalls: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		canPublishCallsVideo: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		canShareCallsScreen: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		callsRoomSpeakerLimit: {
+			type: 'integer',
+			optional: false, nullable: false,
+		},
+		callsRoomListenerLimit: {
+			type: 'integer',
+			optional: false, nullable: false,
+		},
+		canSendPoints: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		eventCreationDailyLimit: {
+			type: 'integer',
+			optional: false, nullable: false,
+		},
 		canJoinCalls: {
 			type: 'boolean',
 			optional: false, nullable: false,

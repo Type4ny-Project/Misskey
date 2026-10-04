@@ -8546,9 +8546,49 @@ export interface Locale extends ILocale {
              */
             "chatAvailability": string;
             /**
-             * コールへの参加を許可
+             * Callsの使用
              */
             "canJoinCalls": string;
+            /**
+             * Callsでの発言
+             */
+            "canSpeakInCalls": string;
+            /**
+             * Callsでの映像配信
+             */
+            "canPublishCallsVideo": string;
+            /**
+             * Callsでの画面共有
+             */
+            "canShareCallsScreen": string;
+            /**
+             * Callsのスピーカー数の上限
+             */
+            "callsRoomSpeakerLimit": string;
+            /**
+             * Callsのリスナー数の上限
+             */
+            "callsRoomListenerLimit": string;
+            /**
+             * ポイントの送信
+             */
+            "canSendPoints": string;
+            /**
+             * 1日あたりのイベント作成上限
+             */
+            "eventCreationDailyLimit": string;
+            /**
+             * 作成したCallsに適用されます。ホストを含み、0にすると無制限です。
+             */
+            "callsRoomSpeakerLimitDescription": string;
+            /**
+             * 作成したCallsに適用されます。0にすると無制限です。
+             */
+            "callsRoomListenerLimitDescription": string;
+            /**
+             * 0にするとイベントを作成できません。
+             */
+            "eventCreationDailyLimitDescription": string;
             /**
              * アップロード可能なファイル種別
              */
@@ -14652,7 +14692,7 @@ export interface Locale extends ILocale {
          */
         "tagsCaption": string;
         /**
-         * イベントの作成上限に達しました（1日5件まで）
+         * 本日のイベント作成上限に達しました
          */
         "rateLimitReached": string;
         /**

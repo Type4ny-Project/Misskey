@@ -8,6 +8,7 @@ import { nextTick } from 'vue';
 import type { CallsRemotePublication } from '@/utility/calls-media.js';
 
 const fixture = vi.hoisted(() => ({
+	policies: { canJoinCalls: true, canSpeakInCalls: true, canPublishCallsVideo: true, canShareCallsScreen: true },
 	api: vi.fn(),
 	toast: vi.fn(),
 	alert: vi.fn(),
@@ -28,7 +29,7 @@ const fixture = vi.hoisted(() => ({
 	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
 }));
 
-vi.mock('@/i.js', () => ({ $i: { id: 'user-a' } }));
+vi.mock('@/i.js', () => ({ $i: { id: 'user-a', policies: fixture.policies } }));
 vi.mock('@/i18n.js', () => ({ i18n: {
 	ts: { somethingHappened: 'Something went wrong', _calls: { videoFailed: 'Video failed', videoResolution: 'Resolution', videoSourceQuality: 'Source quality', videoFrameRate: 'Frame rate', connectedOnAnotherDevice: 'Connected on another device', switchDeviceConfirm: 'Disconnect the other device?', hostLeftRoomEnded: 'Host left; room ended' } },
 	tsx: { _calls: { videoResolutionValue: ({ height }: { height: number }) => `${height}p`, videoFrameRateValue: ({ fps }: { fps: number }) => `${fps}fps` } },
@@ -101,12 +102,33 @@ describe('Calls session device handoff', () => {
 		fixture.setMuted.mockClear();
 		fixture.heartbeat.mockClear();
 		fixture.role = 'listener';
+		Object.assign(fixture.policies, { canJoinCalls: true, canSpeakInCalls: true, canPublishCallsVideo: true, canShareCallsScreen: true });
 		fixture.revoked.length = 0;
 		fixture.controllers.length = 0;
 		fixture.connections.length = 0;
 		fixture.remoteTrackCallbacks.length = 0;
 		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { enumerateDevices: async () => [] } });
 		session = (await import('@/utility/calls-session.js')).useCallsSession();
+	});
+
+	test.each(['camera', 'screen'] as const)('a denied %s permission prevents capture and publication', async source => {
+		fixture.role = 'host';
+		fixture.policies[source === 'camera' ? 'canPublishCallsVideo' : 'canShareCallsScreen'] = false;
+		await session.join('room-a', false);
+		await session.toggleVideo(source);
+		expect(fixture.captureCamera).not.toHaveBeenCalled();
+		expect(fixture.controllers[0].startVideo).not.toHaveBeenCalled();
+		expect(session.controls.value[source === 'camera' ? 'canPublishVideo' : 'canShareScreen']).toBe(false);
+	});
+
+	test('a host without speaking permission keeps video controls but cannot unmute', async () => {
+		fixture.role = 'host';
+		fixture.policies.canSpeakInCalls = false;
+		await session.join('room-a', false);
+		expect(session.controls.value.canSpeak).toBe(false);
+		expect(session.controls.value.canPublishVideo).toBe(true);
+		await session.toggleMute();
+		expect(fixture.setMuted).not.toHaveBeenCalled();
 	});
 
 	test('keeps elapsed time from joining through reconnection and resets it after leaving', async () => {

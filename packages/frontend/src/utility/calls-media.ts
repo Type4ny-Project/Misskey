@@ -33,6 +33,7 @@ export class CallsMediaController {
 	private peer: RTCPeerConnection | null = null;
 	private localVideos = new Map<CallsVideoSource, { track: MediaStreamTrack; publicationId?: string; transceiver?: RTCRtpTransceiver }>();
 	private remotePublications = new Map<string, CallsRemotePublication>();
+	private receivedRemoteTracks = new Map<string, MediaStreamTrack>();
 	private connectionId: string = crypto.randomUUID();
 	private queue = Promise.resolve();
 	private reconnectTimer: number | null = null;
@@ -78,12 +79,20 @@ export class CallsMediaController {
 
 	public async connect(deviceId?: string): Promise<void> {
 		const capabilities = detectCallsMediaCapabilities();
-		if (!capabilities.secureContext || (this.role !== 'listener' && !capabilities.getUserMedia) || !capabilities.peerConnection || !capabilities.transceiver) {
+		if (!capabilities.secureContext || !capabilities.peerConnection || !capabilities.transceiver) {
 			this.fail('unsupported');
 			return;
 		}
 		try {
-			if (this.role !== 'listener') await this.acquireMicrophone(deviceId);
+			if (this.role !== 'listener' && capabilities.getUserMedia) {
+				this.setState('acquiring-media');
+				try {
+					await this.acquireMicrophone(deviceId);
+				} catch (error) {
+					if (!(error instanceof DOMException) || !['NotFoundError', 'NotReadableError', 'NotAllowedError', 'SecurityError'].includes(error.name)) throw error;
+					console.warn('[Calls] Joining without microphone:', error.name);
+				}
+			}
 			await this.enqueue(() => this.createConnection());
 		} catch (error) {
 			if (this.isClosed()) return;
@@ -98,7 +107,6 @@ export class CallsMediaController {
 	}
 
 	private async acquireMicrophone(deviceId?: string, noiseSuppression = this.noiseSuppression): Promise<void> {
-		this.setState('acquiring-media');
 		const mediaRequest = navigator.mediaDevices.getUserMedia({
 			audio: {
 				deviceId: deviceId == null ? undefined : { exact: deviceId },
@@ -155,8 +163,7 @@ export class CallsMediaController {
 		this.peer = peer;
 		if (turn != null) this.scheduleTurnRefresh(Date.parse(turn.expiresAt));
 		peer.addEventListener('track', event => {
-			const publication = this.remotePublications.get(event.transceiver.mid ?? '');
-			if (publication != null) this.onRemoteTrack?.(event.track, publication);
+			this.deliverRemoteTrack(event.transceiver.mid, event.track);
 		});
 		peer.addEventListener('connectionstatechange', () => {
 			if (peer !== this.peer) return;
@@ -174,7 +181,7 @@ export class CallsMediaController {
 			}
 		});
 
-		const sendTransceiver = peer.addTransceiver('audio', { direction: this.role === 'listener' ? 'recvonly' : 'sendrecv' });
+		const sendTransceiver = peer.addTransceiver('audio', { direction: this.localTrack == null ? 'recvonly' : 'sendrecv' });
 		const capabilities = RTCRtpReceiver.getCapabilities('audio');
 		if (capabilities != null && typeof sendTransceiver.setCodecPreferences === 'function') {
 			sendTransceiver.setCodecPreferences(preferOpus(capabilities.codecs));
@@ -206,11 +213,18 @@ export class CallsMediaController {
 			await this.publishVideo(source, video);
 		}
 		const subscribed = await this.reconcileNow();
-		if (this.role === 'listener' && !subscribed && this.peer === peer) this.setState('connected');
+		if (this.localTrack == null && !subscribed && this.peer === peer) this.setState('connected');
 	}
 
 	public reconcile(): Promise<boolean> {
 		return this.enqueue(() => this.reconcileNow());
+	}
+
+	private deliverRemoteTrack(mid: string | null, track: MediaStreamTrack): void {
+		const publication = this.remotePublications.get(mid ?? '');
+		if (publication == null || this.receivedRemoteTracks.get(publication.id) === track) return;
+		this.receivedRemoteTracks.set(publication.id, track);
+		this.onRemoteTrack?.(track, publication);
 	}
 
 	private async reconcileNow(): Promise<boolean> {
@@ -221,6 +235,7 @@ export class CallsMediaController {
 		for (const publicationId of this.subscribedPublications) {
 			if (!authoritativeRemoteIds.has(publicationId)) {
 				this.subscribedPublications.delete(publicationId);
+				this.receivedRemoteTracks.delete(publicationId);
 				for (const [mid, publication] of this.remotePublications) {
 					if (publication.id !== publicationId) continue;
 					this.peer.getTransceivers().find(transceiver => transceiver.mid === mid)?.receiver.track.stop();
@@ -241,6 +256,10 @@ export class CallsMediaController {
 			if (publication != null) this.remotePublications.set(subscription.mid, publication);
 		}
 		await this.applyNegotiation(negotiation);
+		// Publishing may already have fired the track event for a reused receiver.
+		for (const transceiver of this.peer?.getTransceivers() ?? []) {
+			this.deliverRemoteTrack(transceiver.mid, transceiver.receiver.track);
+		}
 		for (const subscription of negotiation.subscriptions) this.subscribedPublications.add(subscription.publicationId);
 		return true;
 	}
@@ -419,6 +438,10 @@ export class CallsMediaController {
 	public async switchMicrophone(deviceId?: string, noiseSuppression = this.noiseSuppression): Promise<void> {
 		const oldTrack = this.localTrack;
 		await this.acquireMicrophone(deviceId, noiseSuppression);
+		if (oldTrack == null && this.peer != null) {
+			await this.enqueue(() => this.createConnection());
+			return;
+		}
 		const sender = this.peer?.getSenders().find(item => item.track?.kind === 'audio');
 		try {
 			await sender?.replaceTrack(this.localTrack);
@@ -547,6 +570,7 @@ export class CallsMediaController {
 		this.subscribedPublications.clear();
 		for (const publication of this.remotePublications.values()) this.videoCallbacks?.remoteRemoved(publication.id);
 		this.remotePublications.clear();
+		this.receivedRemoteTracks.clear();
 		if (stopTrack) {
 			for (const [source, video] of this.localVideos) {
 				video.track.stop();

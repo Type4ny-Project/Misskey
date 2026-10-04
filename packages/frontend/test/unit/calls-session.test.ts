@@ -17,13 +17,14 @@ const fixture = vi.hoisted(() => ({
 	keepalive: vi.fn(),
 	connectionExists: false,
 	participantMuted: true,
+	microphoneAvailable: true,
 	setMuted: vi.fn(),
 	heartbeat: vi.fn(),
 	role: 'listener' as 'listener' | 'host',
 	revoked: [] as Array<(event: { reason: string; connectionId?: string; generation?: number }) => void>,
 	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null } }>,
 	remoteTrackCallbacks: [] as Array<(track: MediaStreamTrack, publication: CallsRemotePublication) => void>,
-	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
+	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
 }));
 
 vi.mock('@/i.js', () => ({ $i: { id: 'user-a' } }));
@@ -59,6 +60,8 @@ vi.mock('@/utility/calls-media.js', () => ({
 	captureCallsCamera: fixture.captureCamera,
 	CallsMediaController: class {
 		public connectionIdentity: { connectionId: string; generation: number };
+		public localTrack = fixture.microphoneAvailable ? { enabled: true } : null;
+		public switchMicrophone = vi.fn(async () => { this.localTrack = { enabled: false }; });
 		public startVideo = vi.fn().mockResolvedValue(undefined);
 		public close = vi.fn().mockResolvedValue(undefined);
 		public setVideoQuality = vi.fn().mockResolvedValue(undefined);
@@ -92,6 +95,7 @@ describe('Calls session device handoff', () => {
 		fixture.confirm.mockReset().mockResolvedValue({ canceled: true });
 		fixture.connectionExists = false;
 		fixture.participantMuted = true;
+		fixture.microphoneAvailable = true;
 		fixture.setMuted.mockClear();
 		fixture.heartbeat.mockClear();
 		fixture.role = 'listener';
@@ -101,6 +105,27 @@ describe('Calls session device handoff', () => {
 		fixture.remoteTrackCallbacks.length = 0;
 		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { enumerateDevices: async () => [] } });
 		session = (await import('@/utility/calls-session.js')).useCallsSession();
+	});
+
+	test('joins with zero capture devices muted and retries capture when unmuting', async () => {
+		fixture.role = 'host';
+		fixture.participantMuted = false;
+		fixture.microphoneAvailable = false;
+		await session.join('room-a', false);
+		expect(session.isActive.value).toBe(true);
+		expect(session.mediaState.value).toBe('connected');
+		expect(session.microphones.value).toEqual([]);
+		expect(session.muted.value).toBe(true);
+		expect(fixture.setMuted).toHaveBeenCalledWith(true);
+		fixture.controllers[0].switchMicrophone.mockRejectedValueOnce(new DOMException('No microphone', 'NotFoundError'));
+		await session.toggleMute();
+		expect(session.muted.value).toBe(true);
+		expect(session.isActive.value).toBe(true);
+		expect(fixture.alert).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
+		await session.toggleMute();
+		expect(fixture.controllers[0].switchMicrophone).toHaveBeenCalledTimes(2);
+		expect(session.muted.value).toBe(false);
+		expect(fixture.setMuted).toHaveBeenLastCalledWith(false);
 	});
 
 	test('adjusts only the selected user audio, retains volume for replacement tracks and clears it on leaving', async () => {

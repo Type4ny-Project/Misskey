@@ -218,13 +218,13 @@ watch(() => props.user.avatarBlurhash, () => {
 	height: 20%;
 }
 
-.callsLive { box-shadow: 0 0 0 3px var(--MI_THEME-error); }
-.callsIndicator { position: absolute; z-index: 3; right: -5%; bottom: -5%; display: grid; width: 34%; height: 34%; place-items: center; border: 2px solid var(--MI_THEME-panel); border-radius: 50%; background: var(--MI_THEME-error); color: var(--MI_THEME-fgOnAccent); font-size: 0.62em; pointer-events: none; }
+.callsLive { box-shadow: 0 0 0 3px var(--MI_THEME-accent); }
+.callsIndicator { position: absolute; z-index: 3; right: -5%; bottom: -5%; display: grid; width: 34%; height: 34%; place-items: center; border: 2px solid var(--MI_THEME-panel); border-radius: 50%; background: var(--MI_THEME-accent); color: var(--MI_THEME-fgOnAccent); font-size: 0.62em; pointer-events: none; }
 .animation.callsLive { animation: callsPulse 2.4s ease-in-out infinite; }
 
 @keyframes callsPulse {
-	0%, 100% { box-shadow: 0 0 0 3px var(--MI_THEME-error); }
-	50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--MI_THEME-error) 20%, transparent); }
+	0%, 100% { box-shadow: 0 0 0 3px var(--MI_THEME-accent); }
+	50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--MI_THEME-accent) 20%, transparent); }
 }
 
 .square {

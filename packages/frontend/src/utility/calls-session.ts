@@ -253,11 +253,15 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 	controller.setMuted(muted.value);
 	await controller.setNoiseSuppression(noiseSuppression.value);
 	await controller.connect(selectedMicrophone.value || undefined);
-	controller.setMuted(muted.value);
 	if (generation !== sessionGeneration || media.value !== controller) {
 		await controller.close().catch(() => undefined);
 		return;
 	}
+	if (participant.role !== 'listener' && controller.localTrack === null) {
+		muted.value = true;
+		connection.value?.setMuted(true);
+	}
+	controller.setMuted(muted.value);
 	if (participant.role !== 'listener') await loadMicrophones();
 }
 
@@ -442,6 +446,15 @@ function onReconnectStorage(event: StorageEvent): void {
 
 async function toggleMute(): Promise<void> {
 	if (!isSpeaker.value) return;
+	if (muted.value && media.value?.localTrack === null) {
+		try {
+			await media.value.switchMicrophone(selectedMicrophone.value || undefined);
+		} catch (error) {
+			console.error('[Calls] Microphone unavailable', error);
+			await alert({ type: 'error', text: i18n.ts._calls.mediaFailed });
+			return;
+		}
+	}
 	muted.value = !muted.value;
 	media.value?.setMuted(muted.value);
 	connection.value?.setMuted(muted.value);

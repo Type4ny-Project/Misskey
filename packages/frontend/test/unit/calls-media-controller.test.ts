@@ -42,6 +42,7 @@ class FakePeerConnection extends EventTarget {
 	public async setRemoteDescription() {}
 	public async setLocalDescription(description: RTCSessionDescriptionInit) { this.localDescription = description; this.signalingState = description.type === 'offer' ? 'have-local-offer' : 'stable'; }
 	public async createOffer() { return { type: 'offer' as const, sdp: 'offer' }; }
+	public async createAnswer() { return { type: 'answer' as const, sdp: 'answer' }; }
 	public getStats() {
 		return Promise.resolve(new Map([
 			['outbound', { type: 'outbound-rtp', kind: 'audio', packetsSent: 1, bytesSent: 1 }],
@@ -258,6 +259,39 @@ describe('CallsMediaController', () => {
 		description.mockRestore();
 	});
 
+	test('a host receives a late speaker on the receiver already created while publishing', async () => {
+		const microphone = makeTrack('audio');
+		const remote = makeTrack('audio');
+		installBrowserMedia(vi.fn().mockResolvedValue(stream(microphone)));
+		const publication = { id: 'speaker-audio', participantId: 'participant-b', mediaKind: 'audio', mediaSource: 'microphone' };
+		let available = false;
+		const fallback = apiMock.getMockImplementation()!;
+		apiMock.mockImplementation(async (endpoint, input) => {
+			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: available ? [publication] : [] };
+			if (endpoint === 'calls/media/tracks/publish') return { publicationId: 'host-audio', negotiation: { requiresImmediateRenegotiation: false, sessionDescription: { type: 'answer', sdp: 'publish-answer' }, trackErrors: [] } };
+			if (endpoint === 'calls/media/tracks/subscribe') return { subscriptions: [{ publicationId: publication.id, mid: '0' }], sessionDescription: { type: 'offer', sdp: 'subscribe-offer' }, requiresImmediateRenegotiation: true, trackErrors: [] };
+			if (endpoint === 'calls/media/renegotiate') return { requiresImmediateRenegotiation: false, sessionDescription: null, trackErrors: [] };
+			return fallback(endpoint, input);
+		});
+		const description = vi.spyOn(FakePeerConnection.prototype, 'setRemoteDescription').mockImplementation(async function (this: FakePeerConnection, input?: RTCSessionDescriptionInit) {
+			if (input?.sdp !== 'publish-answer') return;
+			const transceiver = this.transceivers[0];
+			Object.assign(transceiver.receiver, { track: remote });
+			this.dispatchEvent(Object.assign(new Event('track'), { track: remote, transceiver }));
+		});
+		const onRemoteTrack = vi.fn();
+		const controller = new CallsMediaController('room-a', 'host', undefined, onRemoteTrack);
+		await controller.connect();
+		expect(onRemoteTrack).not.toHaveBeenCalled();
+		available = true;
+		await controller.reconcile();
+		expect(onRemoteTrack).toHaveBeenCalledWith(remote, publication);
+		await controller.reconcile();
+		expect(onRemoteTrack).toHaveBeenCalledTimes(1);
+		await controller.close();
+		description.mockRestore();
+	});
+
 	test('listener connects without requesting microphone permission', async () => {
 		const getUserMedia = vi.fn();
 		installBrowserMedia(getUserMedia);
@@ -339,13 +373,34 @@ describe('CallsMediaController', () => {
 		expect(states).toEqual(expect.arrayContaining(['creating-session', 'reconnecting']));
 	});
 
-	test('normalizes a denied microphone request and remains retryable', async () => {
-		installBrowserMedia(vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError')));
-		const reports: Array<[string, string | null]> = [];
-		const controller = new CallsMediaController('room-a', 'speaker', (state, failure) => reports.push([state, failure]));
+	test.each([
+		['host', 'NotFoundError'],
+		['speaker', 'NotReadableError'],
+		['host', 'NotAllowedError'],
+	] as const)('%s joins without a microphone when capture fails with %s, then can enable it', async (role, errorName) => {
+		const microphone = makeTrack('audio');
+		installBrowserMedia(vi.fn().mockRejectedValueOnce(new DOMException('Microphone unavailable', errorName)).mockResolvedValue(stream(microphone)));
+		const controller = new CallsMediaController('room-a', role);
 
-		await expect(controller.connect()).rejects.toMatchObject({ name: 'NotAllowedError' });
-		expect(reports.at(-1)).toEqual(['failed', 'permission-denied']);
+		await expect(controller.connect()).resolves.toBeUndefined();
+		expect(controller.state).toBe('connected');
+		expect(controller.localTrack).toBeNull();
+		expect(apiMock).not.toHaveBeenCalledWith('calls/media/tracks/publish', expect.anything());
+		await controller.switchMicrophone();
+		expect(controller.localTrack).toBe(microphone);
+		expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/publish', expect.objectContaining({ roomId: 'room-a' }));
+		await controller.close();
+	});
+
+	test('a host joins when the browser provides no capture API', async () => {
+		installBrowserMedia(vi.fn());
+		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
+		const controller = new CallsMediaController('room-a', 'host');
+		await controller.connect();
+		expect(controller.state).toBe('connected');
+		expect(controller.localTrack).toBeNull();
+		expect(apiMock).toHaveBeenCalledWith('calls/media/session/create', expect.objectContaining({ roomId: 'room-a' }));
+		await controller.close();
 	});
 
 	test('cancels a pending microphone request without creating a provider session', async () => {

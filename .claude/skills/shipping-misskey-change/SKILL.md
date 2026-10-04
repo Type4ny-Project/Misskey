@@ -43,8 +43,6 @@ script は次を行い、独立した検査を最後まで続けて exit 0 (合�
   手順は [regenerate-misskey-js.md](references/tasks/regenerate-misskey-js.md)
 - entity / migration: `pnpm --filter backend check-migrations`。
   新規 migration は `up()` / `down()`、既存のマージ済 migration は差分なし
-- backend API endpoint: [misskey-api-reviewer](../../agents/misskey-api-reviewer.md) を実行
-- frontend `.vue`: [vue-component-reviewer](../../agents/vue-component-reviewer.md) を実行
 
 ## 3. 引き継ぎ
 

@@ -99,12 +99,16 @@ jobs:
         working-directory: base
         run: cp .github/misskey/test.yml .config
 
+      # Use the same build instrumentation for both revisions, including bases
+      # that predate the visualizer configuration.
       - name: Build base
         working-directory: base
         env:
           FRONTEND_BUNDLE_VISUALIZER: 'true'
           FRONTEND_BUNDLE_VISUALIZER_FILE: ${{ runner.temp }}/frontend-diagnostics/base-bundle-stats.json
-        run: pnpm build
+        run: |
+          cp ../head/packages/frontend/vite.config.ts packages/frontend/vite.config.ts
+          pnpm build
 
       - name: Install dependencies for head
         working-directory: head
@@ -141,7 +145,6 @@ jobs:
         working-directory: head
         env:
           FRONTEND_BROWSER_METRICS_SAMPLE_COUNT: 5
-          MK_ENABLE_CROSS_ORIGIN_ISOLATION: "true"
           # 計測ハーネスはhead側のものを両方に使うが、成果物はrunnerのworkspace直下に出す
           FRONTEND_BROWSER_HEAP_SNAPSHOT_OUTPUT_DIR: ${{ github.workspace }}
         run: |

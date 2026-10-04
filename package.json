@@ -45,6 +45,7 @@
 		"migrateandstart": "pnpm migrate && pnpm start",
 		"watch": "pnpm dev",
 		"dev": "node scripts/dev.mjs",
+		"dev:portless": ". ./.config/codex-portless.env && portless run node scripts/dev-portless.mjs",
 		"check-dts": "node scripts/check-dts.mjs",
 		"lint": "pnpm --no-bail -r lint && pnpm check-dts",
 		"e2e": "pnpm start-server-and-test start:test http://localhost:61812 \"pnpm --filter frontend test:e2e\"",
@@ -76,6 +77,7 @@
 		"globals": "17.9.0",
 		"ncp": "2.0.0",
 		"pnpm": "11.21.0",
+		"portless": "0.15.5",
 		"start-server-and-test": "3.0.12",
 		"typescript": "npm:@typescript/typescript6@6.0.2"
 	}

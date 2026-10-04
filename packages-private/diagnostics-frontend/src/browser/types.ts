@@ -87,10 +87,6 @@ export type NetworkSummary = {
 	}[];
 };
 
-export type TabMemory = {
-	totalBytes: number;
-};
-
 export type BrowserDiagnostics = {
 	pageErrorCount: number;
 	console: Record<'log' | 'warning' | 'error' | 'info', number>;
@@ -110,7 +106,6 @@ export type BrowserMeasurement = {
 			usedSize: number;
 			totalSize: number;
 		};
-		tabMemory: TabMemory;
 		webVitals: {
 			firstPaintMs?: number;
 			firstContentfulPaintMs?: number;

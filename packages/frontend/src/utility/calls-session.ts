@@ -65,6 +65,7 @@ const reconnectRoomState = ref<'checking' | 'open' | 'unavailable'>('checking');
 const reconnectSecondsRemaining = ref(0);
 const speakerRequestResult = ref<'rejected' | null>(null);
 const usersById = shallowRef(new Map<string, Misskey.entities.UserLite>());
+const pendingUserIds = new Set<string>();
 const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement }>();
 const participantVolumes = shallowRef(new Map<string, number>());
 const localVideos = shallowRef(new Map<CallsVideoSource, MediaStream>());
@@ -644,13 +645,21 @@ watch(() => room.value?.state, state => {
 	}
 });
 
-watch(() => participants.value.map(participant => participant.userId), async userIds => {
-	const missingIds = [...new Set(userIds)].filter(userId => !usersById.value.has(userId));
-	if (missingIds.length === 0) return;
-	const fetched = await Promise.all(missingIds.map(userId => misskeyApi('users/show', { userId }).catch(() => null)));
-	const next = new Map(usersById.value);
-	for (const user of fetched) if (user != null) next.set(user.id, user);
-	usersById.value = next;
+async function loadParticipantUsers(userIds: string[]): Promise<void> {
+	const missingIds = [...new Set(userIds)].filter(userId => !usersById.value.has(userId) && !pendingUserIds.has(userId));
+	await Promise.all(missingIds.map(async userId => {
+		pendingUserIds.add(userId);
+		try {
+			const user = await misskeyApi('users/show', { userId }).catch(() => null);
+			if (user != null) usersById.value = new Map(usersById.value).set(user.id, user);
+		} finally {
+			pendingUserIds.delete(userId);
+		}
+	}));
+}
+
+watch(() => participants.value.map(participant => participant.userId).join(','), userIds => {
+	void loadParticipantUsers(userIds === '' ? [] : userIds.split(','));
 });
 
 window.addEventListener('pagehide', onPageHide);
@@ -697,6 +706,7 @@ export function useCallsSession() {
 		reconnectSecondsRemaining,
 		speakerRequestResult,
 		usersById,
+		loadParticipantUsers,
 		join,
 		leave,
 		toggleMute,

@@ -4,6 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { nextTick } from 'vue';
 import type { CallsRemotePublication } from '@/utility/calls-media.js';
 
 const fixture = vi.hoisted(() => ({
@@ -22,7 +23,7 @@ const fixture = vi.hoisted(() => ({
 	heartbeat: vi.fn(),
 	role: 'listener' as 'listener' | 'host',
 	revoked: [] as Array<(event: { reason: string; connectionId?: string; generation?: number }) => void>,
-	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null } }>,
+	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null }; participants: { value: Array<{ id: string; userId: string; role: string; isMuted: boolean }> } }>,
 	remoteTrackCallbacks: [] as Array<(track: MediaStreamTrack, publication: CallsRemotePublication) => void>,
 	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
 }));
@@ -128,6 +129,37 @@ describe('Calls session device handoff', () => {
 		await session.leave();
 		expect(session.screenWindows.size).toBe(0);
 		expect(secondWindow.dispose).toHaveBeenCalledOnce();
+	});
+
+	test('fetches each participant once while requests are pending and displays completed users immediately', async () => {
+		let resolveUser!: (user: { id: string; username: string }) => void;
+		fixture.api.mockImplementation((endpoint: string, { userId }: { userId?: string }) => {
+			if (endpoint !== 'users/show') return Promise.resolve({});
+			if (userId === 'user-a') return new Promise(resolve => { resolveUser = resolve; });
+			return Promise.resolve({ id: userId, username: userId });
+		});
+		await session.join('room-a', false);
+		const connection = fixture.connections[0];
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, isMuted: false }));
+		await nextTick();
+		connection.participants.value.push({ id: 'participant-b', userId: 'user-b', role: 'listener', isMuted: true });
+		await nextTick();
+		await nextTick();
+		expect(fixture.api.mock.calls.filter(([endpoint, params]) => endpoint === 'users/show' && params.userId === 'user-a')).toHaveLength(1);
+		expect(session.usersById.value.get('user-b')?.username).toBe('user-b');
+		resolveUser({ id: 'user-a', username: 'Alice' });
+		await vi.waitFor(() => expect(session.usersById.value.get('user-a')?.username).toBe('Alice'));
+	});
+
+	test('does not retry a failed user lookup on mute or snapshot updates with unchanged users', async () => {
+		fixture.api.mockImplementation((endpoint: string) => endpoint === 'users/show' ? Promise.reject(new Error('Unavailable')) : Promise.resolve({}));
+		await session.join('room-a', false);
+		await nextTick();
+		await nextTick();
+		const connection = fixture.connections[0];
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, isMuted: false }));
+		await nextTick();
+		expect(fixture.api.mock.calls.filter(([endpoint]) => endpoint === 'users/show')).toHaveLength(1);
 	});
 
 	test('joins with zero capture devices muted and retries capture when unmuting', async () => {

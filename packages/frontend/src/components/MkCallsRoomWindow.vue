@@ -210,7 +210,6 @@ const connected = computed(() => isSessionRoom.value ? session.connected.value :
 const speakingParticipantIds = computed(() => isSessionRoom.value ? session.speakingParticipantIds.value : pageConnection.value?.speakingParticipantIds.value ?? new Set<string>());
 const loadFailed = shallowRef(false);
 let disposed = false;
-const usersById = shallowRef(new Map<string, Misskey.entities.UserLite>());
 const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? null);
 const isHost = computed(() => myParticipant.value?.role === 'host');
 const canKick = computed(() => isHost.value || (myParticipant.value != null && room.value?.moderatorUserIds.includes(myParticipant.value.userId) === true));
@@ -386,18 +385,11 @@ async function refreshRoom(): Promise<void> {
 	else await pageConnection.value?.refresh();
 }
 
-function participantUser(userId: string): Misskey.entities.UserLite | null { return usersById.value.get(userId) ?? null; }
+function participantUser(userId: string): Misskey.entities.UserLite | null { return session.usersById.value.get(userId) ?? null; }
 
-async function loadParticipantUsers(userIds: string[]): Promise<void> {
-	const missingIds = [...new Set(userIds)].filter(userId => !usersById.value.has(userId));
-	if (missingIds.length === 0) return;
-	const fetched = await Promise.all(missingIds.map(userId => misskeyApi('users/show', { userId }).catch(() => null)));
-	const next = new Map(usersById.value);
-	for (const user of fetched) if (user != null) next.set(user.id, user);
-	usersById.value = next;
-}
-
-watch(() => participants.value.map(participant => participant.userId), userIds => { void loadParticipantUsers(userIds); }, { immediate: true });
+watch(() => participants.value.map(participant => participant.userId).join(','), userIds => {
+	void session.loadParticipantUsers(userIds === '' ? [] : userIds.split(','));
+}, { immediate: true });
 watch(isSessionRoom, active => {
 	if (active) {
 		pageConnection.value?.dispose();

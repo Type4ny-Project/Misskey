@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/vue';
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 import { url } from '@@/js/config.js';
 import MkCallsRoomWindow from '@/components/MkCallsRoomWindow.vue';
 import { i18n } from '@/i18n.js';
@@ -36,6 +36,10 @@ beforeEach(() => {
 	const participants = [{ id: 'host-participant', userId: 'host', role: 'host', isMuted: true }];
 	fixture.connection = { room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()), refresh: vi.fn().mockResolvedValue(undefined), dispose: vi.fn() };
 	fixture.session = {
+		usersById: ref(new Map()),
+		loadParticipantUsers: vi.fn(async () => {
+			fixture.session.usersById.value = new Map([['host', { id: 'host', username: 'host', name: 'Host' }]]);
+		}),
 		currentRoomId: ref(null), room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()),
 		isActive: ref(false), joining: ref(false), videos: ref([]), screenWindows: new Map(), mediaState: ref('idle'), mediaFailure: ref(null),
 		speakerRequestResult: ref(null), replacedRoomId: ref(null), needsAudioResume: ref(false), controls: ref({}),
@@ -46,6 +50,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
+	test('uses the session user loader and does not reload users for mute updates', async () => {
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await nextTick();
+		expect(fixture.session.loadParticipantUsers).toHaveBeenCalledWith(['host']);
+		fixture.session.participants.value = fixture.session.participants.value.map(participant => ({ ...participant, isMuted: false }));
+		await nextTick();
+		expect(fixture.session.loadParticipantUsers).toHaveBeenCalledTimes(1);
+	});
+
 	test('recalculates the video grid when the stage is resized and disconnects on close', async () => {
 		let resize!: ResizeObserverCallback;
 		const disconnect = vi.fn();

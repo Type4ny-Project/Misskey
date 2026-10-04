@@ -85,7 +85,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<i v-else class="ti ti-phone"></i>
 					</div>
 					<div :class="$style.body">
-						<div :class="$style.titleRow"><strong>{{ room.title }}</strong></div>
+						<div :class="$style.titleRow"><strong>{{ room.title }}</strong><span v-if="session.elapsedTime.value != null" :class="$style.elapsedTime" :title="i18n.ts._calls.elapsedTime"><i class="ti ti-clock" aria-hidden="true"></i> {{ session.elapsedTime.value }}</span></div>
 						<small>{{ participants.length }} {{ i18n.ts.users }} · {{ i18n.tsx._calls.peopleSpeaking({ count: speakingCount }) }}</small>
 					</div>
 					<i class="ti ti-chevron-up" :class="[$style.expandIcon, expanded && $style.expandIconExpanded]"></i>
@@ -237,6 +237,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .body { min-width: 0; flex: 1; }
 .titleRow { display: flex; align-items: center; gap: 7px; }
 .titleRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.elapsedTime { flex-shrink: 0; font-size: 0.8rem; font-variant-numeric: tabular-nums; opacity: 0.66; }
 .body small { display: block; overflow: hidden; margin-top: 3px; opacity: 0.66; text-overflow: ellipsis; white-space: nowrap; }
 .actions { display: flex; gap: 8px; }
 .action { display: grid; width: 52px; place-items: center; border-radius: 20px; font-size: 1.15rem; }

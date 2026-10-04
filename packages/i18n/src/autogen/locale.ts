@@ -10451,6 +10451,10 @@ export interface Locale extends ILocale {
          */
         "leftCall": string;
         /**
+         * 通話時間
+         */
+        "elapsedTime": string;
+        /**
          * 新しい通話
          */
         "newCall": string;

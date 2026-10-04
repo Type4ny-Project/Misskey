@@ -17874,6 +17874,11 @@ export interface operations {
                     limit?: number;
                     /** Format: misskey:id */
                     chatRoomId?: string;
+                    /**
+                     * @description Only rooms hosted by or containing users the viewer follows.
+                     * @default false
+                     */
+                    following?: boolean;
                     states?: ('scheduled' | 'open')[];
                 };
             };

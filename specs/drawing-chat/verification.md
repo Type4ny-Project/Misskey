@@ -29,3 +29,5 @@ SPDX の既存違反は `packages/backend/migration/1774789240317-event.js` と 
 ![デスクトップ](screenshots/desktop.png)
 
 ![スマホ幅](screenshots/mobile.png)
+
+2026-10-04、Calls PR #18 のマージ後の `origin/develop`（`eaf828bb2c`）を取り込み、SDK を再生成して競合を解消した。取り込み後も DrawingService unit 6件、Calls API e2e 8件、backend / frontend typecheck、`pnpm build-misskey-js-with-types`、変更ファイル lint・SPDX・locale safety はすべて PASS。上記の migration ヘッダー欠落は develop 側で修正済み。ブラウザー確認の記録は初回実装時のもの。

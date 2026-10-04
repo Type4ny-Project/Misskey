@@ -37,6 +37,11 @@ export class CallsMediaRevocationService {
 			await this.liveConnections.clear(participant.id, connection.connectionId, connection.generation);
 			await this.closeGeneration(participant.id, connection.generation);
 			await this.quota.release(connection.applicationId, participant.id);
+		} else {
+			// The live connection expires before its media bindings, so an absent host may still be publishing.
+			const publications = (await this.bindings.listRoomPublications(participant.roomId)).filter(binding => binding.participantId === participant.id);
+			for (const generation of new Set(publications.map(binding => binding.generation))) await this.closeGeneration(participant.id, generation);
+			for (const applicationId of new Set(publications.map(binding => binding.applicationId))) await this.quota.release(applicationId, participant.id);
 		}
 		await this.turnCredentials.revokeParticipant(participant.id);
 		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason });

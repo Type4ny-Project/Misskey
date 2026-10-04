@@ -44,7 +44,7 @@ async function createCall(): Promise<void> {
 			attachmentType: 'personal', title: title.value.trim(), mode: mode.value, visibility: 'public',
 		});
 		room = await misskeyApi('calls/rooms/open', { roomId: room.id, expectedRevision: room.revision });
-		await openCallsRoom(room.id, true);
+		await openCallsRoom(room.id);
 		dialog.value?.close();
 	} catch (error) {
 		console.error('[Calls] Room creation failed', error);

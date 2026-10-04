@@ -58,9 +58,11 @@ export class CallsMediaService {
 				await assertLockHeld();
 				await this.quotaService.reserveSession(input.applicationId, lockedParticipant.id);
 				quotaReserved = true;
+				const replacement = await this.liveConnectionService.replace(lockedParticipant.id, input.connectionId, input.applicationId);
+				if (lockedParticipant.role === 'host') await this.liveConnectionService.touchHost(input.roomId);
 				return {
 					participant: lockedParticipant,
-					replacement: await this.liveConnectionService.replace(lockedParticipant.id, input.connectionId, input.applicationId),
+					replacement,
 				};
 			});
 		} catch (error) {
@@ -210,25 +212,28 @@ export class CallsMediaService {
 	}
 
 	public async heartbeat(user: MiUser, roomId: string, connectionId: string, generation: number): Promise<void> {
-		const participant = await this.authorizeParticipant(user, roomId);
-		let connection: CallsLiveConnection;
-		try {
-			connection = await this.liveConnectionService.assertCurrent(participant.id, connectionId, generation);
-		} catch (error) {
-			if (!(error instanceof StaleCallsConnectionError)) throw error;
-			const room = await this.roomService.getRoom(roomId);
-			const current = await this.liveConnectionService.get(participant.id);
-			if (current != null) {
-				if (current.connectionId !== connectionId) await this.eventService.publish(roomId, room.revision, 'revoked', { participantId: participant.id, reason: 'replaced', connectionId, generation });
-			} else {
-				await this.revocationService.revokeLostGeneration(participant, generation, room.revision, connectionId);
+		await this.liveConnectionService.withRoomLock(roomId, async () => {
+			const participant = await this.authorizeParticipant(user, roomId);
+			let connection: CallsLiveConnection;
+			try {
+				connection = await this.liveConnectionService.assertCurrent(participant.id, connectionId, generation);
+			} catch (error) {
+				if (!(error instanceof StaleCallsConnectionError)) throw error;
+				const room = await this.roomService.getRoom(roomId);
+				const current = await this.liveConnectionService.get(participant.id);
+				if (current != null) {
+					if (current.connectionId !== connectionId) await this.eventService.publish(roomId, room.revision, 'revoked', { participantId: participant.id, reason: 'replaced', connectionId, generation });
+				} else {
+					await this.revocationService.revokeLostGeneration(participant, generation, room.revision, connectionId);
+				}
+				throw error;
 			}
-			throw error;
-		}
-		await this.liveConnectionService.heartbeat(participant.id, connectionId, generation);
-		await this.bindingService.heartbeat(roomId, participant.id, generation);
-		const publications = (await this.bindingService.listRoomPublications(roomId)).filter(binding => binding.participantId === participant.id && binding.generation === generation);
-		await this.quotaService.touch(connection.applicationId, participant.id, publications.map(binding => binding.providerTrackName));
+			await this.liveConnectionService.heartbeat(participant.id, connectionId, generation);
+			if (participant.role === 'host') await this.liveConnectionService.touchHost(roomId);
+			await this.bindingService.heartbeat(roomId, participant.id, generation);
+			const publications = (await this.bindingService.listRoomPublications(roomId)).filter(binding => binding.participantId === participant.id && binding.generation === generation);
+			await this.quotaService.touch(connection.applicationId, participant.id, publications.map(binding => binding.providerTrackName));
+		});
 	}
 
 	private async authorizeParticipant(user: MiUser, roomId: string): Promise<MiCallsParticipant> {

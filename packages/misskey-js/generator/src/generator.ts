@@ -249,7 +249,7 @@ async function generateApiClientJSDoc(
 
 		endpointOutputLine.push(
 			'    /**',
-			`     * ${endpoint.description.split('\n').join('\n     * ')}`,
+			...endpoint.description.split('\n').map(line => `     * ${line}`.trimEnd()),
 			'     */',
 			`    request<E extends '${endpoint.path}', P extends Endpoints[E][\'req\']>(`,
 			'      endpoint: E,',

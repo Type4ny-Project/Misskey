@@ -76,7 +76,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<footer :class="$style.footer">
 				<template v-if="sessionIsCurrent">
 					<MkButton v-if="session.needsAudioResume.value" rounded @click="session.resumeAudio()">{{ i18n.ts._calls.resumeAudio }}</MkButton>
-					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="session.toggleVideo('camera')" @screen="session.toggleVideo('screen')" @microphoneSettings="openDeviceMenu('microphone', $event)" @cameraSettings="openDeviceMenu('camera', $event)" @screenSettings="openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveCurrentRoom"/>
+					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="toggleCamera" @screen="session.toggleVideo('screen')" @microphoneSettings="openDeviceMenu('microphone', $event)" @cameraSettings="openDeviceMenu('camera', $event)" @screenSettings="openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveCurrentRoom"/>
 				</template>
 				<template v-else-if="room.state === 'open'">
 					<MkButton primary large rounded :wait="session.joining.value" :class="$style.joinButton" @click="joinRoom(room.mode === 'open')"><i class="ti ti-headphones"></i> {{ session.joining.value ? i18n.ts._calls.roomConnectedMediaConnecting : i18n.ts._calls.joinRoom }}</MkButton>
@@ -108,7 +108,6 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 
 const props = defineProps<{
 	roomId: string;
-	join?: boolean;
 }>();
 const emit = defineEmits<{ (ev: 'closed'): void; (ev: 'popout', popup: Window | null): void }>();
 const dialog = shallowRef<InstanceType<typeof MkModal>>();
@@ -193,6 +192,7 @@ const participants = computed(() => isSessionRoom.value ? session.participants.v
 const connected = computed(() => isSessionRoom.value ? session.connected.value : pageConnection.value?.connected.value ?? false);
 const speakingParticipantIds = computed(() => isSessionRoom.value ? session.speakingParticipantIds.value : pageConnection.value?.speakingParticipantIds.value ?? new Set<string>());
 const loadFailed = shallowRef(false);
+let disposed = false;
 const usersById = shallowRef(new Map<string, Misskey.entities.UserLite>());
 const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? null);
 const isHost = computed(() => myParticipant.value?.role === 'host');
@@ -214,6 +214,11 @@ function openScreenSettings(event: MouseEvent): void {
 function openDeviceMenu(kind: 'microphone' | 'camera', event: MouseEvent): void {
 	if (popoutWindow != null) window.focus();
 	session.openDeviceMenu(kind, event);
+}
+
+function toggleCamera(): void {
+	if (popoutWindow != null) window.focus();
+	void session.toggleVideo('camera');
 }
 
 function openRoomMenu(event: MouseEvent): void {
@@ -264,11 +269,15 @@ async function cancelRoom(): Promise<void> { if (room.value != null) { await mis
 
 async function endRoom(): Promise<void> { if (room.value != null) { await misskeyApi('calls/rooms/end', { roomId: props.roomId, expectedRevision: room.value.revision }); await refreshRoom(); } }
 
-async function joinRoom(startMuted = false): Promise<void> {
+async function joinRoom(startMuted = false, requestConfirmation = false): Promise<void> {
 	if (session.currentRoomId.value != null && session.currentRoomId.value !== props.roomId) {
 		const { canceled } = await os.confirm({ type: 'warning', text: i18n.ts._calls.switchRoomConfirm });
 		if (canceled) return;
+	} else if (requestConfirmation) {
+		const { canceled } = await os.confirm({ type: 'question', title: room.value?.title, text: i18n.ts._calls.joinRoomConfirm });
+		if (canceled) return;
 	}
+	if (disposed || room.value?.state !== 'open' || sessionIsCurrent.value || session.joining.value) return;
 
 	try {
 		await session.join(props.roomId, myParticipant.value != null, undefined, startMuted);
@@ -280,8 +289,6 @@ async function joinRoom(startMuted = false): Promise<void> {
 		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
 	}
 }
-
-function shouldAutoJoin(): boolean { return props.join === true; }
 
 async function leaveCurrentRoom(): Promise<void> {
 	if (popoutWindow != null) window.focus();
@@ -363,13 +370,14 @@ onMounted(() => {
 	window.addEventListener('pagehide', cleanupPopout);
 	void refreshRoom().then(() => {
 		if (myParticipant.value != null && myParticipant.value.role !== 'listener') void session.prepareMicrophones();
-		if (room.value?.state === 'open' && !sessionIsCurrent.value && shouldAutoJoin()) void joinRoom(isHost.value);
+		if (!disposed && room.value?.state === 'open' && !sessionIsCurrent.value && !session.joining.value) void joinRoom(isHost.value || room.value.mode === 'open', true);
 	}).catch(error => {
 		console.error('[Calls] Room loading failed', error);
 		loadFailed.value = true;
 	});
 });
 onUnmounted(() => {
+	disposed = true;
 	window.removeEventListener('pagehide', cleanupPopout);
 	pageConnection.value?.dispose();
 	cleanupPopout();

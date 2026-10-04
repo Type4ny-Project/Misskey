@@ -10,11 +10,12 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { $i } from '@/i.js';
 
 type Snapshot = Misskey.entities.CallsRoomsShowResponse;
-type EventBase = { sequence: number; roomRevision: number };
+type EventBase = { sequence: number; roomRevision: number; reason?: string };
 export type CallsRevokedEvent = Parameters<Misskey.Channels['callsRoom']['events']['revoked']>[0];
 
 export function createCallsRoomConnection(roomId: string) {
 	const room = shallowRef<Snapshot['room'] | null>(null);
+	const endReason = ref<'host-timeout' | null>(null);
 	const participants = ref<Snapshot['participants']>([]);
 	const connected = ref(false);
 	const speakingParticipantIds = ref<Set<string>>(new Set());
@@ -38,10 +39,12 @@ export function createCallsRoomConnection(roomId: string) {
 	}
 
 	async function accept(event: EventBase, apply: () => void | Promise<void>) {
+		if (event.sequence <= lastSequence.value && event.roomRevision <= lastRoomRevision.value) return;
+		// A gap refresh can end the room before the lifecycle callback runs.
+		if (event.roomRevision >= lastRoomRevision.value && event.reason === 'host-timeout') endReason.value = event.reason;
 		if (event.sequence <= lastSequence.value) {
-			if (event.roomRevision <= lastRoomRevision.value) return;
 			await refresh();
-			await misskeyApi('calls/media/reconcile', { roomId });
+			if (room.value?.state === 'open') await misskeyApi('calls/media/reconcile', { roomId });
 			lastSequence.value = event.sequence;
 			if (event.roomRevision < lastRoomRevision.value) return;
 			lastRoomRevision.value = event.roomRevision;
@@ -51,7 +54,7 @@ export function createCallsRoomConnection(roomId: string) {
 		}
 		if (lastSequence.value !== 0 && event.sequence !== lastSequence.value + 1) {
 			await refresh();
-			await misskeyApi('calls/media/reconcile', { roomId });
+			if (room.value?.state === 'open') await misskeyApi('calls/media/reconcile', { roomId });
 		}
 		lastSequence.value = event.sequence;
 		if (event.roomRevision < lastRoomRevision.value) return;
@@ -71,7 +74,10 @@ export function createCallsRoomConnection(roomId: string) {
 		void refresh().then(() => misskeyApi('calls/media/reconcile', { roomId })).catch(() => undefined);
 	}
 
-	channel.on('lifecycle', event => enqueue(event, () => { if (room.value != null) room.value = { ...room.value, state: event.state, revision: event.roomRevision }; }));
+	channel.on('lifecycle', event => enqueue(event, () => {
+		endReason.value = event.reason ?? null;
+		if (room.value != null) room.value = { ...room.value, state: event.state, revision: event.roomRevision };
+	}));
 	channel.on('participant', event => enqueue(event, () => { void refresh(); }));
 	channel.on('role', event => enqueue(event, () => {
 		participants.value = participants.value.map(participant => participant.id === event.participantId ? { ...participant, role: event.role } : participant);
@@ -98,7 +104,7 @@ export function createCallsRoomConnection(roomId: string) {
 	}
 
 	return {
-		room, participants, connected, speakingParticipantIds, refresh,
+		room, endReason, participants, connected, speakingParticipantIds, refresh,
 		setMuted(isMuted: boolean) { channel.send('mute', isMuted); },
 		setSpeaking(speaking: boolean) { channel.send('speaking', speaking); },
 		heartbeat(connectionId: string, generation: number) { channel.send('heartbeat', { connectionId, generation }); },

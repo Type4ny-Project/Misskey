@@ -317,7 +317,7 @@ export type Channels = {
 			roomId: string;
 		};
 		events: {
-			lifecycle: (payload: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled' }) => void;
+			lifecycle: (payload: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled'; reason?: 'host-timeout' }) => void;
 			participant: (payload: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' | 'updated' }) => void;
 			role: (payload: CallsRoomEventBase & { participantId: string; role: 'host' | 'speaker' | 'listener' }) => void;
 			speakerRequest: (payload: CallsRoomEventBase & { participantId: string; requested: boolean }) => void;

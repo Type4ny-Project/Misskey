@@ -25,14 +25,14 @@ test('opens the joined room directly without looking up or creating a room', asy
 	fixture.roomId.value = 'joined-room';
 	await (await import('@/utility/calls-window.js')).openCallsCreation();
 	expect(fixture.api).not.toHaveBeenCalled();
-	expect(fixture.popup).toHaveBeenCalledWith('RoomWindow', { roomId: 'joined-room', join: false }, expect.anything());
+	expect(fixture.popup).toHaveBeenCalledWith('RoomWindow', { roomId: 'joined-room' }, expect.anything());
 });
 
 test.each(['open', 'scheduled'])('returns to the existing %s host room without showing creation', async state => {
 	fixture.api.mockResolvedValue([{ id: 'existing-room', state, attachment: { type: 'personal', ownerUserId: 'owner-a' } }]);
 	await (await import('@/utility/calls-window.js')).openCallsCreation();
 	expect(fixture.popup).toHaveBeenCalledOnce();
-	expect(fixture.popup).toHaveBeenCalledWith('RoomWindow', { roomId: 'existing-room', join: state === 'open' }, expect.anything());
+	expect(fixture.popup).toHaveBeenCalledWith('RoomWindow', { roomId: 'existing-room' }, expect.anything());
 });
 
 test('shows creation when the available room belongs to someone else', async () => {

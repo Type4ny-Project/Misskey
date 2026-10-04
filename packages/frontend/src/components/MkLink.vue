@@ -21,7 +21,7 @@ import { maybeMakeRelative } from '@@/js/url.js';
 import type { MkABehavior } from '@/components/global/MkA.vue';
 import { useTooltip } from '@/composables/use-tooltip.js';
 import * as os from '@/os.js';
-import { getLocalEventId, isEnabledUrlPreview } from '@/utility/url-preview.js';
+import { getLocalCallsRoomId, getLocalEventId, isEnabledUrlPreview } from '@/utility/url-preview.js';
 
 const props = withDefaults(defineProps<{
 	url: string;
@@ -38,7 +38,7 @@ const target = self ? null : '_blank';
 const el = ref<HTMLElement | { $el: HTMLElement }>();
 const localEventId = getLocalEventId(props.url);
 
-if (isEnabledUrlPreview.value && localEventId == null) {
+if (isEnabledUrlPreview.value && localEventId == null && getLocalCallsRoomId(props.url) == null) {
 	useTooltip(el, (showing) => {
 		const anchorElement = el.value instanceof HTMLElement ? el.value : el.value?.$el;
 		if (anchorElement == null) return;

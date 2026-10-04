@@ -27,6 +27,7 @@ function createFixture(role: MiCallsParticipant['role'] = 'speaker') {
 		assertCurrent: vi.fn().mockResolvedValue({ participantId: participant.id, connectionId: 'connection-a', generation: 2, applicationId: 'app-a', sessionId: 'session-a' }),
 		clear: vi.fn().mockResolvedValue(true),
 		heartbeat: vi.fn(),
+		touchHost: vi.fn(),
 	};
 	const bindings = { getPublication: vi.fn(), createPublication: vi.fn(), removePublication: vi.fn(), listRoomPublications: vi.fn().mockResolvedValue([]), heartbeat: vi.fn(), addSubscriptions: vi.fn(), clearSubscriptions: vi.fn().mockResolvedValue([]) };
 	const provider = { createSession: vi.fn().mockResolvedValue({ sessionId: 'session-a' }), addTracks: vi.fn(), closeTracks: vi.fn(), renegotiate: vi.fn() };
@@ -39,6 +40,13 @@ function createFixture(role: MiCallsParticipant['role'] = 'speaker') {
 }
 
 describe('CallsMediaService authorization boundaries', () => {
+	test.each(['host', 'listener'] as const)('only the host heartbeat renews the room deadline (role: %s)', async role => {
+		const fixture = createFixture(role);
+		await fixture.service.heartbeat(user, room.id, 'connection-a', 2);
+		if (role === 'host') expect(fixture.live.touchHost).toHaveBeenCalledWith(room.id);
+		else expect(fixture.live.touchHost).not.toHaveBeenCalled();
+	});
+
 	beforeEach(() => vi.clearAllMocks());
 
 	test('revokes existing media when a heartbeat observes access loss', async () => {

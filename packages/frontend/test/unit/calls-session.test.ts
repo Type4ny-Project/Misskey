@@ -11,6 +11,8 @@ const fixture = vi.hoisted(() => ({
 	alert: vi.fn(),
 	confirm: vi.fn(),
 	popupMenu: vi.fn(),
+	popup: vi.fn(),
+	captureCamera: vi.fn(),
 	keepalive: vi.fn(),
 	connectionExists: false,
 	participantMuted: true,
@@ -18,43 +20,53 @@ const fixture = vi.hoisted(() => ({
 	heartbeat: vi.fn(),
 	role: 'listener' as 'listener' | 'host',
 	revoked: [] as Array<(event: { reason: string; connectionId?: string; generation?: number }) => void>,
-	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; close: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
+	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null } }>,
+	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
 }));
 
 vi.mock('@/i.js', () => ({ $i: { id: 'user-a' } }));
 vi.mock('@/i18n.js', () => ({ i18n: {
-	ts: { somethingHappened: 'Something went wrong', _calls: { videoFailed: 'Video failed', videoResolution: 'Resolution', videoSourceQuality: 'Source quality', videoFrameRate: 'Frame rate', connectedOnAnotherDevice: 'Connected on another device', switchDeviceConfirm: 'Disconnect the other device?' } },
+	ts: { somethingHappened: 'Something went wrong', _calls: { videoFailed: 'Video failed', videoResolution: 'Resolution', videoSourceQuality: 'Source quality', videoFrameRate: 'Frame rate', connectedOnAnotherDevice: 'Connected on another device', switchDeviceConfirm: 'Disconnect the other device?', hostLeftRoomEnded: 'Host left; room ended' } },
 	tsx: { _calls: { videoResolutionValue: ({ height }: { height: number }) => `${height}p`, videoFrameRateValue: ({ fps }: { fps: number }) => `${fps}fps` } },
 } }));
-vi.mock('@/os.js', () => ({ toast: fixture.toast, alert: fixture.alert, confirm: fixture.confirm, popupMenu: fixture.popupMenu }));
+vi.mock('@/os.js', () => ({ toast: fixture.toast, alert: fixture.alert, confirm: fixture.confirm, popupMenu: fixture.popupMenu, popup: fixture.popup }));
 vi.mock('@/local-storage.js', () => ({ miLocalStorage: { getItemAsJson: () => null, removeItem: vi.fn() } }));
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: fixture.api, misskeyApiKeepalive: fixture.keepalive }));
 vi.mock('@/utility/calls-media-core.js', () => ({ detectCallsMediaCapabilities: () => ({ secureContext: true, peerConnection: true, transceiver: true }) }));
 vi.mock('@/composables/use-calls-room.js', async () => {
 	const { ref } = await import('vue');
 	return {
-		createCallsRoomConnection: (roomId: string) => ({
-			room: ref({ id: roomId, title: 'Room', state: 'open', revision: 1 }),
-			participants: ref([{ id: 'participant-a', userId: 'user-a', role: fixture.role, isMuted: fixture.participantMuted }]),
-			speakingParticipantIds: ref(new Set()),
-			connected: ref(true),
-			refresh: vi.fn(), dispose: vi.fn(), setMuted: fixture.setMuted, setSpeaking: vi.fn(), heartbeat: fixture.heartbeat,
-			onTrackChange: () => vi.fn(),
-			onRevoked: (callback: typeof fixture.revoked[number]) => { fixture.revoked.push(callback); return vi.fn(); },
-		}),
+		createCallsRoomConnection: (roomId: string) => {
+			const connection = {
+				room: ref({ id: roomId, title: 'Room', state: 'open', revision: 1 }),
+				endReason: ref<'host-timeout' | null>(null),
+				participants: ref([{ id: 'participant-a', userId: 'user-a', role: fixture.role, isMuted: fixture.participantMuted }]),
+				speakingParticipantIds: ref(new Set()),
+				connected: ref(true),
+				refresh: vi.fn(), dispose: vi.fn(), setMuted: fixture.setMuted, setSpeaking: vi.fn(), heartbeat: fixture.heartbeat,
+				onTrackChange: () => vi.fn(),
+				onRevoked: (callback: typeof fixture.revoked[number]) => { fixture.revoked.push(callback); return vi.fn(); },
+			};
+			fixture.connections.push(connection);
+			return connection;
+		},
 	};
 });
+vi.mock('@/components/MkCallsCameraPreviewDialog.vue', () => ({ default: {} }));
 vi.mock('@/utility/calls-media.js', () => ({
+	captureCallsCamera: fixture.captureCamera,
 	CallsMediaController: class {
 		public connectionIdentity: { connectionId: string; generation: number };
+		public startVideo = vi.fn().mockResolvedValue(undefined);
 		public close = vi.fn().mockResolvedValue(undefined);
 		public setVideoQuality = vi.fn().mockResolvedValue(undefined);
 		public setNoiseSuppression = vi.fn().mockResolvedValue(undefined);
 		public connect = vi.fn(async () => {
-			if (fixture.connectionExists && !this.replaceExisting) throw { code: 'CALLS_CONNECTION_EXISTS' };
+			if (fixture.connectionExists && !this.replaceExisting) throw Object.assign(new Error('Connection exists'), { code: 'CALLS_CONNECTION_EXISTS' });
+			this.onState('connected');
 		});
 		public setMuted = vi.fn();
-		constructor(_roomId: string, _role: string, _onState: unknown, _onRemoteTrack: unknown, _onStats: unknown, previousConnection?: { connectionId: string; generation: number }, public replaceExisting = false) {
+		constructor(_roomId: string, _role: string, private onState: (state: string) => void, _onRemoteTrack: unknown, _onStats: unknown, previousConnection?: { connectionId: string; generation: number }, public replaceExisting = false) {
 			this.connectionIdentity = previousConnection ?? { connectionId: `device-${fixture.controllers.length}`, generation: 1 };
 			fixture.controllers.push(this);
 		}
@@ -71,6 +83,8 @@ describe('Calls session device handoff', () => {
 		fixture.toast.mockClear();
 		fixture.alert.mockClear();
 		fixture.popupMenu.mockClear();
+		fixture.popup.mockReset().mockReturnValue({ dispose: vi.fn() });
+		fixture.captureCamera.mockReset();
 		fixture.keepalive.mockClear();
 		fixture.confirm.mockReset().mockResolvedValue({ canceled: true });
 		fixture.connectionExists = false;
@@ -80,6 +94,7 @@ describe('Calls session device handoff', () => {
 		fixture.role = 'listener';
 		fixture.revoked.length = 0;
 		fixture.controllers.length = 0;
+		fixture.connections.length = 0;
 		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { enumerateDevices: async () => [] } });
 		session = (await import('@/utility/calls-session.js')).useCallsSession();
 	});
@@ -95,6 +110,68 @@ describe('Calls session device handoff', () => {
 		await session.leave();
 		await vi.advanceTimersByTimeAsync(30_000);
 		expect(fixture.heartbeat).toHaveBeenCalledTimes(2);
+	});
+
+	test('notifies participants and closes media when the host timeout ends the room', async () => {
+		await session.join('room-a', false);
+		const target = session.room.value!;
+		// The lifecycle event applies its reason before the ended state.
+		fixture.connections[0].endReason.value = 'host-timeout';
+		fixture.connections[0].room.value = { ...target, state: 'ended' };
+		await vi.waitFor(() => expect(session.currentRoomId.value).toBeNull());
+		expect(fixture.toast).toHaveBeenCalledWith('Host left; room ended');
+		expect(fixture.controllers[0].close).toHaveBeenCalled();
+	});
+
+	test.each([false, true])('camera is only published after preview confirmation (confirmed: %s)', async confirmed => {
+		fixture.role = 'host';
+		await session.join('room-a', true);
+		const track = { stop: vi.fn() };
+		const stream = { getTracks: () => [track] };
+		fixture.captureCamera.mockResolvedValue(stream);
+		const enabling = session.toggleVideo('camera');
+		await vi.waitFor(() => expect(fixture.popup).toHaveBeenCalled());
+		expect(fixture.controllers[0].startVideo).not.toHaveBeenCalled();
+		fixture.popup.mock.calls[0][2].done(confirmed);
+		await enabling;
+		if (confirmed) {
+			expect(fixture.controllers[0].startVideo).toHaveBeenCalledWith('camera', undefined, { height: 720, frameRate: 30 }, stream);
+			expect(track.stop).not.toHaveBeenCalled();
+		} else {
+			expect(fixture.controllers[0].startVideo).not.toHaveBeenCalled();
+			expect(track.stop).toHaveBeenCalled();
+		}
+	});
+
+	test('leaving while previewing stops the camera without publishing it', async () => {
+		fixture.role = 'host';
+		await session.join('room-a', true);
+		const track = { stop: vi.fn() };
+		fixture.captureCamera.mockResolvedValue({ getTracks: () => [track] });
+		const enabling = session.toggleVideo('camera');
+		await vi.waitFor(() => expect(fixture.popup).toHaveBeenCalled());
+		await session.leave();
+		await enabling;
+		expect(track.stop).toHaveBeenCalled();
+		expect(fixture.controllers[0].startVideo).not.toHaveBeenCalled();
+	});
+
+	test('reconnecting while previewing stops the camera and closes the preview', async () => {
+		fixture.role = 'host';
+		await session.join('room-a', true);
+		const track = { stop: vi.fn() };
+		const dispose = vi.fn();
+		fixture.popup.mockReturnValue({ dispose });
+		fixture.captureCamera.mockResolvedValue({ getTracks: () => [track] });
+		const enabling = session.toggleVideo('camera');
+		await vi.waitFor(() => expect(fixture.popup).toHaveBeenCalled());
+		fixture.revoked[0]({ reason: 'stale-generation', ...fixture.controllers[0].connectionIdentity });
+		await enabling;
+		await vi.waitFor(() => expect(fixture.controllers).toHaveLength(2));
+		expect(track.stop).toHaveBeenCalled();
+		expect(dispose).toHaveBeenCalled();
+		expect(fixture.controllers[0].startVideo).not.toHaveBeenCalled();
+		expect(session.controls.value.busy).toBe(false);
 	});
 
 	test('microphone settings toggle noise suppression and keep the old choice on failure', async () => {

@@ -10,13 +10,12 @@ import { onActivated } from 'vue';
 import { useRouter } from '@/router.js';
 import { openCallsCreation, openCallsRoom } from '@/utility/calls-window.js';
 
-const props = defineProps<{ roomId?: string; join?: string }>();
+const props = defineProps<{ roomId?: string }>();
 const router = useRouter();
 onActivated(() => {
 	const roomId = props.roomId;
-	const join = props.join === 'true';
 	router.replace('/');
-	if (roomId != null) void openCallsRoom(roomId, join);
+	if (roomId != null) void openCallsRoom(roomId);
 	else void openCallsCreation();
 });
 </script>

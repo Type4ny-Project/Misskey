@@ -30,7 +30,6 @@ jobs:
       matrix:
         node-version-file:
           - .node-version
-          - .github/min.node-version
 
     services:
       postgres:
@@ -89,7 +88,6 @@ jobs:
       matrix:
         node-version-file:
           - .node-version
-          - .github/min.node-version
 
     services:
       postgres:
@@ -137,7 +135,6 @@ jobs:
       matrix:
         node-version-file:
           - .node-version
-          #- .github/min.node-version
 
     services:
       postgres:

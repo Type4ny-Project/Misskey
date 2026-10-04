@@ -8777,6 +8777,42 @@ export interface Locale extends ILocale {
          */
         "serverSubMoreThanOrEq": string;
         /**
+         * 送信者
+         */
+        "sender": string;
+        /**
+         * このアカウントからの直近1時間のフォローリクエスト数が指定件数以上
+         */
+        "userFollowRequestsLastHourMoreThanOrEq": string;
+        /**
+         * このサーバーからの直近1時間のフォローリクエスト数が指定件数以上
+         */
+        "serverFollowRequestsLastHourMoreThanOrEq": string;
+        /**
+         * 件数
+         */
+        "followRequestCount": string;
+        /**
+         * 選択した送信元から、このサーバーが直近1時間に受信したフォローリクエストを数えます。今回のリクエストと拒否したリクエストも含み、指定件数に達したフォローリクエストから条件が成立します。
+         */
+        "followRequestsLastHourDescription": string;
+        /**
+         * フォローリクエストか
+         */
+        "thisActivityIsFollow": string;
+        /**
+         * リアクションか
+         */
+        "thisActivityIsReaction": string;
+        /**
+         * リノートか
+         */
+        "thisActivityIsRenote": string;
+        /**
+         * 返信か
+         */
+        "thisActivityIsReply": string;
+        /**
          * このアクティビティがノート
          */
         "thisActivityIsNote": string;
@@ -10287,6 +10323,18 @@ export interface Locale extends ILocale {
          */
         "camera": string;
         /**
+         * カメラのプレビュー
+         */
+        "cameraPreview": string;
+        /**
+         * 映像を確認してから配信を開始します。このプレビューは自分にだけ表示されています。
+         */
+        "cameraPreviewDescription": string;
+        /**
+         * この通話ルームは表示できません。
+         */
+        "roomUnavailable": string;
+        /**
          * カメラを選択
          */
         "selectCamera": string;
@@ -10542,6 +10590,18 @@ export interface Locale extends ILocale {
          */
         "joinRoom": string;
         /**
+         * この通話に参加しますか？
+         */
+        "joinRoomConfirm": string;
+        /**
+         * フォロー中の人が参加しています
+         */
+        "followingParticipating": string;
+        /**
+         * フォロー中の人が開催・参加している通話はありません
+         */
+        "noFollowingRooms": string;
+        /**
          * 最初はミュートで参加します
          */
         "joinMutedHint": string;
@@ -10705,6 +10765,10 @@ export interface Locale extends ILocale {
          * ルームに再接続しています…
          */
         "reconnecting": string;
+        /**
+         * ホストが退出したため、通話ルームは終了しました。
+         */
+        "hostLeftRoomEnded": string;
         /**
          * ルームに接続中です…
          */
@@ -10955,6 +11019,10 @@ export interface Locale extends ILocale {
          * ダイレクトメッセージ
          */
         "chat": string;
+        /**
+         * 通話
+         */
+        "calls": string;
     };
     "_widgetOptions": {
         /**
@@ -12411,6 +12479,18 @@ export interface Locale extends ILocale {
         };
     };
     "_moderationLogTypes": {
+        /**
+         * 受信アクティビティを拒否
+         */
+        "inboxRejected": string;
+        /**
+         * 受信ルールを追加
+         */
+        "setInboxRule": string;
+        /**
+         * 受信ルールを削除
+         */
+        "deleteInboxRule": string;
         /**
          * ジョブキューをクリア
          */
@@ -14380,6 +14460,10 @@ export interface Locale extends ILocale {
          */
         "eventDetail": string;
         /**
+         * 存在しないイベントです
+         */
+        "eventNotFound": string;
+        /**
          * 自分の投稿
          */
         "mySubmissions": string;
@@ -14399,6 +14483,10 @@ export interface Locale extends ILocale {
          * 終了日時
          */
         "endAt": string;
+        /**
+         * 終了日時は開始日時以降にしてください
+         */
+        "endBeforeStart": string;
         /**
          * 説明
          */

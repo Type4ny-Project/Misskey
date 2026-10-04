@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<article :class="$style.root" :style="cardStyle">
+<article v-if="eventData" :class="$style.root" :style="cardStyle">
 	<div :class="$style.head">
 		<div :class="$style.dateCard">
 			<div :class="$style.dateMonth">{{ startMonthLabel }}</div>
@@ -97,12 +97,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</MkButton>
 	</div>
 </article>
+<article v-else :class="$style.root" role="status">
+	<MkLoading v-if="loading"/>
+	<MkResult v-else :type="notFound ? 'notFound' : 'error'" :text="loadError ?? undefined"/>
+</article>
 </template>
 
 <script lang="ts" setup>
-import { computed, toRef } from 'vue';
+import { computed, ref, onMounted, toRef } from 'vue';
+import type * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkLink from '@/components/MkLink.vue';
+import MkResult from '@/components/global/MkResult.vue';
 import { i18n } from '@/i18n.js';
 import { useRouter } from '@/router.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -114,35 +120,52 @@ const props = defineProps<{
 const router = useRouter();
 const eventId = toRef(props, 'eventId');
 
-const eventData = await misskeyApi('events/show', {
-	eventId: eventId.value,
-});
+const eventData = ref<Misskey.entities.Event | null>(null);
+const channelName = ref<string | null>(null);
+const loading = ref(true);
+const loadError = ref<string | null>(null);
+const notFound = ref(false);
 
-const channelName = eventData.channelId
-	? (await misskeyApi('channels/show', { channelId: eventData.channelId }).then(channel => channel.name).catch(() => null))
-	: null;
+onMounted(async () => {
+	try {
+		const loadedEvent = await misskeyApi('events/show', { eventId: eventId.value });
+		eventData.value = loadedEvent;
+		if (loadedEvent.channelId != null) {
+			channelName.value = await misskeyApi('channels/show', { channelId: loadedEvent.channelId })
+				.then(channel => channel.name).catch(() => null);
+		}
+	} catch (error) {
+		notFound.value = (error as { code?: string }).code === 'NO_SUCH_EVENT';
+		loadError.value = notFound.value
+			? i18n.ts._events.eventNotFound
+			: i18n.ts._events.unknownError;
+	} finally {
+		loading.value = false;
+	}
+});
 
 function formatDatePart(date: Date, options: Intl.DateTimeFormatOptions): string {
 	return new Intl.DateTimeFormat(undefined, options).format(date);
 }
 
-const startAtDate = computed(() => new Date(eventData.startAt));
-const startMonthLabel = computed(() => formatDatePart(startAtDate.value, { month: 'short' }));
-const startDayLabel = computed(() => formatDatePart(startAtDate.value, { day: '2-digit' }));
-const startWeekdayLabel = computed(() => formatDatePart(startAtDate.value, { weekday: 'short' }));
-const startYearLabel = computed(() => formatDatePart(startAtDate.value, { year: 'numeric' }));
+const startAtDate = computed(() => eventData.value ? new Date(eventData.value.startAt) : null);
+const startMonthLabel = computed(() => startAtDate.value ? formatDatePart(startAtDate.value, { month: 'short' }) : '');
+const startDayLabel = computed(() => startAtDate.value ? formatDatePart(startAtDate.value, { day: '2-digit' }) : '');
+const startWeekdayLabel = computed(() => startAtDate.value ? formatDatePart(startAtDate.value, { weekday: 'short' }) : '');
+const startYearLabel = computed(() => startAtDate.value ? formatDatePart(startAtDate.value, { year: 'numeric' }) : '');
 
 const cardStyle = computed(() => ({
-	'--event-accent': eventData.color ?? 'var(--MI_THEME-accent)',
+	'--event-accent': eventData.value?.color ?? 'var(--MI_THEME-accent)',
 }));
 
 const gotoChannel = (): void => {
-	if (eventData.channelId == null) return;
-	router.push('/channels/:channelId', { params: { channelId: eventData.channelId } });
+	if (eventData.value?.channelId == null) return;
+	router.push('/channels/:channelId', { params: { channelId: eventData.value.channelId } });
 };
 
 const gotoEvent = (): void => {
-	router.push('/events/:eventId', { params: { eventId: eventData.id } });
+	if (eventData.value == null) return;
+	router.push('/events/:eventId', { params: { eventId: eventData.value.id } });
 };
 
 const openTag = (tag: string): void => {

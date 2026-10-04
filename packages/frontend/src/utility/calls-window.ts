@@ -15,7 +15,7 @@ let disposeRoomWindow: (() => void) | null = null;
 let creationOpen = false;
 let roomPopoutWindow: Window | null = null;
 
-export async function openCallsRoom(roomId: string, join = false): Promise<void> {
+export async function openCallsRoom(roomId: string): Promise<void> {
 	if (callsWindowRoomId.value === roomId) {
 		roomPopoutWindow?.focus();
 		return;
@@ -23,7 +23,7 @@ export async function openCallsRoom(roomId: string, join = false): Promise<void>
 	const { default: RoomWindow } = await import('@/components/MkCallsRoomWindow.vue');
 	disposeRoomWindow?.();
 	callsWindowRoomId.value = roomId;
-	const { dispose } = os.popup(RoomWindow, { roomId, join }, { popout(popup) { if (callsWindowRoomId.value === roomId) roomPopoutWindow = popup; }, closed() {
+	const { dispose } = os.popup(RoomWindow, { roomId }, { popout(popup) { if (callsWindowRoomId.value === roomId) roomPopoutWindow = popup; }, closed() {
 		dispose();
 		if (callsWindowRoomId.value === roomId) {
 			callsWindowRoomId.value = null;
@@ -46,7 +46,7 @@ export async function openCallsCreation(): Promise<void> {
 		const rooms = await misskeyApi('calls/rooms/list', { limit: 100, states: ['open', 'scheduled'] });
 		const existingRoom = rooms.find(room => room.attachment.type === 'personal' && room.attachment.ownerUserId === $i?.id);
 		if (existingRoom != null) {
-			await openCallsRoom(existingRoom.id, existingRoom.state === 'open');
+			await openCallsRoom(existingRoom.id);
 			creationOpen = false;
 			return;
 		}

@@ -25,6 +25,11 @@ export const meta = {
 	},
 
 	errors: {
+		invalidEventTimeRange: {
+			message: 'The end date must not be before the start date.',
+			code: 'INVALID_EVENT_TIME_RANGE',
+			id: 'd0bb4cdc-3f88-43f2-add0-01ce5252c3fd',
+		},
 		tooManyEvents: {
 			message: 'You cannot create events any more today.',
 			code: 'TOO_MANY_EVENTS',
@@ -74,6 +79,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 				return await this.eventEntityService.pack(event, me);
 			} catch (e) {
+				if (e instanceof EventService.InvalidEventTimeRangeError) {
+					throw new ApiError(meta.errors.invalidEventTimeRange);
+				}
 				if (e instanceof EventService.TooManyEventsError) {
 					throw new ApiError(meta.errors.tooManyEvents);
 				}

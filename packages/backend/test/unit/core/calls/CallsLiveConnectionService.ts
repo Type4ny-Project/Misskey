@@ -3,13 +3,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import type * as Redis from 'ioredis';
 import { CallsLiveConnectionService, StaleCallsConnectionError } from '@/core/calls/CallsLiveConnectionService.js';
 
 class FakeRedis {
 	private values = new Map<string, string>();
 	private counters = new Map<string, number>();
+	private deadlines = new Map<string, number>();
+	public async zadd(_key: string, scoreOrNx: number | 'NX', memberOrScore: string | number, member?: string) {
+		const roomId = member ?? memberOrScore as string;
+		if (scoreOrNx !== 'NX' || !this.deadlines.has(roomId)) this.deadlines.set(roomId, Number(scoreOrNx === 'NX' ? memberOrScore : scoreOrNx));
+	}
+	public async zscore(_key: string, roomId: string) { return this.deadlines.get(roomId)?.toString() ?? null; }
+	public async zrangebyscore(_key: string, _min: string, max: number) { return [...this.deadlines].filter(([, deadline]) => deadline <= max).map(([roomId]) => roomId); }
+	public async zrem(_key: string, roomId: string) { this.deadlines.delete(roomId); }
 	public async get(key: string) { return this.values.get(key) ?? null; }
 	public async incr(key: string) { const value = (this.counters.get(key) ?? 0) + 1; this.counters.set(key, value); return value; }
 	public async set(key: string, value: string) { this.values.set(key, value); return 'OK'; }
@@ -24,6 +32,23 @@ class FakeRedis {
 }
 
 describe('CallsLiveConnectionService', () => {
+	test('expires a host after 90 seconds and extends the deadline when they return', async () => {
+		vi.useFakeTimers();
+		try {
+			const service = new CallsLiveConnectionService(new FakeRedis() as unknown as Redis.Redis);
+			await service.touchHost('room-a');
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(await service.expiredHostRooms()).toEqual([]);
+			await service.touchHost('room-a');
+			await vi.advanceTimersByTimeAsync(89_999);
+			expect(await service.expiredHostRooms()).toEqual([]);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(await service.expiredHostRooms()).toEqual(['room-a']);
+			await service.removeHostDeadline('room-a');
+			expect(await service.getHostDeadline('room-a')).toBeNull();
+		} finally { vi.useRealTimers(); }
+	});
+
 	test('replaces a connection with a monotonically increasing generation', async () => {
 		const service = new CallsLiveConnectionService(new FakeRedis() as unknown as Redis.Redis);
 		const first = await service.replace('participant', 'connection-1');

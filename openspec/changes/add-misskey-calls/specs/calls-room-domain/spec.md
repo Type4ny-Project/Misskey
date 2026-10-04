@@ -23,24 +23,25 @@
 - **THEN** リクエスト状態が解除され、本人に拒否結果が表示される
 
 ### Requirement: アクティブルームの再利用と空ルームの終了
-クライアントは同じattachmentに`scheduled`または`open`のルームが存在する場合、新規作成を送信せず既存ルームへの導線を提示しなければならない（SHALL）。サーバーは接続heartbeatのTTLを超えてもlive connectionが1件も存在しない`open`ルームを終了し、active attachment制約を解放しなければならない（SHALL）。
+クライアントは同じattachmentに`scheduled`または`open`のルームが存在する場合、新規作成を送信せず既存ルームへの導線を提示しなければならない（SHALL）。クライアントは30秒ごとにheartbeatを送信し、サーバーはホストの最後のheartbeatから90秒経過した`open`ルームを終了し、active attachment制約を解放しなければならない（SHALL）。ホストが90秒以内に復帰した場合は終了期限を更新する。
 
 #### Scenario: 既存のパーソナルルームがある
 - **WHEN** 開催者がCalls作成画面を開き、同じpersonal attachmentにアクティブルームがある
 - **THEN** クライアントは作成操作の代わりに既存ルームへ戻る操作を表示する
 
-#### Scenario: live connectionがないルームが残った
-- **WHEN** openルームの全参加者connectionがheartbeat TTLを超えて失効する
+#### Scenario: ホストのheartbeatが途絶える
+- **WHEN** openルームのホストのheartbeatが90秒間届かない
 - **THEN** サーバーはルームをendedへ遷移させ、参加者をleftとしてactive attachment制約を解放する
 
 #### Scenario: hostが誤ってリロードする
 - **WHEN** hostのブラウザがopenルーム参加中にリロードされる
-- **THEN** クライアントはhost participantを退出させ、30秒間だけ右下に直前のルームへ再参加する導線を表示する
-- **AND** 30秒以内に再参加したhostはhost roleを維持する
+- **THEN** クライアントはhost participantを退出させ、最大90秒間、右下に直前のルームへ再参加する導線を表示する（ルームが終了した時点で非表示にする）
+- **AND** 終了期限までに再参加したhostはhost roleを維持する
 
 #### Scenario: 誰も戻らない
-- **WHEN** 最後のlive connectionが失効してから30秒間参加者が戻らない
-- **THEN** サーバーはopenルームをendedへ遷移させる
+- **WHEN** ホストの最後のheartbeatから90秒間ホストが戻らない
+- **THEN** 他の参加者が残っていてもサーバーはopenルームをendedへ遷移させる
+- **AND** 接続中の参加者には「ホストが退出したため、通話ルームは終了しました。」と通知する
 
 ### Requirement: Callsルームは必ず1種類の所属先だけを持つ
 システムはすべてのCallsルームを、1人のlocal host userに紐づく`personal`ルーム、または1つの既存local ChatRoomに紐づく`chatRoom`ルームのどちらかとして表現しなければならない（SHALL）。どちらも指定されていない、または両方が指定されたrecord / create requestは拒否しなければならない。

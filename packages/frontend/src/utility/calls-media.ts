@@ -17,6 +17,10 @@ function videoConstraints(quality: CallsVideoQuality): MediaTrackConstraints {
 	return { width: { ideal: width, max: width }, height: { ideal: quality.height, max: quality.height }, frameRate: { ideal: quality.frameRate, max: quality.frameRate } };
 }
 
+export async function captureCallsCamera(deviceId: string | undefined, quality: CallsVideoQuality): Promise<MediaStream> {
+	return navigator.mediaDevices.getUserMedia({ video: { ...videoConstraints(quality), deviceId: deviceId == null ? undefined : { exact: deviceId } }, audio: false });
+}
+
 export type CallsMediaState = 'idle' | 'acquiring-media' | 'creating-session' | 'negotiating' | 'connected' | 'reconnecting' | 'leaving' | 'closed' | 'failed';
 export type CallsMediaFailure = 'unsupported' | 'permission-denied' | 'device-not-found' | 'hardware-failure' | 'constraint-mismatch' | 'permission-pending' | 'negotiation-failed';
 
@@ -294,11 +298,14 @@ export class CallsMediaController {
 		throw new Error('Publisher is not actually sending audio packets');
 	}
 
-	public async startVideo(source: CallsVideoSource, deviceId?: string, quality: CallsVideoQuality = { height: 720, frameRate: 30 }): Promise<void> {
-		if (this.role === 'listener' || this.isClosed() || this.peer == null || this.localVideos.has(source)) return;
+	public async startVideo(source: CallsVideoSource, deviceId?: string, quality: CallsVideoQuality = { height: 720, frameRate: 30 }, previewStream?: MediaStream): Promise<void> {
+		if (this.role === 'listener' || this.isClosed() || this.peer == null || this.localVideos.has(source)) {
+			previewStream?.getTracks().forEach(track => track.stop());
+			return;
+		}
 		// Call directly from the click handler so screen capture retains user activation.
 		const stream = source === 'camera'
-			? await navigator.mediaDevices.getUserMedia({ video: { ...videoConstraints(quality), deviceId: deviceId == null ? undefined : { exact: deviceId } }, audio: false })
+			? previewStream ?? await captureCallsCamera(deviceId, quality)
 			: await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints(quality), audio: false });
 		const track = stream.getVideoTracks()[0];
 		for (const extra of stream.getTracks()) if (extra !== track) extra.stop();

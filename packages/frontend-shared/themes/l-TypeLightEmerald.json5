@@ -1,9 +1,9 @@
 {
-	id: '4eea646f-7afa-4645-83e9-83af0333cd37',
+	id: '20f42f21-3fbd-4b4c-8d05-9b7ff1c24950',
 
 	name: 'TypeLightEmerald',
 	author: 'mattyatea',
-	desc: 'Default Dark theme',
+	desc: 'Default Type4ny light theme',
 
 	base: 'light',
 

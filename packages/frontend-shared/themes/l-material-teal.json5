@@ -1,0 +1,28 @@
+{
+	id: '2a499e22-8f96-48ee-bbad-317df3b9bb9b',
+
+	name: 'Material Teal Light',
+	author: 'Type4ny Project',
+	desc: 'Material UI teal palette (light)',
+
+	base: 'light',
+
+	props: {
+		accent: '#00796b',
+		bg: '#f2f8f7',
+		fg: '#212121',
+		fgHighlighted: '#000000',
+		fgOnAccent: '#ffffff',
+		fgOnWhite: '#00796b',
+		divider: '#e0e0e0',
+		panel: '#ffffff',
+		navBg: '@panel',
+		link: '@accent',
+		hashtag: '@link',
+		mention: '@link',
+		renote: '#2e7d32',
+		love: '#c2185b',
+		buttonGradateB: '@accent',
+		badge: '@accent',
+	},
+}

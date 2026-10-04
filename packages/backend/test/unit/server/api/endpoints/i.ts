@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import { DataSource } from 'typeorm';
 import { loadConfig } from '@/config.js';
@@ -18,6 +18,7 @@ import { DEFAULT_POLICIES, RoleService } from '@/core/RoleService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import MeEndpoint from '@/server/api/endpoints/i.js';
 import { LastLoginBonusDate1791103468369 } from '../../../../../migration/1791103468369-LastLoginBonusDate.js';
+import { LoginBonusSettings1791144811075 } from '../../../../../migration/1791144811075-LoginBonusSettings.js';
 
 describe('i login bonus', () => {
 	const config = loadConfig();
@@ -57,15 +58,23 @@ describe('i login bonus', () => {
 
 	beforeEach(async () => {
 		vi.clearAllMocks();
+		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.setSystemTime(new Date('2026-10-04T03:00:00Z'));
 		await users.deleteAll();
 		const now = new Date();
 		today = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}`;
 		await users.insert({ id: 'loginbonususer', username: 'alice', usernameLower: 'alice', points: 20 });
 		user = await users.findOneByOrFail({ id: 'loginbonususer' }) as MiLocalUser;
 		await profiles.insert({ userId: user.id, loggedInDates: [today] });
-		metaService.fetch.mockResolvedValue({ enableLoginBonus: true } as Awaited<ReturnType<MetaService['fetch']>>);
+		metaService.fetch.mockResolvedValue({
+			enableLoginBonus: true, loginBonusResetTime: '00:00', loginBonusMinPoints: 1, loginBonusMaxPoints: 5,
+		} as Awaited<ReturnType<MetaService['fetch']>>);
 		roleService.getUserPolicies.mockResolvedValue({ ...DEFAULT_POLICIES });
 		userEntityService.pack.mockImplementation(async packedUser => ({ points: (packedUser as MiUser).points }) as never);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	test('awards once after migration even if today is already a logged-in day', async () => {
@@ -85,7 +94,9 @@ describe('i login bonus', () => {
 		expect(await profiles.findOneByOrFail({ userId: user.id })).toMatchObject({
 			loggedInDates: [today], lastLoginBonusDate: null,
 		});
-		metaService.fetch.mockResolvedValue({ enableLoginBonus: true } as Awaited<ReturnType<MetaService['fetch']>>);
+		metaService.fetch.mockResolvedValue({
+			enableLoginBonus: true, loginBonusResetTime: '00:00', loginBonusMinPoints: 1, loginBonusMaxPoints: 5,
+		} as Awaited<ReturnType<MetaService['fetch']>>);
 		expect((await endpoint.exec({}, user, null)).points).toBeGreaterThan(20);
 	});
 
@@ -122,6 +133,64 @@ describe('i login bonus', () => {
 		expect(balance).toBeLessThanOrEqual(25);
 		expect(responses.map(response => response.points)).toEqual([balance, balance]);
 		expect(notificationService.createNotification).toHaveBeenCalledTimes(1);
+	});
+
+	test.each([
+		['00:00', '2026-10-04T15:00:00Z'],
+		['07:30', '2026-10-04T22:30:00Z'],
+	])('starts a new bonus day at %s in Japan', async (resetTime, boundary) => {
+		metaService.fetch.mockResolvedValue({
+			enableLoginBonus: true, loginBonusResetTime: resetTime, loginBonusMinPoints: 1, loginBonusMaxPoints: 5,
+		} as Awaited<ReturnType<MetaService['fetch']>>);
+		await profiles.update({ userId: user.id }, { lastLoginBonusDate: '2026/10/4' });
+		vi.setSystemTime(new Date(Date.parse(boundary) - 1000));
+		expect((await endpoint.exec({}, user, null)).points).toBe(20);
+		vi.setSystemTime(new Date(boundary));
+		const awarded = await endpoint.exec({}, user, null);
+		expect(awarded.points).toBeGreaterThan(20);
+		expect((await profiles.findOneByOrFail({ userId: user.id })).lastLoginBonusDate).toBe('2026/10/5');
+		expect((await endpoint.exec({}, user, null)).points).toBe(awarded.points);
+		expect(notificationService.createNotification).toHaveBeenCalledTimes(1);
+	});
+
+	test.each([[7, 9], [12, 12]])('awards the configured points range %i–%i', async (min, max) => {
+		metaService.fetch.mockResolvedValue({
+			enableLoginBonus: true, loginBonusResetTime: '09:00', loginBonusMinPoints: min, loginBonusMaxPoints: max,
+		} as Awaited<ReturnType<MetaService['fetch']>>);
+		const result = await service.awardLoginBonus(user.id);
+		expect(result?.points).toBeGreaterThanOrEqual(min);
+		expect(result?.points).toBeLessThanOrEqual(max);
+		expect(result?.balance).toBe(20 + result!.points);
+		expect(notificationService.createNotification).toHaveBeenCalledWith(user.id, 'loginBonus', { points: result!.points });
+	});
+
+	test('does not award an older bonus day after the reset time changes', async () => {
+		await profiles.update({ userId: user.id }, { lastLoginBonusDate: today });
+		metaService.fetch.mockResolvedValue({
+			enableLoginBonus: true, loginBonusResetTime: '13:00', loginBonusMinPoints: 1, loginBonusMaxPoints: 5,
+		} as Awaited<ReturnType<MetaService['fetch']>>);
+		expect((await endpoint.exec({}, user, null)).points).toBe(20);
+		expect((await profiles.findOneByOrFail({ userId: user.id })).lastLoginBonusDate).toBe(today);
+	});
+
+	test('settings migration preserves enablement and supports rollback and reapplication', async () => {
+		const runner = db.createQueryRunner();
+		const migration = new LoginBonusSettings1791144811075();
+		await runner.startTransaction();
+		try {
+			await runner.query(`INSERT INTO "meta" ("id", "enableLoginBonus") VALUES ('x', true)`);
+			await migration.down(runner);
+			await migration.up(runner);
+			const [settings] = await runner.query(`SELECT "enableLoginBonus", "loginBonusResetTime", "loginBonusMinPoints", "loginBonusMaxPoints" FROM "meta" WHERE "id" = 'x'`);
+			expect(settings).toEqual({
+				enableLoginBonus: true, loginBonusResetTime: '00:00', loginBonusMinPoints: 1, loginBonusMaxPoints: 5,
+			});
+			await migration.down(runner);
+			await migration.up(runner);
+		} finally {
+			await runner.rollbackTransaction();
+			await runner.release();
+		}
 	});
 
 	test.each([false, true])('migration preserves history and initializes the guard for enableLoginBonus=%s', async enabled => {

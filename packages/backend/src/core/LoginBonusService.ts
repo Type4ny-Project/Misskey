@@ -42,8 +42,13 @@ export class LoginBonusService {
    * Award login bonus points to a user if they haven't received today's bonus
    */
   async awardLoginBonus(userId: string): Promise<LoginBonusAward | null> {
-    const now = new Date();
-    const today = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()}`;
+    const meta = await this.metaService.fetch();
+    if (!meta.enableLoginBonus) return null;
+
+    const [resetHour, resetMinute] = meta.loginBonusResetTime.split(':').map(Number);
+    // Shift the clock so the configured time in Japan starts a new bonus day.
+    const bonusDate = new Date(Date.now() + (9 * 60 - resetHour * 60 - resetMinute) * 60_000);
+    const today = `${bonusDate.getUTCFullYear()}/${bonusDate.getUTCMonth() + 1}/${bonusDate.getUTCDate()}`;
 
     const userProfile = await this.userProfilesRepository.findOne({
       where: { userId },
@@ -57,26 +62,20 @@ export class LoginBonusService {
       return null;
     }
 
-    // Check if login bonus feature is enabled
-    const meta = await this.metaService.fetch();
-    if (!meta.enableLoginBonus) {
-      return null;
-    }
-
     // Check if user has permission to receive login bonus
     const policies = await this.roleService.getUserPolicies(userId);
     if (!policies.loginBonusGrantEnabled) {
       return null;
     }
 
-    // Award random points (1-5)
-    const bonusPoints = randomInt(1, 6);
+    const bonusPoints = randomInt(meta.loginBonusMinPoints, meta.loginBonusMaxPoints + 1);
     const balance = await this.db.transaction(async manager => {
       const claimed = await manager.createQueryBuilder()
         .update(MiUserProfile)
         .set({ lastLoginBonusDate: today })
         .where('"userId" = :userId', { userId })
-        .andWhere('"lastLoginBonusDate" IS DISTINCT FROM :today', { today })
+        // Changing the reset time must not move the last awarded day backwards.
+        .andWhere('("lastLoginBonusDate" IS NULL OR "lastLoginBonusDate"::date < CAST(:today AS date))', { today })
         .execute();
 
       if (claimed.affected === 0) return null;

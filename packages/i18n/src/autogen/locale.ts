@@ -7140,6 +7140,40 @@ export interface Locale extends ILocale {
         "description": string;
     };
     "_serverSettings": {
+        "_loginBonus": {
+            /**
+             * ログインボーナス
+             */
+            "title": string;
+            /**
+             * ログインボーナスを有効にする
+             */
+            "enabled": string;
+            /**
+             * 付与日の切り替え時刻（日本時間）
+             */
+            "resetTime": string;
+            /**
+             * 毎日この時刻以降の最初のアクセスで、1日1回ポイントを付与します。ページを開いたままの場合は再読み込みしてください。
+             */
+            "resetTimeDescription": string;
+            /**
+             * 付与ポイントの下限
+             */
+            "minPoints": string;
+            /**
+             * 付与ポイントの上限
+             */
+            "maxPoints": string;
+            /**
+             * 下限から上限までの整数をランダムに付与します。同じ値にすると固定ポイントになります。
+             */
+            "pointsDescription": string;
+            /**
+             * ポイントは1以上の整数で、下限が上限以下になるように設定してください。
+             */
+            "invalidPointsRange": string;
+        };
         /**
          * アイコン画像のURL
          */

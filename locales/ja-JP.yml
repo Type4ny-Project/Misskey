@@ -1821,6 +1821,15 @@ _serverRules:
   description: "新規登録前に表示する、サーバーの簡潔なルールを設定します。内容は利用規約の要約とすることを推奨します。"
 
 _serverSettings:
+  _loginBonus:
+    title: "ログインボーナス"
+    enabled: "ログインボーナスを有効にする"
+    resetTime: "付与日の切り替え時刻（日本時間）"
+    resetTimeDescription: "毎日この時刻以降の最初のアクセスで、1日1回ポイントを付与します。ページを開いたままの場合は再読み込みしてください。"
+    minPoints: "付与ポイントの下限"
+    maxPoints: "付与ポイントの上限"
+    pointsDescription: "下限から上限までの整数をランダムに付与します。同じ値にすると固定ポイントになります。"
+    invalidPointsRange: "ポイントは1以上の整数で、下限が上限以下になるように設定してください。"
   iconUrl: "アイコン画像のURL"
   appIconDescription: "{host}がアプリとして表示される際のアイコンを指定します。"
   appIconUsageExample: "例: PWAや、スマートフォンのホーム画面にブックマークとして追加された時など"

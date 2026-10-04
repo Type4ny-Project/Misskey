@@ -2732,6 +2732,7 @@ _calls:
   microphoneOn: "マイクON"
   mutedStatus: "ミュート中"
   peopleSpeaking: "{count}人が発話中"
+  peopleWithMicrophoneOn: "{count}人がマイクON"
   connected: "接続済み"
   connecting: "接続中…"
   reconnectingShort: "再接続中…"

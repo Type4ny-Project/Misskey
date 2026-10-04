@@ -10423,6 +10423,10 @@ export interface Locale extends ILocale {
          */
         "peopleSpeaking": ParameterizedString<"count">;
         /**
+         * {count}人がマイクON
+         */
+        "peopleWithMicrophoneOn": ParameterizedString<"count">;
+        /**
          * 接続済み
          */
         "connected": string;

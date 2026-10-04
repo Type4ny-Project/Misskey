@@ -215,7 +215,7 @@ let disposed = false;
 const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? null);
 const isHost = computed(() => myParticipant.value?.role === 'host');
 const canModerateParticipants = computed(() => isHost.value || (myParticipant.value != null && room.value?.moderatorUserIds.includes(myParticipant.value.userId) === true));
-const speakers = computed(() => participants.value.filter(participant => participant.role !== 'listener'));
+const speakers = computed(() => participants.value.filter(participant => participant.role !== 'listener').sort((a, b) => Number(a.isMuted) - Number(b.isMuted)));
 const listeners = computed(() => participants.value.filter(participant => participant.role === 'listener'));
 const sessionIsCurrent = computed(() => isSessionRoom.value && session.isActive.value);
 const roomVideos = computed(() => sessionIsCurrent.value ? session.videos.value : []);

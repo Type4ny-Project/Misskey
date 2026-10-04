@@ -86,7 +86,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 					<div :class="$style.body">
 						<div :class="$style.titleRow"><strong>{{ room.title }}</strong></div>
-						<small>{{ participants.length }} {{ i18n.ts.users }} · {{ i18n.tsx._calls.peopleSpeaking({ count: speakingCount }) }}</small>
+						<small>{{ participants.length }} {{ i18n.ts.users }} · {{ i18n.tsx._calls.peopleWithMicrophoneOn({ count: microphoneOnCount }) }}</small>
 					</div>
 					<i class="ti ti-chevron-up" :class="[$style.expandIcon, expanded && $style.expandIconExpanded]"></i>
 				</button>
@@ -130,13 +130,13 @@ const expanded = ref(false);
 const rootEl = ref<HTMLElement | null>(null);
 const room = computed(() => session.room.value);
 const participants = computed(() => session.participants.value);
-const speakers = computed(() => participants.value.filter(participant => participant.role !== 'listener'));
+const speakers = computed(() => participants.value.filter(participant => participant.role !== 'listener').sort((a, b) => Number(a.isMuted) - Number(b.isMuted)));
 const listeners = computed(() => participants.value.filter(participant => participant.role === 'listener'));
 const pendingRequests = computed(() => listeners.value.filter(participant => participant.speakerRequestedAt != null));
 const hostParticipant = computed(() => participants.value.find(participant => participant.role === 'host') ?? null);
 const hostUser = computed(() => hostParticipant.value == null ? null : participantUser(hostParticipant.value.userId));
 const isLiveSpeaking = computed(() => session.myParticipant.value != null && session.speakingParticipantIds.value.has(session.myParticipant.value.id));
-const speakingCount = computed(() => session.speakingParticipantIds.value.size);
+const microphoneOnCount = computed(() => speakers.value.filter(participant => !participant.isMuted).length);
 
 watch(rootEl, (element, _, onCleanup) => {
 	if (element == null) return;

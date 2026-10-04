@@ -545,6 +545,46 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 	}
 
 	@bindThis
+	public async muteParticipant(actor: MiUser, roomId: string, participantId: string, expectedRevision: number): Promise<void> {
+		const room = await this.getRoom(roomId);
+		await this.assertCanModerateParticipants(actor, room);
+		const participant = await this.callsParticipantsRepository.findOneBy({ id: participantId, roomId, state: 'active' });
+		if (participant == null || participant.role !== 'speaker') throw new CallsRoomError('participant-not-found');
+		if (participant.isMuted) return;
+		const result = await this.callsRoomsRepository.createQueryBuilder().update()
+			.set({ revision: () => '"revision" + 1', updatedAt: new Date() })
+			.where('id = :roomId AND revision = :expectedRevision AND state = :state', { roomId, expectedRevision, state: 'open' })
+			.returning('revision').execute();
+		if (result.affected !== 1) throw new CallsRoomError('stale-revision');
+		const revision = Number((result.raw[0] as { revision: number }).revision);
+		const now = new Date();
+		await this.callsParticipantsRepository.update(participant.id, { isMuted: true, updatedAt: now });
+		await this.callsModerationLogsRepository.insert({
+			id: this.idService.gen(), roomId, actorUserId: actor.id, targetParticipantId: participant.id,
+			action: 'mute', previousRole: participant.role, nextRole: participant.role,
+			reason: null, roomRevision: revision, createdAt: now,
+		});
+		await this.callsEventService.publish(roomId, revision, 'mute', { participantId: participant.id, isMuted: true });
+		this.callsTelemetryService.lifecycle({ action: 'participant-muted', roomId, participantId: participant.id, reason: 'moderation' });
+	}
+
+	@bindThis
+	public async stopParticipantVideo(actor: MiUser, roomId: string, participantId: string, mediaSource: 'camera' | 'screen', expectedRevision: number): Promise<void> {
+		const room = await this.getRoom(roomId);
+		await this.assertCanModerateParticipants(actor, room);
+		const participant = await this.callsParticipantsRepository.findOneBy({ id: participantId, roomId, state: 'active' });
+		if (participant == null || participant.role !== 'speaker') throw new CallsRoomError('participant-not-found');
+		const result = await this.callsRoomsRepository.createQueryBuilder().update()
+			.set({ revision: () => '"revision" + 1', updatedAt: new Date() })
+			.where('id = :roomId AND revision = :expectedRevision AND state = :state', { roomId, expectedRevision, state: 'open' })
+			.returning('revision').execute();
+		if (result.affected !== 1) throw new CallsRoomError('stale-revision');
+		const revision = Number((result.raw[0] as { revision: number }).revision);
+		await this.callsMediaRevocationService.stopParticipantVideo(participant, mediaSource, revision);
+		this.callsTelemetryService.lifecycle({ action: `participant-${mediaSource}-stopped`, roomId, participantId: participant.id, reason: 'moderation' });
+	}
+
+	@bindThis
 	public async reportSpeaking(user: MiUser, roomId: string, speaking: boolean): Promise<void> {
 		const room = await this.getRoom(roomId);
 		await this.assertCanAccess(user, room);
@@ -576,11 +616,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 	@bindThis
 	public async removeParticipant(host: MiUser, roomId: string, participantId: string, expectedRevision: number, reason?: string): Promise<void> {
 		const room = await this.getRoom(roomId);
-		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
-		if (room.ownerUserId !== host.id && !(await this.roleService.isModerator(host))) {
-			if (!room.moderatorUserIds.includes(host.id) || !(await this.callsParticipantsRepository.existsBy({ roomId, userId: host.id, state: 'active' }))) throw new CallsRoomError('access-denied');
-			await this.assertCanAccess(host, room);
-		}
+		await this.assertCanModerateParticipants(host, room);
 		const participant = await this.callsParticipantsRepository.findOneBy({ id: participantId, roomId, state: 'active' });
 		if (participant == null || participant.role === 'host') throw new CallsRoomError('participant-not-found');
 		const result = await this.callsRoomsRepository.createQueryBuilder().update()
@@ -598,6 +634,13 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		await this.callsEventService.publish(roomId, Number((result.raw[0] as { revision: number }).revision), 'participant', { participantId: participant.id, action: 'removed' });
 		await this.callsMediaRevocationService.revokeParticipant(participant, Number((result.raw[0] as { revision: number }).revision), 'moderation');
 		this.callsTelemetryService.lifecycle({ action: 'participant-removed', roomId, participantId: participant.id, reason: 'moderation' });
+	}
+
+	private async assertCanModerateParticipants(actor: MiUser, room: MiCallsRoom): Promise<void> {
+		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
+		if (room.ownerUserId === actor.id || await this.roleService.isModerator(actor)) return;
+		if (!room.moderatorUserIds.includes(actor.id) || !(await this.callsParticipantsRepository.existsBy({ roomId: room.id, userId: actor.id, state: 'active' }))) throw new CallsRoomError('access-denied');
+		await this.assertCanAccess(actor, room);
 	}
 
 	private async bumpRevision(roomId: string): Promise<number> {

@@ -343,26 +343,66 @@ describe('CallsRoomService access', () => {
 
 function createModerationFixture() {
 	const room = { ...baseRoom, visibility: 'public', state: 'open', mode: 'stage', revision: 1, moderatorUserIds: ['moderator-a'] } as MiCallsRoom;
-	const participant = { id: 'target-a', roomId: room.id, userId: 'target-user', role: 'speaker' };
+	const participant = { id: 'target-a', roomId: room.id, userId: 'target-user', role: 'speaker', isMuted: false };
 	const existsBy = vi.fn().mockResolvedValue(true);
 	const update = vi.fn();
 	const set = vi.fn(() => queryBuilder);
 	const execute = vi.fn().mockResolvedValue({ affected: 1, raw: [{ ...room, revision: 2 }] });
 	const queryBuilder = { update: () => queryBuilder, set, where: () => queryBuilder, returning: () => queryBuilder, execute };
 	const revokeParticipant = vi.fn();
+	const stopParticipantVideo = vi.fn();
+	const insertLog = vi.fn();
 	const publish = vi.fn();
 	const service = new CallsRoomService(
 		{ cloudflareRealtime: { enabled: true } } as Config,
 		{ findOneBy: async () => room, createQueryBuilder: () => queryBuilder } as never,
 		{ findOneBy: async () => participant, existsBy, update } as never,
-		{ insert: vi.fn() } as never, {} as never, {} as never, {} as never,
+		{ insert: insertLog } as never, {} as never, {} as never, {} as never,
 		{ gen: () => 'log-a' } as never, { isModerator: async () => false, getUserPolicies: async () => ({ canJoinCalls: true }) } as never,
-		{} as never, { publish } as never, { revokeParticipant } as never, { lifecycle: vi.fn() } as never,
+		{} as never, { publish } as never, { revokeParticipant, stopParticipantVideo } as never, { lifecycle: vi.fn() } as never,
 	);
-	return { service, room, participant, existsBy, update, set, execute, revokeParticipant, publish };
+	return { service, room, participant, existsBy, update, set, execute, revokeParticipant, stopParticipantVideo, insertLog, publish };
 }
 
 describe('Calls VC moderators', () => {
+	test.each(['owner-a', 'moderator-a'])('%s can mute a speaker without changing their role', async id => {
+		const fixture = createModerationFixture();
+		fixture.room.mode = id === 'owner-a' ? 'stage' : 'open';
+		await fixture.service.muteParticipant({ id, host: null } as MiUser, fixture.room.id, fixture.participant.id, 1);
+		expect(fixture.update).toHaveBeenCalledWith(fixture.participant.id, { isMuted: true, updatedAt: expect.any(Date) });
+		expect(fixture.insertLog).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: id, action: 'mute', previousRole: 'speaker', nextRole: 'speaker', roomRevision: 2 }));
+		expect(fixture.publish).toHaveBeenCalledWith(fixture.room.id, 2, 'mute', { participantId: fixture.participant.id, isMuted: true });
+		expect(fixture.revokeParticipant).not.toHaveBeenCalled();
+	});
+
+	test.each(['camera', 'screen'] as const)('a VC moderator can stop a speaker’s %s', async mediaSource => {
+		const fixture = createModerationFixture();
+		await fixture.service.stopParticipantVideo({ id: 'moderator-a', host: null } as MiUser, fixture.room.id, fixture.participant.id, mediaSource, 1);
+		expect(fixture.stopParticipantVideo).toHaveBeenCalledWith(fixture.participant, mediaSource, 2);
+		expect(fixture.update).not.toHaveBeenCalled();
+		expect(fixture.revokeParticipant).not.toHaveBeenCalled();
+	});
+
+	test('muting an already muted speaker does not publish another change', async () => {
+		const fixture = createModerationFixture();
+		fixture.participant.isMuted = true;
+		await fixture.service.muteParticipant({ id: 'moderator-a', host: null } as MiUser, fixture.room.id, fixture.participant.id, 1);
+		expect(fixture.execute).not.toHaveBeenCalled();
+		expect(fixture.publish).not.toHaveBeenCalled();
+	});
+
+	test.each(['ended', 'stale'] as const)('a %s room rejects microphone and video moderation', async reason => {
+		const fixture = createModerationFixture();
+		if (reason === 'ended') fixture.room.state = 'ended';
+		else fixture.execute.mockResolvedValue({ affected: 0, raw: [] });
+		const user = { id: 'moderator-a', host: null } as MiUser;
+		const code = reason === 'ended' ? 'invalid-state' : 'stale-revision';
+		await expect(fixture.service.muteParticipant(user, fixture.room.id, fixture.participant.id, 1)).rejects.toMatchObject({ code });
+		await expect(fixture.service.stopParticipantVideo(user, fixture.room.id, fixture.participant.id, 'screen', 1)).rejects.toMatchObject({ code });
+		expect(fixture.update).not.toHaveBeenCalled();
+		expect(fixture.stopParticipantVideo).not.toHaveBeenCalled();
+	});
+
 	test('the host can promote a listener beyond the former speaker limit', async () => {
 		const fixture = createModerationFixture();
 		fixture.participant.role = 'listener';
@@ -400,19 +440,27 @@ describe('Calls VC moderators', () => {
 		expect(fixture.revokeParticipant).toHaveBeenCalledWith(fixture.participant, 2, 'moderation');
 	});
 
-	test.each(['ordinary', 'inactive', 'no-access'])('a %s participant cannot use VC moderator kick permission', async reason => {
+	test.each(['ordinary', 'inactive', 'no-access'])('a %s participant cannot moderate other participants', async reason => {
 		const fixture = createModerationFixture();
 		if (reason === 'inactive') fixture.existsBy.mockResolvedValue(false);
 		if (reason === 'no-access') fixture.room.visibility = 'specified';
 		await expect(fixture.service.removeParticipant({ id: reason === 'ordinary' ? 'viewer-a' : 'moderator-a', host: null } as MiUser, fixture.room.id, fixture.participant.id, 1)).rejects.toMatchObject({ code: 'access-denied' });
+		const user = { id: reason === 'ordinary' ? 'viewer-a' : 'moderator-a', host: null } as MiUser;
+		await expect(fixture.service.muteParticipant(user, fixture.room.id, fixture.participant.id, 1)).rejects.toMatchObject({ code: 'access-denied' });
+		await expect(fixture.service.stopParticipantVideo(user, fixture.room.id, fixture.participant.id, 'camera', 1)).rejects.toMatchObject({ code: 'access-denied' });
 		expect(fixture.update).not.toHaveBeenCalled();
+		expect(fixture.stopParticipantVideo).not.toHaveBeenCalled();
 	});
 
-	test('a VC moderator cannot kick the host', async () => {
+	test('a VC moderator cannot kick or stop the host’s media', async () => {
 		const fixture = createModerationFixture();
 		fixture.participant.role = 'host';
 		await expect(fixture.service.removeParticipant({ id: 'moderator-a', host: null } as MiUser, fixture.room.id, fixture.participant.id, 1)).rejects.toMatchObject({ code: 'participant-not-found' });
+		const user = { id: 'moderator-a', host: null } as MiUser;
+		await expect(fixture.service.muteParticipant(user, fixture.room.id, fixture.participant.id, 1)).rejects.toMatchObject({ code: 'participant-not-found' });
+		await expect(fixture.service.stopParticipantVideo(user, fixture.room.id, fixture.participant.id, 'screen', 1)).rejects.toMatchObject({ code: 'participant-not-found' });
 		expect(fixture.update).not.toHaveBeenCalled();
+		expect(fixture.stopParticipantVideo).not.toHaveBeenCalled();
 	});
 
 	test('a stale moderator assignment does not change permissions', async () => {

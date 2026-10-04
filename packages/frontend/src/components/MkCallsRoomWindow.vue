@@ -48,7 +48,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</div>
 									<div :class="$style.personName">
 										<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
-										<button v-if="canKick && participant.role !== 'host' && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
+										<button v-if="canModerateParticipants && participant.role !== 'host' && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
 									</div>
 									<small :class="speakingParticipantIds.has(participant.id) && $style.speakingLabel">{{ speakingParticipantIds.has(participant.id) ? i18n.ts._calls.speakingNow : participant.role === 'host' ? i18n.ts._calls.host : room.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.vcModerator : i18n.ts._calls.speaker }}</small>
 									<label v-if="sessionIsCurrent && participant.userId !== $i?.id" :class="$style.personVolume">
@@ -68,7 +68,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<div v-else :class="[$style.listenerAvatar, $style.avatarPlaceholder]"><i class="ti ti-user"></i></div>
 									<div :class="$style.personName">
 										<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
-										<button v-if="canKick && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
+										<button v-if="canModerateParticipants && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
 									</div>
 									<small v-if="room.moderatorUserIds.includes(participant.userId)">{{ i18n.ts._calls.vcModerator }}</small>
 									<small v-if="participant.speakerRequestedAt != null" :class="$style.speakingLabel"><i class="ti ti-hand-stop"></i> {{ i18n.ts._calls.requestSpeaker }}</small>
@@ -214,7 +214,7 @@ const loadFailed = shallowRef(false);
 let disposed = false;
 const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? null);
 const isHost = computed(() => myParticipant.value?.role === 'host');
-const canKick = computed(() => isHost.value || (myParticipant.value != null && room.value?.moderatorUserIds.includes(myParticipant.value.userId) === true));
+const canModerateParticipants = computed(() => isHost.value || (myParticipant.value != null && room.value?.moderatorUserIds.includes(myParticipant.value.userId) === true));
 const speakers = computed(() => participants.value.filter(participant => participant.role !== 'listener'));
 const listeners = computed(() => participants.value.filter(participant => participant.role === 'listener'));
 const sessionIsCurrent = computed(() => isSessionRoom.value && session.isActive.value);
@@ -283,13 +283,16 @@ function openRoomMenu(event: MouseEvent): void {
 
 function openParticipantMenu(participant: (typeof participants.value)[number], event: MouseEvent): void {
 	if (popoutWindow != null) window.focus();
-	if (!canKick.value || room.value == null || participant.role === 'host' || participant.userId === $i?.id) return;
+	if (!canModerateParticipants.value || room.value == null || participant.role === 'host' || participant.userId === $i?.id) return;
 	os.popupMenu([
 		...(isHost.value && room.value.mode === 'stage' ? [
 			{ text: participant.role === 'listener' ? participant.speakerRequestedAt != null ? i18n.ts.approve : i18n.ts._calls.promoteSpeaker : i18n.ts._calls.demoteListener, icon: 'ti ti-microphone', action: () => setRole(participant.id, participant.role === 'listener' ? 'speaker' : 'listener') },
 			...(participant.speakerRequestedAt != null ? [{ text: i18n.ts.reject, icon: 'ti ti-x', action: () => setRole(participant.id, 'listener') }] : []),
 		] : []),
 		...(isHost.value ? [{ text: room.value.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.removeVcModerator : i18n.ts._calls.assignVcModerator, icon: 'ti ti-shield', action: () => setModerator(participant.id, !room.value!.moderatorUserIds.includes(participant.userId)) }] : []),
+		...(participant.role === 'speaker' && !participant.isMuted ? [{ text: i18n.ts._calls.mute, icon: 'ti ti-microphone-off', action: () => muteParticipant(participant.id) }] : []),
+		...(roomVideos.value.some(video => video.participantId === participant.id && video.source === 'camera') ? [{ text: i18n.ts._calls.stopCamera, icon: 'ti ti-camera-off', action: () => stopParticipantVideo(participant.id, 'camera') }] : []),
+		...(roomVideos.value.some(video => video.participantId === participant.id && video.source === 'screen') ? [{ text: i18n.ts._calls.stopScreenSharing, icon: 'ti ti-screen-share-off', action: () => stopParticipantVideo(participant.id, 'screen') }] : []),
 		{ text: i18n.ts._calls.removeParticipant, icon: 'ti ti-user-x', danger: true, action: () => removeParticipant(participant.id) },
 	], event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
 }
@@ -366,6 +369,28 @@ async function setModerator(participantId: string, isModerator: boolean): Promis
 		await refreshRoom();
 	} catch (error) {
 		console.error('[Calls] Moderator change failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
+}
+
+async function muteParticipant(participantId: string): Promise<void> {
+	if (room.value == null) return;
+	try {
+		await misskeyApi('calls/rooms/mute-participant', { roomId: props.roomId, participantId, expectedRevision: room.value.revision });
+		await refreshRoom();
+	} catch (error) {
+		console.error('[Calls] Participant mute failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
+}
+
+async function stopParticipantVideo(participantId: string, mediaSource: 'camera' | 'screen'): Promise<void> {
+	if (room.value == null) return;
+	try {
+		await misskeyApi('calls/rooms/stop-participant-video', { roomId: props.roomId, participantId, mediaSource, expectedRevision: room.value.revision });
+		await refreshRoom();
+	} catch (error) {
+		console.error('[Calls] Participant video stop failed', error);
 		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
 	}
 }

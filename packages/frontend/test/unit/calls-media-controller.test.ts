@@ -121,6 +121,31 @@ describe('CallsMediaController', () => {
 		expect(audio.stop).toHaveBeenCalled();
 	});
 
+	test.each(['camera', 'screen'] as const)('stops local %s capture when moderation removes its publication', async source => {
+		const audio = makeTrack('audio');
+		const camera = makeTrack('video');
+		const screen = makeTrack('video');
+		installBrowserMedia(vi.fn().mockResolvedValueOnce(stream(audio)).mockResolvedValueOnce(stream(camera)), vi.fn().mockResolvedValue(stream(screen)));
+		const localTrack = vi.fn();
+		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, undefined, undefined, false, { localTrack, remoteRemoved: vi.fn(), error: vi.fn() });
+		await controller.connect();
+		await controller.startVideo('camera');
+		await controller.startVideo('screen');
+		const publishCalls = apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish');
+		const publications = publishCalls.map(([, input]) => ({ id: `publication-${apiMock.mock.calls.findIndex(call => call[1] === input) + 1}`, participantId: 'participant-a', mediaKind: 'video', mediaSource: input.mediaSource }));
+		apiMock.mockImplementation(async (endpoint: string) => {
+			if (endpoint === 'calls/media/reconcile') return { roomRevision: 2, publications: publications.filter(publication => publication.mediaSource !== source) };
+			return {};
+		});
+		await controller.reconcile();
+		expect((source === 'camera' ? camera : screen).stop).toHaveBeenCalledOnce();
+		expect((source === 'camera' ? screen : camera).stop).not.toHaveBeenCalled();
+		expect(audio.stop).not.toHaveBeenCalled();
+		expect(localTrack).toHaveBeenCalledWith(source, null);
+		expect(apiMock).not.toHaveBeenCalledWith('calls/media/tracks/close', expect.anything());
+		await controller.close();
+	});
+
 	test('toggles noise suppression without reconnecting and retains it when switching microphones', async () => {
 		const tracks = Array.from({ length: 4 }, () => makeTrack('audio'));
 		const getUserMedia = vi.fn();

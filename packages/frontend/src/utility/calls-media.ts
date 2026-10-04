@@ -231,6 +231,15 @@ export class CallsMediaController {
 		if (this.peer == null || this.generation === 0) return false;
 		await this.ensureCredential();
 		const authoritative = await misskeyApi('calls/media/reconcile', { roomId: this.roomId });
+		const authoritativeOwnIds = new Set(authoritative.publications.filter(publication => publication.participantId === this.participantId).map(publication => publication.id));
+		for (const [source, video] of this.localVideos) {
+			if (video.publicationId == null || authoritativeOwnIds.has(video.publicationId)) continue;
+			video.track.stop();
+			this.localVideos.delete(source);
+			this.publications.delete(video.publicationId);
+			this.videoCallbacks?.localTrack(source, null);
+			await video.transceiver?.sender.replaceTrack(null);
+		}
 		const authoritativeRemoteIds = new Set(authoritative.publications.filter(publication => publication.participantId !== this.participantId).map(publication => publication.id));
 		for (const publicationId of this.subscribedPublications) {
 			if (!authoritativeRemoteIds.has(publicationId)) {

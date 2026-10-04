@@ -618,7 +618,10 @@ watch(() => participants.value.filter(participant => participant.role !== 'liste
 });
 
 watch(() => myParticipant.value?.isMuted, value => {
-	if (value != null) muted.value = value;
+	if (value != null) {
+		muted.value = value;
+		media.value?.setMuted(value);
+	}
 });
 
 watch(() => myParticipant.value?.role, (role, previousRole) => {

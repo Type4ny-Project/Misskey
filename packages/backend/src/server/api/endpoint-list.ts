@@ -413,6 +413,8 @@ export * as 'calls/rooms/leave' from './endpoints/calls/rooms/leave.js';
 export * as 'calls/rooms/set-moderator' from './endpoints/calls/rooms/set-moderator.js';
 export * as 'calls/rooms/set-role' from './endpoints/calls/rooms/set-role.js';
 export * as 'calls/rooms/remove-participant' from './endpoints/calls/rooms/remove-participant.js';
+export * as 'calls/rooms/mute-participant' from './endpoints/calls/rooms/mute-participant.js';
+export * as 'calls/rooms/stop-participant-video' from './endpoints/calls/rooms/stop-participant-video.js';
 export * as 'calls/rooms/request-speaker' from './endpoints/calls/rooms/request-speaker.js';
 export * as 'calls/rooms/cancel-speaker-request' from './endpoints/calls/rooms/cancel-speaker-request.js';
 export * as 'calls/media/session/create' from './endpoints/calls/media/session-create.js';

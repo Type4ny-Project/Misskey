@@ -47,6 +47,15 @@ export class CallsMediaRevocationService {
 		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason });
 	}
 
+	public async stopParticipantVideo(participant: MiCallsParticipant, mediaSource: 'camera' | 'screen', roomRevision: number): Promise<void> {
+		const publications = (await this.bindings.listRoomPublications(participant.roomId)).filter(binding => binding.participantId === participant.id && binding.mediaSource === mediaSource);
+		await this.closeProviderPublications(publications);
+		for (const publication of publications) {
+			await this.bindings.removePublication(publication.id);
+			await this.events.publish(participant.roomId, roomRevision, 'track', { participantId: participant.id, publicationId: publication.id, available: false, mediaKind: publication.mediaKind, mediaSource });
+		}
+	}
+
 	public async closeGeneration(participantId: string, generation: number): Promise<void> {
 		const publications = await this.bindings.listGenerationPublications(participantId, generation);
 		const subscriptions = await this.bindings.listSubscriptions(participantId, generation);

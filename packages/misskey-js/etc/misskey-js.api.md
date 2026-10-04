@@ -841,6 +841,9 @@ type CallsRoomsListRequest = operations['calls___rooms___list']['requestBody']['
 type CallsRoomsListResponse = operations['calls___rooms___list']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type CallsRoomsMuteParticipantRequest = operations['calls___rooms___mute-participant']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
 type CallsRoomsOpenRequest = operations['calls___rooms___open']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -869,6 +872,9 @@ type CallsRoomsShowRequest = operations['calls___rooms___show']['requestBody']['
 
 // @public (undocumented)
 type CallsRoomsShowResponse = operations['calls___rooms___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsStopParticipantVideoRequest = operations['calls___rooms___stop-participant-video']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type CallsUsersActiveRoomsRequest = operations['calls___users___active-rooms']['requestBody']['content']['application/json'];
@@ -2183,6 +2189,7 @@ declare namespace entities {
         CallsRoomsLeaveRequest,
         CallsRoomsListRequest,
         CallsRoomsListResponse,
+        CallsRoomsMuteParticipantRequest,
         CallsRoomsOpenRequest,
         CallsRoomsOpenResponse,
         CallsRoomsRemoveParticipantRequest,
@@ -2193,6 +2200,7 @@ declare namespace entities {
         CallsRoomsSetRoleResponse,
         CallsRoomsShowRequest,
         CallsRoomsShowResponse,
+        CallsRoomsStopParticipantVideoRequest,
         CallsUsersActiveRoomsRequest,
         CallsUsersActiveRoomsResponse,
         ChannelsCreateRequest,

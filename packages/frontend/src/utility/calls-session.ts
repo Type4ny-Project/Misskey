@@ -15,10 +15,12 @@ import { i18n } from '@/i18n.js';
 import { alert, confirm, popup, popupMenu, toast } from '@/os.js';
 import { misskeyApi, misskeyApiKeepalive } from '@/utility/misskey-api.js';
 import { callsScreenWindows, clearCallsScreenWindow, clearCallsScreenWindows, showCallsScreenWindow } from '@/utility/calls-screen-window.js';
+import { CallsReportRecorder } from '@/utility/calls-report-recording.js';
 
 type CallsRoomConnection = ReturnType<typeof createCallsRoomConnection>;
 type CallsReconnectCandidate = { roomId: string; title: string; userId: string; reconnectToken: string; expiresAt: number };
 const reconnectStorageKey = 'miux:calls-reconnect' as const;
+let reportRecorder: CallsReportRecorder | null = null;
 
 function safeRemoveReconnectCandidate(): void {
 	try {
@@ -152,6 +154,7 @@ function disposeConnection(): void {
 }
 
 function removeRemoteTrack(publicationId: string): void {
+	reportRecorder?.setTrack(publicationId, null);
 	const audio = remoteAudio.get(publicationId)?.element;
 	if (audio != null) { audio.pause(); audio.srcObject = null; audio.remove(); }
 	remoteAudio.delete(publicationId);
@@ -184,6 +187,7 @@ function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublica
 		return;
 	}
 	if (track.kind !== 'audio') return;
+	reportRecorder?.setTrack(publication.id, track);
 	const audio = new Audio();
 	audio.autoplay = true;
 	audio.hidden = true;
@@ -233,6 +237,9 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 		previousConnection,
 		replaceExisting,
 		{
+			microphoneTrack(track) {
+				if (generation === sessionGeneration && media.value === controller) reportRecorder?.setTrack('local', track);
+			},
 			localTrack(source, track) {
 				if (generation !== sessionGeneration || media.value !== controller) return;
 				const next = new Map(localVideos.value);
@@ -264,6 +271,8 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 }
 
 async function clearSession(): Promise<void> {
+	reportRecorder?.close();
+	reportRecorder = null;
 	cancelCameraPreview?.();
 	clearCallsScreenWindows();
 	sessionGeneration += 1;
@@ -327,6 +336,23 @@ async function join(roomId: string, alreadyParticipant: boolean, reconnectToken?
 	try {
 		if (currentRoomId.value != null && currentRoomId.value !== roomId) await leave();
 		generation = ++sessionGeneration;
+		if (reportRecorder == null) {
+			const recorder = new CallsReportRecorder();
+			reportRecorder = recorder;
+			void recorder.start().then(() => {
+				if (reportRecorder !== recorder) return;
+				for (const [id, { element }] of remoteAudio) {
+					const stream = element.srcObject as MediaStream | null;
+					recorder.setTrack(id, stream?.getAudioTracks()[0] ?? null);
+				}
+				recorder.setTrack('local', media.value?.localTrack ?? null);
+			}).catch(error => {
+				console.error('[Calls] Report recording unavailable', error);
+				recorder.close();
+				if (reportRecorder === recorder) reportRecorder = null;
+			});
+			toast(i18n.ts._calls.recordingNotice);
+		}
 		currentRoomId.value = roomId;
 		const next = attachConnection(roomId);
 		await next.refresh();
@@ -376,6 +402,7 @@ async function reconnectMedia(): Promise<void> {
 	const identity = controller?.connectionIdentity ?? undefined;
 	media.value = null;
 	localVideos.value = new Map();
+	reportRecorder?.setTrack('local', null);
 	for (const id of remoteAudio.keys()) removeRemoteTrack(id);
 	remoteVideos.value = new Map();
 	needsAudioResume.value = false;
@@ -598,6 +625,7 @@ function openScreenSettings(event: MouseEvent): void {
 }
 
 async function resumeAudio(): Promise<void> {
+	await reportRecorder?.resume();
 	await Promise.all([...remoteAudio.values()].map(({ element }) => element.play()));
 	needsAudioResume.value = false;
 }
@@ -687,6 +715,7 @@ export function useCallsSession() {
 		reconnectRoomState,
 		reconnectSecondsRemaining,
 		speakerRequestResult,
+		captureReportRecording() { return reportRecorder?.capture() ?? null; },
 		join,
 		leave,
 		toggleMute,

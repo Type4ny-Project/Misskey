@@ -67,6 +67,7 @@ export class CallsMediaController {
 		private replaceExisting = false,
 		private videoCallbacks?: {
 			localTrack: (source: CallsVideoSource, track: MediaStreamTrack | null) => void;
+			microphoneTrack?: (track: MediaStreamTrack | null) => void;
 			remoteRemoved: (publicationId: string) => void;
 			error: (error: unknown) => void;
 		},
@@ -137,6 +138,7 @@ export class CallsMediaController {
 		this.localTrack = stream.getAudioTracks()[0] ?? null;
 		if (this.localTrack == null) throw new DOMException('No audio track', 'NotFoundError');
 		this.localTrack.enabled = !this.muted;
+		this.videoCallbacks?.microphoneTrack?.(this.localTrack);
 		this.localTrack.addEventListener('ended', () => void this.recoverFromDeviceLoss());
 	}
 
@@ -460,6 +462,7 @@ export class CallsMediaController {
 		} catch (error) {
 			this.localTrack?.stop();
 			this.localTrack = oldTrack;
+			this.videoCallbacks?.microphoneTrack?.(oldTrack);
 			throw error;
 		}
 		oldTrack?.stop();

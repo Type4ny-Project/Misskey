@@ -36,6 +36,13 @@ vi.mock('@/i18n.js', () => ({ i18n: {
 vi.mock('@/os.js', () => ({ toast: fixture.toast, alert: fixture.alert, confirm: fixture.confirm, popupMenu: fixture.popupMenu, popup: fixture.popup }));
 vi.mock('@/local-storage.js', () => ({ miLocalStorage: { getItemAsJson: () => null, removeItem: vi.fn() } }));
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: fixture.api, misskeyApiKeepalive: fixture.keepalive }));
+vi.mock('@/utility/calls-report-recording.js', () => ({ CallsReportRecorder: class {
+	public start = vi.fn().mockResolvedValue(undefined);
+	public setTrack = vi.fn();
+	public close = vi.fn();
+	public resume = vi.fn().mockResolvedValue(undefined);
+	public capture = vi.fn().mockReturnValue(null);
+} }));
 vi.mock('@/utility/calls-media-core.js', () => ({ detectCallsMediaCapabilities: () => ({ secureContext: true, peerConnection: true, transceiver: true }) }));
 vi.mock('@/composables/use-calls-room.js', async () => {
 	const { ref } = await import('vue');
@@ -414,6 +421,7 @@ describe('Calls session device handoff', () => {
 
 	test('the new device ignores revocation addressed to an old connection', async () => {
 		await session.join('room-a', true);
+		fixture.toast.mockClear();
 		fixture.revoked[0]({ reason: 'replaced', connectionId: 'old-device', generation: 1 });
 		expect(session.isActive.value).toBe(true);
 		expect(fixture.controllers[0].close).not.toHaveBeenCalled();

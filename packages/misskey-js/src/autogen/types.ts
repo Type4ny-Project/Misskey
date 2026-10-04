@@ -52,6 +52,15 @@ export type paths = {
          */
         post: operations['admin___abuse-report___notification-recipient___update'];
     };
+    '/admin/abuse-user-report-recording': {
+        /**
+         * admin/abuse-user-report-recording
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:admin:abuse-user-reports*
+         */
+        post: operations['admin___abuse-user-report-recording'];
+    };
     '/admin/abuse-user-reports': {
         /**
          * admin/abuse-user-reports
@@ -1439,6 +1448,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:calls*
          */
         post: operations['calls___rooms___remove-participant'];
+    };
+    '/calls/rooms/report-abuse': {
+        /**
+         * calls/rooms/report-abuse
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:report-abuse*
+         */
+        post: operations['calls___rooms___report-abuse'];
     };
     '/calls/rooms/request-speaker': {
         /**
@@ -6838,6 +6856,75 @@ export interface operations {
             };
         };
     };
+    'admin___abuse-user-report-recording': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    reportId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** @description Base64-encoded audio/wav evidence. */
+                        recording: string | null;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     'admin___abuse-user-reports': {
         requestBody: {
             content: {
@@ -6881,6 +6968,13 @@ export interface operations {
                         /** Format: date-time */
                         createdAt: string;
                         comment: string;
+                        callsContext: {
+                            /** Format: id */
+                            roomId: string;
+                            roomTitle: string;
+                            reportedAt: number;
+                            hasRecording: boolean;
+                        } | null;
                         /** @example false */
                         resolved: boolean;
                         /** Format: id */
@@ -18156,6 +18250,83 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'calls___rooms___report-abuse': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    userId: string;
+                    comment: string;
+                    reportedAt: number;
+                    recording?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

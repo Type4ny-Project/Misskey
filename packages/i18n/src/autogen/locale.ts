@@ -10275,6 +10275,46 @@ export interface Locale extends ILocale {
     };
     "_calls": {
         /**
+         * このコールを通報
+         */
+        "reportRoom": string;
+        /**
+         * この参加者を通報
+         */
+        "reportParticipant": string;
+        /**
+         * 通報に備え、会話の直近30秒をこの端末内で一時保持します。通報した場合のみ、通報操作の前後30秒の音声を管理者・モデレーターへ送信できます。
+         */
+        "recordingNotice": string;
+        /**
+         * 通報操作の前後30秒の音声を添付
+         */
+        "attachRecording": string;
+        /**
+         * 通報操作後の音声を記録中です（最大30秒）。完了後に確認して送信できます。
+         */
+        "recordingCapturing": string;
+        /**
+         * 録音を添付できません。文章だけで通報できます。
+         */
+        "recordingUnavailable": string;
+        /**
+         * この端末が受信した音声と、ミュートしていない自分の音声を添付します。参加直後や通話終了時は60秒より短くなります。録音は管理者・モデレーターだけが取得でき、公開や他サーバーへの転送はされません。
+         */
+        "recordingDescription": string;
+        /**
+         * Callsの通報用録音
+         */
+        "recordingEvidence": string;
+        /**
+         * 通報者の端末で作成された録音です。改変されていないことをサーバーが保証するものではありません。
+         */
+        "recordingUnverified": string;
+        /**
+         * 録音を取得
+         */
+        "loadRecording": string;
+        /**
          * このアカウントではコールへの参加が許可されていません。
          */
         "participationNotAllowed": string;

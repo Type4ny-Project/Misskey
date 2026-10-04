@@ -68,6 +68,17 @@ declare module '../api.js' {
      *
      * **Credential required**: *Yes* / **Permission**: *read:admin:abuse-user-reports*
      */
+    request<E extends 'admin/abuse-user-report-recording', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     *
+     * **Credential required**: *Yes* / **Permission**: *read:admin:abuse-user-reports*
+     */
     request<E extends 'admin/abuse-user-reports', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
@@ -1750,6 +1761,17 @@ declare module '../api.js' {
      * **Credential required**: *Yes* / **Permission**: *write:calls*
      */
     request<E extends 'calls/rooms/remove-participant', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     *
+     * **Credential required**: *Yes* / **Permission**: *write:report-abuse*
+     */
+    request<E extends 'calls/rooms/report-abuse', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,

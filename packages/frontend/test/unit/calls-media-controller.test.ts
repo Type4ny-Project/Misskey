@@ -501,15 +501,18 @@ describe('CallsMediaController', () => {
 			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: [] };
 			throw new Error(`unexpected endpoint: ${endpoint}`);
 		});
-		const controller = new CallsMediaController('room-a', 'speaker');
+		const microphoneTrack = vi.fn();
+		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, undefined, undefined, false, { localTrack: vi.fn(), microphoneTrack, remoteRemoved: vi.fn(), error: vi.fn() });
 		controller.setMuted(true);
 		await controller.connect();
 		expect(oldTrack.enabled).toBe(false);
+		expect(microphoneTrack).toHaveBeenLastCalledWith(oldTrack);
 		await controller.switchMicrophone('new-device');
 
 		expect(FakePeerConnection.instances[0]?.sender.track).toBe(newTrack);
 		expect(oldTrack.stop).toHaveBeenCalled();
 		expect(newTrack.enabled).toBe(false);
+		expect(microphoneTrack).toHaveBeenLastCalledWith(newTrack);
 		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: expect.objectContaining({ deviceId: { exact: 'new-device' } }) }));
 	});
 

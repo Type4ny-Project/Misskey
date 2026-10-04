@@ -49,6 +49,8 @@ export class AbuseReportService {
 		reporterId: MiAbuseUserReport['reporterId'],
 		reporterHost: MiAbuseUserReport['reporterHost'],
 		comment: string,
+		callsContext?: MiAbuseUserReport['callsContext'],
+		callsRecording?: Buffer | null,
 	}[]) {
 		const entities = params.map(param => {
 			return {
@@ -58,6 +60,8 @@ export class AbuseReportService {
 				reporterId: param.reporterId,
 				reporterHost: param.reporterHost,
 				comment: param.comment,
+				callsContext: param.callsContext ?? null,
+				callsRecording: param.callsRecording ?? null,
 			};
 		});
 

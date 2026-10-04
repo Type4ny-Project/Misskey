@@ -238,7 +238,7 @@ export class CallsMediaService {
 		});
 	}
 
-	private async authorizeParticipant(user: MiUser, roomId: string): Promise<MiCallsParticipant> {
+	public async authorizeParticipant(user: MiUser, roomId: string): Promise<MiCallsParticipant> {
 		const room = await this.roomService.getRoom(roomId);
 		try {
 			await this.roomService.assertCanAccess(user, room);

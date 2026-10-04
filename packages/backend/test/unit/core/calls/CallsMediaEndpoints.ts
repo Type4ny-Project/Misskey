@@ -41,19 +41,19 @@ test.each([
 	await expect(endpoint.exec({ roomId: 'rooma', connectionId: 'connection-a', operationId: 'operation-a' }, { id: 'usera' } as MiLocalUser, null)).rejects.toMatchObject({ code });
 });
 
-test('renews an expired credential only while its connection is current', async () => {
+test.each(['listener', 'speaker'] as const)('renews an expired credential using the current %s role only while its connection is current', async role => {
 	const credentials = new CallsMediaCredentialService({ url: 'https://misskey.example', cloudflareRealtime: { appSecret: 'test-secret' } } as Config);
-	const claims = { userId: 'usera', applicationId: 'first-party:usera', roomId: 'rooma', participantId: 'participanta', connectionId: 'connection-a', generation: 1, canPublish: true };
+	const claims = { userId: 'usera', applicationId: 'first-party:usera', roomId: 'rooma', participantId: 'participanta', connectionId: 'connection-a', generation: 1, canPublish: false };
 	const issuedAt = Date.now() - 301_000;
 	const clock = vi.spyOn(Date, 'now').mockReturnValue(issuedAt);
 	const credential = credentials.issue(claims).credential;
 	clock.mockRestore();
 	const connections = { assertCurrent: vi.fn().mockResolvedValue({}) };
 	const guard = { execute: (_scope: unknown, operation: () => Promise<unknown>) => operation() };
-	const endpoint = new CredentialRefresh(credentials, { reconcile: vi.fn().mockResolvedValue({}) } as never, guard as never, connections as never);
+	const endpoint = new CredentialRefresh(credentials, { authorizeParticipant: vi.fn().mockResolvedValue({ id: claims.participantId, role }) } as never, guard as never, connections as never);
 	const input = { ...claims, operationId: 'refresh-a', mediaCredential: credential };
 	const result = await endpoint.exec(input, { id: claims.userId } as MiLocalUser, null);
-	expect(credentials.verify(result.mediaCredential, claims)).toMatchObject(claims);
+	expect(credentials.verify(result.mediaCredential, claims)).toMatchObject({ ...claims, canPublish: role !== 'listener' });
 	expect(connections.assertCurrent).toHaveBeenCalledWith(claims.participantId, claims.connectionId, claims.generation);
 	connections.assertCurrent.mockRejectedValue(new StaleCallsConnectionError());
 	await expect(endpoint.exec(input, { id: claims.userId } as MiLocalUser, null)).rejects.toMatchObject({ code: 'CALLS_STALE_CONNECTION' });

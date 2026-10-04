@@ -10421,7 +10421,7 @@ export interface Locale extends ILocale {
          */
         "everyoneCanSpeak": string;
         /**
-         * ホストが許可したユーザーのみ
+         * ホストまたはVCモデレーターが許可したユーザーのみ
          */
         "approvedSpeakersOnly": string;
         /**
@@ -10664,7 +10664,7 @@ export interface Locale extends ILocale {
          */
         "stageCall": string;
         /**
-         * ホストが発言できる参加者を管理します。
+         * ホストとVCモデレーターが発言できる参加者を管理します。
          */
         "stageCallDescription": string;
         /**

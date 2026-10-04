@@ -27,7 +27,7 @@ const fixture = vi.hoisted(() => ({
 	revoked: [] as Array<(event: { reason: string; connectionId?: string; generation?: number }) => void>,
 	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null }; participants: { value: Array<{ id: string; userId: string; role: string; isMuted: boolean; joinedAt?: string }> } }>,
 	remoteTrackCallbacks: [] as Array<(track: MediaStreamTrack, publication: CallsRemotePublication) => void>,
-	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
+	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; setRole: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
 }));
 
 vi.mock('@/utility/sound.js', () => ({ playMisskeySfx: fixture.playSound }));
@@ -77,6 +77,7 @@ vi.mock('@/utility/calls-media.js', () => ({
 			this.onState('connected');
 		});
 		public setMuted = vi.fn();
+		public setRole = vi.fn();
 		constructor(_roomId: string, _role: string, private onState: (state: string) => void, onRemoteTrack: typeof fixture.remoteTrackCallbacks[number], _onStats: unknown, previousConnection?: { connectionId: string; generation: number }, public replaceExisting = false) {
 			this.connectionIdentity = previousConnection ?? { connectionId: `device-${fixture.controllers.length}`, generation: 1 };
 			fixture.controllers.push(this);
@@ -583,14 +584,18 @@ describe('Calls session device handoff', () => {
 		expect(session.replacedRoomId.value).toBeNull();
 	});
 
-	test('a listener receiving the host reconnects media and can end the room', async () => {
+	test.each(['host', 'speaker'])('a listener promoted to %s keeps media connected and muted', async role => {
 		await session.join('room-a', false);
 		const connection = fixture.connections[fixture.connections.length - 1];
-		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, role: 'host' }));
-		await vi.waitFor(() => expect(fixture.controllers).toHaveLength(2));
-		expect(session.isHost.value).toBe(true);
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, role }));
+		await nextTick();
+		expect(fixture.controllers).toHaveLength(1);
+		expect(fixture.controllers[0].close).not.toHaveBeenCalled();
+		expect(fixture.controllers[0].setRole).toHaveBeenCalledWith(role);
+		expect(session.muted.value).toBe(true);
+		expect(session.isHost.value).toBe(role === 'host');
 		await session.leave();
-		expect(fixture.api).toHaveBeenCalledWith('calls/rooms/end', expect.objectContaining({ roomId: 'room-a' }));
+		expect(fixture.api).toHaveBeenCalledWith(role === 'host' ? 'calls/rooms/end' : 'calls/rooms/leave', expect.objectContaining({ roomId: 'room-a' }));
 	});
 
 	test('the previous host leaves without ending the room after transfer', async () => {

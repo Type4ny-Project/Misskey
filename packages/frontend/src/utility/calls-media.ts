@@ -235,20 +235,7 @@ export class CallsMediaController {
 		if (session.sessionDescription != null) await peer.setRemoteDescription(session.sessionDescription);
 
 		if (this.localTrack != null) {
-			await this.ensureCredential();
-			this.setState('negotiating');
-			const offer = await peer.createOffer();
-			await peer.setLocalDescription(offer);
-			await this.waitForIceGathering(peer);
-			const result = await misskeyApi('calls/media/tracks/publish', {
-				roomId: this.roomId, connectionId: this.connectionId, generation: this.generation,
-				operationId: crypto.randomUUID(),
-				participantId: this.participantId!, mediaCredential: this.mediaCredential!,
-				mid: sendTransceiver.mid ?? '0', sessionDescription: { type: 'offer', sdp: peer.localDescription?.sdp ?? offer.sdp ?? '' },
-			});
-			this.publications.add(result.publicationId);
-			await this.applyNegotiation(result.negotiation);
-			await this.waitUntilPublishing(peer);
+			await this.publishMicrophone(peer, sendTransceiver);
 		}
 		for (const [source, video] of this.localVideos) {
 			if (video.track.readyState === 'ended') continue;
@@ -257,6 +244,23 @@ export class CallsMediaController {
 		}
 		const subscribed = await this.reconcileNow();
 		if (this.localTrack == null && !subscribed && this.peer === peer) this.setState('connected');
+	}
+
+	private async publishMicrophone(peer: RTCPeerConnection, transceiver: RTCRtpTransceiver): Promise<void> {
+		await this.ensureCredential();
+		this.setState('negotiating');
+		const offer = await peer.createOffer();
+		await peer.setLocalDescription(offer);
+		await this.waitForIceGathering(peer);
+		const result = await misskeyApi('calls/media/tracks/publish', {
+			roomId: this.roomId, connectionId: this.connectionId, generation: this.generation,
+			operationId: crypto.randomUUID(),
+			participantId: this.participantId!, mediaCredential: this.mediaCredential!,
+			mid: transceiver.mid ?? '0', sessionDescription: { type: 'offer', sdp: peer.localDescription?.sdp ?? offer.sdp ?? '' },
+		});
+		this.publications.add(result.publicationId);
+		await this.applyNegotiation(result.negotiation);
+		await this.waitUntilPublishing(peer);
 	}
 
 	public reconcile(): Promise<boolean> {
@@ -483,6 +487,12 @@ export class CallsMediaController {
 		});
 	}
 
+	public setRole(role: 'host' | 'speaker'): void {
+		this.role = role;
+		// Refresh the listener credential before publishing with the new role.
+		this.credentialExpiresAt = 0;
+	}
+
 	public setMuted(muted: boolean): void {
 		this.muted = muted;
 		if (this.localTrack != null) this.localTrack.enabled = !muted;
@@ -503,13 +513,21 @@ export class CallsMediaController {
 		const microphone = await this.acquireMicrophone(deviceId);
 		if (this.isClosed()) { microphone.processing?.close(); microphone.track.stop(); return; }
 		this.useMicrophone(microphone);
-		if (oldTrack == null && this.peer != null) {
-			await this.enqueue(() => this.createConnection());
-			return;
-		}
-		const sender = this.peer?.getSenders().find(item => item.track?.kind === 'audio');
 		try {
-			await sender?.replaceTrack(this.localTrack);
+			if (oldTrack == null && this.peer != null) {
+				await this.enqueue(async () => {
+					const peer = this.peer;
+					if (peer == null || this.isClosed()) return;
+					const transceiver = peer.getTransceivers()[0];
+					transceiver.direction = 'sendrecv';
+					await transceiver.sender.replaceTrack(this.localTrack);
+					await this.publishMicrophone(peer, transceiver);
+					this.setState('connected');
+				});
+			} else {
+				const sender = this.peer?.getSenders().find(item => item.track?.kind === 'audio');
+				await sender?.replaceTrack(this.localTrack);
+			}
 		} catch (error) {
 			microphone.processing?.close();
 			microphone.track.stop();

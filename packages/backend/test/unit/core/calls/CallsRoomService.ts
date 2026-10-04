@@ -371,7 +371,7 @@ function createModerationFixture() {
 	const service = new CallsRoomService(
 		config,
 		{ findOneBy: async () => room, createQueryBuilder: () => queryBuilder } as never,
-		{ findOneBy: async () => participant, findBy: async () => [], existsBy, update } as never,
+		{ findOneBy: async () => participant, findOneByOrFail: async () => participant, findBy: async () => [], existsBy, update } as never,
 		{ insert: insertLog } as never, {} as never, {} as never, {} as never,
 		{ gen: () => 'log-a' } as never, { isModerator, getUserPolicies: async () => ({ ...DEFAULT_POLICIES }) } as never,
 		{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() } as never, { publish, publishRoomsList } as never, { revokeParticipant, stopParticipantVideo } as never, { lifecycle: vi.fn() } as never,
@@ -528,13 +528,26 @@ describe('Calls VC moderators', () => {
 		expect(fixture.publish).toHaveBeenCalledWith(fixture.room.id, 2, 'participant', { participantId: fixture.participant.id, action: 'updated' });
 	});
 
-	test.each(['viewer-a', 'moderator-a'])('%s cannot appoint moderators, change speakers, or end the room', async id => {
+	test.each(['viewer-a', 'moderator-a'])('%s cannot appoint moderators or end the room', async id => {
 		const fixture = createModerationFixture();
 		const user = { id, host: null } as MiUser;
 		await expect(fixture.service.setModerator(user, fixture.room.id, fixture.participant.id, true, 1)).rejects.toMatchObject({ code: 'access-denied' });
-		await expect(fixture.service.setRole(user, fixture.room.id, fixture.participant.id, 'listener', 1)).rejects.toMatchObject({ code: 'access-denied' });
 		await expect(fixture.service.end(user, fixture.room.id, 1)).rejects.toMatchObject({ code: 'access-denied' });
 		expect(fixture.execute).not.toHaveBeenCalled();
+	});
+
+	test.each(['owner-a', 'moderator-a'])('%s can approve a listener as a muted speaker', async id => {
+		const fixture = createModerationFixture();
+		fixture.participant.role = 'listener';
+		await fixture.service.setRole({ id, host: null } as MiUser, fixture.room.id, fixture.participant.id, 'speaker', 1);
+		expect(fixture.update).toHaveBeenCalledWith(fixture.participant.id, expect.objectContaining({ role: 'speaker', isMuted: true, speakerRequestedAt: null }));
+	});
+
+	test.each(['viewer-a', 'moderator-a'])('%s cannot change speakers without active moderator access', async id => {
+		const fixture = createModerationFixture();
+		fixture.existsBy.mockResolvedValue(false);
+		await expect(fixture.service.setRole({ id, host: null } as MiUser, fixture.room.id, fixture.participant.id, 'speaker', 1)).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fixture.update).not.toHaveBeenCalled();
 	});
 
 	test('an active VC moderator can kick a participant and revoke their media', async () => {

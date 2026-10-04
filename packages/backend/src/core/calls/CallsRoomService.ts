@@ -489,7 +489,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 
 	private async moderateRole(host: MiUser, roomId: string, participantId: string, role: Exclude<CallsParticipantRole, 'host'>, expectedRevision: number, action: CallsModerationAction): Promise<MiCallsParticipant> {
 		const room = await this.getRoom(roomId);
-		if (room.ownerUserId !== host.id && !(await this.roleService.isModerator(host))) throw new CallsRoomError('access-denied');
+		await this.assertCanModerateParticipants(host, room);
 		if (room.state !== 'open' || room.mode !== 'stage') throw new CallsRoomError('invalid-state');
 		const participant = await this.callsParticipantsRepository.findOneBy({ id: participantId, roomId, state: 'active' });
 		if (participant == null || participant.role === 'host') throw new CallsRoomError('participant-not-found');
@@ -508,7 +508,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		const now = new Date();
 		await this.callsParticipantsRepository.update(participant.id, {
 			role,
-			isMuted: role === 'listener' ? true : participant.isMuted,
+			isMuted: role === 'listener' || participant.role === 'listener' ? true : participant.isMuted,
 			speakerRequestedAt: null,
 			updatedAt: now,
 		});

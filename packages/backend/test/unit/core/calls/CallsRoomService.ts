@@ -363,7 +363,7 @@ function createModerationFixture() {
 	const queryBuilder = { update: () => queryBuilder, set, where: () => queryBuilder, returning: () => queryBuilder, execute };
 	const revokeParticipant = vi.fn();
 	const stopParticipantVideo = vi.fn();
-	const insertLog = vi.fn();
+	const insertLog = vi.fn((_entry: Record<string, unknown>) => undefined);
 	const publish = vi.fn();
 	const publishRoomsList = vi.fn();
 	const config = { cloudflareRealtime: { enabled: true } } as Config;
@@ -579,23 +579,73 @@ function createHostTransferFixture(role: 'speaker' | 'listener' = 'speaker') {
 	const fixture = createModerationFixture();
 	Object.assign(fixture.participant, { role, state: 'active', speakerRequestedAt: new Date() });
 	const rooms = { findOneBy: async () => fixture.room, createQueryBuilder: () => builder };
-	const participants = { findOneBy: vi.fn().mockResolvedValue(fixture.participant), findBy: async () => [fixture.participant], update: fixture.update };
+	const participants = { findOneBy: vi.fn().mockResolvedValue(fixture.participant), findOneByOrFail: async () => ({ id: 'former-host-a', role: 'speaker' }), findBy: async () => [fixture.participant], update: fixture.update };
+	fixture.update.mockResolvedValue({ affected: 1 });
+	const logs = { insert: fixture.insertLog, existsBy: vi.fn(async (criteria: Record<string, unknown>) => fixture.insertLog.mock.calls.some(([entry]) => Object.entries(criteria).every(([key, value]) => entry[key] === value))) };
 	const where = vi.fn(() => builder);
 	const builder = { update: () => builder, set: fixture.set, where, returning: () => builder, execute: fixture.execute };
 	// The room builder's set method must continue with this transaction's builder.
 	fixture.set.mockImplementation(() => builder);
-	fixture.execute.mockImplementation(async () => ({ affected: 1, raw: [{ ...fixture.room, ...fixture.set.mock.calls[0][0], revision: 2 }] }));
-	const transaction = vi.fn(async (callback: (manager: unknown) => Promise<unknown>) => callback({ getRepository: (target: string) => target === 'rooms' ? rooms : participants }));
+	fixture.execute.mockImplementation(async () => ({ affected: 1, raw: [Object.assign(fixture.room, fixture.set.mock.calls[0][0], { revision: 2 })] }));
+	const transaction = vi.fn(async (callback: (manager: unknown) => Promise<unknown>) => callback({ getRepository: (target: string) => target === 'rooms' ? rooms : target === 'participants' ? participants : logs }));
 	const touchHost = vi.fn();
 	Object.assign(fixture.service, {
 		callsRoomsRepository: { target: 'rooms', manager: { transaction } },
 		callsParticipantsRepository: { target: 'participants' },
+		callsModerationLogsRepository: { target: 'logs' },
 		callsLiveConnectionService: { withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback(), touchHost },
 	});
 	return { ...fixture, participants, transaction, touchHost, where };
 }
 
 describe('Calls host transfer', () => {
+	test('rejects a target whose Calls participation permission was revoked', async () => {
+		const fixture = createHostTransferFixture();
+		Object.assign(fixture.service, { roleService: { getUserPolicies: async () => ({ ...DEFAULT_POLICIES, canJoinCalls: false }) } });
+		await expect(fixture.service.transferHost({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, 1)).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fixture.execute).not.toHaveBeenCalled();
+		expect(fixture.update).not.toHaveBeenCalled();
+		expect(fixture.insertLog).not.toHaveBeenCalled();
+	});
+
+	test.each(['deadline', 'role', 'participant'])('retries the committed transfer after %s notification failure without changing ownership again', async failure => {
+		const fixture = createHostTransferFixture();
+		if (failure === 'deadline') fixture.touchHost.mockRejectedValueOnce(new Error('Redis unavailable'));
+		if (failure === 'role') fixture.publish.mockRejectedValueOnce(new Error('Redis unavailable'));
+		if (failure === 'participant') fixture.publish.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('Redis unavailable'));
+		const actor = { id: 'owner-a' } as MiUser;
+		await expect(fixture.service.transferHost(actor, fixture.room.id, fixture.participant.id, 1)).rejects.toThrow('Redis unavailable');
+		fixture.participant.role = 'host';
+		fixture.execute.mockClear();
+		fixture.update.mockClear();
+		fixture.publish.mockClear();
+		await expect(fixture.service.transferHost(actor, fixture.room.id, fixture.participant.id, 1)).resolves.toMatchObject({ ownerUserId: fixture.participant.userId, revision: 2 });
+		expect(fixture.execute).not.toHaveBeenCalled();
+		expect(fixture.update).not.toHaveBeenCalled();
+		expect(fixture.insertLog).toHaveBeenCalledTimes(1);
+		expect(fixture.publish.mock.calls).toEqual([
+			[fixture.room.id, 2, 'role', { participantId: 'former-host-a', role: 'speaker' }],
+			[fixture.room.id, 2, 'participant', { participantId: fixture.participant.id, action: 'updated' }],
+		]);
+	});
+
+	test.each(['actor', 'revision'])('a retry requires the original %s', async changed => {
+		const fixture = createHostTransferFixture();
+		await fixture.service.transferHost({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, 1);
+		fixture.participant.role = 'host';
+		fixture.publish.mockClear();
+		await expect(fixture.service.transferHost({ id: changed === 'actor' ? 'viewer-a' : 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, changed === 'revision' ? 2 : 1)).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fixture.publish).not.toHaveBeenCalled();
+	});
+
+	test('aborts the transaction if the selected participant has left', async () => {
+		const fixture = createHostTransferFixture();
+		fixture.update.mockResolvedValueOnce({ affected: 1 }).mockResolvedValueOnce({ affected: 0 });
+		await expect(fixture.service.transferHost({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, 1)).rejects.toMatchObject({ code: 'participant-not-found' });
+		expect(fixture.insertLog).not.toHaveBeenCalled();
+		expect(fixture.publish).not.toHaveBeenCalled();
+	});
+
 	test.each(['speaker', 'listener'] as const)('transfers ownership to a %s and keeps the previous host as a speaker', async role => {
 		const fixture = createHostTransferFixture(role);
 		fixture.room.visibility = 'specified';
@@ -603,7 +653,8 @@ describe('Calls host transfer', () => {
 		const updated = await fixture.service.transferHost({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, 1);
 		expect(updated).toMatchObject({ ownerUserId: fixture.participant.userId, revision: 2, moderatorUserIds: ['moderator-a'], visibleUserIds: ['owner-a', fixture.participant.userId] });
 		expect(fixture.update).toHaveBeenCalledWith({ roomId: fixture.room.id, userId: 'owner-a', role: 'host' }, expect.objectContaining({ role: 'speaker' }));
-		expect(fixture.update).toHaveBeenCalledWith(fixture.participant.id, expect.objectContaining({ role: 'host', speakerRequestedAt: null }));
+		expect(fixture.update).toHaveBeenCalledWith({ id: fixture.participant.id, state: 'active' }, expect.objectContaining({ role: 'host', speakerRequestedAt: null }));
+		expect(fixture.publish).toHaveBeenCalledWith(fixture.room.id, 2, 'role', { participantId: 'former-host-a', role: 'speaker' });
 		expect(fixture.touchHost).toHaveBeenCalledWith(fixture.room.id);
 		expect(fixture.publish).toHaveBeenCalledWith(fixture.room.id, 2, 'participant', { participantId: fixture.participant.id, action: 'updated' });
 	});

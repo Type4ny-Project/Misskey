@@ -407,8 +407,15 @@ async function transferHost(participantId: string): Promise<void> {
 	if (!isHost.value || room.value == null) return;
 	const { canceled } = await os.confirm({ type: 'warning', title: videoLabel(participantId), text: i18n.ts._calls.transferHostConfirm });
 	if (canceled || !isHost.value || room.value == null) return;
+	const params = { roomId: props.roomId, participantId, expectedRevision: room.value.revision };
 	try {
-		await misskeyApi('calls/rooms/transfer-host', { roomId: props.roomId, participantId, expectedRevision: room.value.revision });
+		try {
+			await misskeyApi('calls/rooms/transfer-host', params);
+		} catch (error) {
+			await refreshRoom();
+			if (participants.value.find(item => item.id === participantId)?.role !== 'host') throw error;
+			await misskeyApi('calls/rooms/transfer-host', params);
+		}
 		await refreshRoom();
 	} catch (error) {
 		console.error('[Calls] Host transfer failed', error);

@@ -52,6 +52,32 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
+	test.each([true, false])('retries notifications only when a failed request committed the transfer (%s)', async committed => {
+		fixture.confirm.mockResolvedValue({ canceled: false });
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		fixture.session.participants.value = [
+			{ id: 'viewer-participant', userId: 'viewer', role: 'host', isMuted: false },
+			{ id: 'listener-participant', userId: 'listener', role: 'listener', isMuted: true },
+		];
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
+		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
+		vi.mocked(misskeyApi).mockRejectedValueOnce(new Error('Request failed'));
+		fixture.session.refresh.mockImplementationOnce(async () => {
+			if (!committed) return;
+			fixture.session.room.value.revision = 2;
+			fixture.session.participants.value = fixture.session.participants.value.map((participant: { role: string; userId: string }) => ({ ...participant, role: participant.userId === 'viewer' ? 'speaker' : 'host' }));
+		});
+		await menu.find(item => item.text === i18n.ts._calls.transferHost)!.action(new PointerEvent('click'));
+		const calls = vi.mocked(misskeyApi).mock.calls.filter(([endpoint]) => endpoint === 'calls/rooms/transfer-host');
+		expect(calls).toHaveLength(committed ? 2 : 1);
+		for (const [, params] of calls) expect(params).toEqual({ roomId: 'room', participantId: 'listener-participant', expectedRevision: 1 });
+		if (committed) expect(os.alert).not.toHaveBeenCalled();
+		else expect(os.alert).toHaveBeenCalled();
+	});
+
 	test.each([false, true])('confirms host transfer to a listener (canceled: %s)', async canceled => {
 		fixture.confirm.mockResolvedValue({ canceled });
 		fixture.session.currentRoomId.value = 'room';

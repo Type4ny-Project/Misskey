@@ -74,6 +74,17 @@ describe('useCallsRoom streaming updates', () => {
 		reopened.dispose();
 	});
 
+	test('refreshes ownership and both roles when a new host is announced', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		const updated = { room: { ...snapshot.room, revision: 2, attachment: { type: 'personal', ownerUserId: 'new-host' } }, participants: [{ ...snapshot.participants[0], role: 'speaker' }, { ...snapshot.participants[0], id: 'new-participant', userId: 'new-host', role: 'host' }] };
+		fixture.api.mockResolvedValueOnce(updated);
+		fixture.channelHandlers.get('participant')?.({ sequence: 1, roomRevision: 2, participantId: 'new-participant', action: 'updated', participant: updated.participants[1] });
+		await vi.waitFor(() => expect(calls.room.value).toEqual(updated.room));
+		expect(calls.participants.value).toEqual(updated.participants);
+		expect(fixture.api).toHaveBeenCalledTimes(2);
+	});
+
 	test('applies moderator and speaker request changes without fetching the room or user', async () => {
 		const calls = useCallsRoom('room-a');
 		await calls.refresh();

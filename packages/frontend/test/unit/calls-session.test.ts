@@ -11,6 +11,7 @@ const fixture = vi.hoisted(() => ({
 	policies: { canJoinCalls: true, canSpeakInCalls: true, canPublishCallsVideo: true, canShareCallsScreen: true },
 	api: vi.fn(),
 	toast: vi.fn(),
+	playSound: vi.fn(),
 	alert: vi.fn(),
 	confirm: vi.fn(),
 	popupMenu: vi.fn(),
@@ -29,6 +30,7 @@ const fixture = vi.hoisted(() => ({
 	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
 }));
 
+vi.mock('@/utility/sound.js', () => ({ playMisskeySfx: fixture.playSound }));
 vi.mock('@/i.js', () => ({ $i: { id: 'user-a', policies: fixture.policies } }));
 vi.mock('@/i18n.js', () => ({ i18n: {
 	ts: { somethingHappened: 'Something went wrong', _calls: { videoFailed: 'Video failed', videoResolution: 'Resolution', videoSourceQuality: 'Source quality', videoFrameRate: 'Frame rate', connectedOnAnotherDevice: 'Connected on another device', switchDeviceConfirm: 'Disconnect the other device?', hostLeftRoomEnded: 'Host left; room ended' } },
@@ -91,6 +93,7 @@ describe('Calls session device handoff', () => {
 		vi.useFakeTimers();
 		fixture.api.mockReset().mockResolvedValue({});
 		fixture.toast.mockClear();
+		fixture.playSound.mockClear();
 		fixture.alert.mockClear();
 		fixture.popupMenu.mockClear();
 		fixture.popup.mockReset().mockReturnValue({ dispose: vi.fn() });
@@ -110,6 +113,58 @@ describe('Calls session device handoff', () => {
 		fixture.remoteTrackCallbacks.length = 0;
 		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { enumerateDevices: async () => [] } });
 		session = (await import('@/utility/calls-session.js')).useCallsSession();
+	});
+
+	test('plays join, participant changes and leave sounds without sounding the initial snapshot', async () => {
+		fixture.api.mockImplementation(async (endpoint: string) => {
+			if (endpoint === 'calls/rooms/join') fixture.connections[0].participants.value.push({ id: 'participant-c', userId: 'user-c', role: 'listener', isMuted: true });
+			return {};
+		});
+		await session.join('room-a', false);
+		await nextTick();
+		expect(fixture.playSound.mock.calls).toEqual([['callsJoin']]);
+		const connection = fixture.connections[0];
+		connection.participants.value.push({ id: 'participant-b', userId: 'user-b', role: 'listener', isMuted: true });
+		await nextTick();
+		expect(fixture.playSound).toHaveBeenLastCalledWith('callsParticipantJoin');
+		const count = fixture.playSound.mock.calls.length;
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, isMuted: participant.userId === 'user-b' ? false : participant.isMuted }));
+		await nextTick();
+		expect(fixture.playSound).toHaveBeenCalledTimes(count);
+		connection.participants.value = connection.participants.value.filter(participant => participant.userId !== 'user-b');
+		await nextTick();
+		expect(fixture.playSound).toHaveBeenLastCalledWith('callsParticipantLeave');
+		await session.leave();
+		await nextTick();
+		expect(fixture.playSound.mock.calls).toEqual([['callsJoin'], ['callsParticipantJoin'], ['callsParticipantLeave'], ['callsLeave']]);
+	});
+
+	test('plays microphone sounds once for local toggles and moderator changes', async () => {
+		fixture.role = 'host';
+		fixture.participantMuted = false;
+		await session.join('room-a', false);
+		fixture.playSound.mockClear();
+		await session.toggleMute();
+		await nextTick();
+		const connection = fixture.connections[0];
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, isMuted: true }));
+		await nextTick();
+		expect(fixture.playSound.mock.calls).toEqual([['callsMute']]);
+		await session.toggleMute();
+		await nextTick();
+		expect(fixture.playSound).toHaveBeenLastCalledWith('callsUnmute');
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, isMuted: false }));
+		await nextTick();
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, isMuted: true }));
+		await nextTick();
+		expect(fixture.playSound.mock.calls).toEqual([['callsMute'], ['callsUnmute'], ['callsMute']]);
+	});
+
+	test('does not play join or leave sounds when a device handoff is cancelled', async () => {
+		fixture.connectionExists = true;
+		await session.join('room-a', true);
+		await nextTick();
+		expect(fixture.playSound).not.toHaveBeenCalled();
 	});
 
 	test.each(['camera', 'screen'] as const)('a denied %s permission prevents capture and publication', async source => {
@@ -523,6 +578,7 @@ describe('Calls session device handoff', () => {
 		fixture.revoked[0]({ reason: 'stale-generation', ...identity });
 		await vi.waitFor(() => expect(fixture.controllers).toHaveLength(2));
 		expect(fixture.controllers[1].connectionIdentity).toEqual(identity);
+		expect(fixture.playSound.mock.calls).toEqual([['callsJoin']]);
 		expect(session.isActive.value).toBe(true);
 		expect(session.replacedRoomId.value).toBeNull();
 	});

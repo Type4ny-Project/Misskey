@@ -9738,6 +9738,30 @@ export interface Locale extends ILocale {
          * ダイレクトメッセージ
          */
         "chatMessage": string;
+        /**
+         * 通話に参加したとき（自分）
+         */
+        "callsJoin": string;
+        /**
+         * 通話から退出したとき（自分）
+         */
+        "callsLeave": string;
+        /**
+         * 通話に参加したとき（他の人）
+         */
+        "callsParticipantJoin": string;
+        /**
+         * 通話から退出したとき（他の人）
+         */
+        "callsParticipantLeave": string;
+        /**
+         * 通話のマイクをミュートしたとき
+         */
+        "callsMute": string;
+        /**
+         * 通話のマイクをアンミュートしたとき
+         */
+        "callsUnmute": string;
     };
     "_soundSettings": {
         /**

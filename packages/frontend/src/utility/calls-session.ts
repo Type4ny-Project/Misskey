@@ -14,6 +14,7 @@ import { miLocalStorage } from '@/local-storage.js';
 import { i18n } from '@/i18n.js';
 import { alert, confirm, popup, popupMenu, toast } from '@/os.js';
 import { misskeyApi, misskeyApiKeepalive } from '@/utility/misskey-api.js';
+import { playMisskeySfx } from '@/utility/sound.js';
 import { callsScreenWindows, clearCallsScreenWindow, clearCallsScreenWindows, showCallsScreenWindow } from '@/utility/calls-screen-window.js';
 
 type CallsRoomConnection = ReturnType<typeof createCallsRoomConnection>;
@@ -78,6 +79,7 @@ const videos = computed(() => [
 let removeTrackListener: (() => void) | null = null;
 let removeRevokedListener: (() => void) | null = null;
 let sessionGeneration = 0;
+let sessionSoundActive = false;
 let reconnectExpiryTimer: number | null = null;
 let reconnectCountdownTimer: number | null = null;
 let reconnectConnection: CallsRoomConnection | null = null;
@@ -302,6 +304,8 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 }
 
 async function clearSession(): Promise<void> {
+	if (sessionSoundActive) playMisskeySfx('callsLeave');
+	sessionSoundActive = false;
 	cancelCameraPreview?.();
 	clearCallsScreenWindows();
 	sessionGeneration += 1;
@@ -392,6 +396,8 @@ async function join(roomId: string, alreadyParticipant: boolean, reconnectToken?
 			await connectMedia(generation, undefined, true);
 		}
 		if (generation !== sessionGeneration) return;
+		if (!sessionSoundActive) playMisskeySfx('callsJoin');
+		sessionSoundActive = true;
 		replacedRoomId.value = null;
 		if (startMuted && myParticipant.value?.role === 'host') next.setMuted(true);
 		setReconnectCandidate(null);
@@ -649,6 +655,16 @@ watch(videos, current => {
 });
 
 watch(participants, applyParticipantVolumes);
+
+watch(() => participants.value.map(participant => participant.userId), (current, previous) => {
+	if (!sessionSoundActive || joining.value || !isActive.value || !previous.includes($i?.id ?? '')) return;
+	if (current.some(id => id !== $i?.id && !previous.includes(id))) playMisskeySfx('callsParticipantJoin');
+	if (previous.some(id => id !== $i?.id && !current.includes(id))) playMisskeySfx('callsParticipantLeave');
+});
+
+watch(muted, value => {
+	if (sessionSoundActive && !joining.value && isActive.value) playMisskeySfx(value ? 'callsMute' : 'callsUnmute');
+}, { flush: 'sync' });
 
 watch(() => participants.value.filter(participant => participant.role !== 'listener').map(participant => participant.id).join(','), () => {
 	void media.value?.reconcile().catch(error => {

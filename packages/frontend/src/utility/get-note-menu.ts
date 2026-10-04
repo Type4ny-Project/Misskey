@@ -25,6 +25,7 @@ import { genEmbedCode } from '@/utility/get-embed-code.js';
 import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
 import { globalEvents } from '@/events.js';
+import { noteEvents } from '@/composables/use-note-capture.js';
 
 const isInBrowserTranslationAvailable = (
 	'LanguageDetector' in window &&
@@ -483,6 +484,11 @@ export function getNoteMenu(props: {
 							misskeyApi('notes/reactions/delete', {
 								noteId: appearNote.id,
 								reaction: myReactions[0],
+							}).then(() => {
+								noteEvents.emit(`unreacted:${appearNote.id}`, {
+									userId: $i!.id,
+									reaction: myReactions[0],
+								});
 							});
 						});
 					},
@@ -504,6 +510,11 @@ export function getNoteMenu(props: {
 								misskeyApi('notes/reactions/delete', {
 									noteId: appearNote.id,
 									reaction,
+								}).then(() => {
+									noteEvents.emit(`unreacted:${appearNote.id}`, {
+										userId: $i!.id,
+										reaction,
+									});
 								});
 							});
 						},

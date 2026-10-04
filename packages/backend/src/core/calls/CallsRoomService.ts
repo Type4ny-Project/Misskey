@@ -242,10 +242,22 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 	}
 
 	@bindThis
-	public async listDiscoverable(user: MiUser, limit: number, chatRoomId?: MiChatRoom['id'], states: Array<'scheduled' | 'open'> = ['scheduled', 'open']): Promise<MiCallsRoom[]> {
+	public async listDiscoverable(user: MiUser, limit: number, chatRoomId?: MiChatRoom['id'], states: Array<'scheduled' | 'open'> = ['scheduled', 'open'], following = false): Promise<MiCallsRoom[]> {
 		if (user.host !== null) return [];
+		const where = { state: In(states), ...(chatRoomId == null ? {} : { chatRoomId }) };
+		let followingRoomIds: string[] = [];
+		let followingUserIds: string[] = [];
+		if (following) {
+			followingUserIds = Object.keys(await this.cacheService.userFollowingsCache.fetch(user.id));
+			if (followingUserIds.length === 0) return [];
+			const participants = await this.callsParticipantsRepository.findBy({ userId: In(followingUserIds), state: 'active' });
+			followingRoomIds = [...new Set(participants.map(participant => participant.roomId))];
+		}
 		const candidates = await this.callsRoomsRepository.find({
-			where: { state: In(states), ...(chatRoomId == null ? {} : { chatRoomId }) },
+			where: following ? [
+				{ ...where, ownerUserId: In(followingUserIds) },
+				{ ...where, id: In(followingRoomIds) },
+			] : where,
 			order: { createdAt: 'DESC' },
 			take: Math.min(limit * 4, 400),
 		});

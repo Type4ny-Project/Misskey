@@ -36,3 +36,4 @@ export const Default = {
 } satisfies StoryObj<typeof MkCallsRoomCard>;
 
 export const LongTitle = { ...Default, args: { room: { ...room, title: '長いルーム名でも参加者とルームを開く操作が分かりやすく表示されることを確認するための通話' } } } satisfies StoryObj<typeof MkCallsRoomCard>;
+export const Compact = { ...Default, args: { room, compact: true } } satisfies StoryObj<typeof MkCallsRoomCard>;

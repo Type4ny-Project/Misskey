@@ -10554,6 +10554,18 @@ export interface Locale extends ILocale {
          */
         "joinRoom": string;
         /**
+         * この通話に参加しますか？
+         */
+        "joinRoomConfirm": string;
+        /**
+         * フォロー中の人が参加しています
+         */
+        "followingParticipating": string;
+        /**
+         * フォロー中の人が開催・参加している通話はありません
+         */
+        "noFollowingRooms": string;
+        /**
          * 最初はミュートで参加します
          */
         "joinMutedHint": string;
@@ -10971,6 +10983,10 @@ export interface Locale extends ILocale {
          * ダイレクトメッセージ
          */
         "chat": string;
+        /**
+         * 通話
+         */
+        "calls": string;
     };
     "_widgetOptions": {
         /**

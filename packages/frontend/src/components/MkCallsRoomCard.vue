@@ -4,30 +4,43 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<button type="button" class="_button" :class="$style.root" @click="openCallsRoom(room.id)">
-	<div :class="$style.meta">
-		<span v-if="room.state === 'open'" :class="$style.live"><i class="ti ti-wave-sine" aria-hidden="true"></i> {{ i18n.ts._calls.live }}</span>
-		<span v-else>{{ i18n.ts._calls[room.state] }}</span>
-		<span>{{ room.mode === 'stage' ? i18n.ts._calls.stageCall : i18n.ts._calls.openCall }}</span>
-		<span>{{ i18n.ts._calls[room.visibility] }}</span>
-	</div>
-	<strong :class="$style.title">{{ room.title }}</strong>
-	<p v-if="room.description" :class="$style.description">{{ room.description }}</p>
-	<div v-if="hostUser != null" :class="$style.host">
-		<MkAvatar :user="hostUser" :class="$style.hostAvatar"/>
-		<MkUserName :user="hostUser"/>
-		<small>{{ i18n.ts._calls.host }}</small>
-	</div>
-	<div v-if="speakingParticipants.length > 0" :class="$style.speakingNow"><i class="ti ti-volume" aria-hidden="true"></i> {{ i18n.ts._calls.speakingNow }}: <MkUserName v-if="speakingParticipants[0].user != null" :user="speakingParticipants[0].user"/><span v-else>{{ speakingParticipants[0].participant.userId }}</span></div>
-	<div :class="$style.footer">
-		<div :class="$style.participants">
-			<div :class="$style.avatarStack">
-				<MkAvatar v-for="item in visibleParticipants.slice(0, 4).filter(item => item.user != null)" :key="item.participant.id" :user="item.user!" :class="[$style.previewAvatar, connection?.speakingParticipantIds.value.has(item.participant.id) && $style.speakingAvatar]"/>
+<button type="button" class="_button" :class="[$style.root, { [$style.compact]: compact }]" @click="openCallsRoom(room.id)">
+	<template v-if="compact">
+		<MkAvatar v-if="hostUser != null" :user="hostUser" :class="$style.compactAvatar"/>
+		<div :class="$style.compactContent">
+			<strong :class="$style.compactTitle">{{ room.title }}</strong>
+			<div :class="$style.compactMeta"><MkUserName v-if="hostUser != null" :user="hostUser"/><span>{{ i18n.tsx._calls.peopleInRoom({ count: participants.length }) }}</span></div>
+			<div v-if="followedParticipants.length > 0" :class="$style.following">
+				<MkAvatar v-for="item in followedParticipants.slice(0, 3)" :key="item.participant.id" :user="item.user!" :class="$style.followingAvatar"/>
+				<span>{{ i18n.ts._calls.followingParticipating }}</span>
 			</div>
-			<span>{{ i18n.tsx._calls.peopleInRoom({ count: participants.length }) }}</span>
 		</div>
-		<span :class="$style.openRoom">{{ i18n.ts._calls.viewRoom }} <i class="ti ti-arrow-right" aria-hidden="true"></i></span>
-	</div>
+	</template>
+	<template v-else>
+		<div :class="$style.meta">
+			<span v-if="room.state === 'open'" :class="$style.live"><i class="ti ti-wave-sine" aria-hidden="true"></i> {{ i18n.ts._calls.live }}</span>
+			<span v-else>{{ i18n.ts._calls[room.state] }}</span>
+			<span>{{ room.mode === 'stage' ? i18n.ts._calls.stageCall : i18n.ts._calls.openCall }}</span>
+			<span>{{ i18n.ts._calls[room.visibility] }}</span>
+		</div>
+		<strong :class="$style.title">{{ room.title }}</strong>
+		<p v-if="room.description" :class="$style.description">{{ room.description }}</p>
+		<div v-if="hostUser != null" :class="$style.host">
+			<MkAvatar :user="hostUser" :class="$style.hostAvatar"/>
+			<MkUserName :user="hostUser"/>
+			<small>{{ i18n.ts._calls.host }}</small>
+		</div>
+		<div v-if="speakingParticipants.length > 0" :class="$style.speakingNow"><i class="ti ti-volume" aria-hidden="true"></i> {{ i18n.ts._calls.speakingNow }}: <MkUserName v-if="speakingParticipants[0].user != null" :user="speakingParticipants[0].user"/><span v-else>{{ speakingParticipants[0].participant.userId }}</span></div>
+		<div :class="$style.footer">
+			<div :class="$style.participants">
+				<div :class="$style.avatarStack">
+					<MkAvatar v-for="item in visibleParticipants.slice(0, 4).filter(item => item.user != null)" :key="item.participant.id" :user="item.user!" :class="[$style.previewAvatar, connection?.speakingParticipantIds.value.has(item.participant.id) && $style.speakingAvatar]"/>
+				</div>
+				<span>{{ i18n.tsx._calls.peopleInRoom({ count: participants.length }) }}</span>
+			</div>
+			<span :class="$style.openRoom">{{ i18n.ts._calls.viewRoom }} <i class="ti ti-arrow-right" aria-hidden="true"></i></span>
+		</div>
+	</template>
 </button>
 </template>
 
@@ -41,6 +54,7 @@ import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
 
 const props = defineProps<{
 	room: Misskey.entities.CallsRoom;
+	compact?: boolean;
 }>();
 
 const connection = shallowRef<ReturnType<typeof createCallsRoomConnection> | null>(null);
@@ -54,6 +68,7 @@ const sortedParticipants = computed(() => participants.value.map(participant => 
 }));
 const visibleParticipants = computed(() => sortedParticipants.value.slice(0, 10));
 const speakingParticipants = computed(() => sortedParticipants.value.filter(item => connection.value?.speakingParticipantIds.value.has(item.participant.id)));
+const followedParticipants = computed(() => sortedParticipants.value.filter(item => item.participant.role !== 'host' && item.user?.isFollowing));
 
 async function connectRoom(roomId: string): Promise<void> {
 	connection.value?.dispose();
@@ -92,6 +107,13 @@ onUnmounted(() => connection.value?.dispose());
 .previewAvatar { width: 28px; height: 28px; margin-left: -8px; border: 2px solid var(--MI_THEME-panel); }
 .speakingAvatar { box-shadow: 0 0 0 2px var(--MI_THEME-accent); }
 .openRoom { display: inline-flex; flex-shrink: 0; align-items: center; gap: 6px; color: var(--MI_THEME-accent); font-size: 0.85rem; font-weight: 700; }
+.root.compact { flex-direction: row; align-items: center; gap: 10px; padding: 12px; border: 0; border-radius: 0; }
+.compactAvatar { width: 36px; height: 36px; flex-shrink: 0; }
+.compactContent { flex: 1; min-width: 0; }
+.compactTitle { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.5; }
+.compactMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--MI_THEME-fgTransparentWeak); }
+.following { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 6px; font-size: 0.75rem; color: var(--MI_THEME-accent); }
+.followingAvatar { width: 18px; height: 18px; flex-shrink: 0; }
 @media (max-width: 400px) {
 	.root { padding: 16px; }
 	.footer { align-items: flex-start; }

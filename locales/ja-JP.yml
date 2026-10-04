@@ -2764,6 +2764,9 @@ _calls:
   endRoom: "通話を終了"
   cancelRoom: "予定を中止"
   joinRoom: "ルームに参加"
+  joinRoomConfirm: "この通話に参加しますか？"
+  followingParticipating: "フォロー中の人が参加しています"
+  noFollowingRooms: "フォロー中の人が開催・参加している通話はありません"
   joinMutedHint: "最初はミュートで参加します"
   alreadyJoined: "この通話に参加中"
   activeAttachmentExists: "この開催場所には、通話中または開始予定のルームがあります。新しいルームを作らず、既存のルームを確認できます。"
@@ -2875,6 +2878,7 @@ _widgets:
   clicker: "クリッカー"
   birthdayFollowings: "もうすぐ誕生日のユーザー"
   chat: "ダイレクトメッセージ"
+  calls: "通話"
 
 _widgetOptions:
   showHeader: "ヘッダーを表示"

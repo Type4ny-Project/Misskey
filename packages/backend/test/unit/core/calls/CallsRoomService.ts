@@ -48,6 +48,27 @@ function createConnectionFixture(role: 'host' | 'listener') {
 }
 
 describe('CallsRoomService lifecycle', () => {
+	test('filters followed hosts and active participants before limiting rooms, preserving access checks', async () => {
+		const service = createAccessFixture({ followings: { 'followed-host': {}, 'followed-listener': {} } });
+		const hosted = { ...baseRoom, id: 'hosted', ownerUserId: 'followed-host', state: 'open', visibility: 'public' };
+		const attended = { ...baseRoom, id: 'attended', state: 'open', visibility: 'public' };
+		const privateRoom = { ...baseRoom, id: 'private', state: 'open' };
+		const find = vi.fn().mockResolvedValue([hosted, attended, privateRoom]);
+		const findBy = vi.fn().mockResolvedValue([{ roomId: 'attended' }, { roomId: 'private' }]);
+		Object.assign(service, { callsRoomsRepository: { find }, callsParticipantsRepository: { findBy } });
+		await expect(service.listDiscoverable(viewer, 10, undefined, ['open'], true)).resolves.toEqual([hosted, attended]);
+		expect(findBy).toHaveBeenCalledWith({ userId: expect.objectContaining({ _value: ['followed-host', 'followed-listener'] }), state: 'active' });
+		expect(find).toHaveBeenCalledWith(expect.objectContaining({ where: [
+			expect.objectContaining({ ownerUserId: expect.objectContaining({ _value: ['followed-host', 'followed-listener'] }) }),
+			expect.objectContaining({ id: expect.objectContaining({ _value: ['attended', 'private'] }) }),
+		] }));
+	});
+
+	test('returns no followed rooms when the viewer follows nobody', async () => {
+		const service = createAccessFixture();
+		await expect(service.listDiscoverable(viewer, 10, undefined, ['open'], true)).resolves.toEqual([]);
+	});
+
 	test('the background check ends an absent host room at 90 seconds and stops at shutdown', async () => {
 		vi.useFakeTimers();
 		const fixture = createConnectionFixture('host');

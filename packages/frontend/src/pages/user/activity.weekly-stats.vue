@@ -93,7 +93,6 @@ import MkReactionIcon from '@/components/MkReactionIcon.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkError from '@/components/global/MkError.vue';
 import * as os from '@/os.js';
-import { $i } from '@/i.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { uploadFile } from '@/utility/drive.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -143,7 +142,7 @@ const weekLabel = computed(() => {
 	return `${new Date(stats.value.sinceDate).toLocaleDateString()} からのまとめ`;
 });
 
-const statsUrl = computed(() => $i ? `${url}/@${$i.username}/stats` : url);
+const statsUrl = `${url}/my/stats`;
 
 const metrics = computed(() => {
 	if (stats.value == null) return [];
@@ -203,7 +202,7 @@ async function shareStats(): Promise<void> {
 	const shareDataWithFile: ShareData = {
 		title: 'Weekly Stats',
 		text: shareText.value,
-		url: statsUrl.value,
+		url: statsUrl,
 		files: [file],
 	};
 
@@ -215,7 +214,7 @@ async function shareStats(): Promise<void> {
 	const shareData: ShareData = {
 		title: 'Weekly Stats',
 		text: shareText.value,
-		url: statsUrl.value,
+		url: statsUrl,
 	};
 
 	if (navigator.share) {
@@ -223,7 +222,7 @@ async function shareStats(): Promise<void> {
 		return;
 	}
 
-	copyToClipboard(`${shareText.value}\n\n${statsUrl.value}`);
+	copyToClipboard(`${shareText.value}\n\n${statsUrl}`);
 }
 
 async function shareWithNote(): Promise<void> {
@@ -241,7 +240,7 @@ async function shareWithNote(): Promise<void> {
 		const driveFile = await os.promiseDialog(filePromise);
 
 		await os.post({
-			initialText: `${shareText.value}\n\n${statsUrl.value}`,
+			initialText: `${shareText.value}\n\n${statsUrl}`,
 			initialFiles: [driveFile],
 		});
 	} finally {

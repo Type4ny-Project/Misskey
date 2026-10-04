@@ -29,6 +29,9 @@ export const ROUTE_DEF = [{
 	path: '/timeline',
 	component: PageTimeline,
 }, {
+	path: '/my/stats',
+	redirect: $i ? `/@${$i.username}/stats` : '/',
+}, {
 	path: '/@:username/pages/:pageName(*)',
 	component: page(() => import('@/pages/page.vue')),
 }, {

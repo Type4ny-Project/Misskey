@@ -14630,6 +14630,10 @@ export interface Locale extends ILocale {
          */
         "removeConfirm": string;
         /**
+         * 絵チャに参加できません。利用権限・参加範囲・空き人数を確認してください。画像の閲覧と保存は引き続きできます。
+         */
+        "cannotJoin": string;
+        /**
          * キャンバスの容量に達しました。画像を保存してから、ホストが全消去してください。
          */
         "canvasFull": string;

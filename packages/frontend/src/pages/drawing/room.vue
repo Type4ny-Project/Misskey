@@ -10,6 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div>{{ i18n.ts._drawing.description }}</div>
 		<MkInfo v-if="error" warn>{{ error }}</MkInfo>
 		<MkInfo v-else-if="!connected" warn>{{ i18n.ts._drawing.disconnected }}</MkInfo>
+		<MkInfo v-if="participationError && !error" warn>{{ participationError }}</MkInfo>
 		<div v-if="room && !state && !error" class="_gaps">
 			<template v-if="isHost && (room.state === 'open' || room.state === 'scheduled')">
 				<MkSelect v-model="scope" :items="scopeItems"><template #label>{{ i18n.ts._drawing.scope }}</template></MkSelect>
@@ -99,6 +100,7 @@ const width = ref(4);
 const eraser = ref(false);
 const text = ref('');
 const error = ref('');
+const participationError = ref('');
 const busy = ref(false);
 const pending = ref(0);
 const connected = ref(stream.state === 'connected');
@@ -126,7 +128,12 @@ function drawSnapshot() {
 }
 
 function showError(cause: unknown) {
-	if ((cause as { code?: string })?.code === 'DRAWING_CANVAS_FULL') {
+	const failure = cause as { code?: string; kind?: string };
+	if (!failure?.code || failure.kind === 'server') {
+		connected.value = false;
+		stopPointer();
+		console.error(cause);
+	} else if (failure.code === 'DRAWING_CANVAS_FULL') {
 		void os.alert({ type: 'warning', text: i18n.ts._drawing.canvasFull });
 	} else {
 		error.value = i18n.ts._drawing.unavailable;
@@ -148,7 +155,9 @@ async function refresh() {
 		const { canvas: snapshot } = await misskeyApi('drawing/show', { roomId: props.roomId });
 		if (!active) return;
 		if (snapshot && (!state.value || snapshot.version >= state.value.version)) {
-			const changed = state.value?.version !== snapshot.version;
+			const changed = state.value?.version !== snapshot.version || error.value !== '' || !connected.value;
+			error.value = '';
+			connected.value = stream.state === 'connected';
 			state.value = snapshot;
 			await nextTick();
 			if (changed) drawSnapshot();
@@ -160,10 +169,15 @@ async function refresh() {
 async function update(action: 'join' | 'leave' | 'clear' | 'end' | 'kick' | 'message', params: { userId?: string; text?: string } = {}) {
 	if (!state.value) return;
 	busy.value = true;
+	if (action === 'join') participationError.value = '';
 	try {
 		await misskeyApi(`drawing/${action}`, { roomId: props.roomId, canvasId: state.value.canvasId, ...params } as never);
 		await refresh();
-	} catch (cause) { showError(cause); } finally { busy.value = false; }
+	} catch (cause) {
+		if (action === 'join' && (cause as { code?: string })?.code) {
+			participationError.value = i18n.ts._drawing.cannotJoin;
+		} else { showError(cause); }
+	} finally { busy.value = false; }
 }
 
 async function start() {

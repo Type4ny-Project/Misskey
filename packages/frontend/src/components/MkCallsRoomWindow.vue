@@ -75,7 +75,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<footer :class="$style.footer">
 				<template v-if="sessionIsCurrent">
 					<MkButton v-if="session.needsAudioResume.value" rounded @click="session.resumeAudio()">{{ i18n.ts._calls.resumeAudio }}</MkButton>
-					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="session.toggleVideo('camera')" @screen="session.toggleVideo('screen')" @microphoneSettings="openDeviceMenu('microphone', $event)" @cameraSettings="openDeviceMenu('camera', $event)" @screenSettings="openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveCurrentRoom"/>
+					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="toggleCamera" @screen="session.toggleVideo('screen')" @microphoneSettings="openDeviceMenu('microphone', $event)" @cameraSettings="openDeviceMenu('camera', $event)" @screenSettings="openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveCurrentRoom"/>
 				</template>
 				<template v-else-if="room.state === 'open'">
 					<MkButton primary large rounded :wait="session.joining.value" :class="$style.joinButton" @click="joinRoom(room.mode === 'open')"><i class="ti ti-headphones"></i> {{ session.joining.value ? i18n.ts._calls.roomConnectedMediaConnecting : i18n.ts._calls.joinRoom }}</MkButton>
@@ -209,6 +209,11 @@ function openScreenSettings(event: MouseEvent): void {
 function openDeviceMenu(kind: 'microphone' | 'camera', event: MouseEvent): void {
 	if (popoutWindow != null) window.focus();
 	session.openDeviceMenu(kind, event);
+}
+
+function toggleCamera(): void {
+	if (popoutWindow != null) window.focus();
+	void session.toggleVideo('camera');
 }
 
 function openRoomMenu(event: MouseEvent): void {

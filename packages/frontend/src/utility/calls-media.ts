@@ -503,9 +503,10 @@ export class CallsMediaController {
 			this.localTrack = null;
 			this.videoCallbacks?.microphoneTrack?.(null);
 			await this.enqueue(async () => { await this.microphoneSender?.replaceTrack(null); });
-		} else if (this.peer != null && this.role !== 'listener' && this.canUseMicrophone && !this.isClosed()) {
+		} else if (this.role !== 'listener' && this.canUseMicrophone && !this.isClosed()) {
 			try {
-				await this.switchMicrophone(this.microphoneDeviceId);
+				if (this.peer != null) await this.switchMicrophone(this.microphoneDeviceId);
+				if (this.localTrack == null) throw new DOMException('No audio track', 'NotFoundError');
 			} catch (error) {
 				this.muted = true;
 				throw error;
@@ -535,6 +536,11 @@ export class CallsMediaController {
 			} catch (error) {
 				microphone.processing?.close();
 				microphone.track.stop();
+				if (this.muted || this.isClosed()) {
+					oldMicrophone?.processing?.close();
+					oldMicrophone?.track.stop();
+					throw error;
+				}
 				this.microphone = oldMicrophone;
 				this.localTrack = oldTrack;
 				oldMicrophone?.processing?.setEnabled(this.noiseSuppression);

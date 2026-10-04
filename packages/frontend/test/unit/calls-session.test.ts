@@ -412,6 +412,26 @@ describe('Calls session device handoff', () => {
 		expect(params.reconnectToken).toEqual(expect.any(String));
 	});
 
+	test.each(['host', 'listener'] as const)('warns before reloading while participating as %s without disconnecting', async role => {
+		fixture.role = role;
+		const addListener = vi.spyOn(window, 'addEventListener');
+		const removeListener = vi.spyOn(window, 'removeEventListener');
+		expect(addListener.mock.calls.some(([type]) => type === 'beforeunload')).toBe(false);
+		await session.join('room-a', true);
+		const listener = addListener.mock.calls.find(([type]) => type === 'beforeunload')![1] as EventListener;
+		const event = new Event('beforeunload', { cancelable: true });
+		listener(event);
+		expect(event.defaultPrevented).toBe(true);
+		expect(event.returnValue).toBe('');
+		expect(session.isActive.value).toBe(true);
+		expect(fixture.controllers[0].close).not.toHaveBeenCalled();
+		expect(fixture.keepalive).not.toHaveBeenCalled();
+		await session.leave();
+		expect(removeListener).toHaveBeenCalledWith('beforeunload', listener);
+		addListener.mockRestore();
+		removeListener.mockRestore();
+	});
+
 	test('a failed server leave reports the error while keeping local media disconnected', async () => {
 		const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		fixture.role = 'host';

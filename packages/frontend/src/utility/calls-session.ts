@@ -132,6 +132,17 @@ const speakingParticipantIds = computed(() => connection.value?.speakingParticip
 const connected = computed(() => connection.value?.connected.value ?? false);
 const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? null);
 const isActive = computed(() => currentRoomId.value != null && myParticipant.value != null && room.value?.state === 'open');
+
+watch(isActive, (active, _, onCleanup) => {
+	if (!active) return;
+	const onBeforeUnload = (event: BeforeUnloadEvent) => {
+		event.preventDefault();
+		event.returnValue = '';
+	};
+	window.addEventListener('beforeunload', onBeforeUnload);
+	onCleanup(() => window.removeEventListener('beforeunload', onBeforeUnload));
+}, { flush: 'sync' });
+
 const elapsedTime = ref<string | null>(null);
 
 watch(() => isActive.value ? myParticipant.value?.joinedAt ?? null : null, (joinedAt, _, onCleanup) => {

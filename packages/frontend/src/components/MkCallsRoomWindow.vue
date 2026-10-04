@@ -10,6 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<header :class="$style.header">
 			<button type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.windowMinimize" :title="i18n.ts.windowMinimize" @click="closeWindow"><i class="ti ti-minus"></i></button>
 			<h1 :class="$style.title">{{ room?.title ?? i18n.ts._calls.title }}</h1>
+			<button v-if="room != null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.copyLink" :title="i18n.ts.copyLink" @click="copyRoomLink"><i class="ti ti-link" aria-hidden="true"></i></button>
 			<button v-if="hasRoomMenu" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.details" :disabled="session.joining.value" aria-haspopup="menu" @click="openRoomMenu"><i class="ti ti-dots"></i></button>
 			<button v-if="popoutTarget == null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.popout" :title="i18n.ts.popout" @click="popout"><i class="ti ti-external-link"></i></button>
 		</header>
@@ -24,8 +25,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkInfo v-if="sessionIsCurrent && session.speakerRequestResult.value === 'rejected'" warn>{{ i18n.ts._calls.speakerRequestRejected }}</MkInfo>
 
 				<div :class="$style.callLayout">
-					<section :class="$style.stage" :aria-label="i18n.ts._calls.title">
-						<div ref="videoGrid" :class="[$style.videoGrid, focusedVideoId != null && $style.videoGridFocused]">
+					<section ref="stage" :class="$style.stage" :aria-label="i18n.ts._calls.title">
+						<div ref="videoGrid" :class="$style.videoGrid" :style="videoGridStyle">
 							<CallsVideo v-for="video in roomVideos" :key="video.id" :stream="video.stream" screenWindow :screenWindowActive="session.screenWindowStream.value === video.stream" :label="videoLabel(video.participantId)" :speaking="speakingParticipantIds.has(video.participantId)" :focused="focusedVideoId === video.id" :class="focusedVideoId === video.id && $style.focusedVideo" @select="focusVideo(video.id)" @screenWindow="showScreenWindow(video.stream, video.participantId)"/>
 							<div v-for="participant in audioOnlySpeakers" :key="participant.id" :class="[$style.voiceTile, speakingParticipantIds.has(participant.id) && $style.speaking]">
 								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.stageAvatar"/>
@@ -39,8 +40,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div v-if="room.mode === 'stage'" :class="$style.groupLabel">{{ i18n.ts._calls.speaker }}</div>
 							<TransitionGroup tag="div" :class="$style.people" :moveClass="$style.personMove">
 								<div v-for="participant in speakers" :key="participant.id" :class="$style.person">
+									<MkA v-if="participantUser(participant.userId) != null" v-user-preview="participant.userId" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.personLink"/>
 									<div :class="[$style.avatarWrap, speakingParticipantIds.has(participant.id) && $style.speaking]">
-										<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.avatar" link preview/>
+										<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.avatar"/>
 										<div v-else :class="[$style.avatar, $style.avatarPlaceholder]"><i class="ti ti-user"></i></div>
 										<span :class="$style.microphoneBadge" :title="participant.isMuted ? i18n.ts._calls.mutedStatus : i18n.ts._calls.microphoneOn"><i :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i></span>
 									</div>
@@ -49,6 +51,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<button v-if="canKick && participant.role !== 'host' && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
 									</div>
 									<small :class="speakingParticipantIds.has(participant.id) && $style.speakingLabel">{{ speakingParticipantIds.has(participant.id) ? i18n.ts._calls.speakingNow : participant.role === 'host' ? i18n.ts._calls.host : room.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.vcModerator : i18n.ts._calls.speaker }}</small>
+									<label v-if="sessionIsCurrent && participant.userId !== $i?.id" :class="$style.personVolume">
+										<span>{{ i18n.ts.volume }} · {{ session.getParticipantVolume(participant.userId) }}%</span>
+										<input type="range" min="0" max="100" step="1" :value="session.getParticipantVolume(participant.userId)" :aria-label="`${i18n.ts.volume}: ${videoLabel(participant.id)}`" @input="session.setParticipantVolume(participant.userId, ($event.target as HTMLInputElement).valueAsNumber)">
+									</label>
 								</div>
 							</TransitionGroup>
 						</section>
@@ -57,7 +63,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div :class="$style.groupLabel">{{ i18n.ts._calls.listener }} · {{ listeners.length }}</div>
 							<TransitionGroup tag="div" :class="$style.people" :moveClass="$style.personMove">
 								<div v-for="participant in listeners" :key="participant.id" :class="$style.person">
-									<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.listenerAvatar" link preview/>
+									<MkA v-if="participantUser(participant.userId) != null" v-user-preview="participant.userId" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.personLink"/>
+									<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.listenerAvatar"/>
 									<div v-else :class="[$style.listenerAvatar, $style.avatarPlaceholder]"><i class="ti ti-user"></i></div>
 									<div :class="$style.personName">
 										<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
@@ -93,6 +100,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, shallowRef, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
+import { url } from '@@/js/config.js';
 import CallsVideo from '@/components/MkCallsVideo.vue';
 import MkModal from '@/components/MkModal.vue';
 import MkCallsControls from '@/components/MkCallsControls.vue';
@@ -104,6 +112,9 @@ import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { useCallsSession } from '@/utility/calls-session.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
+import MkA from '@/components/global/MkA.vue';
+import { acct, userPage } from '@/filters/user.js';
 
 const props = defineProps<{
 	roomId: string;
@@ -160,6 +171,17 @@ async function popout(): Promise<void> {
 }
 
 const videoGrid = shallowRef<HTMLElement | null>(null);
+const stage = shallowRef<HTMLElement | null>(null);
+const stageSize = shallowRef({ width: 0, height: 0 });
+
+watch(stage, (element, _, onCleanup) => {
+	if (element == null) return;
+	const observer = new ResizeObserver(([entry]) => {
+		stageSize.value = { width: entry.contentRect.width, height: entry.contentRect.height };
+	});
+	observer.observe(element);
+	onCleanup(() => observer.disconnect());
+}, { flush: 'post' });
 
 async function focusVideo(id: string): Promise<void> {
 	const tiles = Array.from(videoGrid.value?.children ?? []) as HTMLElement[];
@@ -197,9 +219,39 @@ const listeners = computed(() => participants.value.filter(participant => partic
 const sessionIsCurrent = computed(() => isSessionRoom.value && session.isActive.value);
 const roomVideos = computed(() => sessionIsCurrent.value ? session.videos.value : []);
 const audioOnlySpeakers = computed(() => speakers.value.filter(participant => !roomVideos.value.some(video => video.participantId === participant.id)));
+const videoGridStyle = computed(() => {
+	const focused = focusedVideoId.value != null;
+	const count = roomVideos.value.length + audioOnlySpeakers.value.length - (focused ? 1 : 0);
+	const { width, height } = stageSize.value;
+	let columns = 1;
+	let bestSize = 0;
+	for (let candidate = 1; candidate <= count; candidate++) {
+		const rows = Math.ceil(count / candidate);
+		const rowHeight = focused ? (height - 12 * rows) / (3 + rows) : (height - 12 * (rows - 1)) / rows;
+		const size = Math.min((width - 12 * (candidate - 1)) / candidate * 9 / 16, rowHeight);
+		if (size > bestSize) {
+			columns = candidate;
+			bestSize = size;
+		}
+	}
+	const rows = Math.ceil(count / columns);
+	return {
+		gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+		gridTemplateRows: focused ? count > 0 ? `minmax(0, 3fr) repeat(${rows}, minmax(0, 1fr))` : 'minmax(0, 1fr)' : `repeat(${Math.max(1, rows)}, minmax(0, 1fr))`,
+	};
+});
 const failureText = computed(() => session.mediaFailure.value === 'unsupported' ? i18n.ts._calls.unsupportedBrowser : session.mediaFailure.value === 'permission-denied' ? i18n.ts._calls.permissionDenied : session.mediaFailure.value === 'device-not-found' ? i18n.ts._calls.deviceNotFound : session.mediaFailure.value === 'permission-pending' ? i18n.ts._calls.permissionPending : i18n.ts._calls.mediaFailed);
 
 const hasRoomMenu = computed(() => isHost.value && (room.value?.state === 'scheduled' || (room.value?.state === 'open' && !sessionIsCurrent.value && session.replacedRoomId.value !== props.roomId)));
+
+async function copyRoomLink(): Promise<void> {
+	if (popoutWindow != null) window.focus();
+	try {
+		await copyToClipboard(`${url}/calls/${props.roomId}`);
+	} catch {
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
+}
 
 function openScreenSettings(event: MouseEvent): void {
 	if (popoutWindow != null) window.focus();
@@ -392,7 +444,8 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 .participantArea { grid-column: 1; grid-row: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 24px; padding: 16px; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
 .groupLabel { margin-bottom: 12px; font-size: 0.85rem; font-weight: 600; opacity: 0.65; }
 .people { display: flex; flex-direction: column; gap: 12px; }
-.person { display: grid; min-width: 0; grid-template-columns: 40px minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 2px; }
+.person { position: relative; display: grid; min-width: 0; grid-template-columns: 40px minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 2px; }
+.personLink { position: absolute; inset: 0; z-index: 1; border-radius: var(--MI-radius); }
 .person > .avatarWrap, .person > .listenerAvatar { grid-row: span 2; }
 .avatarWrap { position: relative; padding: 2px; border: 2px solid transparent; border-radius: 50%; transition: border-color 0.2s ease; }
 .speaking { border-color: var(--MI_THEME-accent); }
@@ -402,14 +455,15 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 .microphoneBadge { position: absolute; right: -2px; bottom: -2px; display: grid; place-items: center; width: 16px; height: 16px; border: 2px solid var(--MI_THEME-panel); border-radius: 50%; background: var(--MI_THEME-buttonBg); font-size: 10px; }
 .personName { display: flex; align-items: center; justify-content: space-between; width: 100%; min-width: 0; gap: 4px; }
 .personName > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; }
-.personMenu { flex: 0 0 28px; height: 28px; border-radius: 50%; }
+.personMenu { position: relative; z-index: 2; flex: 0 0 28px; height: 28px; border-radius: 50%; }
 .person > small { grid-column: 2; font-size: 0.75rem; color: var(--MI_THEME-fgTransparentWeak); }
 .person > .speakingLabel { color: var(--MI_THEME-accent); }
+.personVolume { position: relative; z-index: 2; grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; width: 100%; margin-top: 4px; font-size: 0.75rem; }
+.personVolume > input { width: 100%; min-width: 0; margin: 0; accent-color: var(--MI_THEME-accent); }
 .personMove { transition: transform 0.2s ease; }
-.videoGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 12px; align-content: start; }
-.videoGridFocused { grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); }
+.videoGrid { display: grid; gap: 12px; height: 100%; min-height: 0; }
 .focusedVideo { grid-column: 1 / -1; order: -1; }
-.voiceTile { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; min-width: 0; border: 2px solid transparent; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
+.voiceTile { position: relative; display: grid; place-items: center; min-width: 0; min-height: 0; overflow: hidden; border: 2px solid transparent; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
 .voiceTile.speaking { border-color: var(--MI_THEME-accent); }
 .stageAvatar { width: 80px; height: 80px; }
 .stageAvatarPlaceholder { font-size: 48px; }

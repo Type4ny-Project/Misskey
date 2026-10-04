@@ -53,6 +53,7 @@ watch([video, () => props.stream], ([element, stream]) => {
 	margin: 0;
 	overflow: hidden;
 	min-width: 0;
+	min-height: 0;
 	border-radius: var(--MI-radius);
 	background: var(--MI_THEME-bg);
 }
@@ -69,6 +70,7 @@ watch([video, () => props.stream], ([element, stream]) => {
 .video {
 	display: block;
 	width: 100%;
+	height: 100%;
 	aspect-ratio: 16 / 9;
 	object-fit: contain;
 	background: var(--MI_THEME-bg);

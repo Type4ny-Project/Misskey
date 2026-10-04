@@ -26,7 +26,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:showPinned="showPinned"
 		:pinnedEmojis="pinnedEmojis"
 		:asReactionPicker="asReactionPicker"
-		:checkReactionRoles="checkReactionRoles"
 		:targetNote="targetNote"
 		:asDrawer="type === 'drawer'"
 		:max-height="maxHeight"
@@ -49,7 +48,6 @@ const props = withDefaults(defineProps<{
 	showPinned?: boolean;
 	pinnedEmojis?: string[],
 	asReactionPicker?: boolean;
-	checkReactionRoles?: boolean;
 	targetNote?: Misskey.entities.Note | null;
 	choseAndClose?: boolean;
 }>(), {

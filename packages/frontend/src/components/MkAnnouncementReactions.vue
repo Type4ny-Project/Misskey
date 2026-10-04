@@ -82,7 +82,7 @@ function choose() {
 	if (!$i || !props.interactive || pending.value) return;
 	reactionPicker.show(pickerButton.value, null, reaction => {
 		void react(reaction);
-	}, undefined, true);
+	});
 }
 </script>
 

@@ -217,8 +217,7 @@ const props = withDefaults(defineProps<{
 	maxHeight?: number;
 	asDrawer?: boolean;
 	asWindow?: boolean;
-	asReactionPicker?: boolean;
-	checkReactionRoles?: boolean;
+	asReactionPicker?: boolean; // 今は使われてないが将来的に使いそう
 	targetNote?: Misskey.entities.Note | null;
 }>(), {
 	showPinned: true,
@@ -555,7 +554,7 @@ watch(() => [
 });
 
 function canReact(emoji: Misskey.entities.EmojiSimple | UnicodeEmojiDef | string): boolean {
-	return !(props.targetNote || props.checkReactionRoles) || checkReactionPermissions($i!, props.targetNote ?? null, emoji);
+	return !props.targetNote || checkReactionPermissions($i!, props.targetNote, emoji);
 }
 
 function canRequestSuggestions(): boolean {
@@ -695,8 +694,6 @@ function computeButtonTitle(ev: PointerEvent): void {
 }
 
 function chosen(emoji: string | Misskey.entities.EmojiSimple | UnicodeEmojiDef, ev?: PointerEvent) {
-	if (props.checkReactionRoles && !canReact(typeof emoji === 'string' ? getDef(emoji) : emoji)) return;
-
 	if (suppressNextClick) {
 		ev?.preventDefault();
 		ev?.stopPropagation();

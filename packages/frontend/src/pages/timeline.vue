@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="src" :actions="headerActions" :tabs="$i ? headerTabs : headerTabsWhenNotLogin" :swipable="true" :displayMyAvatar="true" :canOmitTitle="true">
+<PageWithHeader v-model:tab="src" :class="{ [$style.compact]: compactTimeline }" :actions="headerActions" :tabs="$i ? headerTabs : headerTabsWhenNotLogin" :swipable="true" :displayMyAvatar="true" :canOmitTitle="true">
 	<div class="_spacer" style="--MI_SPACER-w: 800px;">
 		<MkTip v-if="isBasicTimeline(src)" :k="`tl.${src}`" style="margin-bottom: var(--MI-margin);">
 			{{ i18n.ts._timelineDescription[src] }}
@@ -364,6 +364,12 @@ definePage(() => ({
 </script>
 
 <style lang="scss" module>
+.compact {
+	scrollbar-width: auto;
+	scrollbar-gutter: stable;
+	scrollbar-color: var(--MI_THEME-scrollbarHandle) var(--MI_THEME-panel);
+}
+
 .new {
 	position: sticky;
 	top: calc(var(--MI-stickyTop, 0px) + 16px);

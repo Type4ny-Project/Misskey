@@ -50,6 +50,10 @@ export function createCallsRoomConnection(roomId: string) {
 
 	function onStreamConnected() {
 		connected.value = true;
+		void refresh().then(() => {
+			if (room.value?.state !== 'open') return;
+			for (const listener of trackListeners) listener();
+		}).catch(() => undefined);
 	}
 
 	channel.on('lifecycle', event => accept(event, () => {

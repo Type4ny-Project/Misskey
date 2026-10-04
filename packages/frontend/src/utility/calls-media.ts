@@ -37,6 +37,7 @@ export class CallsMediaController {
 	private connectionId: string = crypto.randomUUID();
 	private queue = Promise.resolve();
 	private reconnectTimer: number | null = null;
+	private reconnectPromise: Promise<void> | null = null;
 	private publications = new Set<string>();
 	private subscribedPublications = new Set<string>();
 	private mediaCredential: string | null = null;
@@ -217,6 +218,10 @@ export class CallsMediaController {
 	}
 
 	public reconcile(): Promise<boolean> {
+		if (this.reconnectPromise != null) return this.reconnectPromise.then(() => false);
+		if (!this.isClosed() && this.generation !== 0 && (this.state === 'failed' || this.peer?.connectionState === 'failed' || this.peer?.connectionState === 'disconnected')) {
+			return this.scheduleReconnect(this.peer?.connectionState === 'disconnected' ? 'disconnected' : 'failed').then(() => false);
+		}
 		return this.enqueue(() => this.reconcileNow());
 	}
 
@@ -490,16 +495,20 @@ export class CallsMediaController {
 
 	private isClosed(): boolean { return this.state === 'leaving' || this.state === 'closed'; }
 
-	private scheduleReconnect(reason: Exclude<CallsNormalizedStats['reconnectReason'], null>): void {
-		if (this.isClosed() || this.state === 'reconnecting') return;
+	private scheduleReconnect(reason: Exclude<CallsNormalizedStats['reconnectReason'], null>): Promise<void> {
+		if (this.isClosed()) return Promise.resolve();
+		if (this.reconnectPromise != null) return this.reconnectPromise;
 		this.reconnectReason = reason;
 		this.reconnectStartedAt = performance.now();
 		this.recoveryTimeMs = null;
 		this.setState('reconnecting');
-		void this.enqueue(() => this.createConnection()).catch(error => {
+		this.reconnectPromise = this.enqueue(() => this.createConnection()).catch(error => {
 			console.error('[Calls] Media reconnection failed', error);
 			if (!this.isClosed()) this.fail('negotiation-failed');
+		}).finally(() => {
+			this.reconnectPromise = null;
 		});
+		return this.reconnectPromise;
 	}
 
 	private async ensureCredential(): Promise<void> {

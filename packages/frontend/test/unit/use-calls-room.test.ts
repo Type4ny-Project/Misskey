@@ -162,14 +162,18 @@ describe('useCallsRoom streaming updates', () => {
 		expect(revoked).not.toHaveBeenCalled();
 	});
 
-	test('updates connection state without refetching and treats channel-wide revoke as local', async () => {
+	test('refreshes room and media state on reconnect and treats channel-wide revoke as local', async () => {
 		const calls = useCallsRoom('room-a');
 		await calls.refresh();
 		const revoked = vi.fn();
 		calls.onRevoked(revoked);
+		const tracksChanged = vi.fn();
+		calls.onTrackChange(tracksChanged);
 		fixture.streamHandlers.get('_connected_')?.();
 		expect(calls.connected.value).toBe(true);
-		expect(fixture.api).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(tracksChanged).toHaveBeenCalledOnce());
+		expect(fixture.api).toHaveBeenCalledTimes(2);
+		expect(fixture.api).toHaveBeenLastCalledWith('calls/rooms/show', { roomId: 'room-a' });
 
 		fixture.channelHandlers.get('revoked')?.({ sequence: 1, roomRevision: 2, reason: 'access' });
 		await vi.waitFor(() => expect(revoked).toHaveBeenCalledWith(expect.objectContaining({ reason: 'access' })));

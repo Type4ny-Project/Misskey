@@ -223,6 +223,10 @@ export const packedNoteSchema = {
 			type: 'boolean',
 			optional: true, nullable: false,
 		},
+		reactionLimit: {
+			type: 'number',
+			optional: false, nullable: true,
+		},
 		reactionAcceptance: {
 			type: 'string',
 			optional: false, nullable: true,

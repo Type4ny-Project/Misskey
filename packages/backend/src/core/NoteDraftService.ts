@@ -172,6 +172,13 @@ export class NoteDraftService {
 		me: MiLocalUser,
 		data: Partial<NoteDraftOptions>,
 	): Promise<void> {
+		if (data.reactionLimit != null) {
+			const policies = await this.roleService.getUserPolicies(me.id);
+			if (!Number.isInteger(data.reactionLimit) || data.reactionLimit < 1 || data.reactionLimit > policies.reactionLimit) {
+				throw new IdentifiableError('a7b81bb7-87ea-47d9-9e01-65d0635d57ad', 'Invalid reaction limit');
+			}
+		}
+
 		if (data.isActuallyScheduled) {
 			if (data.scheduledAt == null) {
 				throw new IdentifiableError('94a89a43-3591-400a-9c17-dd166e71fdfa', 'scheduledAt is required when isActuallyScheduled is true');

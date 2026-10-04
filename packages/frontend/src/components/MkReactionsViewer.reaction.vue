@@ -9,6 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	v-ripple="canToggle"
 	class="_button"
 	:class="[$style.root, { [$style.reacted]: (props.myReactions ?? []).includes(reaction), [$style.canToggle]: canToggle, [$style.small]: prefer.s.reactionsDisplaySize === 'small', [$style.large]: prefer.s.reactionsDisplaySize === 'large' }]"
+	:aria-disabled="!canToggle"
 	@click="toggleReaction()"
 	@contextmenu.prevent.stop="menu"
 >
@@ -31,6 +32,7 @@ import { useTooltip } from '@/composables/use-tooltip.js';
 import { $i } from '@/i.js';
 import MkReactionEffect from '@/components/MkReactionEffect.vue';
 import { i18n } from '@/i18n.js';
+import { getNoteReactionLimit } from '@/utility/get-note-reaction-limit.js';
 import * as sound from '@/utility/sound.js';
 import { checkReactionPermissions } from '@/utility/check-reaction-permissions.js';
 import { customEmojisMap } from '@/custom-emojis.js';
@@ -47,6 +49,7 @@ const props = defineProps<{
 	reactionEmojis: Misskey.entities.Note['reactionEmojis'];
 	myReaction: Misskey.entities.Note['myReaction'];
 	myReactions?: string[];
+	reactionLimit?: number | null;
 	count: number;
 	isInitial: boolean;
 }>();
@@ -61,13 +64,17 @@ const buttonEl = useTemplateRef('buttonEl');
 
 const emojiName = computed(() => props.reaction.replace(/:/g, '').replace(/@\./, ''));
 
-const canToggle = computed(() => {
+const canUseEmoji = computed(() => {
 	const emoji = customEmojisMap.get(emojiName.value) ?? getUnicodeEmojiOrNull(props.reaction);
 
 	// TODO
 	//return !props.reaction.match(/@\w/) && $i && emoji && checkReactionPermissions($i, props.note, emoji);
 	return props.reaction.match(/@\w/) == null && $i != null && emoji != null;
 });
+const canToggle = computed(() => canUseEmoji.value && (
+	(props.myReactions ?? []).includes(props.reaction) ||
+	(props.myReactions ?? []).length < getNoteReactionLimit(props, $i!.policies.reactionLimit)
+));
 const canGetInfo = computed(() => !props.reaction.match(/@\w/) && props.reaction.includes(':'));
 const isLocalCustomEmoji = props.reaction[0] === ':' && props.reaction.includes('@.');
 
@@ -184,7 +191,7 @@ async function menu(ev: PointerEvent) {
 		});
 	}
 
-	if (canToggle.value) {
+	if (canUseEmoji.value) {
 		menuItems.push({
 			text: i18n.ts.addToEmojiPalette,
 			icon: 'ti ti-palette',

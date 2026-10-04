@@ -211,6 +211,7 @@ if (props.initialVisibleUsers) {
 	props.initialVisibleUsers.forEach(u => pushVisibleUser(u));
 }
 const reactionAcceptance = ref(store.s.reactionAcceptance);
+const reactionLimit = ref<number | null>(null);
 const scheduledAt = ref<number | null>(null);
 const draghover = ref(false);
 const quoteId = ref<string | null>(null);
@@ -457,6 +458,7 @@ function watchForDraft() {
 	watch(localOnly, () => saveDraft());
 	watch(quoteId, () => saveDraft());
 	watch(reactionAcceptance, () => saveDraft());
+	watch(reactionLimit, () => saveDraft());
 	watch(scheduledAt, () => saveDraft());
 }
 
@@ -631,6 +633,22 @@ async function toggleReactionAcceptance() {
 	reactionAcceptance.value = select.result;
 }
 
+async function setReactionLimit() {
+	const max = (postAccount.value ?? $i).policies.reactionLimit;
+	const result = await os.inputNumber({
+		title: i18n.ts.noteReactionLimit,
+		default: reactionLimit.value,
+	});
+	if (result.canceled) return;
+	// MkInput emits NaN when a number input is cleared.
+	const limit = Number.isNaN(result.result) ? null : result.result;
+	if (limit != null && (!Number.isInteger(limit) || limit < 1 || limit > max)) {
+		await os.alert({ type: 'error', text: i18n.tsx.noteReactionLimitInvalid({ max }) });
+		return;
+	}
+	reactionLimit.value = limit;
+}
+
 //#region その他の設定メニューpopup
 function showOtherSettings() {
 	let reactionAcceptanceIcon = 'ti ti-icons';
@@ -673,7 +691,12 @@ function showOtherSettings() {
 		action: () => {
 			toggleReactionAcceptance();
 		},
-	}, { type: 'divider' }, {
+	}, ...(!props.updateMode ? [{
+		icon: 'ti ti-number',
+		text: i18n.ts.noteReactionLimit,
+		caption: reactionLimit.value == null ? i18n.ts.notSet : String(reactionLimit.value),
+		action: setReactionLimit,
+	}] : []), { type: 'divider' }, {
 		type: 'button',
 		text: i18n.ts._drafts.saveToDraft,
 		icon: 'ti ti-cloud-upload',
@@ -742,6 +765,7 @@ function clear() {
 	files.value = [];
 	poll.value = null;
 	quoteId.value = null;
+	reactionLimit.value = null;
 	scheduledAt.value = null;
 	uploader.reset();
 }
@@ -898,6 +922,7 @@ type StoredDrafts = {
 			poll: PollEditorModelValue | null;
 			visibleUserIds?: string[];
 			quoteId: string | null;
+			reactionLimit?: number | null;
 			reactionAcceptance: 'likeOnly' | 'likeOnlyForRemote' | 'nonSensitiveOnly' | 'nonSensitiveOnlyForLocalLikeOnlyForRemote' | null;
 			scheduledAt: number | null;
 		};
@@ -922,6 +947,7 @@ function saveDraft() {
 			...( visibleUsers.value.length > 0 ? { visibleUserIds: visibleUsers.value.map(x => x.id) } : {}),
 			quoteId: quoteId.value,
 			reactionAcceptance: reactionAcceptance.value,
+			reactionLimit: reactionLimit.value,
 			scheduledAt: scheduledAt.value,
 		},
 	};
@@ -954,6 +980,7 @@ async function saveServerDraft(options: {
 		replyId: replyTargetNote.value ? replyTargetNote.value.id : null,
 		channelId: targetChannel.value ? targetChannel.value.id : null,
 		reactionAcceptance: reactionAcceptance.value,
+		reactionLimit: reactionLimit.value,
 		scheduledAt: scheduledAt.value,
 		isActuallyScheduled: options.isActuallyScheduled ?? false,
 	});
@@ -1055,6 +1082,7 @@ async function post(ev?: PointerEvent) {
 		visibility: visibility.value,
 		visibleUserIds: visibility.value === 'specified' ? visibleUsers.value.map(u => u.id) : undefined,
 		reactionAcceptance: reactionAcceptance.value,
+		reactionLimit: reactionLimit.value,
 	};
 
 	if (withHashtags.value && hashtags.value && hashtags.value.trim() !== '') {
@@ -1298,7 +1326,7 @@ function showActions(ev: PointerEvent) {
 	})), ev.currentTarget ?? ev.target);
 }
 
-const postAccount = ref<Misskey.entities.UserDetailed | null>(null);
+const postAccount = ref<Misskey.entities.MeDetailed | null>(null);
 
 async function openAccountMenu(ev: PointerEvent) {
 	if (props.mock) return;
@@ -1337,6 +1365,7 @@ async function openAccountMenu(ev: PointerEvent) {
 				renoteTargetNote.value = draft.renote;
 				replyTargetNote.value = draft.reply;
 				reactionAcceptance.value = draft.reactionAcceptance;
+				reactionLimit.value = draft.reactionLimit ?? null;
 				scheduledAt.value = draft.scheduledAt ?? null;
 				if (draft.channel) {
 					targetChannel.value = draft.channel as unknown as Misskey.entities.Channel;
@@ -1493,6 +1522,7 @@ onMounted(() => {
 				}
 				quoteId.value = draft.data.quoteId;
 				reactionAcceptance.value = draft.data.reactionAcceptance;
+				reactionLimit.value = draft.data.reactionLimit ?? null;
 				scheduledAt.value = draft.data.scheduledAt ?? null;
 			}
 		}
@@ -1521,6 +1551,7 @@ onMounted(() => {
 			}
 			quoteId.value = renoteTargetNote.value ? renoteTargetNote.value.id : null;
 			reactionAcceptance.value = init.reactionAcceptance;
+			reactionLimit.value = init.reactionLimit ?? null;
 		}
 
 		nextTick(() => watchForDraft());

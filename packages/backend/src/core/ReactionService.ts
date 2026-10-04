@@ -188,7 +188,7 @@ export class ReactionService {
 		});
 
 		const policies = await this.roleService.getUserPolicies(user.id);
-		if (reactionCount >= policies.reactionLimit) {
+		if (reactionCount >= Math.min(policies.reactionLimit, note.reactionLimit ?? Infinity)) {
 			throw new IdentifiableError('51c42bb4-931a-456b-bff7-e5a8a70dd298');
 		}
 

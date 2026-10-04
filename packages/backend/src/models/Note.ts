@@ -99,6 +99,9 @@ export class MiNote {
 	})
 	public reactionAcceptance: typeof noteReactionAcceptances[number];
 
+	@Column('integer', { nullable: true })
+	public reactionLimit: number | null;
+
 	@Column('smallint', {
 		default: 0,
 	})

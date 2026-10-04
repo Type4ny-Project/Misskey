@@ -1148,6 +1148,8 @@ invitationRequiredToRegister: "現在このサーバーは招待制です。招�
 emailNotSupported: "このサーバーではメール配信はサポートされていません"
 postToTheChannel: "チャンネルに投稿"
 cannotBeChangedLater: "後から変更できません。"
+noteReactionLimit: "1人あたりのリアクション上限"
+noteReactionLimitInvalid: "1〜{max}の整数を指定してください。"
 reactionAcceptance: "リアクションの受け入れ"
 likeOnly: "いいねのみ"
 likeOnlyForRemote: "全て (リモートはいいねのみ)"

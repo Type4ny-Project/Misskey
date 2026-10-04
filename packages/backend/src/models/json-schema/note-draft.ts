@@ -161,6 +161,10 @@ export const packedNoteDraftSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		reactionLimit: {
+			type: 'number',
+			optional: false, nullable: true,
+		},
 		reactionAcceptance: {
 			type: 'string',
 			optional: false, nullable: true,

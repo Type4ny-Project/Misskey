@@ -2758,6 +2758,7 @@ _calls:
   scheduledAtDescription: "空欄の場合は作成後すぐに通話を開始します。"
   createRoom: "通話ルームを作成"
   roomTitle: "ルーム名"
+  changeTitle: "タイトルを変更"
   roomDescription: "説明"
   callMode: "通話モード"
   openCall: "オープン通話"

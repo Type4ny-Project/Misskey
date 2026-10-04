@@ -211,6 +211,11 @@ if (props.initialVisibleUsers) {
 	props.initialVisibleUsers.forEach(u => pushVisibleUser(u));
 }
 const reactionAcceptance = ref(store.s.reactionAcceptance);
+const postAccount = ref<Misskey.entities.MeDetailed | null>(null);
+const canChangeReactionAcceptance = computed(() => !props.updateMode && (postAccount.value ?? $i).policies.canChangeReactionAcceptance !== false);
+const effectiveReactionAcceptance = computed(() => props.updateMode
+	? props.initialNote?.reactionAcceptance ?? null
+	: canChangeReactionAcceptance.value ? reactionAcceptance.value : null);
 const scheduledAt = ref<number | null>(null);
 const draghover = ref(false);
 const quoteId = ref<string | null>(null);
@@ -616,6 +621,7 @@ async function toggleLocalOnly() {
 }
 
 async function toggleReactionAcceptance() {
+	if (!canChangeReactionAcceptance.value) return;
 	const select = await os.select({
 		title: i18n.ts.reactionAcceptance,
 		items: [
@@ -636,7 +642,7 @@ function showOtherSettings() {
 	let reactionAcceptanceIcon = 'ti ti-icons';
 	let reactionAcceptanceCaption = '';
 
-	switch (reactionAcceptance.value) {
+	switch (effectiveReactionAcceptance.value) {
 		case 'likeOnly':
 			reactionAcceptanceIcon = 'ti ti-heart _love';
 			reactionAcceptanceCaption = i18n.ts.likeOnly;
@@ -669,7 +675,8 @@ function showOtherSettings() {
 	}, { type: 'divider' }, {
 		icon: reactionAcceptanceIcon,
 		text: i18n.ts.reactionAcceptance,
-		caption: reactionAcceptanceCaption,
+		caption: props.updateMode || canChangeReactionAcceptance.value ? reactionAcceptanceCaption : i18n.ts.reactionAcceptanceLockedByRole,
+		disabled: !canChangeReactionAcceptance.value,
 		action: () => {
 			toggleReactionAcceptance();
 		},
@@ -1298,8 +1305,6 @@ function showActions(ev: PointerEvent) {
 	})), ev.currentTarget ?? ev.target);
 }
 
-const postAccount = ref<Misskey.entities.UserDetailed | null>(null);
-
 async function openAccountMenu(ev: PointerEvent) {
 	if (props.mock) return;
 
@@ -1367,11 +1372,16 @@ async function openAccountMenu(ev: PointerEvent) {
 		withExtraOperation: false,
 		includeCurrentAccount: true,
 		active: postAccount.value != null ? postAccount.value.id : $i.id,
-		onChoose: (account) => {
+		onChoose: async (account) => {
 			if (account.id === $i.id) {
 				postAccount.value = null;
 			} else {
 				postAccount.value = account;
+				const storedAccount = (await getAccounts()).find(x => x.id === account.id);
+				if (storedAccount?.token) {
+					const refreshedAccount = await misskeyApi('i', {}, storedAccount.token);
+					if (postAccount.value?.id === account.id) postAccount.value = refreshedAccount;
+				}
 			}
 		},
 	});

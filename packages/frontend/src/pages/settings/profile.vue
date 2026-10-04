@@ -115,6 +115,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<SearchMarker :keywords="['reaction']">
 			<MkSelect
 				v-model="reactionAcceptance"
+				:disabled="$i.policies.canChangeReactionAcceptance === false"
 				:items="[
 					{ label: i18n.ts.all, value: null },
 					{ label: i18n.ts.likeOnlyForRemote, value: 'likeOnlyForRemote' },
@@ -124,6 +125,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				]"
 			>
 				<template #label><SearchLabel>{{ i18n.ts.reactionAcceptance }}</SearchLabel></template>
+				<template v-if="$i.policies.canChangeReactionAcceptance === false" #caption>{{ i18n.ts.reactionAcceptanceLockedByRole }}</template>
 			</MkSelect>
 		</SearchMarker>
 
@@ -187,7 +189,14 @@ import { genId } from '@/utility/id.js';
 
 const $i = ensureSignin();
 
-const reactionAcceptance = store.model('reactionAcceptance');
+const savedReactionAcceptance = store.model('reactionAcceptance');
+const reactionAcceptance = computed({
+	get: () => $i.policies.canChangeReactionAcceptance === false ? null : savedReactionAcceptance.value,
+	set: value => {
+		if ($i.policies.canChangeReactionAcceptance === false) return;
+		savedReactionAcceptance.value = value;
+	},
+});
 
 function assertVaildLang(lang: string | null): lang is keyof typeof langmap {
 	return lang != null && lang in langmap;

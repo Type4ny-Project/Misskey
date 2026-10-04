@@ -180,6 +180,10 @@ export const packedRolePoliciesSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		canChangeReactionAcceptance: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
 		mentionLimit: {
 			type: 'integer',
 			optional: false, nullable: false,

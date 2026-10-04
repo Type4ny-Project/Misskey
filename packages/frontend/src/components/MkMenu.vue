@@ -191,6 +191,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				role="menuitem"
 				tabindex="0"
 				:class="['_button', $style.item, { [$style.danger]: item.danger, [$style.active]: unref(item.active) }]"
+				:disabled="unref(item.disabled)"
 				@click.prevent="unref(item.active) ? close(false) : clicked(item.action, $event)"
 				@mouseenter.passive="onItemMouseEnter"
 				@mouseleave.passive="onItemMouseLeave"

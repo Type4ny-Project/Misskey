@@ -149,6 +149,19 @@ describe('useCallsRoom streaming updates', () => {
 		expect(calls.participants.value[0]?.isMuted).toBe(true);
 	});
 
+	test('video stop events trigger media reconciliation without revoking the participant', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		const reconcile = vi.fn();
+		const revoked = vi.fn();
+		calls.onTrackChange(reconcile);
+		calls.onRevoked(revoked);
+		fixture.channelHandlers.get('videoStopped')?.({ sequence: 1, roomRevision: 2, participantId: 'participant-a', mediaSource: 'camera' });
+		expect(reconcile).toHaveBeenCalledTimes(1);
+		expect(calls.room.value?.revision).toBe(2);
+		expect(revoked).not.toHaveBeenCalled();
+	});
+
 	test('updates connection state without refetching and treats channel-wide revoke as local', async () => {
 		const calls = useCallsRoom('room-a');
 		await calls.refresh();

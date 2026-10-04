@@ -547,10 +547,14 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 	@bindThis
 	public async muteParticipant(actor: MiUser, roomId: string, participantId: string, expectedRevision: number): Promise<void> {
 		const room = await this.getRoom(roomId);
+		this.assertEnabled(room.attachmentType);
 		await this.assertCanModerateParticipants(actor, room);
 		const participant = await this.callsParticipantsRepository.findOneBy({ id: participantId, roomId, state: 'active' });
 		if (participant == null || participant.role !== 'speaker') throw new CallsRoomError('participant-not-found');
-		if (participant.isMuted) return;
+		if (participant.isMuted) {
+			await this.callsEventService.publish(roomId, room.revision, 'mute', { participantId: participant.id, isMuted: true });
+			return;
+		}
 		const result = await this.callsRoomsRepository.createQueryBuilder().update()
 			.set({ revision: () => '"revision" + 1', updatedAt: new Date() })
 			.where('id = :roomId AND revision = :expectedRevision AND state = :state', { roomId, expectedRevision, state: 'open' })
@@ -571,6 +575,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 	@bindThis
 	public async stopParticipantVideo(actor: MiUser, roomId: string, participantId: string, mediaSource: 'camera' | 'screen', expectedRevision: number): Promise<void> {
 		const room = await this.getRoom(roomId);
+		this.assertEnabled(room.attachmentType);
 		await this.assertCanModerateParticipants(actor, room);
 		const participant = await this.callsParticipantsRepository.findOneBy({ id: participantId, roomId, state: 'active' });
 		if (participant == null || participant.role !== 'speaker') throw new CallsRoomError('participant-not-found');

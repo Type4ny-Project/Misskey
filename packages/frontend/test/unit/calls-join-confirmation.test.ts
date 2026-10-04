@@ -36,7 +36,7 @@ beforeEach(() => {
 	vi.mocked(os.toast).mockClear();
 	vi.mocked(os.alert).mockClear();
 	vi.mocked(os.popupMenu).mockClear();
-	vi.mocked(misskeyApi).mockClear();
+	vi.mocked(misskeyApi).mockReset().mockResolvedValue({ roomRevision: 1, publications: [] } as never);
 	const room = { id: 'room', title: 'Another user’s room', state: 'open', mode: 'stage', revision: 1, moderatorUserIds: [] };
 	const participants = [{ id: 'host-participant', userId: 'host', role: 'host', isMuted: true, user: { id: 'host', username: 'host', name: 'Host' } }];
 	fixture.connection = { room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()), refresh: vi.fn().mockResolvedValue(undefined), dispose: vi.fn() };
@@ -51,17 +51,22 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
-	test.each(['host', 'moderator'])('the %s can mute a speaker and stop camera and screen separately', async actor => {
-		fixture.session.currentRoomId.value = 'room';
-		fixture.session.isActive.value = true;
+	test.each(['host', 'moderator', 'host-without-media'])('the %s can mute a speaker and stop camera and screen separately', async actor => {
+		if (actor !== 'host-without-media') {
+			fixture.session.currentRoomId.value = 'room';
+			fixture.session.isActive.value = true;
+		}
 		fixture.session.room.value.moderatorUserIds = actor === 'moderator' ? ['viewer'] : [];
 		fixture.session.participants.value = [
-			{ id: 'viewer-participant', userId: 'viewer', role: actor === 'host' ? 'host' : 'listener', isMuted: true },
+			{ id: 'viewer-participant', userId: 'viewer', role: actor === 'moderator' ? 'listener' : 'host', isMuted: true },
 			{ id: 'speaker-participant', userId: 'speaker', role: 'speaker', isMuted: false },
 		];
-		fixture.session.videos.value = ['camera', 'screen'].map(source => ({ id: source, participantId: 'speaker-participant', source }));
+		fixture.connection.participants.value = fixture.session.participants.value;
+		vi.mocked(misskeyApi).mockResolvedValue({ roomRevision: 1, publications: ['camera', 'screen'].map(mediaSource => ({ id: mediaSource, participantId: 'speaker-participant', mediaKind: 'video', mediaSource })) } as never);
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
 		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
+		expect(misskeyApi).toHaveBeenCalledWith('calls/media/reconcile', { roomId: 'room' });
 		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
 		await menu.find(item => item.text === i18n.ts._calls.mute)!.action(new PointerEvent('click'));
 		expect(vi.mocked(misskeyApi)).toHaveBeenCalledWith('calls/rooms/mute-participant', { roomId: 'room', participantId: 'speaker-participant', expectedRevision: 1 });
@@ -83,7 +88,7 @@ describe('Calls room window', () => {
 		expect(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')).toBeNull();
 	});
 
-	test('hides mute for muted speakers and video stop for sources that are off', async () => {
+	test.each([false, true])('hides video stop for absent sources with screen sharing %s', async hasScreen => {
 		fixture.session.currentRoomId.value = 'room';
 		fixture.session.isActive.value = true;
 		fixture.session.room.value.moderatorUserIds = ['viewer'];
@@ -91,9 +96,11 @@ describe('Calls room window', () => {
 			{ id: 'viewer-participant', userId: 'viewer', role: 'listener', isMuted: true },
 			{ id: 'speaker-participant', userId: 'speaker', role: 'speaker', isMuted: true },
 		];
+		vi.mocked(misskeyApi).mockResolvedValue({ roomRevision: 1, publications: hasScreen ? [{ id: 'screen', participantId: 'speaker-participant', mediaKind: 'video', mediaSource: 'screen' }] : [] } as never);
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
 		await fireEvent.click(view.getByRole('button', { name: i18n.ts.details }));
-		expect((vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[]).map(item => item.text)).toEqual([i18n.ts._calls.removeParticipant]);
+		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
+		expect((vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[]).map(item => item.text)).toEqual([...(hasScreen ? [i18n.ts._calls.stopScreenSharing] : []), i18n.ts._calls.removeParticipant]);
 	});
 
 	test('does not prompt or offer to join when the role disallows participation', async () => {

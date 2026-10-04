@@ -353,15 +353,17 @@ function createModerationFixture() {
 	const stopParticipantVideo = vi.fn();
 	const insertLog = vi.fn();
 	const publish = vi.fn();
+	const config = { cloudflareRealtime: { enabled: true } } as Config;
+	const isModerator = vi.fn().mockResolvedValue(false);
 	const service = new CallsRoomService(
-		{ cloudflareRealtime: { enabled: true } } as Config,
+		config,
 		{ findOneBy: async () => room, createQueryBuilder: () => queryBuilder } as never,
 		{ findOneBy: async () => participant, existsBy, update } as never,
 		{ insert: insertLog } as never, {} as never, {} as never, {} as never,
-		{ gen: () => 'log-a' } as never, { isModerator: async () => false, getUserPolicies: async () => ({ canJoinCalls: true }) } as never,
+		{ gen: () => 'log-a' } as never, { isModerator, getUserPolicies: async () => ({ canJoinCalls: true }) } as never,
 		{} as never, { publish } as never, { revokeParticipant, stopParticipantVideo } as never, { lifecycle: vi.fn() } as never,
 	);
-	return { service, room, participant, existsBy, update, set, execute, revokeParticipant, stopParticipantVideo, insertLog, publish };
+	return { service, config, isModerator, room, participant, existsBy, update, set, execute, revokeParticipant, stopParticipantVideo, insertLog, publish };
 }
 
 describe('Calls VC moderators', () => {
@@ -383,12 +385,45 @@ describe('Calls VC moderators', () => {
 		expect(fixture.revokeParticipant).not.toHaveBeenCalled();
 	});
 
-	test('muting an already muted speaker does not publish another change', async () => {
+	test('muting an already muted speaker resends the event without another mutation', async () => {
 		const fixture = createModerationFixture();
 		fixture.participant.isMuted = true;
 		await fixture.service.muteParticipant({ id: 'moderator-a', host: null } as MiUser, fixture.room.id, fixture.participant.id, 1);
 		expect(fixture.execute).not.toHaveBeenCalled();
+		expect(fixture.publish).toHaveBeenCalledWith(fixture.room.id, 1, 'mute', { participantId: fixture.participant.id, isMuted: true });
+		expect(fixture.update).not.toHaveBeenCalled();
+		expect(fixture.insertLog).not.toHaveBeenCalled();
+	});
+
+	test('retries a failed mute notification after the database has been updated', async () => {
+		const fixture = createModerationFixture();
+		const actor = { id: 'owner-a', host: null } as MiUser;
+		fixture.publish.mockRejectedValueOnce(new Error('publish failed'));
+		fixture.update.mockImplementation(async () => { fixture.participant.isMuted = true; });
+		await expect(fixture.service.muteParticipant(actor, fixture.room.id, fixture.participant.id, 1)).rejects.toThrow('publish failed');
+		fixture.room.revision = 2;
+		await fixture.service.muteParticipant(actor, fixture.room.id, fixture.participant.id, 2);
+		expect(fixture.publish).toHaveBeenCalledTimes(2);
+		expect(fixture.publish).toHaveBeenLastCalledWith(fixture.room.id, 2, 'mute', { participantId: fixture.participant.id, isMuted: true });
+		expect(fixture.execute).toHaveBeenCalledTimes(1);
+		expect(fixture.update).toHaveBeenCalledTimes(1);
+		expect(fixture.insertLog).toHaveBeenCalledTimes(1);
+	});
+
+	test.each(['owner-a', 'global-moderator'])('disabled Calls rejects new media moderation by %s but permits removal', async id => {
+		const fixture = createModerationFixture();
+		fixture.config.cloudflareRealtime!.enabled = false;
+		fixture.isModerator.mockResolvedValue(id === 'global-moderator');
+		const actor = { id, host: null } as MiUser;
+		await expect(fixture.service.muteParticipant(actor, fixture.room.id, fixture.participant.id, 1)).rejects.toBeInstanceOf(CallsFeatureDisabledError);
+		await expect(fixture.service.stopParticipantVideo(actor, fixture.room.id, fixture.participant.id, 'camera', 1)).rejects.toBeInstanceOf(CallsFeatureDisabledError);
+		expect(fixture.execute).not.toHaveBeenCalled();
+		expect(fixture.update).not.toHaveBeenCalled();
+		expect(fixture.insertLog).not.toHaveBeenCalled();
 		expect(fixture.publish).not.toHaveBeenCalled();
+		expect(fixture.stopParticipantVideo).not.toHaveBeenCalled();
+		await fixture.service.removeParticipant(actor, fixture.room.id, fixture.participant.id, 1);
+		expect(fixture.revokeParticipant).toHaveBeenCalledWith(fixture.participant, 2, 'moderation');
 	});
 
 	test.each(['ended', 'stale'] as const)('a %s room rejects microphone and video moderation', async reason => {

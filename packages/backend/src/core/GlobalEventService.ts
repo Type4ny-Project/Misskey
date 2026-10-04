@@ -43,6 +43,7 @@ export interface CallsRoomEventTypes {
 	mute: CallsRoomEventBase & { participantId: string; isMuted: boolean };
 	speaking: CallsRoomEventBase & { participantIds: string[] };
 	track: CallsRoomEventBase & { participantId: string; publicationId: string; available: boolean; mediaKind: 'audio' | 'video'; mediaSource?: 'microphone' | 'camera' | 'screen' };
+	videoStopped: CallsRoomEventBase & { participantId: string; mediaSource: 'camera' | 'screen' };
 	revoked: CallsRoomEventBase & { participantId?: string; connectionId?: string; generation?: number; reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation' | 'replaced' };
 }
 

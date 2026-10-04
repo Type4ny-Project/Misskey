@@ -23,7 +23,25 @@ describe('CallsMediaRevocationService', () => {
 		expect(provider.closeTracks).toHaveBeenCalledExactlyOnceWith('session-a', [{ mid: mediaSource === 'camera' ? '1' : '2' }], true);
 		expect(bindings.removePublication).toHaveBeenCalledExactlyOnceWith(mediaSource);
 		expect(quota.releaseTrack).toHaveBeenCalledExactlyOnceWith('app-a', mediaSource);
-		expect(events.publish).toHaveBeenCalledExactlyOnceWith(participant.roomId, 2, 'track', { participantId: participant.id, publicationId: mediaSource, available: false, mediaKind: 'video', mediaSource });
+		expect(events.publish).toHaveBeenCalledExactlyOnceWith(participant.roomId, 2, 'videoStopped', { participantId: participant.id, mediaSource });
+	});
+
+	test('retries a failed video stop notification after removing its publication binding', async () => {
+		const publications = [{ id: 'camera', participantId: participant.id, mediaSource: 'camera', providerSessionId: 'session-a', providerMid: '1', applicationId: 'app-a', providerTrackName: 'camera' }];
+		const bindings = {
+			listRoomPublications: vi.fn().mockResolvedValueOnce(publications).mockResolvedValue([]),
+			removePublication: vi.fn(),
+		};
+		const provider = { closeTracks: vi.fn() };
+		const events = { publish: vi.fn().mockRejectedValueOnce(new Error('publish failed')).mockResolvedValue(undefined) };
+		const service = new CallsMediaRevocationService({} as never, {} as never, {} as never, bindings as never, provider as never, events as never, {} as never, { releaseTrack: vi.fn() } as never);
+		await expect(service.stopParticipantVideo(participant, 'camera', 2)).rejects.toThrow('publish failed');
+		expect(bindings.removePublication).toHaveBeenCalledExactlyOnceWith('camera');
+		await service.stopParticipantVideo(participant, 'camera', 3);
+		expect(events.publish).toHaveBeenCalledTimes(2);
+		expect(events.publish).toHaveBeenLastCalledWith(participant.roomId, 3, 'videoStopped', { participantId: participant.id, mediaSource: 'camera' });
+		expect(provider.closeTracks).toHaveBeenCalledTimes(1);
+		expect(bindings.removePublication).toHaveBeenCalledTimes(1);
 	});
 
 	test('keeps video bindings and quota when stopping the provider track fails', async () => {

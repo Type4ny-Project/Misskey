@@ -281,9 +281,19 @@ function openRoomMenu(event: MouseEvent): void {
 	], event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
 }
 
-function openParticipantMenu(participant: (typeof participants.value)[number], event: MouseEvent): void {
+async function openParticipantMenu(participant: (typeof participants.value)[number], event: MouseEvent): Promise<void> {
 	if (popoutWindow != null) window.focus();
 	if (!canModerateParticipants.value || room.value == null || participant.role === 'host' || participant.userId === $i?.id) return;
+	const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined;
+	let publications: Misskey.entities.CallsMediaReconcileResponse['publications'];
+	try {
+		({ publications } = await misskeyApi('calls/media/reconcile', { roomId: props.roomId }));
+	} catch (error) {
+		console.error('[Calls] Participant menu failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		return;
+	}
+	if (disposed || !canModerateParticipants.value || room.value == null) return;
 	os.popupMenu([
 		...(isHost.value && room.value.mode === 'stage' ? [
 			{ text: participant.role === 'listener' ? participant.speakerRequestedAt != null ? i18n.ts.approve : i18n.ts._calls.promoteSpeaker : i18n.ts._calls.demoteListener, icon: 'ti ti-microphone', action: () => setRole(participant.id, participant.role === 'listener' ? 'speaker' : 'listener') },
@@ -291,10 +301,10 @@ function openParticipantMenu(participant: (typeof participants.value)[number], e
 		] : []),
 		...(isHost.value ? [{ text: room.value.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.removeVcModerator : i18n.ts._calls.assignVcModerator, icon: 'ti ti-shield', action: () => setModerator(participant.id, !room.value!.moderatorUserIds.includes(participant.userId)) }] : []),
 		...(participant.role === 'speaker' && !participant.isMuted ? [{ text: i18n.ts._calls.mute, icon: 'ti ti-microphone-off', action: () => muteParticipant(participant.id) }] : []),
-		...(roomVideos.value.some(video => video.participantId === participant.id && video.source === 'camera') ? [{ text: i18n.ts._calls.stopCamera, icon: 'ti ti-camera-off', action: () => stopParticipantVideo(participant.id, 'camera') }] : []),
-		...(roomVideos.value.some(video => video.participantId === participant.id && video.source === 'screen') ? [{ text: i18n.ts._calls.stopScreenSharing, icon: 'ti ti-screen-share-off', action: () => stopParticipantVideo(participant.id, 'screen') }] : []),
+		...(publications.some(publication => publication.participantId === participant.id && publication.mediaSource === 'camera') ? [{ text: i18n.ts._calls.stopCamera, icon: 'ti ti-camera-off', action: () => stopParticipantVideo(participant.id, 'camera') }] : []),
+		...(publications.some(publication => publication.participantId === participant.id && publication.mediaSource === 'screen') ? [{ text: i18n.ts._calls.stopScreenSharing, icon: 'ti ti-screen-share-off', action: () => stopParticipantVideo(participant.id, 'screen') }] : []),
 		{ text: i18n.ts._calls.removeParticipant, icon: 'ti ti-user-x', danger: true, action: () => removeParticipant(participant.id) },
-	], event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
+	], target);
 }
 
 async function showScreenWindow(stream: MediaStream, participantId: string): Promise<void> {

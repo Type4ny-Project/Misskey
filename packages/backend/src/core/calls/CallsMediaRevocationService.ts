@@ -52,8 +52,9 @@ export class CallsMediaRevocationService {
 		await this.closeProviderPublications(publications);
 		for (const publication of publications) {
 			await this.bindings.removePublication(publication.id);
-			await this.events.publish(participant.roomId, roomRevision, 'track', { participantId: participant.id, publicationId: publication.id, available: false, mediaKind: publication.mediaKind, mediaSource });
 		}
+		// The source remains known on retry even after its publication bindings are removed.
+		await this.events.publish(participant.roomId, roomRevision, 'videoStopped', { participantId: participant.id, mediaSource });
 	}
 
 	public async closeGeneration(participantId: string, generation: number): Promise<void> {

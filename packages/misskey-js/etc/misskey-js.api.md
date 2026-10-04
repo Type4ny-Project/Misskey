@@ -1240,6 +1240,10 @@ export type Channels = {
                 mediaKind: 'audio' | 'video';
                 mediaSource?: 'microphone' | 'camera' | 'screen';
             }) => void;
+            videoStopped: (payload: CallsRoomEventBase & {
+                participantId: string;
+                mediaSource: 'camera' | 'screen';
+            }) => void;
             revoked: (payload: CallsRoomEventBase & {
                 participantId?: string;
                 connectionId?: string;

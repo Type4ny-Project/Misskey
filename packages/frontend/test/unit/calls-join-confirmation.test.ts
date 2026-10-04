@@ -18,7 +18,7 @@ vi.mock('@/i.js', () => ({ $i: { id: 'viewer', policies: fixture.policies } }));
 vi.mock('@/components/MkModal.vue', () => ({ default: { template: '<section><slot/></section>', methods: { close() {} } } }));
 vi.mock('@/components/MkButton.vue', () => ({ default: { template: '<button><slot/></button>' } }));
 vi.mock('@/components/global/MkA.vue', () => ({ default: { props: ['to'], template: '<a :href="to"><slot/></a>' } }));
-vi.mock('@/os.js', () => ({ confirm: fixture.confirm, inputText: fixture.inputText, toast: vi.fn(), alert: vi.fn(), popupMenu: vi.fn() }));
+vi.mock('@/os.js', () => ({ confirm: fixture.confirm, inputText: fixture.inputText, toast: vi.fn(), alert: vi.fn(), popupMenu: vi.fn(), contextMenu: vi.fn() }));
 vi.mock('@/utility/calls-session.js', () => ({ useCallsSession: () => fixture.session }));
 vi.mock('@/composables/use-calls-room.js', () => ({ createCallsRoomConnection: () => fixture.connection }));
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: vi.fn().mockResolvedValue({ id: 'host', username: 'host', name: 'Host' }) }));
@@ -37,6 +37,7 @@ beforeEach(() => {
 	vi.mocked(os.toast).mockClear();
 	vi.mocked(os.alert).mockClear();
 	vi.mocked(os.popupMenu).mockClear();
+	vi.mocked(os.contextMenu).mockClear();
 	vi.mocked(misskeyApi).mockReset().mockResolvedValue({ roomRevision: 1, publications: [] } as never);
 	const room = { id: 'room', title: 'Another user’s room', state: 'open', mode: 'stage', revision: 1, moderatorUserIds: [] };
 	const participants = [{ id: 'host-participant', userId: 'host', role: 'host', isMuted: true, user: { id: 'host', username: 'host', name: 'Host' } }];
@@ -73,6 +74,36 @@ describe('Calls room window', () => {
 		await nextTick();
 		expect(names()).toEqual(['alice', 'bob', 'carol', 'zed', 'eve']);
 		expect(participants.map(participant => participant.id)).toEqual(['zed', 'alice', 'bob', 'carol', 'eve']);
+	});
+
+	test.each(['voice tile', 'video tile', 'speaker link', 'listener link'])('right-clicking a %s opens the Calls menu for that participant', async surface => {
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		fixture.session.participants.value = [
+			{ id: 'viewer-participant', userId: 'viewer', role: 'host', isMuted: false },
+			{ id: 'other-participant', userId: 'other', role: surface === 'listener link' ? 'listener' : 'speaker', isMuted: false, user: { id: 'other', username: 'other' } },
+		];
+		if (surface === 'video tile') {
+			fixture.session.videos.value = [{ id: 'camera', participantId: 'other-participant', source: 'camera', stream: new window.MediaStream() }];
+		}
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs: {
+			...stubs,
+			MkA: { props: ['to'], template: '<a :href="to" @contextmenu.prevent.stop><slot/></a>' },
+			CallsVideo: false,
+		} } });
+		await waitFor(() => expect(view.getByRole('link', { name: 'other' })).toBeTruthy());
+		const stage = view.getByRole('region', { name: i18n.ts._calls.title });
+		const target = surface === 'voice tile' ? stage.querySelector('mk-avatar-stub')!.parentElement! : surface === 'video tile' ? stage.querySelector('figure button')! : view.getByRole('link', { name: 'other' });
+		const event = new PointerEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 120, clientY: 80 });
+		await fireEvent(target, event);
+		expect(event.defaultPrevented).toBe(true);
+		await waitFor(() => expect(os.contextMenu).toHaveBeenCalledOnce());
+		expect(vi.mocked(os.contextMenu).mock.calls[0][1]).toBe(event);
+		const menu = vi.mocked(os.contextMenu).mock.calls[0][0] as MenuButton[];
+		expect(menu.map(item => item.text)).toContain(i18n.ts._calls.removeParticipant);
+		await menu.find(item => item.text === i18n.ts._calls.assignVcModerator)!.action(new PointerEvent('click'));
+		expect(misskeyApi).toHaveBeenCalledWith('calls/rooms/set-moderator', { roomId: 'room', participantId: 'other-participant', isModerator: true, expectedRevision: 1 });
+		expect(os.popupMenu).not.toHaveBeenCalled();
 	});
 
 	test.each([true, false])('retries notifications only when a failed request committed the transfer (%s)', async committed => {

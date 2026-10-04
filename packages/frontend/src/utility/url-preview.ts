@@ -23,6 +23,16 @@ export function getLocalEventId(url: string): string | null {
 	}
 }
 
+export function getLocalCallsRoomId(url: string): string | null {
+	try {
+		const requestUrl = new URL(url, local);
+		if (!['http:', 'https:'].includes(requestUrl.protocol) || requestUrl.origin !== LOCAL_URL.origin) return null;
+		return requestUrl.pathname.match(/^\/calls\/([^/?#]+)\/?$/)?.[1] ?? null;
+	} catch {
+		return null;
+	}
+}
+
 export function transformPlayerUrl(url: string): string {
 	const urlObj = new URL(url);
 	if (!['https:', 'http:'].includes(urlObj.protocol)) throw new Error('Invalid protocol');

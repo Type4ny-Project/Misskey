@@ -17,7 +17,7 @@ import { defineAsyncComponent } from 'vue';
 import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
 import { extractUrlFromMfm } from '@/utility/extract-url-from-mfm.js';
-import { getLocalEventId, isEnabledUrlPreview } from '@/utility/url-preview.js';
+import { getLocalCallsRoomId, getLocalEventId, isEnabledUrlPreview } from '@/utility/url-preview.js';
 
 const MkUrlPreview = defineAsyncComponent(() => import('@/components/MkUrlPreview.vue'));
 
@@ -27,7 +27,7 @@ const props = defineProps<{
 }>();
 
 const urls = props.block.text
-	? extractUrlFromMfm(mfm.parse(props.block.text)).filter((url) => getLocalEventId(url) == null)
+	? extractUrlFromMfm(mfm.parse(props.block.text)).filter((url) => getLocalEventId(url) == null && getLocalCallsRoomId(url) == null)
 	: [];
 </script>
 

@@ -5,10 +5,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <template v-for="file in note.files">
-		<div
-			v-if="isHiding(file)"
-			:class="[$style.filePreview, { [$style.square]: square }]"
-			@click="reveal(file)"
+	<div
+		v-if="isHiding(file)"
+		:class="[$style.filePreview, { [$style.square]: square }]"
+		@click="reveal(file)"
 		@mousedown="onPointerDown(file)"
 		@touchstart="onPointerDown(file)"
 		@mouseup="onPointerUp(file)"

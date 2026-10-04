@@ -31,6 +31,12 @@ if (!Number.isInteger(port) || port <= 0 || port > 65535) {
 
 const normalizedPortlessUrl = new URL(process.env.PORTLESS_URL);
 
+// The local Portless listener may use HTTP and a non-standard port, while the
+// public Cloudflare URL remains HTTPS on port 443.
+const publicUrl = process.env.MISSKEY_PUBLIC_URL
+	? new URL(process.env.MISSKEY_PUBLIC_URL)
+	: normalizedPortlessUrl;
+
 if (!normalizedPortlessUrl.pathname.endsWith('/')) {
 	normalizedPortlessUrl.pathname += '/';
 }
@@ -64,11 +70,19 @@ await fsp.mkdir(configDir, { recursive: true });
 const defaultConfig = yaml.load(await fsp.readFile(defaultConfigPath, 'utf-8')) ?? {};
 const generatedConfig = {
 	...defaultConfig,
-	url: normalizedPortlessUrl.toString(),
+	url: publicUrl.toString(),
 	port,
+	// Portless routes the development server over TCP. Ignore a local Unix
+	// socket from the regular development config so the route is reachable.
+	socket: null,
+	chmodSocket: null,
 };
 
 await fsp.writeFile(generatedConfigPath, yaml.dump(generatedConfig), 'utf-8');
+
+if (process.env.MISSKEY_PUBLIC_URL) {
+	process.env.PORTLESS_URL = publicUrl.toString();
+}
 
 const [vitePort, embedVitePort] = await Promise.all([
 	process.env.VITE_PORT ? Number(process.env.VITE_PORT) : getFreePort(),

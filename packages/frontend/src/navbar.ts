@@ -14,6 +14,7 @@ import { lookup } from '@/utility/lookup.js';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { unisonReload } from '@/utility/unison-reload.js';
+import { openCallsCreation } from '@/utility/calls-window.js';
 
 export const navbarItemDef = reactive<{
 	[key: string]: {
@@ -131,6 +132,12 @@ export const navbarItemDef = reactive<{
 		title: i18n.ts.channel,
 		icon: 'ti ti-device-tv',
 		to: '/channels',
+	},
+	calls: {
+		title: i18n.ts._calls.title,
+		icon: 'ti ti-phone-call',
+		show: computed(() => $i != null),
+		action: () => { void openCallsCreation(); },
 	},
 	chat: {
 		title: i18n.ts.directMessage_short,

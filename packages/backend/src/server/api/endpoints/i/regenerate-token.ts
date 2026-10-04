@@ -10,6 +10,7 @@ import type { UsersRepository, UserProfilesRepository } from '@/models/_.js';
 import { generateNativeUserToken } from '@/misc/token.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { DI } from '@/di-symbols.js';
+import { CallsMediaRevocationService } from '@/core/calls/CallsMediaRevocationService.js';
 
 export const meta = {
 	requireCredential: true,
@@ -35,6 +36,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private userProfilesRepository: UserProfilesRepository,
 
 		private globalEventService: GlobalEventService,
+		private callsMediaRevocationService: CallsMediaRevocationService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const freshUser = await this.usersRepository.findOneByOrFail({ id: me.id });
@@ -58,6 +60,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			// Publish event
 			this.globalEventService.publishInternalEvent('userTokenRegenerated', { id: me.id, oldToken, newToken });
 			this.globalEventService.publishMainStream(me.id, 'myTokenRegenerated');
+			await this.callsMediaRevocationService.revokeUser(me.id, 'logout');
 		});
 	}
 }

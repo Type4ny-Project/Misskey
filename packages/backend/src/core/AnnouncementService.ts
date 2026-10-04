@@ -229,8 +229,8 @@ export class AnnouncementService {
 				}
 				reaction = `:${emoji.name}:`;
 			} else {
-				const unicode = emojiRegex.exec(reaction)?.[0];
-				if (unicode !== reaction) throw new IdentifiableError('INVALID_REACTION');
+				const unicode = emojiRegex.exec(reaction)?.[0] ?? emojiRegex.exec(`${reaction}\ufe0f`)?.[0];
+				if (unicode == null || (unicode !== reaction && unicode !== `${reaction}\ufe0f`)) throw new IdentifiableError('INVALID_REACTION');
 				reaction = unicode.includes('\u200d') ? unicode : unicode.replace(/\ufe0f/g, '');
 			}
 			await this.announcementReactionsRepository.upsert({

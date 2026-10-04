@@ -1,6 +1,7 @@
 ## Unreleased
 
 ### General
+- Enhance: ChatRoomに紐づくCallsの新規作成とチャット画面の通話導線を一時的に無効化
 - Feat: チャンネルの非掲載・フォロー承認制・フォロワー管理に対応
 
 ### Client

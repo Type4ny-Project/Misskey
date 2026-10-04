@@ -48,6 +48,27 @@ function createConnectionFixture(role: 'host' | 'listener') {
 }
 
 describe('CallsRoomService lifecycle', () => {
+	test.each(['personal', 'chatRoom'] as const)('only allows personal Calls creation (attachment: %s)', async attachmentType => {
+		const insertRoom = vi.fn(async (room: Partial<MiCallsRoom>) => room);
+		const insertParticipant = vi.fn();
+		const service = new CallsRoomService(
+			{ cloudflareRealtime: { enabled: true } } as Config,
+			{ findOneBy: async () => null, insertOne: insertRoom } as never,
+			{ insertOne: insertParticipant } as never,
+			{} as never, {} as never, {} as never, {} as never, { gen: () => 'created-a' } as never,
+			{} as never, {} as never, { publishRoomsList: vi.fn() } as never, {} as never, { lifecycle: vi.fn() } as never,
+		);
+		const operation = service.create(viewer, { attachmentType, chatRoomId: 'chat-a', title: 'Call' });
+		if (attachmentType === 'chatRoom') {
+			await expect(operation).rejects.toBeInstanceOf(CallsFeatureDisabledError);
+			expect(insertRoom).not.toHaveBeenCalled();
+			expect(insertParticipant).not.toHaveBeenCalled();
+		} else {
+			await expect(operation).resolves.toMatchObject({ attachmentType: 'personal', chatRoomId: null });
+			expect(insertParticipant).toHaveBeenCalled();
+		}
+	});
+
 	test.each([true, false])('counts connected hosts and speakers, excluding expired connections (connected: %s)', async connected => {
 		const room = { ...baseRoom, visibility: 'public', state: 'open', mode: 'open' };
 		const candidates = Array.from({ length: 8 }, (_, index) => ({ id: `speaker-${index}`, joinedAt: new Date(Date.now() - 120_000) }));

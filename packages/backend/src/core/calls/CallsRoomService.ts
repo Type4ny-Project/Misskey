@@ -90,7 +90,7 @@ export class CallsRoomService {
 		visibleUserIds?: MiUser['id'][];
 		scheduledAt?: Date | null;
 	}): Promise<MiCallsRoom> {
-		this.assertEnabled();
+		this.assertEnabled(params.attachmentType);
 		if (owner.host !== null) throw new CallsRoomError('access-denied');
 		const title = this.sanitizeMetadata(params.title);
 		if (title.length === 0) throw new CallsRoomError('invalid-metadata');
@@ -553,7 +553,8 @@ export class CallsRoomService {
 		return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim();
 	}
 
-	private assertEnabled(): void {
-		if (this.config.cloudflareRealtime == null || !this.config.cloudflareRealtime.enabled) throw new CallsFeatureDisabledError();
+	private assertEnabled(attachmentType?: MiCallsRoom['attachmentType']): void {
+		// ChatRoom-attached Calls are temporarily disabled; personal Calls remain available.
+		if (attachmentType === 'chatRoom' || this.config.cloudflareRealtime == null || !this.config.cloudflareRealtime.enabled) throw new CallsFeatureDisabledError();
 	}
 }

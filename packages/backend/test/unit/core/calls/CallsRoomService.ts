@@ -13,7 +13,7 @@ function createAccessFixture(options?: { enabled?: boolean; chatMember?: boolean
 	const chatRooms = { findOneBy: async () => ({ id: 'chat-a' }) };
 	const cache = { userFollowingsCache: { fetch: async () => options?.followings ?? {} } };
 	const chat = { isRoomMember: async () => options?.chatMember ?? false };
-	const role = { isModerator: async () => false };
+	const role = { isModerator: async () => false, getUserPolicies: async () => ({ canJoinCalls: true }) };
 	const service = new CallsRoomService(
 		{ cloudflareRealtime: options?.enabled === false ? undefined : { enabled: true } } as Config,
 		{} as never, {} as never, {} as never, chatRooms as never, cache as never, chat as never,
@@ -40,7 +40,7 @@ function createConnectionFixture(role: 'host' | 'listener') {
 		{ findOneBy: async () => room, createQueryBuilder: () => queryBuilder } as never,
 		{ findOneBy: async () => participant, update } as never,
 		{} as never, {} as never, {} as never, {} as never, {} as never,
-		{ isModerator: async () => false } as never, live as never,
+		{ isModerator: async () => false, getUserPolicies: async () => ({ canJoinCalls: true }) } as never, live as never,
 		{ publish: vi.fn(), publishRoomsList: vi.fn() } as never,
 		{ revokeRoom, revokeParticipant, revokeDisconnectedGeneration, closeGeneration: vi.fn() } as never, { lifecycle: vi.fn() } as never,
 	);
@@ -124,7 +124,7 @@ describe('CallsRoomService lifecycle', () => {
 			{ findOneBy: async () => null, insertOne: insertRoom } as never,
 			{ insertOne: insertParticipant } as never,
 			{} as never, {} as never, {} as never, {} as never, { gen: () => 'created-a' } as never,
-			{} as never, {} as never, { publishRoomsList: vi.fn() } as never, {} as never, { lifecycle: vi.fn() } as never,
+			{ getUserPolicies: async () => ({ canJoinCalls: true }) } as never, {} as never, { publishRoomsList: vi.fn() } as never, {} as never, { lifecycle: vi.fn() } as never,
 		);
 		const operation = service.create(viewer, { attachmentType, chatRoomId: 'chat-a', title: 'Call' });
 		if (attachmentType === 'chatRoom') {
@@ -148,7 +148,7 @@ describe('CallsRoomService lifecycle', () => {
 		const service = new CallsRoomService(
 			{ cloudflareRealtime: { enabled: true } } as Config,
 			{ findOneBy: async () => room, createQueryBuilder: () => builder } as never, participants as never,
-			{} as never, {} as never, {} as never, {} as never, { gen: () => 'joined' } as never, { isModerator: async () => false } as never,
+			{} as never, {} as never, {} as never, {} as never, { gen: () => 'joined' } as never, { isModerator: async () => false, getUserPolicies: async () => ({ canJoinCalls: true }) } as never,
 			{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback(), get: async () => ({}) } as never,
 			{ publish: vi.fn() } as never, {} as never, { lifecycle: vi.fn() } as never,
 		);
@@ -251,7 +251,7 @@ describe('CallsRoomService lifecycle', () => {
 			{ cloudflareRealtime: { enabled: true } } as Config,
 			{ findOneBy: async () => room, find: async () => [room], insertOne: roomInsert } as never,
 			{} as never, {} as never, {} as never, {} as never, {} as never, {} as never,
-			{ isModerator: async () => false } as never, {} as never, {} as never, {} as never, {} as never,
+			{ isModerator: async () => false, getUserPolicies: async () => ({ canJoinCalls: true }) } as never, {} as never, {} as never, {} as never, {} as never,
 		);
 		const owner = { id: 'owner-a', host: null } as MiUser;
 		await expect(service.create(owner, { attachmentType: 'personal', title: 'Next room' })).rejects.toMatchObject({ code: 'active-attachment' });
@@ -307,6 +307,19 @@ describe('CallsRoomService lifecycle', () => {
 });
 
 describe('CallsRoomService access', () => {
+	test.each(['create', 'join'] as const)('rejects %s before changing room or participant state when the role disallows participation', async operation => {
+		const fixture = createConnectionFixture('host');
+		const getUserPolicies = vi.fn().mockResolvedValue({ canJoinCalls: false });
+		Object.assign(fixture.service, { roleService: { getUserPolicies } });
+		const user = { id: 'owner-a', host: null } as MiUser;
+		await expect(operation === 'create'
+			? fixture.service.create(user, { attachmentType: 'personal', title: 'Call' })
+			: fixture.service.join(user, fixture.room.id)).rejects.toMatchObject({ code: 'access-denied' });
+		expect(getUserPolicies).toHaveBeenCalledWith(user.id);
+		expect(fixture.update).not.toHaveBeenCalled();
+		expect(fixture.execute).not.toHaveBeenCalled();
+	});
+
 	test('enforces the explicit specified audience without using participant history', async () => {
 		await expect(createAccessFixture().assertCanAccess(viewer, baseRoom)).rejects.toMatchObject({ code: 'access-denied' } satisfies Partial<CallsRoomError>);
 		await expect(createAccessFixture().assertCanAccess(viewer, { ...baseRoom, visibleUserIds: [viewer.id] })).resolves.toBeUndefined();
@@ -343,7 +356,7 @@ function createModerationFixture() {
 		{ findOneBy: async () => room, createQueryBuilder: () => queryBuilder } as never,
 		{ findOneBy: async () => participant, existsBy, update } as never,
 		{ insert: vi.fn() } as never, {} as never, {} as never, {} as never,
-		{ gen: () => 'log-a' } as never, { isModerator: async () => false } as never,
+		{ gen: () => 'log-a' } as never, { isModerator: async () => false, getUserPolicies: async () => ({ canJoinCalls: true }) } as never,
 		{} as never, { publish } as never, { revokeParticipant } as never, { lifecycle: vi.fn() } as never,
 	);
 	return { service, room, participant, existsBy, update, set, execute, revokeParticipant, publish };

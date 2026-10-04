@@ -8542,6 +8542,10 @@ export interface Locale extends ILocale {
              */
             "chatAvailability": string;
             /**
+             * コールへの参加を許可
+             */
+            "canJoinCalls": string;
+            /**
              * アップロード可能なファイル種別
              */
             "uploadableFileTypes": string;
@@ -10270,6 +10274,10 @@ export interface Locale extends ILocale {
         "write:calls": string;
     };
     "_calls": {
+        /**
+         * このアカウントではコールへの参加が許可されていません。
+         */
+        "participationNotAllowed": string;
         /**
          * カメラの設定
          */

@@ -2214,6 +2214,7 @@ _role:
     canImportMuting: "ミュートのインポートを許可"
     canImportUserLists: "リストのインポートを許可"
     chatAvailability: "ダイレクトメッセージを許可"
+    canJoinCalls: "コールへの参加を許可"
     uploadableFileTypes: "アップロード可能なファイル種別"
     uploadableFileTypes_caption: "MIMEタイプを指定します。改行で区切って複数指定できるほか、アスタリスク(*)でワイルドカード指定できます。(例: image/*)"
     uploadableFileTypes_caption2: "ファイルによっては種別を判定できないことがあります。そのようなファイルを許可する場合は {x} を指定に追加してください。"
@@ -2694,6 +2695,7 @@ _permissions:
   "write:calls": "Misskey Callsへの参加と音声通話を操作する"
 
 _calls:
+  participationNotAllowed: "このアカウントではコールへの参加が許可されていません。"
   cameraSettings: "カメラの設定"
   screenSettings: "画面共有の設定"
   videoResolution: "解像度"

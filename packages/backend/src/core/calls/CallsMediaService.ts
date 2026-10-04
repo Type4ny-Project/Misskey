@@ -238,7 +238,10 @@ export class CallsMediaService {
 
 	private async authorizeParticipant(user: MiUser, roomId: string): Promise<MiCallsParticipant> {
 		const room = await this.roomService.getRoom(roomId);
-		try { await this.roomService.assertCanAccess(user, room); } catch (error) {
+		try {
+			await this.roomService.assertCanAccess(user, room);
+			await this.roomService.assertCanJoin(user);
+		} catch (error) {
 			if (error instanceof CallsFeatureDisabledError || (error instanceof CallsRoomError && error.code === 'access-denied')) {
 				await this.roomService.leave(user, roomId).catch(leaveError => {
 					if (!(leaveError instanceof CallsRoomError && leaveError.code === 'participant-not-found')) throw leaveError;

@@ -18,7 +18,7 @@ function createFixture(role: MiCallsParticipant['role'] = 'speaker') {
 		findOneBy: vi.fn().mockResolvedValue(participant),
 		findBy: vi.fn().mockResolvedValue([]),
 	};
-	const rooms = { getRoom: vi.fn().mockResolvedValue(room), assertCanAccess: vi.fn().mockResolvedValue(undefined), snapshot: vi.fn(), leave: vi.fn().mockResolvedValue(undefined) };
+	const rooms = { getRoom: vi.fn().mockResolvedValue(room), assertCanAccess: vi.fn().mockResolvedValue(undefined), assertCanJoin: vi.fn().mockResolvedValue(undefined), snapshot: vi.fn(), leave: vi.fn().mockResolvedValue(undefined) };
 	const live = {
 		get: vi.fn().mockResolvedValue(null),
 		withRoomLock: vi.fn(async (_roomId: string, callback: (assertHeld: () => Promise<void>) => Promise<unknown>) => callback(async () => undefined)),
@@ -54,6 +54,17 @@ describe('CallsMediaService authorization boundaries', () => {
 		fixture.rooms.assertCanAccess.mockRejectedValue(new CallsRoomError('access-denied'));
 		await expect(fixture.service.heartbeat(user, room.id, 'connection-a', 2)).rejects.toMatchObject({ code: 'access-denied' });
 		expect(fixture.rooms.leave).toHaveBeenCalledWith(user, room.id);
+		expect(fixture.live.heartbeat).not.toHaveBeenCalled();
+	});
+
+	test.each(['connect', 'heartbeat'] as const)('rejects media %s when the role disallows participation', async operation => {
+		const fixture = createFixture('listener');
+		fixture.rooms.assertCanJoin.mockRejectedValue(new CallsRoomError('access-denied'));
+		await expect(operation === 'connect'
+			? fixture.service.createSession(user, { roomId: room.id, connectionId: 'connection-a', applicationId: 'app-a' })
+			: fixture.service.heartbeat(user, room.id, 'connection-a', 2)).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fixture.rooms.leave).toHaveBeenCalledWith(user, room.id);
+		expect(fixture.provider.createSession).not.toHaveBeenCalled();
 		expect(fixture.live.heartbeat).not.toHaveBeenCalled();
 	});
 

@@ -5,9 +5,9 @@
 
 import { beforeEach, expect, test, vi } from 'vitest';
 
-const fixture = vi.hoisted(() => ({ api: vi.fn(), popup: vi.fn(), alert: vi.fn(), roomId: { value: null as string | null } }));
-vi.mock('@/i.js', () => ({ $i: { id: 'owner-a' } }));
-vi.mock('@/i18n.js', () => ({ i18n: { ts: { somethingHappened: 'Error' } } }));
+const fixture = vi.hoisted(() => ({ api: vi.fn(), popup: vi.fn(), alert: vi.fn(), roomId: { value: null as string | null }, policies: { canJoinCalls: true } }));
+vi.mock('@/i.js', () => ({ $i: { id: 'owner-a', policies: fixture.policies } }));
+vi.mock('@/i18n.js', () => ({ i18n: { ts: { somethingHappened: 'Error', _calls: { participationNotAllowed: 'Participation not allowed' } } } }));
 vi.mock('@/os.js', () => ({ popup: fixture.popup, alert: fixture.alert }));
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: fixture.api }));
 vi.mock('@/utility/calls-session.js', () => ({ useCallsSession: () => ({ currentRoomId: fixture.roomId }) }));
@@ -19,6 +19,16 @@ beforeEach(() => {
 	fixture.api.mockReset().mockResolvedValue([]);
 	fixture.popup.mockReset().mockReturnValue({ dispose: vi.fn() });
 	fixture.roomId.value = null;
+	fixture.policies.canJoinCalls = true;
+	fixture.alert.mockReset();
+});
+
+test('does not show creation when the role disallows participation', async () => {
+	fixture.policies.canJoinCalls = false;
+	await (await import('@/utility/calls-window.js')).openCallsCreation();
+	expect(fixture.alert).toHaveBeenCalledWith({ type: 'error', text: 'Participation not allowed' });
+	expect(fixture.api).not.toHaveBeenCalled();
+	expect(fixture.popup).not.toHaveBeenCalled();
 });
 
 test('opens the joined room directly without looking up or creating a room', async () => {

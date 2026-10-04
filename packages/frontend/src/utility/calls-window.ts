@@ -41,6 +41,10 @@ export async function openCallsCreation(): Promise<void> {
 		return;
 	}
 	if (creationOpen) return;
+	if ($i?.policies.canJoinCalls === false) {
+		await os.alert({ type: 'error', text: i18n.ts._calls.participationNotAllowed });
+		return;
+	}
 	creationOpen = true;
 	try {
 		const rooms = await misskeyApi('calls/rooms/list', { limit: 100, states: ['open', 'scheduled'] });

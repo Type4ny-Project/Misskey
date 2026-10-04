@@ -6008,6 +6008,7 @@ export type components = {
             canManageAvatarDecorations: boolean;
             canSearchNotes: boolean;
             canSearchUsers: boolean;
+            canJoinCalls: boolean;
             canUseTranslator: boolean;
             canHideAds: boolean;
             canCreateChannel: boolean;

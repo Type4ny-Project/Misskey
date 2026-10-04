@@ -12,8 +12,8 @@ import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 
-const fixture = vi.hoisted(() => ({ confirm: vi.fn(), session: null as any, connection: null as any }));
-vi.mock('@/i.js', () => ({ $i: { id: 'viewer', policies: {} } }));
+const fixture = vi.hoisted(() => ({ confirm: vi.fn(), session: null as any, connection: null as any, policies: { canJoinCalls: true } }));
+vi.mock('@/i.js', () => ({ $i: { id: 'viewer', policies: fixture.policies } }));
 vi.mock('@/components/MkModal.vue', () => ({ default: { template: '<section><slot/></section>', methods: { close() {} } } }));
 vi.mock('@/components/MkButton.vue', () => ({ default: { template: '<button><slot/></button>' } }));
 vi.mock('@/components/global/MkA.vue', () => ({ default: { props: ['to'], template: '<a :href="to"><slot/></a>' } }));
@@ -30,6 +30,7 @@ const stubs = {
 };
 
 beforeEach(() => {
+	fixture.policies.canJoinCalls = true;
 	fixture.confirm.mockReset().mockResolvedValue({ canceled: true });
 	vi.mocked(os.toast).mockClear();
 	vi.mocked(os.alert).mockClear();
@@ -48,6 +49,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
+	test('does not prompt or offer to join when the role disallows participation', async () => {
+		fixture.policies.canJoinCalls = false;
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await waitFor(() => expect(fixture.connection.refresh).toHaveBeenCalled());
+		expect(fixture.confirm).not.toHaveBeenCalled();
+		expect(fixture.session.join).not.toHaveBeenCalled();
+		expect(view.queryByRole('button', { name: i18n.ts._calls.joinRoom })).toBeNull();
+	});
+
 	test('renders participant users without profile requests on mute updates', async () => {
 		fixture.session.currentRoomId.value = 'room';
 		fixture.session.isActive.value = true;

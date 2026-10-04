@@ -141,6 +141,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 	}): Promise<MiCallsRoom> {
 		this.assertEnabled(params.attachmentType);
 		if (owner.host !== null) throw new CallsRoomError('access-denied');
+		await this.assertCanJoin(owner);
 		const title = this.sanitizeMetadata(params.title);
 		if (title.length === 0) throw new CallsRoomError('invalid-metadata');
 		const description = this.sanitizeMetadata(params.description ?? '');
@@ -350,10 +351,16 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 
 	@bindThis
 	public async join(user: MiUser, roomId: string, reconnectToken?: string): Promise<MiCallsParticipant> {
+		await this.assertCanJoin(user);
 		return this.callsLiveConnectionService.withRoomLock(roomId, async () => {
 			if (reconnectToken != null) await this.callsLiveConnectionService.consumeReconnectToken(reconnectToken);
 			return this.joinLocked(user, roomId);
 		});
+	}
+
+	@bindThis
+	public async assertCanJoin(user: MiUser): Promise<void> {
+		if (!(await this.roleService.getUserPolicies(user.id)).canJoinCalls) throw new CallsRoomError('access-denied');
 	}
 
 	private async joinLocked(user: MiUser, roomId: string): Promise<MiCallsParticipant> {

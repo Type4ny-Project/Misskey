@@ -11,7 +11,7 @@ import { In } from 'typeorm';
 import { extractCustomEmojisFromMfm } from '@/misc/extract-custom-emojis-from-mfm.js';
 import { extractHashtags } from '@/misc/extract-hashtags.js';
 import { MiNote, IMentionedRemoteUsers } from '@/models/Note.js';
-import type { NotesRepository, DriveFilesRepository, UsersRepository } from '@/models/_.js';
+import type { NotesRepository, DriveFilesRepository, UsersRepository, UserNotePiningsRepository } from '@/models/_.js';
 import type { MiDriveFile } from '@/models/DriveFile.js';
 import type { MiUser, MiLocalUser, MiRemoteUser } from '@/models/User.js';
 import { DI } from '@/di-symbols.js';
@@ -24,6 +24,7 @@ import { ApDeliverManagerService } from '@/core/activitypub/ApDeliverManagerServ
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { RelayService } from '@/core/RelayService.js';
 import ActiveUsersChart from '@/core/chart/charts/active-users.js';
+import { FeaturedCollectionCacheService } from '@/core/FeaturedCollectionCacheService.js';
 
 export type NoteUpdateData = {
 	updatedAt?: Date | null;
@@ -49,6 +50,9 @@ export class NoteUpdateService implements OnApplicationShutdown {
 		@Inject(DI.driveFilesRepository)
 		private driveFilesRepository: DriveFilesRepository,
 
+		@Inject(DI.userNotePiningsRepository)
+		private userNotePiningsRepository: UserNotePiningsRepository,
+
 		private globalEventService: GlobalEventService,
 		private searchService: SearchService,
 		private apRendererService: ApRendererService,
@@ -56,6 +60,7 @@ export class NoteUpdateService implements OnApplicationShutdown {
 		private userEntityService: UserEntityService,
 		private relayService: RelayService,
 		private activeUsersChart: ActiveUsersChart,
+		private featuredCollectionCacheService: FeaturedCollectionCacheService,
 	) {
 	}
 
@@ -127,6 +132,13 @@ export class NoteUpdateService implements OnApplicationShutdown {
 
 		// Fetch the updated note
 		const updatedNote = await this.notesRepository.findOneByOrFail({ id: note.id });
+
+		if (this.userEntityService.isLocalUser(user) && await this.userNotePiningsRepository.existsBy({
+			userId: user.id,
+			noteId: note.id,
+		})) {
+			await this.featuredCollectionCacheService.invalidate(user.id);
+		}
 
 		if (!silent) {
 			if (this.userEntityService.isLocalUser(user)) this.activeUsersChart.write(user);

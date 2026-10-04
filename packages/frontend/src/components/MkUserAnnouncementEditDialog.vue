@@ -43,6 +43,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				>
 					<template #label>{{ i18n.ts.display }}</template>
 				</MkRadios>
+				<MkSwitch v-model="reactionsEnabled">
+					{{ i18n.ts._announcement.reactionsEnabled }}
+				</MkSwitch>
 				<MkSwitch v-model="needConfirmationToRead">
 					{{ i18n.ts._announcement.needConfirmationToRead }}
 					<template #caption>{{ i18n.ts._announcement.needConfirmationToReadDescription }}</template>
@@ -87,6 +90,7 @@ const title = ref(props.announcement ? props.announcement.title : '');
 const text = ref(props.announcement ? props.announcement.text : '');
 const icon = ref(props.announcement ? props.announcement.icon : 'info');
 const display = ref(props.announcement ? props.announcement.display : 'dialog');
+const reactionsEnabled = ref(props.announcement?.reactionsEnabled ?? false);
 const needConfirmationToRead = ref(props.announcement ? props.announcement.needConfirmationToRead : false);
 
 async function done() {
@@ -97,6 +101,7 @@ async function done() {
 		imageUrl: null,
 		display: display.value,
 		needConfirmationToRead: needConfirmationToRead.value,
+		reactionsEnabled: reactionsEnabled.value,
 		userId: props.user.id,
 	} satisfies Misskey.entities.AdminAnnouncementsCreateRequest;
 

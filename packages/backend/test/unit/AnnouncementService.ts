@@ -169,6 +169,9 @@ describe('AnnouncementService', () => {
 				text: 'Text',
 			}, me);
 
+			expect(result.raw.reactionsEnabled).toBe(false);
+			expect(result.packed.reactions).toEqual({});
+			expect(result.packed.myReaction).toBeNull();
 			expect(result.raw.title).toBe('Title');
 			expect(result.packed.title).toBe('Title');
 
@@ -187,6 +190,9 @@ describe('AnnouncementService', () => {
 				userId: user.id,
 			}, me);
 
+			expect(result.raw.reactionsEnabled).toBe(false);
+			expect(result.packed.reactions).toEqual({});
+			expect(result.packed.myReaction).toBeNull();
 			expect(result.raw.title).toBe('Title');
 			expect(result.packed.title).toBe('Title');
 

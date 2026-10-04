@@ -1712,6 +1712,8 @@ _bubbleGame:
     section3: "モノがハコからあふれるとゲームオーバーです。ハコからあふれないようにしつつモノを融合させてハイスコアを目指そう！"
 
 _announcement:
+  reactionsEnabled: "リアクションを有効にする"
+  reactInDetail: "詳細を開いてリアクションする"
   forExistingUsers: "既存ユーザーのみ"
   forExistingUsersDescription: "有効にすると、このお知らせ作成時点で存在するユーザーにのみお知らせが表示されます。無効にすると、このお知らせ作成後にアカウントを作成したユーザーにもお知らせが表示されます。"
   needConfirmationToRead: "既読にするのに確認が必要"

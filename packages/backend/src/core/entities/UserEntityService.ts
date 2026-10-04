@@ -44,6 +44,7 @@ import { RoleService } from '@/core/RoleService.js';
 import { ApPersonService } from '@/core/activitypub/models/ApPersonService.js';
 import { FederatedInstanceService } from '@/core/FederatedInstanceService.js';
 import { IdService } from '@/core/IdService.js';
+import type { AnnouncementEntityService } from '@/core/entities/AnnouncementEntityService.js';
 import type { AnnouncementService } from '@/core/AnnouncementService.js';
 import type { CustomEmojiService } from '@/core/CustomEmojiService.js';
 import { AvatarDecorationService } from '@/core/AvatarDecorationService.js';
@@ -90,6 +91,7 @@ export class UserEntityService implements OnModuleInit {
 	private pageEntityService: PageEntityService;
 	private customEmojiService: CustomEmojiService;
 	private announcementService: AnnouncementService;
+	private announcementEntityService: AnnouncementEntityService;
 	private roleService: RoleService;
 	private federatedInstanceService: FederatedInstanceService;
 	private idService: IdService;
@@ -146,6 +148,7 @@ export class UserEntityService implements OnModuleInit {
 		this.pageEntityService = this.moduleRef.get('PageEntityService');
 		this.customEmojiService = this.moduleRef.get('CustomEmojiService');
 		this.announcementService = this.moduleRef.get('AnnouncementService');
+		this.announcementEntityService = this.moduleRef.get('AnnouncementEntityService');
 		this.roleService = this.moduleRef.get('RoleService');
 		this.federatedInstanceService = this.moduleRef.get('FederatedInstanceService');
 		this.idService = this.moduleRef.get('IdService');
@@ -480,10 +483,7 @@ export class UserEntityService implements OnModuleInit {
 		const isModerator = isMe && isDetailed ? this.roleService.isModerator(user) : undefined;
 		const isAdmin = isMe && isDetailed ? this.roleService.isAdministrator(user) : undefined;
 		const unreadAnnouncements = isMe && isDetailed ?
-			(await this.announcementService.getUnreadAnnouncements(user)).map((announcement) => ({
-				createdAt: this.idService.parse(announcement.id).date.toISOString(),
-				...announcement,
-			})) : null;
+			await this.announcementEntityService.packMany(await this.announcementService.getUnreadAnnouncements(user), user) : null;
 
 		const notificationsInfo = isMe && isDetailed ? await this.getNotificationsInfo(user.id) : null;
 

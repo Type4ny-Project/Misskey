@@ -54,6 +54,9 @@ export class MiAnnouncement {
 	})
 	public needConfirmationToRead: boolean;
 
+	@Column('boolean', { default: false })
+	public reactionsEnabled: boolean;
+
 	@Index()
 	@Column('boolean', {
 		default: true,

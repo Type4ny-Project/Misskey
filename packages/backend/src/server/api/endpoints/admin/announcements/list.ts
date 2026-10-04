@@ -71,6 +71,10 @@ export const meta = {
 					type: 'boolean',
 					optional: false, nullable: false,
 				},
+				reactionsEnabled: {
+					type: 'boolean',
+					optional: false, nullable: false,
+				},
 				needConfirmationToRead: {
 					type: 'boolean',
 					optional: false, nullable: false,
@@ -156,6 +160,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				forExistingUsers: announcement.forExistingUsers,
 				silence: announcement.silence,
 				needConfirmationToRead: announcement.needConfirmationToRead,
+				reactionsEnabled: announcement.reactionsEnabled,
 				userId: announcement.userId,
 				reads: reads.get(announcement)!,
 			}));

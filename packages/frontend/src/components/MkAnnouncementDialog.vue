@@ -16,6 +16,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span :class="$style.title">{{ announcement.title }}</span>
 		</div>
 		<div :class="$style.text"><Mfm :text="announcement.text"/></div>
+		<MkA v-if="announcement.reactionsEnabled" :to="`/announcements/${announcement.id}`" @click="modal?.close()">{{ i18n.ts._announcement.reactInDetail }}</MkA>
 		<div ref="bottomEl"></div>
 		<div :class="$style.footer">
 			<MkButton

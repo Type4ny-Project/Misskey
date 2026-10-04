@@ -447,6 +447,7 @@ function toStories(component: string): Promise<string> {
 		globSync('src/components/MkAnalogClock.vue'),
 		globSync('src/components/MkAnimBg.vue'),
 		globSync('src/components/MkAnnouncementDialog.vue'),
+		globSync('src/components/MkAnnouncementReactions.vue'),
 		globSync('src/components/MkAntennaEditor.vue'),
 		globSync('src/components/MkAntennaEditorDialog.vue'),
 		globSync('src/components/MkAsUi.vue'),

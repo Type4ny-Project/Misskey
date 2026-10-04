@@ -541,6 +541,12 @@ type AnnouncementCreated = {
 };
 
 // @public (undocumented)
+type AnnouncementsReactRequest = operations['announcements___react']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AnnouncementsReactResponse = operations['announcements___react']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AnnouncementsRequest = operations['announcements']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -1868,6 +1874,8 @@ declare namespace entities {
         AdminUpdateUserNoteRequest,
         AnnouncementsRequest,
         AnnouncementsResponse,
+        AnnouncementsReactRequest,
+        AnnouncementsReactResponse,
         AnnouncementsShowRequest,
         AnnouncementsShowResponse,
         AntennasCreateRequest,

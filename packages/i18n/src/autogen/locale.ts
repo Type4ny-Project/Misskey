@@ -6753,6 +6753,14 @@ export interface Locale extends ILocale {
     };
     "_announcement": {
         /**
+         * リアクションを有効にする
+         */
+        "reactionsEnabled": string;
+        /**
+         * 詳細を開いてリアクションする
+         */
+        "reactInDetail": string;
+        /**
          * 既存ユーザーのみ
          */
         "forExistingUsers": string;

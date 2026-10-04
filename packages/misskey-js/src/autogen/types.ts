@@ -1070,6 +1070,15 @@ export type paths = {
          */
         post: operations['announcements'];
     };
+    '/announcements/react': {
+        /**
+         * announcements/react
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:reactions*
+         */
+        post: operations['announcements___react'];
+    };
     '/announcements/show': {
         /**
          * announcements/show
@@ -4835,6 +4844,11 @@ export type components = {
             needConfirmationToRead: boolean;
             silence: boolean;
             forYou: boolean;
+            reactionsEnabled: boolean;
+            reactions: {
+                [key: string]: number;
+            };
+            myReaction: string | null;
             isRead?: boolean;
         };
         App: {
@@ -7284,6 +7298,8 @@ export interface operations {
                     /** @default false */
                     silence?: boolean;
                     /** @default false */
+                    reactionsEnabled?: boolean;
+                    /** @default false */
                     needConfirmationToRead?: boolean;
                     /**
                      * Format: misskey:id
@@ -7474,6 +7490,7 @@ export interface operations {
                         isActive: boolean;
                         forExistingUsers: boolean;
                         silence: boolean;
+                        reactionsEnabled: boolean;
                         needConfirmationToRead: boolean;
                         userId: string | null;
                         imageUrl: string | null;
@@ -7543,6 +7560,7 @@ export interface operations {
                     display?: 'normal' | 'banner' | 'dialog';
                     forExistingUsers?: boolean;
                     silence?: boolean;
+                    reactionsEnabled?: boolean;
                     needConfirmationToRead?: boolean;
                     isActive?: boolean;
                 };
@@ -14760,6 +14778,82 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    announcements___react: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    announcementId: string;
+                    reaction: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Announcement'];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

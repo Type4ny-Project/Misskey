@@ -12,6 +12,49 @@ import type { MiCallsParticipant } from '@/models/_.js';
 const participant = { id: 'participant-a', roomId: 'room-a', userId: 'user-a', state: 'active' } as MiCallsParticipant;
 
 describe('CallsMediaRevocationService', () => {
+	test.each(['camera', 'screen'] as const)('stops only the target participant’s %s and publishes its removal', async mediaSource => {
+		const publications = ['microphone', 'camera', 'screen'].map((source, index) => ({ id: source, participantId: participant.id, mediaSource: source, mediaKind: source === 'microphone' ? 'audio' : 'video', providerSessionId: 'session-a', providerMid: String(index), applicationId: 'app-a', providerTrackName: source }));
+		const bindings = { listRoomPublications: vi.fn().mockResolvedValue([...publications, { ...publications[1], id: 'other-camera', participantId: 'other-participant' }]), removePublication: vi.fn() };
+		const provider = { closeTracks: vi.fn() };
+		const events = { publish: vi.fn() };
+		const quota = { releaseTrack: vi.fn() };
+		const service = new CallsMediaRevocationService({} as never, {} as never, {} as never, bindings as never, provider as never, events as never, {} as never, quota as never);
+		await service.stopParticipantVideo(participant, mediaSource, 2);
+		expect(provider.closeTracks).toHaveBeenCalledExactlyOnceWith('session-a', [{ mid: mediaSource === 'camera' ? '1' : '2' }], true);
+		expect(bindings.removePublication).toHaveBeenCalledExactlyOnceWith(mediaSource);
+		expect(quota.releaseTrack).toHaveBeenCalledExactlyOnceWith('app-a', mediaSource);
+		expect(events.publish).toHaveBeenCalledExactlyOnceWith(participant.roomId, 2, 'videoStopped', { participantId: participant.id, mediaSource });
+	});
+
+	test('retries a failed video stop notification after removing its publication binding', async () => {
+		const publications = [{ id: 'camera', participantId: participant.id, mediaSource: 'camera', providerSessionId: 'session-a', providerMid: '1', applicationId: 'app-a', providerTrackName: 'camera' }];
+		const bindings = {
+			listRoomPublications: vi.fn().mockResolvedValueOnce(publications).mockResolvedValue([]),
+			removePublication: vi.fn(),
+		};
+		const provider = { closeTracks: vi.fn() };
+		const events = { publish: vi.fn().mockRejectedValueOnce(new Error('publish failed')).mockResolvedValue(undefined) };
+		const service = new CallsMediaRevocationService({} as never, {} as never, {} as never, bindings as never, provider as never, events as never, {} as never, { releaseTrack: vi.fn() } as never);
+		await expect(service.stopParticipantVideo(participant, 'camera', 2)).rejects.toThrow('publish failed');
+		expect(bindings.removePublication).toHaveBeenCalledExactlyOnceWith('camera');
+		await service.stopParticipantVideo(participant, 'camera', 3);
+		expect(events.publish).toHaveBeenCalledTimes(2);
+		expect(events.publish).toHaveBeenLastCalledWith(participant.roomId, 3, 'videoStopped', { participantId: participant.id, mediaSource: 'camera' });
+		expect(provider.closeTracks).toHaveBeenCalledTimes(1);
+		expect(bindings.removePublication).toHaveBeenCalledTimes(1);
+	});
+
+	test('keeps video bindings and quota when stopping the provider track fails', async () => {
+		const bindings = { listRoomPublications: vi.fn().mockResolvedValue([{ id: 'camera', participantId: participant.id, mediaSource: 'camera', providerSessionId: 'session-a', providerMid: '1' }]), removePublication: vi.fn() };
+		const quota = { releaseTrack: vi.fn() };
+		const events = { publish: vi.fn() };
+		const service = new CallsMediaRevocationService({} as never, {} as never, {} as never, bindings as never, { closeTracks: vi.fn().mockRejectedValue(new Error('close failed')) } as never, events as never, {} as never, quota as never);
+		await expect(service.stopParticipantVideo(participant, 'camera', 2)).rejects.toThrow('close failed');
+		expect(bindings.removePublication).not.toHaveBeenCalled();
+		expect(quota.releaseTrack).not.toHaveBeenCalled();
+		expect(events.publish).not.toHaveBeenCalled();
+	});
+
 	afterEach(() => vi.unstubAllGlobals());
 
 	test('completes room revocation and releases media bindings after the provider session is gone', async () => {

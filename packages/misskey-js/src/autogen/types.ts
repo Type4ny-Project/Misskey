@@ -1413,6 +1413,15 @@ export type paths = {
          */
         post: operations['calls___rooms___list'];
     };
+    '/calls/rooms/mute-participant': {
+        /**
+         * calls/rooms/mute-participant
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:calls*
+         */
+        post: operations['calls___rooms___mute-participant'];
+    };
     '/calls/rooms/open': {
         /**
          * calls/rooms/open
@@ -1466,6 +1475,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:calls*
          */
         post: operations['calls___rooms___show'];
+    };
+    '/calls/rooms/stop-participant-video': {
+        /**
+         * calls/rooms/stop-participant-video
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:calls*
+         */
+        post: operations['calls___rooms___stop-participant-video'];
     };
     '/calls/users/active-rooms': {
         /**
@@ -17956,6 +17974,72 @@ export interface operations {
             };
         };
     };
+    'calls___rooms___mute-participant': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    participantId: string;
+                    expectedRevision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     calls___rooms___open: {
         requestBody: {
             content: {
@@ -18395,6 +18479,74 @@ export interface operations {
                             } | null;
                         }[];
                     };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'calls___rooms___stop-participant-video': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    participantId: string;
+                    /** @enum {string} */
+                    mediaSource: 'camera' | 'screen';
+                    expectedRevision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
                 };
             };
             /** @description Client error */

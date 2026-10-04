@@ -234,6 +234,7 @@ import type {
 	CallsRoomsLeaveRequest,
 	CallsRoomsListRequest,
 	CallsRoomsListResponse,
+	CallsRoomsMuteParticipantRequest,
 	CallsRoomsOpenRequest,
 	CallsRoomsOpenResponse,
 	CallsRoomsRemoveParticipantRequest,
@@ -244,6 +245,7 @@ import type {
 	CallsRoomsSetRoleResponse,
 	CallsRoomsShowRequest,
 	CallsRoomsShowResponse,
+	CallsRoomsStopParticipantVideoRequest,
 	CallsUsersActiveRoomsRequest,
 	CallsUsersActiveRoomsResponse,
 	ChannelsCreateRequest,
@@ -943,12 +945,14 @@ export type Endpoints = {
 	'calls/rooms/join': { req: CallsRoomsJoinRequest; res: CallsRoomsJoinResponse };
 	'calls/rooms/leave': { req: CallsRoomsLeaveRequest; res: EmptyResponse };
 	'calls/rooms/list': { req: CallsRoomsListRequest; res: CallsRoomsListResponse };
+	'calls/rooms/mute-participant': { req: CallsRoomsMuteParticipantRequest; res: EmptyResponse };
 	'calls/rooms/open': { req: CallsRoomsOpenRequest; res: CallsRoomsOpenResponse };
 	'calls/rooms/remove-participant': { req: CallsRoomsRemoveParticipantRequest; res: EmptyResponse };
 	'calls/rooms/request-speaker': { req: CallsRoomsRequestSpeakerRequest; res: EmptyResponse };
 	'calls/rooms/set-moderator': { req: CallsRoomsSetModeratorRequest; res: CallsRoomsSetModeratorResponse };
 	'calls/rooms/set-role': { req: CallsRoomsSetRoleRequest; res: CallsRoomsSetRoleResponse };
 	'calls/rooms/show': { req: CallsRoomsShowRequest; res: CallsRoomsShowResponse };
+	'calls/rooms/stop-participant-video': { req: CallsRoomsStopParticipantVideoRequest; res: EmptyResponse };
 	'calls/users/active-rooms': { req: CallsUsersActiveRoomsRequest; res: CallsUsersActiveRoomsResponse };
 	'channels/create': { req: ChannelsCreateRequest; res: ChannelsCreateResponse };
 	'channels/favorite': { req: ChannelsFavoriteRequest; res: EmptyResponse };

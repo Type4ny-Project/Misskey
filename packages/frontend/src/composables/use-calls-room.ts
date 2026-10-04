@@ -77,6 +77,7 @@ export function createCallsRoomConnection(roomId: string) {
 	}));
 	channel.on('mute', event => accept(event, () => { participants.value = participants.value.map(participant => participant.id === event.participantId ? { ...participant, isMuted: event.isMuted } : participant); }));
 	channel.on('track', event => accept(event, () => { for (const listener of trackListeners) listener(); }));
+	channel.on('videoStopped', event => accept(event, () => { for (const listener of trackListeners) listener(); }));
 	channel.on('speaking', event => accept(event, () => { speakingParticipantIds.value = new Set(event.participantIds); }));
 	channel.on('revoked', event => accept(event, () => {
 		if (event.participantId != null && event.participantId !== ownParticipantId) return;

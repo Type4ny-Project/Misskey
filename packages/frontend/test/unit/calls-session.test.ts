@@ -25,7 +25,7 @@ const fixture = vi.hoisted(() => ({
 	revoked: [] as Array<(event: { reason: string; connectionId?: string; generation?: number }) => void>,
 	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null }; participants: { value: Array<{ id: string; userId: string; role: string; isMuted: boolean }> } }>,
 	remoteTrackCallbacks: [] as Array<(track: MediaStreamTrack, publication: CallsRemotePublication) => void>,
-	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
+	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
 }));
 
 vi.mock('@/i.js', () => ({ $i: { id: 'user-a' } }));
@@ -138,6 +138,21 @@ describe('Calls session device handoff', () => {
 		connection.participants.value.push({ id: 'participant-b', userId: 'user-b', role: 'listener', isMuted: true });
 		await nextTick();
 		expect(fixture.api.mock.calls.filter(([endpoint]) => endpoint === 'users/show')).toHaveLength(0);
+	});
+
+	test('applies moderator mute updates to the microphone and still allows self unmute', async () => {
+		fixture.role = 'host';
+		fixture.participantMuted = false;
+		await session.join('room-a', false);
+		const controller = fixture.controllers[0];
+		const connection = fixture.connections[0];
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, isMuted: true }));
+		await nextTick();
+		expect(session.muted.value).toBe(true);
+		expect(controller.setMuted).toHaveBeenLastCalledWith(true);
+		await session.toggleMute();
+		expect(controller.setMuted).toHaveBeenLastCalledWith(false);
+		expect(fixture.setMuted).toHaveBeenLastCalledWith(false);
 	});
 
 	test('joins with zero capture devices muted and retries capture when unmuting', async () => {

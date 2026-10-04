@@ -318,6 +318,7 @@ export type Channels = {
 			mute: (payload: CallsRoomEventBase & { participantId: string; isMuted: boolean }) => void;
 			speaking: (payload: CallsRoomEventBase & { participantIds: string[] }) => void;
 			track: (payload: CallsRoomEventBase & { participantId: string; publicationId: string; available: boolean; mediaKind: 'audio' | 'video'; mediaSource?: 'microphone' | 'camera' | 'screen' }) => void;
+			videoStopped: (payload: CallsRoomEventBase & { participantId: string; mediaSource: 'camera' | 'screen' }) => void;
 			revoked: (payload: CallsRoomEventBase & { participantId?: string; connectionId?: string; generation?: number; reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation' | 'replaced' }) => void;
 		};
 		receives: {

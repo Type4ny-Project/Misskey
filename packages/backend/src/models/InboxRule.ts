@@ -175,6 +175,27 @@ type CondFormulaThisActivityIsNote = {
 	type: 'thisActivityIsNote'
 };
 
+type CondFormulaThisActivityIsFollow = {
+	type: 'thisActivityIsFollow';
+};
+
+type CondFormulaThisActivityIsReaction = {
+	type: 'thisActivityIsReaction';
+};
+
+type CondFormulaThisActivityIsRenote = {
+	type: 'thisActivityIsRenote';
+};
+
+type CondFormulaThisActivityIsReply = {
+	type: 'thisActivityIsReply';
+};
+
+type CondFormulaFollowRequestsLastHourMoreThanOrEq = {
+	type: 'userFollowRequestsLastHourMoreThanOrEq' | 'serverFollowRequestsLastHourMoreThanOrEq';
+	value: number;
+};
+
 export type InboxRuleCondFormulaValue = { id: string } & (
 	CondFormulaValueAnd |
 	CondFormulaValueOr |
@@ -201,7 +222,12 @@ export type InboxRuleCondFormulaValue = { id: string } & (
 	CondFormulaValueServerPubMoreThanOrEq |
 	CondFormulaValueServerSubLessThanOrEq |
 	CondFormulaValueServerSubMoreThanOrEq |
-	CondFormulaThisActivityIsNote
+	CondFormulaThisActivityIsNote |
+	CondFormulaThisActivityIsFollow |
+	CondFormulaThisActivityIsReaction |
+	CondFormulaThisActivityIsRenote |
+	CondFormulaThisActivityIsReply |
+	CondFormulaFollowRequestsLastHourMoreThanOrEq
 	);
 
 export type InboxRuleAction = {

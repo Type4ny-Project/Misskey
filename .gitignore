@@ -39,7 +39,7 @@ coverage
 /mise.local.toml
 /.mise/
 docker-compose.yml
-./compose.yml
+/compose.yml
 .devcontainer/compose.yml
 !/.devcontainer/compose.yml
 

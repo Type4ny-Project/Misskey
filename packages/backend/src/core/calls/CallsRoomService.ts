@@ -5,12 +5,13 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import type { OnApplicationShutdown, OnModuleInit } from '@nestjs/common';
-import { In, IsNull } from 'typeorm';
+import { In, IsNull, QueryFailedError } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type {
 	CallsModerationLogsRepository,
 	CallsParticipantsRepository,
 	CallsRoomsRepository,
+	MiCallsModerationLog,
 	ChatRoomsRepository,
 	MiCallsParticipant,
 	MiCallsRoom,
@@ -648,6 +649,58 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		await this.callsEventService.publish(roomId, updated.revision, 'title', { title: updated.title });
 		this.callsEventService.publishRoomsList('updated', { roomId, action: 'title' });
 		return updated;
+	}
+
+	@bindThis
+	public async transferHost(host: MiUser, roomId: string, participantId: string, expectedRevision: number): Promise<MiCallsRoom> {
+		return this.callsLiveConnectionService.withRoomLock(roomId, async () => {
+			let transfer: { room: MiCallsRoom; formerHostParticipantId: string; formerHostRole: CallsParticipantRole };
+			try {
+				transfer = await this.callsRoomsRepository.manager.transaction(async manager => {
+					const rooms = manager.getRepository<MiCallsRoom>(this.callsRoomsRepository.target);
+					const participants = manager.getRepository<MiCallsParticipant>(this.callsParticipantsRepository.target);
+					const logs = manager.getRepository<MiCallsModerationLog>(this.callsModerationLogsRepository.target);
+					const room = await rooms.findOneBy({ id: roomId });
+					if (room == null) throw new CallsRoomError('room-not-found');
+					// Only the actor recorded by this committed transfer may resend its notifications.
+					const retry = room.ownerUserId !== host.id && await logs.existsBy({ roomId, actorUserId: host.id, targetParticipantId: participantId, action: 'promote', nextRole: 'host', reason: 'host-transfer', roomRevision: expectedRevision + 1 });
+					if (room.ownerUserId !== host.id && !retry) throw new CallsRoomError('access-denied');
+					if (room.state !== 'open') throw new CallsRoomError('invalid-state');
+					const participant = await participants.findOneBy({ id: participantId, roomId, state: 'active' });
+					if (participant == null) throw new CallsRoomError('participant-not-found');
+					const formerHost = await participants.findOneByOrFail({ roomId, userId: host.id });
+					if (retry) {
+						if (participant.role !== 'host' || room.ownerUserId !== participant.userId) throw new CallsRoomError('access-denied');
+						return { room, formerHostParticipantId: formerHost.id, formerHostRole: formerHost.role };
+					}
+					if (participant.role === 'host') throw new CallsRoomError('participant-not-found');
+					await this.assertCanJoin({ id: participant.userId });
+					const now = new Date();
+					// Keep current participants' access when the owner-based visibility changes.
+					const activeParticipants = room.visibility === 'public' ? [] : await participants.findBy({ roomId, state: 'active' });
+					const visibleUserIds = room.visibility === 'public' ? room.visibleUserIds : [...new Set([...room.visibleUserIds, host.id, ...activeParticipants.map(item => item.userId)])];
+					const result = await rooms.createQueryBuilder().update()
+						.set({ ownerUserId: participant.userId, visibleUserIds, moderatorUserIds: room.moderatorUserIds.filter(id => id !== participant.userId), revision: () => '"revision" + 1', updatedAt: now })
+						.where('id = :roomId AND revision = :expectedRevision AND state = :state AND "ownerUserId" = :ownerUserId', { roomId, expectedRevision, state: 'open', ownerUserId: host.id })
+						.returning('*').execute();
+					if (result.affected !== 1) throw new CallsRoomError('stale-revision');
+					await participants.update({ roomId, userId: host.id, role: 'host' }, { role: 'speaker', updatedAt: now });
+					const promoted = await participants.update({ id: participant.id, state: 'active' }, { role: 'host', speakerRequestedAt: null, updatedAt: now });
+					if (promoted.affected !== 1) throw new CallsRoomError('participant-not-found');
+					const updated = result.raw[0] as MiCallsRoom;
+					await logs.insert({ id: this.idService.gen(), roomId, actorUserId: host.id, targetParticipantId: participant.id, action: 'promote', previousRole: participant.role, nextRole: 'host', reason: 'host-transfer', roomRevision: updated.revision, createdAt: now });
+					return { room: updated, formerHostParticipantId: formerHost.id, formerHostRole: 'speaker' as const };
+				});
+			} catch (error) {
+				if (error instanceof QueryFailedError && error.driverError.code === '23505' && error.driverError.constraint === 'IDX_calls_room_active_personal_owner') throw new CallsRoomError('active-attachment');
+				throw error;
+			}
+			await this.callsLiveConnectionService.touchHost(roomId);
+			await this.callsEventService.publish(roomId, transfer.room.revision, 'role', { participantId: transfer.formerHostParticipantId, role: transfer.formerHostRole });
+			await this.callsEventService.publish(roomId, transfer.room.revision, 'participant', { participantId, action: 'updated' });
+			this.callsTelemetryService.lifecycle({ action: 'host-transferred', roomId, participantId });
+			return transfer.room;
+		});
 	}
 
 	@bindThis

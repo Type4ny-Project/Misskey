@@ -248,6 +248,8 @@ import type {
 	CallsRoomsShowRequest,
 	CallsRoomsShowResponse,
 	CallsRoomsStopParticipantVideoRequest,
+	CallsRoomsTransferHostRequest,
+	CallsRoomsTransferHostResponse,
 	CallsRoomsUpdateTitleRequest,
 	CallsRoomsUpdateTitleResponse,
 	CallsUsersActiveRoomsRequest,
@@ -958,6 +960,7 @@ export type Endpoints = {
 	'calls/rooms/set-role': { req: CallsRoomsSetRoleRequest; res: CallsRoomsSetRoleResponse };
 	'calls/rooms/show': { req: CallsRoomsShowRequest; res: CallsRoomsShowResponse };
 	'calls/rooms/stop-participant-video': { req: CallsRoomsStopParticipantVideoRequest; res: EmptyResponse };
+	'calls/rooms/transfer-host': { req: CallsRoomsTransferHostRequest; res: CallsRoomsTransferHostResponse };
 	'calls/rooms/update-title': { req: CallsRoomsUpdateTitleRequest; res: CallsRoomsUpdateTitleResponse };
 	'calls/users/active-rooms': { req: CallsUsersActiveRoomsRequest; res: CallsUsersActiveRoomsResponse };
 	'channels/create': { req: ChannelsCreateRequest; res: ChannelsCreateResponse };

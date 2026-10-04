@@ -2823,6 +2823,8 @@ _calls:
   promoteSpeaker: "スピーカーにする"
   demoteListener: "リスナーに戻す"
   removeParticipant: "参加者から削除"
+  transferHost: "ホストを譲る"
+  transferHostConfirm: "この参加者にホストを譲りますか？あなたはスピーカーとして通話に残ります。"
   muteParticipantConfirm: "この参加者のマイクをミュートしますか？"
   stopParticipantCameraConfirm: "この参加者のカメラを停止しますか？"
   stopParticipantScreenSharingConfirm: "この参加者の画面共有を停止しますか？"

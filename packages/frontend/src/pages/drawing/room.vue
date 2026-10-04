@@ -106,7 +106,7 @@ const pending = ref(0);
 const connected = ref(stream.state === 'connected');
 const isHost = computed(() => room.value?.attachment.ownerUserId === $i.id);
 const joined = computed(() => state.value?.participantIds.includes($i.id) === true);
-const canDraw = computed(() => joined.value && state.value?.ended === false && connected.value && !error.value);
+const canDraw = computed(() => joined.value && state.value?.ended === false && connected.value && !error.value && !participationError.value && $i.policies.chatAvailability === 'available');
 const canSend = computed(() => canDraw.value && !busy.value && text.value.trim().length > 0 && [...text.value].length <= 500);
 let channel: Misskey.IChannelConnection<Misskey.Channels['drawing']> | null = null;
 let chatChannel: Misskey.IChannelConnection<Misskey.Channels['chatRoom']> | null = null;
@@ -295,13 +295,18 @@ async function activate() {
 	stream.on('_disconnected_', onDisconnected);
 	try {
 		room.value = (await misskeyApi('calls/rooms/show', { roomId: props.roomId })).room;
+		if (!active) return;
 		scope.value = room.value.attachment.type === 'chatRoom' ? 'chatRoom' : room.value.visibility === 'public' ? 'public' : 'calls';
 		if (room.value.attachment.type === 'chatRoom') {
 			const chat = await misskeyApi('chat/rooms/show', { roomId: room.value.attachment.chatRoomId });
 			chatRoom.value = chat;
 			chatMessages.value = (await misskeyApi('chat/messages/room-timeline', { roomId: chat.id, limit: 20 })).reverse();
+			if (!active) return;
 			chatChannel = stream.useChannel('chatRoom', { roomId: chat.id });
-			chatChannel.on('message', message => { chatMessages.value.push(message as Misskey.entities.ChatMessage); });
+			chatChannel.on('message', message => {
+				chatMessages.value.push(message as Misskey.entities.ChatMessage);
+				if (message.fromUserId !== $i.id && active && !window.document.hidden) chatChannel?.send('read', { id: message.id });
+			});
 			chatChannel.on('deleted', id => { chatMessages.value = chatMessages.value.filter(message => message.id !== id); });
 			chatChannel.on('react', event => {
 				chatMessages.value.find(message => message.id === event.messageId)?.reactions.push({ reaction: event.reaction, user: event.user! });
@@ -313,9 +318,11 @@ async function activate() {
 		}
 		await refresh();
 		await nextTick();
+		if (!active) return;
 		drawSnapshot();
 		if (state.value && !state.value.ended) await join();
 	} catch (cause) { showError(cause); }
+	if (!active) return;
 	poll = window.setInterval(() => { if (!error.value) void refresh(); }, 15000);
 	heartbeat = window.setInterval(() => { if (canDraw.value) void misskeyApi('drawing/join', { roomId: props.roomId, canvasId: state.value!.canvasId }).catch(showError); }, 30000);
 }

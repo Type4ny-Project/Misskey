@@ -64,14 +64,17 @@ const buttonEl = useTemplateRef('buttonEl');
 
 const emojiName = computed(() => props.reaction.replace(/:/g, '').replace(/@\./, ''));
 
-const canToggle = computed(() => {
-	if ($i != null && !(props.myReactions ?? []).includes(props.reaction) && (props.myReactions ?? []).length >= getNoteReactionLimit(props, $i.policies.reactionLimit)) return false;
+const canUseEmoji = computed(() => {
 	const emoji = customEmojisMap.get(emojiName.value) ?? getUnicodeEmojiOrNull(props.reaction);
 
 	// TODO
 	//return !props.reaction.match(/@\w/) && $i && emoji && checkReactionPermissions($i, props.note, emoji);
 	return props.reaction.match(/@\w/) == null && $i != null && emoji != null;
 });
+const canToggle = computed(() => canUseEmoji.value && (
+	(props.myReactions ?? []).includes(props.reaction) ||
+	(props.myReactions ?? []).length < getNoteReactionLimit(props, $i!.policies.reactionLimit)
+));
 const canGetInfo = computed(() => !props.reaction.match(/@\w/) && props.reaction.includes(':'));
 const isLocalCustomEmoji = props.reaction[0] === ':' && props.reaction.includes('@.');
 
@@ -188,7 +191,7 @@ async function menu(ev: PointerEvent) {
 		});
 	}
 
-	if (canToggle.value) {
+	if (canUseEmoji.value) {
 		menuItems.push({
 			text: i18n.ts.addToEmojiPalette,
 			icon: 'ti ti-palette',

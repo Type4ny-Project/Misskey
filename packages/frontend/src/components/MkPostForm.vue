@@ -637,7 +637,6 @@ async function setReactionLimit() {
 	const max = (postAccount.value ?? $i).policies.reactionLimit;
 	const result = await os.inputNumber({
 		title: i18n.ts.noteReactionLimit,
-		text: i18n.tsx.noteReactionLimitDescription({ max }),
 		default: reactionLimit.value,
 	});
 	if (result.canceled) return;

@@ -1149,7 +1149,6 @@ emailNotSupported: "このサーバーではメール配信はサポートされ
 postToTheChannel: "チャンネルに投稿"
 cannotBeChangedLater: "後から変更できません。"
 noteReactionLimit: "1人あたりのリアクション上限"
-noteReactionLimitDescription: "1〜{max}の整数を指定してください。空欄なら従来の上限を使います。"
 noteReactionLimitInvalid: "1〜{max}の整数を指定してください。"
 reactionAcceptance: "リアクションの受け入れ"
 likeOnly: "いいねのみ"

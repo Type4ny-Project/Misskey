@@ -4601,10 +4601,6 @@ export interface Locale extends ILocale {
      */
     "noteReactionLimit": string;
     /**
-     * 1〜{max}の整数を指定してください。空欄なら従来の上限を使います。
-     */
-    "noteReactionLimitDescription": ParameterizedString<"max">;
-    /**
      * 1〜{max}の整数を指定してください。
      */
     "noteReactionLimitInvalid": ParameterizedString<"max">;

@@ -6,20 +6,25 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/vue';
 import { ref } from 'vue';
+import { url } from '@@/js/config.js';
 import MkCallsRoomWindow from '@/components/MkCallsRoomWindow.vue';
+import { i18n } from '@/i18n.js';
+import * as os from '@/os.js';
 
 const fixture = vi.hoisted(() => ({ confirm: vi.fn(), session: null as any, connection: null as any }));
 vi.mock('@/i.js', () => ({ $i: { id: 'viewer', policies: {} } }));
 vi.mock('@/components/MkModal.vue', () => ({ default: { template: '<section><slot/></section>', methods: { close() {} } } }));
 vi.mock('@/components/MkButton.vue', () => ({ default: { template: '<button><slot/></button>' } }));
+vi.mock('@/components/global/MkA.vue', () => ({ default: { props: ['to'], template: '<a :href="to"><slot/></a>' } }));
 vi.mock('@/os.js', () => ({ confirm: fixture.confirm, toast: vi.fn(), alert: vi.fn() }));
 vi.mock('@/utility/calls-session.js', () => ({ useCallsSession: () => fixture.session }));
 vi.mock('@/composables/use-calls-room.js', () => ({ createCallsRoomConnection: () => fixture.connection }));
-vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: vi.fn().mockResolvedValue({ id: 'host', name: 'Host' }) }));
+vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: vi.fn().mockResolvedValue({ id: 'host', username: 'host', name: 'Host' }) }));
 
 const stubs = {
 	MkModal: { template: '<section><slot/></section>', methods: { close() {} } },
 	MkButton: { template: '<button><slot/></button>' },
+	MkA: { props: ['to'], template: '<a :href="to"><slot/></a>' },
 	MkInfo: true, MkAvatar: true, MkUserName: true, MkLoading: true, MkCallsControls: true, CallsVideo: true,
 };
 
@@ -38,7 +43,42 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('Calls participation confirmation', () => {
+describe('Calls room window', () => {
+	test('recalculates the video grid when the stage is resized and disconnects on close', async () => {
+		let resize!: ResizeObserverCallback;
+		const disconnect = vi.fn();
+		const observer = vi.spyOn(globalThis, 'ResizeObserver').mockImplementation(function (callback) {
+			resize = callback;
+			return { observe: vi.fn(), unobserve: vi.fn(), disconnect };
+		});
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		fixture.session.videos.value = [{ id: 'video-1', participantId: 'host-participant' }, { id: 'video-2', participantId: 'host-participant' }];
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await waitFor(() => expect(resize).toBeTypeOf('function'));
+		const grid = view.container.querySelector('[style*="grid-template-columns"]') as HTMLElement;
+		resize([{ contentRect: { width: 1200, height: 600 } } as ResizeObserverEntry], {} as ResizeObserver);
+		await waitFor(() => expect(grid.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))'));
+		expect(grid.style.gridTemplateRows).toBe('repeat(1, minmax(0, 1fr))');
+		resize([{ contentRect: { width: 400, height: 1000 } } as ResizeObserverEntry], {} as ResizeObserver);
+		await waitFor(() => expect(grid.style.gridTemplateColumns).toBe('repeat(1, minmax(0, 1fr))'));
+		expect(grid.style.gridTemplateRows).toBe('repeat(2, minmax(0, 1fr))');
+		view.unmount();
+		expect(disconnect).toHaveBeenCalled();
+		observer.mockRestore();
+	});
+
+	test('copies the room link without joining or requiring host permissions', async () => {
+		const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await waitFor(() => expect(fixture.confirm).toHaveBeenCalled());
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts.copyLink }));
+		expect(writeText).toHaveBeenCalledWith(`${url}/calls/room`);
+		expect(os.toast).toHaveBeenCalledWith(i18n.ts.copiedToClipboard);
+		expect(fixture.session.join).not.toHaveBeenCalled();
+		writeText.mockRestore();
+	});
+
 	test('a listener can adjust the host volume and has no volume control for themselves', async () => {
 		fixture.session.currentRoomId.value = 'room';
 		fixture.session.isActive.value = true;
@@ -47,6 +87,8 @@ describe('Calls participation confirmation', () => {
 		const slider = view.getByRole('slider') as HTMLInputElement;
 		expect(slider.value).toBe('100');
 		await waitFor(() => expect(slider.getAttribute('aria-label')).toContain('Host'));
+		expect(view.getByRole('link', { name: 'host' }).getAttribute('href')).toBe('/@host');
+		expect(slider.closest('a')).toBeNull();
 		await fireEvent.input(slider, { target: { value: '25' } });
 		expect(fixture.session.setParticipantVolume).toHaveBeenCalledWith('host', 25);
 		expect(view.getAllByRole('slider')).toHaveLength(1);

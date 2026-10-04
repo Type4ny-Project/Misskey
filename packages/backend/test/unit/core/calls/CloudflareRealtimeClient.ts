@@ -74,6 +74,14 @@ describe('CloudflareRealtimeClient', () => {
 		await expect(new CloudflareRealtimeClient(config, telemetry as never).closeTracks('session-a', [{ mid: '1' }], true)).rejects.toMatchObject({ detail: { providerCode: 'internal_error' } });
 	});
 
+	test('treats HTTP 410 as already closed only when closing tracks', async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => new Response('Session is gone', { status: 410 })));
+		const client = new CloudflareRealtimeClient(config, telemetry as never);
+		await expect(client.closeTracks('expired-session', [{ mid: '0' }], true)).resolves.toEqual({});
+		expect(telemetry.providerOperation).toHaveBeenLastCalledWith(expect.objectContaining({ operation: 'close-tracks', status: 410, outcome: 'success' }));
+		await expect(client.getSession('expired-session')).rejects.toMatchObject({ detail: { status: 410 } });
+	});
+
 	test('allows closing existing media after disabling Calls while rejecting new sessions', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ tracks: [{ mid: '1' }] }), { status: 200 }));
 		vi.stubGlobal('fetch', fetchMock);

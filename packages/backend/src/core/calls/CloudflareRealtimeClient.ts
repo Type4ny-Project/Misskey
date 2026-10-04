@@ -96,6 +96,11 @@ export class CloudflareRealtimeClient {
 		}
 
 		const responseBody = await this.readJson(response);
+		// A gone session has no remaining tracks to close.
+		if (operation === 'close-tracks' && response.status === 410) {
+			this.telemetry.providerOperation({ operation, status: response.status, durationMs: performance.now() - startedAt, outcome: 'success' });
+			return {} as T;
+		}
 		if (!response.ok || responseBody.errorCode != null) {
 			const detail = mapCloudflareRealtimeError(response.status, responseBody);
 			this.telemetry.providerOperation({ operation, status: response.status, durationMs: performance.now() - startedAt, outcome: 'failure', category: detail.kind, retryable: detail.retryable });

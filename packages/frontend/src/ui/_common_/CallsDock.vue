@@ -36,6 +36,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.sectionLabel">{{ i18n.ts._calls.requestSpeaker }}</strong>
 						<div :class="$style.userList">
 							<div v-for="participant in pendingRequests" :key="participant.id" :class="$style.userRow">
+								<MkA v-if="participantUser(participant.userId) != null" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.userLink"/>
 								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.userAvatar"/>
 								<div :class="$style.userBody"><strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong></div>
 								<button type="button" class="_button" :class="$style.inlineAction" @click="setRole(participant.id, 'speaker')">{{ i18n.ts.approve }}</button>
@@ -48,6 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.sectionLabel">{{ room?.mode === 'open' ? i18n.ts.users : i18n.ts._calls.speaker }}</strong>
 						<div :class="$style.userList">
 							<div v-for="participant in speakers" :key="participant.id" :class="$style.userRow">
+								<MkA v-if="participantUser(participant.userId) != null" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.userLink"/>
 								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="[$style.userAvatar, session.speakingParticipantIds.value.has(participant.id) && $style.userAvatarLive]"/>
 								<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
 								<div :class="$style.userBody">
@@ -63,6 +65,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.sectionLabel">{{ i18n.ts._calls.listener }}</strong>
 						<div :class="$style.userList">
 							<div v-for="participant in listeners" :key="participant.id" :class="$style.userRow">
+								<MkA v-if="participantUser(participant.userId) != null" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.userLink"/>
 								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.userAvatar"/>
 								<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
 								<div :class="$style.userBody">
@@ -119,6 +122,8 @@ import * as os from '@/os.js';
 import { callsWindowRoomId, openCallsRoom } from '@/utility/calls-window.js';
 import { useCallsSession } from '@/utility/calls-session.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import MkA from '@/components/global/MkA.vue';
+import { acct, userPage } from '@/filters/user.js';
 
 const session = useCallsSession();
 const expanded = ref(false);
@@ -196,13 +201,14 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .section { display: flex; flex-direction: column; gap: 8px; }
 .sectionLabel { font-size: 0.78rem; letter-spacing: 0.04em; opacity: 0.72; text-transform: uppercase; }
 .userList { display: flex; flex-direction: column; gap: 6px; }
-.userRow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 16px; background: color(from var(--MI_THEME-bg) srgb r g b / 0.28); }
+.userRow { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 16px; background: color(from var(--MI_THEME-bg) srgb r g b / 0.28); }
+.userLink { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 .userAvatar, .avatarPlaceholder { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; }
 .avatarPlaceholder { display: grid; place-items: center; background: var(--MI_THEME-bg); }
 .userAvatarLive { box-shadow: 0 0 0 3px var(--MI_THEME-accent), 0 0 16px color-mix(in srgb, var(--MI_THEME-accent) 38%, transparent); animation: avatarPulse 1.35s ease-in-out infinite alternate; }
 .userBody { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
 .userBody small { opacity: 0.68; }
-.inlineAction { flex: 0 0 auto; padding: 6px 10px; border-radius: 999px; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); font-size: 0.78rem; font-weight: 700; }
+.inlineAction { position: relative; z-index: 2; flex: 0 0 auto; padding: 6px 10px; border-radius: 999px; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); font-size: 0.78rem; font-weight: 700; }
 .summaryRow { display: flex; align-items: stretch; gap: 8px; }
 .main { display: flex; min-width: min(310px, calc(100vw - 120px)); align-items: center; gap: 11px; padding: 9px 12px; border-radius: 22px; text-align: left; box-shadow: 0 12px 30px color(from var(--MI_THEME-bg) srgb r g b / 0.24); }
 .resumeMain { min-width: min(350px, calc(100vw - 92px)); }

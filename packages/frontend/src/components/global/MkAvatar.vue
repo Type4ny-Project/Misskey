@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<component :is="link ? MkA : 'span'" v-user-preview="preview ? user.id : undefined" v-bind="bound" class="_noSelect" :class="[$style.root, { [$style.animation]: animation, [$style.cat]: user.isCat, [$style.square]: squareAvatars, [$style.callsLive]: callsRoomId != null }]" :style="{ color }" :title="acct(user)" @click="onClick">
+<component :is="link ? callsRoomId != null ? 'button' : MkA : 'span'" v-user-preview="preview ? user.id : undefined" v-bind="bound" class="_noSelect" :class="[$style.root, { _button: link && callsRoomId != null, [$style.animation]: animation, [$style.cat]: user.isCat, [$style.square]: squareAvatars, [$style.callsLive]: callsRoomId != null }]" :style="{ color }" :title="acct(user)" @click="onClick">
 	<MkImgWithBlurhash v-if="prefer.s.enableHighQualityImagePlaceholders" :class="$style.inner" :src="url" :hash="user.avatarBlurhash" :cover="true" :onlyAvgColor="true"/>
 	<img v-else :class="$style.inner" :src="url" alt="" decoding="async" style="pointer-events: none;"/>
 	<MkUserOnlineIndicator v-if="indicator" :class="$style.indicator" :user="user"/>
@@ -54,6 +54,9 @@ import { acct, userPage } from '@/filters/user.js';
 import MkUserOnlineIndicator from '@/components/MkUserOnlineIndicator.vue';
 import { prefer } from '@/preferences.js';
 import { useCallsUserRoom } from '@/composables/use-calls-user-room.js';
+import { openCallsRoom } from '@/utility/calls-window.js';
+import { i18n } from '@/i18n.js';
+import * as os from '@/os.js';
 
 const animation = ref(prefer.s.animation);
 const squareAvatars = ref(prefer.s.squareAvatars);
@@ -88,7 +91,9 @@ const showDecoration = props.forceShowDecoration || prefer.s.showAvatarDecoratio
 const callsRoomId = props.callsIndicator ? useCallsUserRoom(() => props.user.id) : ref<string | null>(null);
 
 const bound = computed(() => props.link
-	? { to: userPage(props.user), target: props.target }
+	? callsRoomId.value != null
+		? { type: 'button', 'aria-label': acct(props.user), 'aria-haspopup': 'menu' as const }
+		: { to: userPage(props.user), target: props.target }
 	: {});
 
 const url = computed(() => {
@@ -97,7 +102,23 @@ const url = computed(() => {
 });
 
 function onClick(ev: PointerEvent): void {
-	if (props.link) return;
+	if (props.link) {
+		const roomId = callsRoomId.value;
+		if (roomId == null) return;
+		ev.preventDefault();
+		ev.stopPropagation();
+		os.popupMenu([{
+			type: 'link',
+			text: i18n.ts.profile,
+			icon: 'ti ti-user',
+			to: userPage(props.user),
+		}, {
+			text: i18n.ts._calls.joinRoom,
+			icon: 'ti ti-wave-sine',
+			action: () => { void openCallsRoom(roomId); },
+		}], ev.currentTarget instanceof HTMLElement ? ev.currentTarget : undefined);
+		return;
+	}
 	emit('click', ev);
 }
 

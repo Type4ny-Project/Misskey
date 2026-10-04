@@ -49,7 +49,7 @@ import { computed, onUnmounted, shallowRef, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
 import { i18n } from '@/i18n.js';
 import { openCallsRoom } from '@/utility/calls-window.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
+import { callsUsersById as participantUsers, loadCallsUsers } from '@/utility/calls-users.js';
 import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
 
 const props = defineProps<{
@@ -60,8 +60,6 @@ const props = defineProps<{
 const connection = shallowRef<ReturnType<typeof createCallsRoomConnection> | null>(null);
 const room = computed(() => connection.value?.room.value ?? props.room);
 const participants = computed(() => room.value.state === 'open' ? (connection.value?.participants.value ?? []).filter(participant => participant.state === 'active') : []);
-const participantUsers = shallowRef(new Map<string, Misskey.entities.UserDetailed>());
-const pendingUserIds = new Set<string>();
 const hostUser = computed(() => {
 	const host = participants.value.find(participant => participant.role === 'host');
 	return host == null ? null : participantUsers.value.get(host.userId) ?? null;
@@ -81,17 +79,8 @@ async function connectRoom(roomId: string): Promise<void> {
 }
 
 watch(() => props.room.id, roomId => void connectRoom(roomId), { immediate: true });
-watch(() => participants.value.map(participant => participant.userId).join(','), async userIds => {
-	const missingIds = [...new Set(userIds === '' ? [] : userIds.split(','))].filter(userId => !participantUsers.value.has(userId) && !pendingUserIds.has(userId));
-	await Promise.all(missingIds.map(async userId => {
-		pendingUserIds.add(userId);
-		try {
-			const user = await misskeyApi('users/show', { userId }).catch(() => null);
-			if (user != null) participantUsers.value = new Map(participantUsers.value).set(user.id, user);
-		} finally {
-			pendingUserIds.delete(userId);
-		}
-	}));
+watch(() => participants.value.map(participant => participant.userId).join(','), userIds => {
+	void loadCallsUsers(userIds === '' ? [] : userIds.split(','));
 }, { immediate: true });
 onUnmounted(() => connection.value?.dispose());
 </script>

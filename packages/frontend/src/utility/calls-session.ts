@@ -4,7 +4,6 @@
  */
 
 import { computed, ref, shallowRef, watch } from 'vue';
-import type * as Misskey from 'misskey-js';
 import type { CallsMediaFailure, CallsMediaState, CallsRemotePublication, CallsVideoQuality, CallsVideoSource } from '@/utility/calls-media.js';
 import type { MenuItem } from '@/types/menu.js';
 import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
@@ -16,6 +15,7 @@ import { i18n } from '@/i18n.js';
 import { alert, confirm, popup, popupMenu, toast } from '@/os.js';
 import { misskeyApi, misskeyApiKeepalive } from '@/utility/misskey-api.js';
 import { callsScreenWindows, clearCallsScreenWindow, clearCallsScreenWindows, showCallsScreenWindow } from '@/utility/calls-screen-window.js';
+import { callsUsersById as usersById, loadCallsUsers as loadParticipantUsers } from '@/utility/calls-users.js';
 
 type CallsRoomConnection = ReturnType<typeof createCallsRoomConnection>;
 type CallsReconnectCandidate = { roomId: string; title: string; userId: string; reconnectToken: string; expiresAt: number };
@@ -64,8 +64,6 @@ const reconnectCandidate = ref<CallsReconnectCandidate | null>(null);
 const reconnectRoomState = ref<'checking' | 'open' | 'unavailable'>('checking');
 const reconnectSecondsRemaining = ref(0);
 const speakerRequestResult = ref<'rejected' | null>(null);
-const usersById = shallowRef(new Map<string, Misskey.entities.UserLite>());
-const pendingUserIds = new Set<string>();
 const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement }>();
 const participantVolumes = shallowRef(new Map<string, number>());
 const localVideos = shallowRef(new Map<CallsVideoSource, MediaStream>());
@@ -282,7 +280,6 @@ async function clearSession(): Promise<void> {
 	selectedCamera.value = '';
 	microphones.value = [];
 	cameras.value = [];
-	usersById.value = new Map();
 	for (const id of remoteAudio.keys()) removeRemoteTrack(id);
 	remoteAudio.clear();
 	participantVolumes.value = new Map();
@@ -644,19 +641,6 @@ watch(() => room.value?.state, state => {
 		void clearSession();
 	}
 });
-
-async function loadParticipantUsers(userIds: string[]): Promise<void> {
-	const missingIds = [...new Set(userIds)].filter(userId => !usersById.value.has(userId) && !pendingUserIds.has(userId));
-	await Promise.all(missingIds.map(async userId => {
-		pendingUserIds.add(userId);
-		try {
-			const user = await misskeyApi('users/show', { userId }).catch(() => null);
-			if (user != null) usersById.value = new Map(usersById.value).set(user.id, user);
-		} finally {
-			pendingUserIds.delete(userId);
-		}
-	}));
-}
 
 watch(() => participants.value.map(participant => participant.userId).join(','), userIds => {
 	void loadParticipantUsers(userIds === '' ? [] : userIds.split(','));

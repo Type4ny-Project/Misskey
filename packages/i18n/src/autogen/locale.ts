@@ -4601,6 +4601,10 @@ export interface Locale extends ILocale {
      */
     "reactionAcceptance": string;
     /**
+     * ロールにより変更できません。センシティブな絵文字を含む、すべてのリアクションを受け入れます。
+     */
+    "reactionAcceptanceLockedByRole": string;
+    /**
      * いいねのみ
      */
     "likeOnly": string;
@@ -8381,6 +8385,14 @@ export interface Locale extends ILocale {
              * ローカルタイムラインの閲覧
              */
             "ltlAvailable": string;
+            /**
+             * リアクションの受け入れ設定を変更
+             */
+            "canChangeReactionAcceptance": string;
+            /**
+             * 無効にすると、新しい投稿はセンシティブな絵文字を含む、すべてのリアクションを受け入れます。過去の投稿には影響しません。
+             */
+            "descriptionOfCanChangeReactionAcceptance": string;
             /**
              * パブリック投稿の許可
              */

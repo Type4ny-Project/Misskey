@@ -8,7 +8,7 @@ import type { Repository } from "typeorm";
 process.env.NODE_ENV = 'test';
 
 import * as assert from 'assert';
-import { describe, beforeAll, afterAll, test } from 'vitest';
+import { describe, beforeAll, afterAll, test, expect } from 'vitest';
 import { MiNote } from '@/models/Note.js';
 import { MAX_NOTE_TEXT_LENGTH } from '@/const.js';
 import { api, castAsError, initTestDb, post, role, signup, uploadFile, uploadUrl } from '../utils.js';
@@ -41,6 +41,42 @@ describe('Note', () => {
 		assert.strictEqual(res.status, 200);
 		assert.strictEqual(typeof res.body === 'object' && !Array.isArray(res.body), true);
 		assert.strictEqual(res.body.createdNote.text, post.text);
+	});
+
+	test('ロールによる受け入れ設定の固定は新規投稿だけに適用される', async () => {
+		const author = await signup({ username: 'acceptanceauthor' });
+		const oldNote = await post(author, { text: 'before role', reactionAcceptance: 'likeOnly' });
+		assert.strictEqual(oldNote.reactionAcceptance, 'likeOnly');
+		const restrictedRole = await role(root, { name: 'All reactions' }, {
+			canChangeReactionAcceptance: { useDefault: false, priority: 1, value: false },
+		});
+		const assigned = await api('admin/roles/assign', { userId: author.id, roleId: restrictedRole.id }, root);
+		assert.strictEqual(assigned.status, 204);
+		await expect.poll(async () => (await api('i', {}, author)).body.policies.canChangeReactionAcceptance).toBe(false);
+
+		for (const reactionAcceptance of [undefined, 'likeOnly', 'likeOnlyForRemote', 'nonSensitiveOnly', 'nonSensitiveOnlyForLocalLikeOnlyForRemote'] as const) {
+			const created = await api('notes/create', { text: 'fixed by role', visibility: 'home', reactionAcceptance }, author);
+			assert.strictEqual(created.status, 200);
+			assert.strictEqual(created.body.createdNote.reactionAcceptance, null);
+		}
+		const image = await uploadFile(root);
+		assert.ok(image.body);
+		const emoji = await api('admin/emoji/add', { name: 't09_sensitive', fileId: image.body.id, isSensitive: true }, root);
+		assert.strictEqual(emoji.status, 200);
+		const acceptsSensitive = await post(author, { text: 'sensitive emoji', reactionAcceptance: 'nonSensitiveOnly' });
+		const reacted = await api('notes/reactions/create', { noteId: acceptsSensitive.id, reaction: ':t09_sensitive:' }, bob);
+		assert.strictEqual(reacted.status, 204);
+		const reactedNote = await api('notes/show', { noteId: acceptsSensitive.id }, bob);
+		assert.strictEqual(reactedNote.body.reactions[':t09_sensitive@.:'], 1);
+
+		const oldNoteAfter = await api('notes/show', { noteId: oldNote.id }, author);
+		assert.strictEqual(oldNoteAfter.body.reactionAcceptance, 'likeOnly');
+
+		const unassigned = await api('admin/roles/unassign', { userId: author.id, roleId: restrictedRole.id }, root);
+		assert.strictEqual(unassigned.status, 204);
+		await expect.poll(async () => (await api('i', {}, author)).body.policies.canChangeReactionAcceptance).toBe(true);
+		const restored = await post(author, { text: 'after role', reactionAcceptance: 'nonSensitiveOnly' });
+		assert.strictEqual(restored.reactionAcceptance, 'nonSensitiveOnly');
 	});
 
 	test('ファイルを添付できる', async () => {

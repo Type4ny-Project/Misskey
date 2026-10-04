@@ -211,6 +211,7 @@ if (props.initialVisibleUsers) {
 	props.initialVisibleUsers.forEach(u => pushVisibleUser(u));
 }
 const reactionAcceptance = ref(store.s.reactionAcceptance);
+const effectiveReactionAcceptance = computed(() => $i.policies.canChangeReactionAcceptance === false ? null : reactionAcceptance.value);
 const scheduledAt = ref<number | null>(null);
 const draghover = ref(false);
 const quoteId = ref<string | null>(null);
@@ -616,6 +617,7 @@ async function toggleLocalOnly() {
 }
 
 async function toggleReactionAcceptance() {
+	if ($i.policies.canChangeReactionAcceptance === false) return;
 	const select = await os.select({
 		title: i18n.ts.reactionAcceptance,
 		items: [
@@ -636,7 +638,7 @@ function showOtherSettings() {
 	let reactionAcceptanceIcon = 'ti ti-icons';
 	let reactionAcceptanceCaption = '';
 
-	switch (reactionAcceptance.value) {
+	switch (effectiveReactionAcceptance.value) {
 		case 'likeOnly':
 			reactionAcceptanceIcon = 'ti ti-heart _love';
 			reactionAcceptanceCaption = i18n.ts.likeOnly;
@@ -669,7 +671,8 @@ function showOtherSettings() {
 	}, { type: 'divider' }, {
 		icon: reactionAcceptanceIcon,
 		text: i18n.ts.reactionAcceptance,
-		caption: reactionAcceptanceCaption,
+		caption: $i.policies.canChangeReactionAcceptance === false ? i18n.ts.reactionAcceptanceLockedByRole : reactionAcceptanceCaption,
+		disabled: $i.policies.canChangeReactionAcceptance === false,
 		action: () => {
 			toggleReactionAcceptance();
 		},
@@ -953,7 +956,7 @@ async function saveServerDraft(options: {
 		renoteId: renoteTargetNote.value ? renoteTargetNote.value.id : quoteId.value ? quoteId.value : null,
 		replyId: replyTargetNote.value ? replyTargetNote.value.id : null,
 		channelId: targetChannel.value ? targetChannel.value.id : null,
-		reactionAcceptance: reactionAcceptance.value,
+		reactionAcceptance: effectiveReactionAcceptance.value,
 		scheduledAt: scheduledAt.value,
 		isActuallyScheduled: options.isActuallyScheduled ?? false,
 	});
@@ -1054,7 +1057,7 @@ async function post(ev?: PointerEvent) {
 		localOnly: visibility.value === 'specified' ? false : localOnly.value,
 		visibility: visibility.value,
 		visibleUserIds: visibility.value === 'specified' ? visibleUsers.value.map(u => u.id) : undefined,
-		reactionAcceptance: reactionAcceptance.value,
+		reactionAcceptance: effectiveReactionAcceptance.value,
 	};
 
 	if (withHashtags.value && hashtags.value && hashtags.value.trim() !== '') {

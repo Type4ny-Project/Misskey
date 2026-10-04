@@ -249,6 +249,29 @@ describe('RoleService', () => {
 	});
 
 	describe('getUserPolicies', () => {
+		test('reaction acceptance is editable by default and follows role priority', async () => {
+			const normalUser = await createUser();
+			const restrictedUser = await createUser();
+			const allowedUser = await createUser();
+			const restricted = await createRole({
+				policies: {
+					canChangeReactionAcceptance: { useDefault: false, priority: 1, value: false },
+				},
+			});
+			const allowed = await createRole({
+				policies: {
+					canChangeReactionAcceptance: { useDefault: false, priority: 2, value: true },
+				},
+			});
+			await roleService.assign(restrictedUser.id, restricted.id);
+			await roleService.assign(allowedUser.id, restricted.id);
+			await roleService.assign(allowedUser.id, allowed.id);
+
+			expect((await roleService.getUserPolicies(normalUser.id)).canChangeReactionAcceptance).toBe(true);
+			expect((await roleService.getUserPolicies(restrictedUser.id)).canChangeReactionAcceptance).toBe(false);
+			expect((await roleService.getUserPolicies(allowedUser.id)).canChangeReactionAcceptance).toBe(true);
+		});
+
 		test('instance default policies', async () => {
 			const user = await createUser();
 			meta.policies = {

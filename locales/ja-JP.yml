@@ -1149,6 +1149,7 @@ emailNotSupported: "このサーバーではメール配信はサポートされ
 postToTheChannel: "チャンネルに投稿"
 cannotBeChangedLater: "後から変更できません。"
 reactionAcceptance: "リアクションの受け入れ"
+reactionAcceptanceLockedByRole: "ロールにより変更できません。センシティブな絵文字を含む、すべてのリアクションを受け入れます。"
 likeOnly: "いいねのみ"
 likeOnlyForRemote: "全て (リモートはいいねのみ)"
 nonSensitiveOnly: "非センシティブのみ"
@@ -2174,6 +2175,8 @@ _role:
   _options:
     gtlAvailable: "グローバルタイムラインの閲覧"
     ltlAvailable: "ローカルタイムラインの閲覧"
+    canChangeReactionAcceptance: "リアクションの受け入れ設定を変更"
+    descriptionOfCanChangeReactionAcceptance: "無効にすると、新しい投稿はセンシティブな絵文字を含む、すべてのリアクションを受け入れます。過去の投稿には影響しません。"
     canPublicNote: "パブリック投稿の許可"
     mentionMax: "ノート内の最大メンション数"
     canInvite: "サーバー招待コードの発行"

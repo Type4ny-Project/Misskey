@@ -223,12 +223,12 @@ const videoGridStyle = computed(() => {
 	const focused = focusedVideoId.value != null;
 	const count = roomVideos.value.length + audioOnlySpeakers.value.length - (focused ? 1 : 0);
 	const { width, height } = stageSize.value;
-	const availableHeight = focused && count > 0 ? (height - 12) / 4 : height;
 	let columns = 1;
 	let bestSize = 0;
 	for (let candidate = 1; candidate <= count; candidate++) {
 		const rows = Math.ceil(count / candidate);
-		const size = Math.min((width - 12 * (candidate - 1)) / candidate * 9 / 16, (availableHeight - 12 * (rows - 1)) / rows);
+		const rowHeight = focused ? (height - 12 * rows) / (3 + rows) : (height - 12 * (rows - 1)) / rows;
+		const size = Math.min((width - 12 * (candidate - 1)) / candidate * 9 / 16, rowHeight);
 		if (size > bestSize) {
 			columns = candidate;
 			bestSize = size;
@@ -244,9 +244,13 @@ const failureText = computed(() => session.mediaFailure.value === 'unsupported' 
 
 const hasRoomMenu = computed(() => isHost.value && (room.value?.state === 'scheduled' || (room.value?.state === 'open' && !sessionIsCurrent.value && session.replacedRoomId.value !== props.roomId)));
 
-function copyRoomLink(): void {
+async function copyRoomLink(): Promise<void> {
 	if (popoutWindow != null) window.focus();
-	copyToClipboard(`${url}/calls/${props.roomId}`);
+	try {
+		await copyToClipboard(`${url}/calls/${props.roomId}`);
+	} catch {
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
 }
 
 function openScreenSettings(event: MouseEvent): void {

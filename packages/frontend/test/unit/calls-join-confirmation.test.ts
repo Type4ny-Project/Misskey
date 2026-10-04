@@ -30,6 +30,8 @@ const stubs = {
 
 beforeEach(() => {
 	fixture.confirm.mockReset().mockResolvedValue({ canceled: true });
+	vi.mocked(os.toast).mockClear();
+	vi.mocked(os.alert).mockClear();
 	const room = { id: 'room', title: 'Another user’s room', state: 'open', mode: 'stage', revision: 1, moderatorUserIds: [] };
 	const participants = [{ id: 'host-participant', userId: 'host', role: 'host', isMuted: true }];
 	fixture.connection = { room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()), refresh: vi.fn().mockResolvedValue(undefined), dispose: vi.fn() };
@@ -68,14 +70,49 @@ describe('Calls room window', () => {
 		observer.mockRestore();
 	});
 
+	test('focus layout sizes the remaining four tiles using the actual row fractions', async () => {
+		let resize!: ResizeObserverCallback;
+		const observer = vi.spyOn(globalThis, 'ResizeObserver').mockImplementation(function (callback) {
+			resize = callback;
+			return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() };
+		});
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		fixture.session.videos.value = Array.from({ length: 5 }, (_, index) => ({ id: `video-${index}`, participantId: 'host-participant' }));
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs: {
+			...stubs,
+			CallsVideo: { template: '<button aria-label="Focus video" @click="$emit(\'select\')"></button>' },
+		} } });
+		await waitFor(() => expect(resize).toBeTypeOf('function'));
+		const grid = view.container.querySelector('[style*="grid-template-columns"]') as HTMLElement;
+		resize([{ contentRect: { width: 750, height: 600 } } as ResizeObserverEntry], {} as ResizeObserver);
+		for (const tile of grid.children) Object.assign(tile, { getAnimations: () => [] });
+		await fireEvent.click(view.getAllByRole('button', { name: 'Focus video' })[0]);
+		await waitFor(() => expect(grid.style.gridTemplateRows).toBe('minmax(0, 3fr) repeat(2, minmax(0, 1fr))'));
+		expect(grid.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
+		observer.mockRestore();
+	});
+
 	test('copies the room link without joining or requiring host permissions', async () => {
-		const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+		let finishCopy!: () => void;
+		const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockImplementation(() => new Promise<void>(resolve => { finishCopy = resolve; }));
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
 		await waitFor(() => expect(fixture.confirm).toHaveBeenCalled());
 		await fireEvent.click(view.getByRole('button', { name: i18n.ts.copyLink }));
 		expect(writeText).toHaveBeenCalledWith(`${url}/calls/room`);
-		expect(os.toast).toHaveBeenCalledWith(i18n.ts.copiedToClipboard);
+		expect(os.toast).not.toHaveBeenCalled();
+		finishCopy();
+		await waitFor(() => expect(os.toast).toHaveBeenCalledWith(i18n.ts.copiedToClipboard));
 		expect(fixture.session.join).not.toHaveBeenCalled();
+		writeText.mockRestore();
+	});
+
+	test('shows an error instead of a success notification when copying the link is denied', async () => {
+		const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new DOMException('Clipboard denied', 'NotAllowedError'));
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts.copyLink }));
+		await waitFor(() => expect(os.alert).toHaveBeenCalledWith({ type: 'error', text: i18n.ts.somethingHappened }));
+		expect(os.toast).not.toHaveBeenCalled();
 		writeText.mockRestore();
 	});
 

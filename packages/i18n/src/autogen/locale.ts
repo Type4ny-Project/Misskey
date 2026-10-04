@@ -14019,4 +14019,22 @@ export interface Locale extends ILocale {
          */
         "unknownError": string;
     };
+    "_compactTimeline": {
+        /**
+         * タイムラインを1行で表示
+         */
+        "enable": string;
+        /**
+         * 内容を隠したノート
+         */
+        "hiddenContent": string;
+        /**
+         * 内容に関する警告
+         */
+        "cw": string;
+        /**
+         * リンク
+         */
+        "link": string;
+    };
 }

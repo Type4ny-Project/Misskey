@@ -24,6 +24,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:withSensitive="withSensitive"
 			:onlyFiles="onlyFiles"
 			:sound="true"
+			:compact="compactTimeline"
 		/>
 	</div>
 </PageWithHeader>
@@ -145,6 +146,7 @@ const withSensitive = computed<boolean>({
 });
 
 const showFixedPostForm = prefer.model('showFixedPostForm');
+const compactTimeline = prefer.model('compactTimeline');
 
 async function chooseList(ev: PointerEvent): Promise<void> {
 	const lists = await userListsCache.fetch();
@@ -258,6 +260,13 @@ const headerActions = computed<PageHeaderItem[]>(() => {
 			const menuItems: MenuItem[] = [];
 
 			menuItems.push({
+				type: 'switch',
+				icon: 'ti ti-list',
+				text: i18n.ts._compactTimeline.enable,
+				ref: compactTimeline,
+			}, {
+				type: 'divider',
+			}, {
 				type: 'switch',
 				icon: 'ti ti-repeat',
 				text: i18n.ts.showRenotes,

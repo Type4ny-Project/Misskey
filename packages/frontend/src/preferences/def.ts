@@ -261,6 +261,9 @@ export const PREF_DEF = definePreferences({
 	enableHighQualityImagePlaceholders: {
 		default: true,
 	},
+	compactTimeline: {
+		default: false,
+	},
 	showFixedPostForm: {
 		default: false,
 	},

@@ -63,6 +63,29 @@ describe('Calls URL cards', () => {
 		expect(fixture.dispose).toHaveBeenCalledTimes(1);
 	});
 
+	test('loads five distinct rooms with ten participants each in five room requests and one user batch', async () => {
+		const roomIds = Array.from({ length: 5 }, (_, index) => `distinct-room-${index}`);
+		fixture.api.mockImplementation(async (endpoint, params) => {
+			if (endpoint === 'users/show') return params.userIds.map((id: string) => ({ id, username: id }));
+			return {
+				room: { id: params.roomId, title: params.roomId, state: 'open', revision: 1 },
+				participants: Array.from({ length: 10 }, (_, index) => ({ id: `${params.roomId}-participant-${index}`, userId: `${params.roomId}-user-${index}`, role: index === 0 ? 'host' : 'listener', state: 'active' })),
+			};
+		});
+		const view = render(defineComponent({
+			setup: () => () => h('div', roomIds.map(roomId => h(MkUrlCallsCard, { key: roomId, roomId }))),
+		}), { global: { stubs } });
+		await waitFor(() => expect(view.getAllByRole('button')).toHaveLength(5));
+		await waitFor(() => expect(fixture.api.mock.calls.filter(([endpoint]) => endpoint === 'users/show')).toHaveLength(1));
+		expect(fixture.api.mock.calls.filter(([endpoint]) => endpoint === 'calls/rooms/show')).toHaveLength(5);
+		const [, params] = fixture.api.mock.calls.find(([endpoint]) => endpoint === 'users/show')!;
+		expect(params.userIds).toHaveLength(50);
+		expect(new Set(params.userIds).size).toBe(50);
+		expect(fixture.useChannel).toHaveBeenCalledTimes(5);
+		view.unmount();
+		expect(fixture.dispose).toHaveBeenCalledTimes(5);
+	});
+
 	test('does not expose a room card when access is denied', async () => {
 		fixture.api.mockRejectedValue({ code: 'CALLS_ACCESS_DENIED' });
 		const view = render(MkUrlCallsCard, { props: { roomId: 'room-a' }, global: { stubs } });

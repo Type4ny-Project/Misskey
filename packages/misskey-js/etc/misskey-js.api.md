@@ -1193,6 +1193,7 @@ export type Channels = {
         events: {
             lifecycle: (payload: CallsRoomEventBase & {
                 state: 'scheduled' | 'open' | 'ended' | 'cancelled';
+                reason?: 'host-timeout';
             }) => void;
             participant: (payload: CallsRoomEventBase & {
                 participantId: string;

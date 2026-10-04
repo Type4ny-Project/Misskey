@@ -33,7 +33,7 @@ import type { EventEmitter } from 'events';
 //#region Stream type-body definitions
 type CallsRoomEventBase = { sequence: number; roomRevision: number; occurredAt: string };
 export interface CallsRoomEventTypes {
-	lifecycle: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled' };
+	lifecycle: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled'; reason?: 'host-timeout' };
 	participant: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' | 'updated' };
 	role: CallsRoomEventBase & { participantId: string; role: 'host' | 'speaker' | 'listener' };
 	speakerRequest: CallsRoomEventBase & { participantId: string; requested: boolean };

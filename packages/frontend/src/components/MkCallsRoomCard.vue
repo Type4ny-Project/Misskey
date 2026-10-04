@@ -12,6 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<span>{{ i18n.ts._calls[room.visibility] }}</span>
 	</div>
 	<strong :class="$style.title">{{ room.title }}</strong>
+	<p v-if="room.description" :class="$style.description">{{ room.description }}</p>
 	<div v-if="hostUser != null" :class="$style.host">
 		<MkAvatar :user="hostUser" :class="$style.hostAvatar"/>
 		<MkUserName :user="hostUser"/>
@@ -43,7 +44,8 @@ const props = defineProps<{
 }>();
 
 const connection = shallowRef<ReturnType<typeof createCallsRoomConnection> | null>(null);
-const participants = computed(() => connection.value?.participants.value ?? []);
+const room = computed(() => connection.value?.room.value ?? props.room);
+const participants = computed(() => room.value.state === 'open' ? (connection.value?.participants.value ?? []).filter(participant => participant.state === 'active') : []);
 const hostUser = shallowRef<Misskey.entities.UserLite | null>(null);
 const participantUsers = shallowRef(new Map<string, Misskey.entities.UserDetailed>());
 const sortedParticipants = computed(() => participants.value.map(participant => ({ participant, user: participantUsers.value.get(participant.userId) ?? null })).sort((a, b) => {
@@ -78,6 +80,7 @@ onUnmounted(() => connection.value?.dispose());
 .live { display: inline-flex; align-items: center; gap: 4px; color: var(--MI_THEME-accent); font-weight: 700; }
 .live > i { font-size: 20px; }
 .title { font-size: 1.15rem; line-height: 1.4; overflow-wrap: anywhere; }
+.description { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; opacity: 0.8; }
 .host { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .host > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .host > small { flex-shrink: 0; color: var(--MI_THEME-fgTransparentWeak); }

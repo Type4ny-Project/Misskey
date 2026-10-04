@@ -9,11 +9,11 @@ import type { CallsMediaFailure, CallsMediaState, CallsRemotePublication, CallsV
 import type { MenuItem } from '@/types/menu.js';
 import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
 import { $i } from '@/i.js';
-import { CallsMediaController } from '@/utility/calls-media.js';
+import { CallsMediaController, captureCallsCamera } from '@/utility/calls-media.js';
 import { detectCallsMediaCapabilities, normalizeCallsMediaError } from '@/utility/calls-media-core.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { i18n } from '@/i18n.js';
-import { alert, confirm, popupMenu, toast } from '@/os.js';
+import { alert, confirm, popup, popupMenu, toast } from '@/os.js';
 import { misskeyApi, misskeyApiKeepalive } from '@/utility/misskey-api.js';
 import { callsScreenWindowStream, clearCallsScreenWindow, showCallsScreenWindow } from '@/utility/calls-screen-window.js';
 
@@ -84,6 +84,7 @@ let reconnectCountdownTimer: number | null = null;
 let reconnectConnection: CallsRoomConnection | null = null;
 let stopReconnectRoomWatch: (() => void) | null = null;
 let cancelingSpeakerRequest = false;
+let cancelCameraPreview: (() => void) | null = null;
 
 function disposeReconnectConnection(): void {
 	stopReconnectRoomWatch?.();
@@ -112,6 +113,7 @@ function setReconnectCandidate(candidate: CallsReconnectCandidate | null): void 
 	stopReconnectRoomWatch = watch(reconnectConnection.room, room => {
 		if (room == null) return;
 		if (room.state !== 'open') {
+			if (reconnectConnection?.endReason.value === 'host-timeout') toast(i18n.ts._calls.hostLeftRoomEnded);
 			dismissReconnectCandidate();
 			return;
 		}
@@ -242,6 +244,7 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 }
 
 async function clearSession(): Promise<void> {
+	cancelCameraPreview?.();
 	clearCallsScreenWindow();
 	sessionGeneration += 1;
 	const controller = media.value;
@@ -404,7 +407,7 @@ function onPageHide(event: PageTransitionEvent): void {
 	const targetRoom = room.value;
 	const identity = media.value?.connectionIdentity;
 	if (targetRoomId == null || targetRoom?.state !== 'open' || identity == null || $i == null) return;
-	const candidate = { roomId: targetRoomId, title: targetRoom.title, userId: $i.id, reconnectToken: crypto.randomUUID(), expiresAt: Date.now() + 30_000 };
+	const candidate = { roomId: targetRoomId, title: targetRoom.title, userId: $i.id, reconnectToken: crypto.randomUUID(), expiresAt: Date.now() + 90_000 };
 	misskeyApiKeepalive('calls/rooms/leave', { roomId: targetRoomId, reconnectToken: candidate.reconnectToken, connectionId: identity.connectionId, generation: identity.generation });
 	try {
 		miLocalStorage.setItemAsJson(reconnectStorageKey, candidate);
@@ -453,7 +456,24 @@ async function toggleVideo(source: CallsVideoSource): Promise<void> {
 	videoBusy.value = true;
 	try {
 		if (localVideos.value.has(source)) await controller.stopVideo(source);
-		else await controller.startVideo(source, source === 'camera' ? selectedCamera.value || undefined : undefined, videoQuality.value[source]);
+		else if (source === 'camera') {
+			const stream = await captureCallsCamera(selectedCamera.value || undefined, videoQuality.value.camera);
+			let published = false;
+			try {
+				const { default: PreviewDialog } = await import('@/components/MkCallsCameraPreviewDialog.vue');
+				if (media.value !== controller) return;
+				const confirmed = await new Promise<boolean>(resolve => {
+					const { dispose } = popup(PreviewDialog, { stream }, { done: resolve, closed() { dispose(); resolve(false); } });
+					cancelCameraPreview = () => { stream.getTracks().forEach(track => track.stop()); dispose(); resolve(false); };
+				});
+				if (!confirmed || media.value !== controller) return;
+				await controller.startVideo('camera', selectedCamera.value || undefined, videoQuality.value.camera, stream);
+				published = true;
+			} finally {
+				cancelCameraPreview = null;
+				if (!published) stream.getTracks().forEach(track => track.stop());
+			}
+		} else await controller.startVideo(source, undefined, videoQuality.value[source]);
 		await loadMicrophones();
 	} catch (error) {
 		console.error(`[Calls] ${source} start/stop failed`, error);
@@ -579,7 +599,12 @@ watch(() => myParticipant.value?.speakerRequestedAt, (requestedAt, previousReque
 });
 
 watch(() => room.value?.state, state => {
-	if (state === 'ended' || state === 'cancelled') void clearSession();
+	if (state === 'ended' || state === 'cancelled') {
+		if (connection.value?.endReason.value === 'host-timeout') toast(i18n.ts._calls.hostLeftRoomEnded);
+		setReconnectCandidate(null);
+		safeRemoveReconnectCandidate();
+		void clearSession();
+	}
 });
 
 watch(() => participants.value.map(participant => participant.userId), async userIds => {

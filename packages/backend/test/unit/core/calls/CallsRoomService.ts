@@ -31,7 +31,7 @@ function createConnectionFixture(role: 'host' | 'listener') {
 	const update = vi.fn();
 	const execute = vi.fn(async () => ({ affected: 1, raw: [{ ...room, state: 'ended', revision: 2 }] }));
 	const queryBuilder = { update: () => queryBuilder, set: () => queryBuilder, where: () => queryBuilder, returning: () => queryBuilder, execute };
-	const live = { clear: vi.fn().mockResolvedValue(true), isReconnectTokenConsumed: vi.fn().mockResolvedValue(false), get: vi.fn().mockResolvedValue({ connectionId: 'new-device', generation: 2 }), withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() };
+	const live = { removeHostDeadline: vi.fn(), clear: vi.fn().mockResolvedValue(true), isReconnectTokenConsumed: vi.fn().mockResolvedValue(false), get: vi.fn().mockResolvedValue({ connectionId: 'new-device', generation: 2 }), withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() };
 	const revokeRoom = vi.fn();
 	const revokeParticipant = vi.fn();
 	const revokeDisconnectedGeneration = vi.fn().mockResolvedValue({ participantId: 'participant-a', generation: 2 });
@@ -48,6 +48,53 @@ function createConnectionFixture(role: 'host' | 'listener') {
 }
 
 describe('CallsRoomService lifecycle', () => {
+	test('the background check ends an absent host room at 90 seconds and stops at shutdown', async () => {
+		vi.useFakeTimers();
+		const fixture = createConnectionFixture('host');
+		let deadline = Date.now() + 90_000;
+		Object.assign(fixture.service, {
+			callsRoomsRepository: { findBy: async () => [fixture.room], findOneBy: async () => fixture.room, createQueryBuilder: () => {
+				const builder = { update: () => builder, set: () => builder, where: () => builder, returning: () => builder, execute: fixture.execute };
+				return builder;
+			} },
+			callsLiveConnectionService: { ...fixture.live,
+				touchHost: async () => { deadline = Date.now() + 90_000; },
+				expiredHostRooms: async () => Date.now() >= deadline ? [fixture.room.id] : [],
+				getHostDeadline: async () => deadline,
+			},
+		});
+		try {
+			await fixture.service.onModuleInit();
+			await vi.advanceTimersByTimeAsync(89_999);
+			expect(fixture.execute).not.toHaveBeenCalled();
+			await vi.advanceTimersByTimeAsync(1);
+			expect(fixture.execute).toHaveBeenCalledOnce();
+			fixture.service.onApplicationShutdown();
+			await vi.advanceTimersByTimeAsync(1000);
+			expect(fixture.execute).toHaveBeenCalledOnce();
+		} finally { fixture.service.onApplicationShutdown(); vi.useRealTimers(); }
+	});
+
+	test.each([false, true])('ends the room after the host timeout unless a heartbeat renewed it (renewed: %s)', async renewed => {
+		const fixture = createConnectionFixture('host');
+		Object.assign(fixture.service, {
+			callsLiveConnectionService: {
+				...fixture.live,
+				expiredHostRooms: async () => [fixture.room.id],
+				getHostDeadline: async () => Date.now() + (renewed ? 90_000 : 0),
+			},
+		});
+		await fixture.service.endRoomsWithExpiredHosts();
+		if (renewed) {
+			expect(fixture.execute).not.toHaveBeenCalled();
+			expect(fixture.revokeRoom).not.toHaveBeenCalled();
+		} else {
+			expect(fixture.execute).toHaveBeenCalledOnce();
+			expect(fixture.revokeRoom).toHaveBeenCalledWith(fixture.room.id, 2, 'room-ended');
+			expect(fixture.update).toHaveBeenCalledWith({ roomId: fixture.room.id, state: 'active' }, expect.objectContaining({ state: 'left' }));
+		}
+	});
+
 	test.each(['personal', 'chatRoom'] as const)('only allows personal Calls creation (attachment: %s)', async attachmentType => {
 		const insertRoom = vi.fn(async (room: Partial<MiCallsRoom>) => room);
 		const insertParticipant = vi.fn();

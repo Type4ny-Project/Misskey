@@ -10287,6 +10287,18 @@ export interface Locale extends ILocale {
          */
         "camera": string;
         /**
+         * カメラのプレビュー
+         */
+        "cameraPreview": string;
+        /**
+         * 映像を確認してから配信を開始します。このプレビューは自分にだけ表示されています。
+         */
+        "cameraPreviewDescription": string;
+        /**
+         * この通話ルームは表示できません。
+         */
+        "roomUnavailable": string;
+        /**
          * カメラを選択
          */
         "selectCamera": string;
@@ -10705,6 +10717,10 @@ export interface Locale extends ILocale {
          * ルームに再接続しています…
          */
         "reconnecting": string;
+        /**
+         * ホストが退出したため、通話ルームは終了しました。
+         */
+        "hostLeftRoomEnded": string;
         /**
          * ルームに接続中です…
          */

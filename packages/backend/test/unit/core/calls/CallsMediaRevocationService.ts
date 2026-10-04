@@ -10,6 +10,19 @@ import type { MiCallsParticipant } from '@/models/_.js';
 const participant = { id: 'participant-a', roomId: 'room-a', userId: 'user-a', state: 'active' } as MiCallsParticipant;
 
 describe('CallsMediaRevocationService', () => {
+	test('closes host tracks even after the live connection expired', async () => {
+		const publications = [{ id: 'publication-a', participantId: participant.id, generation: 3, providerSessionId: 'host-session', providerMid: '0', applicationId: 'app-a', providerTrackName: 'camera' }];
+		const bindings = { listRoomPublications: vi.fn().mockResolvedValue(publications), listGenerationPublications: vi.fn().mockResolvedValue(publications), listSubscriptions: vi.fn().mockResolvedValue([]), clearGeneration: vi.fn(), clearSubscriptions: vi.fn() };
+		const provider = { closeTracks: vi.fn() };
+		const service = new CallsMediaRevocationService(
+			{} as never, {} as never, { get: async () => null } as never, bindings as never, provider as never,
+			{ publish: vi.fn() } as never, { revokeParticipant: vi.fn() } as never, { release: vi.fn(), releaseTrack: vi.fn() } as never,
+		);
+		await service.revokeParticipant(participant, 8, 'room-ended');
+		expect(provider.closeTracks).toHaveBeenCalledWith('host-session', [{ mid: '0' }], true);
+		expect(bindings.clearGeneration).toHaveBeenCalledWith(participant.id, 3);
+	});
+
 	test('retains close bindings when the provider fails and does not release track quota', async () => {
 		const bindings = { listGenerationPublications: vi.fn().mockResolvedValue([{ providerSessionId: 'session-a', providerMid: '1', applicationId: 'app-a', providerTrackName: 'audio' }]), listSubscriptions: vi.fn().mockResolvedValue([]), clearGeneration: vi.fn(), clearSubscriptions: vi.fn() };
 		const quota = { releaseTrack: vi.fn() };
@@ -61,7 +74,7 @@ describe('CallsMediaRevocationService', () => {
 		const live = { get: vi.fn().mockResolvedValue(null) };
 		const events = { publish: vi.fn().mockResolvedValue(undefined) };
 		const turn = { revokeParticipant: vi.fn().mockResolvedValue(undefined) };
-		const service = new CallsMediaRevocationService(rooms as never, participants as never, live as never, {} as never, {} as never, events as never, turn as never, {} as never);
+		const service = new CallsMediaRevocationService(rooms as never, participants as never, live as never, { listRoomPublications: vi.fn().mockResolvedValue([]) } as never, {} as never, events as never, turn as never, {} as never);
 
 		await service.revokeUser(participant.userId, 'logout');
 
@@ -106,7 +119,7 @@ describe('CallsMediaRevocationService', () => {
 		const live = { get: vi.fn().mockResolvedValue(null) };
 		const events = { publish: vi.fn().mockResolvedValue(undefined) };
 		const turn = { revokeParticipant: vi.fn().mockResolvedValue(undefined) };
-		const service = new CallsMediaRevocationService(rooms as never, participants as never, live as never, {} as never, {} as never, events as never, turn as never, {} as never);
+		const service = new CallsMediaRevocationService(rooms as never, participants as never, live as never, { listRoomPublications: vi.fn().mockResolvedValue([]) } as never, {} as never, events as never, turn as never, {} as never);
 
 		await service.revokeChatRoomUser('chat-a', participant.userId);
 
@@ -119,7 +132,7 @@ describe('CallsMediaRevocationService', () => {
 		const live = { get: vi.fn().mockResolvedValue(null) };
 		const events = { publish: vi.fn().mockResolvedValue(undefined) };
 		const turn = { revokeParticipant: vi.fn().mockResolvedValue(undefined) };
-		const service = new CallsMediaRevocationService({} as never, participants as never, live as never, {} as never, {} as never, events as never, turn as never, {} as never);
+		const service = new CallsMediaRevocationService({} as never, participants as never, live as never, { listRoomPublications: vi.fn().mockResolvedValue([]) } as never, {} as never, events as never, turn as never, {} as never);
 
 		await service.revokeRoom(participant.roomId, 6, 'room-ended');
 

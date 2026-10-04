@@ -165,6 +165,20 @@ describe('CallsMediaController', () => {
 		await controller.close();
 	});
 
+	test('publishes the previewed camera stream without capturing a second camera stream', async () => {
+		const audio = makeTrack('audio');
+		const camera = makeTrack('video');
+		const getUserMedia = vi.fn().mockResolvedValue(stream(audio));
+		installBrowserMedia(getUserMedia);
+		const controller = new CallsMediaController('room-a', 'speaker');
+		await controller.connect();
+		await controller.startVideo('camera', undefined, { height: 720, frameRate: 30 }, stream(camera));
+		expect(getUserMedia).toHaveBeenCalledTimes(1);
+		expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/publish', expect.objectContaining({ mediaSource: 'camera' }));
+		expect(camera.stop).not.toHaveBeenCalled();
+		await controller.close();
+	});
+
 	test('switches the active camera without republishing or interrupting microphone audio', async () => {
 		const audio = makeTrack('audio');
 		const camera = makeTrack('video');

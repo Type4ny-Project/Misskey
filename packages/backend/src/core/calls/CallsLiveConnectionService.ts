@@ -46,6 +46,25 @@ export class CallsLiveConnectionService {
 		return value == null ? null : JSON.parse(value) as CallsLiveConnection;
 	}
 
+	public async touchHost(roomId: string, onlyIfMissing = false): Promise<void> {
+		const deadline = Date.now() + CallsLiveConnectionService.ttlSeconds * 1000;
+		if (onlyIfMissing) await this.redis.zadd('calls:host-deadlines', 'NX', deadline, roomId);
+		else await this.redis.zadd('calls:host-deadlines', deadline, roomId);
+	}
+
+	public async getHostDeadline(roomId: string): Promise<number | null> {
+		const score = await this.redis.zscore('calls:host-deadlines', roomId);
+		return score == null ? null : Number(score);
+	}
+
+	public async expiredHostRooms(): Promise<string[]> {
+		return this.redis.zrangebyscore('calls:host-deadlines', '-inf', Date.now(), 'LIMIT', 0, 100);
+	}
+
+	public async removeHostDeadline(roomId: string): Promise<void> {
+		await this.redis.zrem('calls:host-deadlines', roomId);
+	}
+
 	public async consumeReconnectToken(token: string): Promise<void> {
 		await this.redis.set(`calls:reconnect-consumed:${token}`, '1', 'EX', 60);
 	}

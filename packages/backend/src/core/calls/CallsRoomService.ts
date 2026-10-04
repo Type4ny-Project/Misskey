@@ -4,6 +4,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import type { OnApplicationShutdown, OnModuleInit } from '@nestjs/common';
 import { In, IsNull } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type {
@@ -57,7 +58,10 @@ export function isCallsRoomTransitionAllowed(from: MiCallsRoom['state'], to: MiC
 }
 
 @Injectable()
-export class CallsRoomService {
+export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
+	private hostTimeoutTimer: ReturnType<typeof setInterval> | null = null;
+	private checkingHostTimeouts = false;
+
 	constructor(
 		@Inject(DI.config)
 		private config: Config,
@@ -78,6 +82,55 @@ export class CallsRoomService {
 		private callsMediaRevocationService: CallsMediaRevocationService,
 		private callsTelemetryService: CallsTelemetryService,
 	) {}
+
+	public async onModuleInit(): Promise<void> {
+		if (!this.config.cloudflareRealtime?.enabled) return;
+		const rooms = await this.callsRoomsRepository.findBy({ state: 'open' });
+		for (const room of rooms) await this.callsLiveConnectionService.touchHost(room.id, true);
+		this.hostTimeoutTimer = setInterval(() => {
+			if (this.checkingHostTimeouts) return;
+			this.checkingHostTimeouts = true;
+			void this.endRoomsWithExpiredHosts().catch(error => {
+				console.error('[Calls] Host timeout check failed', error);
+			}).finally(() => { this.checkingHostTimeouts = false; });
+		}, 1000);
+		this.hostTimeoutTimer.unref();
+	}
+
+	public onApplicationShutdown(): void {
+		if (this.hostTimeoutTimer != null) clearInterval(this.hostTimeoutTimer);
+	}
+
+	public async endRoomsWithExpiredHosts(): Promise<void> {
+		for (const roomId of await this.callsLiveConnectionService.expiredHostRooms()) {
+			const ended = await this.callsLiveConnectionService.withRoomLock(roomId, async () => {
+				const deadline = await this.callsLiveConnectionService.getHostDeadline(roomId);
+				if (deadline == null || deadline > Date.now()) return null;
+				const room = await this.callsRoomsRepository.findOneBy({ id: roomId });
+				if (room == null || room.state !== 'open') {
+					await this.callsLiveConnectionService.removeHostDeadline(roomId);
+					return null;
+				}
+				const now = new Date();
+				const result = await this.callsRoomsRepository.createQueryBuilder().update()
+					.set({ state: 'ended', endedAt: now, updatedAt: now, revision: () => '"revision" + 1' })
+					.where('id = :roomId AND state = :state AND revision = :revision', { roomId, state: 'open', revision: room.revision })
+					.returning('*').execute();
+				if (result.affected !== 1) return null;
+				await this.callsLiveConnectionService.removeHostDeadline(roomId);
+				return result.raw[0] as MiCallsRoom;
+			});
+			if (ended == null) continue;
+			await this.callsEventService.publish(roomId, ended.revision, 'lifecycle', { state: 'ended', reason: 'host-timeout' });
+			this.callsEventService.publishRoomsList('updated', { roomId, action: 'ended' });
+			this.callsTelemetryService.lifecycle({ action: 'room-ended', roomId, reason: 'host-timeout' });
+			try {
+				await this.callsMediaRevocationService.revokeRoom(roomId, ended.revision, 'room-ended');
+			} finally {
+				await this.callsParticipantsRepository.update({ roomId, state: 'active' }, { state: 'left', leftAt: ended.endedAt, updatedAt: new Date() });
+			}
+		}
+	}
 
 	@bindThis
 	public async create(owner: MiUser, params: {
@@ -276,6 +329,8 @@ export class CallsRoomService {
 			.execute();
 		if (result.affected !== 1) throw new CallsRoomError('stale-revision');
 		const updated = result.raw[0] as MiCallsRoom;
+		if (to === 'open') await this.callsLiveConnectionService.touchHost(roomId);
+		else await this.callsLiveConnectionService.removeHostDeadline(roomId);
 		await this.callsEventService.publish(roomId, updated.revision, 'lifecycle', { state: updated.state });
 		this.callsTelemetryService.lifecycle({ action: `room-${updated.state}`, roomId });
 		this.callsEventService.publishRoomsList('updated', { roomId, action: updated.state as 'open' | 'ended' | 'cancelled' });

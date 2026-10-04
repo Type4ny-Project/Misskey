@@ -634,16 +634,17 @@ async function toggleReactionAcceptance() {
 }
 
 async function setReactionLimit() {
+	const max = (postAccount.value ?? $i).policies.reactionLimit;
 	const result = await os.inputNumber({
 		title: i18n.ts.noteReactionLimit,
-		text: i18n.tsx.noteReactionLimitDescription({ max: $i.policies.reactionLimit }),
+		text: i18n.tsx.noteReactionLimitDescription({ max }),
 		default: reactionLimit.value,
 	});
 	if (result.canceled) return;
 	// MkInput emits NaN when a number input is cleared.
 	const limit = Number.isNaN(result.result) ? null : result.result;
-	if (limit != null && (!Number.isInteger(limit) || limit < 1 || limit > $i.policies.reactionLimit)) {
-		await os.alert({ type: 'error', text: i18n.tsx.noteReactionLimitInvalid({ max: $i.policies.reactionLimit }) });
+	if (limit != null && (!Number.isInteger(limit) || limit < 1 || limit > max)) {
+		await os.alert({ type: 'error', text: i18n.tsx.noteReactionLimitInvalid({ max }) });
 		return;
 	}
 	reactionLimit.value = limit;
@@ -1326,7 +1327,7 @@ function showActions(ev: PointerEvent) {
 	})), ev.currentTarget ?? ev.target);
 }
 
-const postAccount = ref<Misskey.entities.UserDetailed | null>(null);
+const postAccount = ref<Misskey.entities.MeDetailed | null>(null);
 
 async function openAccountMenu(ev: PointerEvent) {
 	if (props.mock) return;

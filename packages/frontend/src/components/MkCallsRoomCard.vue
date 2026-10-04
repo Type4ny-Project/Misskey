@@ -60,8 +60,12 @@ const props = defineProps<{
 const connection = shallowRef<ReturnType<typeof createCallsRoomConnection> | null>(null);
 const room = computed(() => connection.value?.room.value ?? props.room);
 const participants = computed(() => room.value.state === 'open' ? (connection.value?.participants.value ?? []).filter(participant => participant.state === 'active') : []);
-const hostUser = shallowRef<Misskey.entities.UserLite | null>(null);
 const participantUsers = shallowRef(new Map<string, Misskey.entities.UserDetailed>());
+const pendingUserIds = new Set<string>();
+const hostUser = computed(() => {
+	const host = participants.value.find(participant => participant.role === 'host');
+	return host == null ? null : participantUsers.value.get(host.userId) ?? null;
+});
 const sortedParticipants = computed(() => participants.value.map(participant => ({ participant, user: participantUsers.value.get(participant.userId) ?? null })).sort((a, b) => {
 	const priority = (item: typeof a) => item.participant.role === 'host' ? 0 : item.user?.isFollowing && item.user?.isFollowed ? 1 : 2;
 	return priority(a) - priority(b);
@@ -77,12 +81,17 @@ async function connectRoom(roomId: string): Promise<void> {
 }
 
 watch(() => props.room.id, roomId => void connectRoom(roomId), { immediate: true });
-watch(() => participants.value.find(participant => participant.role === 'host')?.userId, async userId => {
-	hostUser.value = userId == null ? null : await misskeyApi('users/show', { userId }).catch(() => null);
-}, { immediate: true });
-watch(() => participants.value.map(participant => participant.userId), async userIds => {
-	const users = await Promise.all(userIds.map(userId => misskeyApi('users/show', { userId }).catch(() => null)));
-	participantUsers.value = new Map(users.filter(user => user != null).map(user => [user.id, user]));
+watch(() => participants.value.map(participant => participant.userId).join(','), async userIds => {
+	const missingIds = [...new Set(userIds === '' ? [] : userIds.split(','))].filter(userId => !participantUsers.value.has(userId) && !pendingUserIds.has(userId));
+	await Promise.all(missingIds.map(async userId => {
+		pendingUserIds.add(userId);
+		try {
+			const user = await misskeyApi('users/show', { userId }).catch(() => null);
+			if (user != null) participantUsers.value = new Map(participantUsers.value).set(user.id, user);
+		} finally {
+			pendingUserIds.delete(userId);
+		}
+	}));
 }, { immediate: true });
 onUnmounted(() => connection.value?.dispose());
 </script>

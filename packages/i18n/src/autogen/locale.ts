@@ -6761,6 +6761,10 @@ export interface Locale extends ILocale {
          */
         "reactInDetail": string;
         /**
+         * リアクションしたユーザー
+         */
+        "reactionUsers": string;
+        /**
          * 既存ユーザーのみ
          */
         "forExistingUsers": string;

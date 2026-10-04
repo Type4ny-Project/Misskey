@@ -80,6 +80,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div>{{ i18n.ts.reactions }}</div>
 							<MkAnnouncementReactions :announcement="{ ...announcement, id: announcement.id, reactionsEnabled: true, myReaction: null }"/>
 							<div v-if="Object.keys(announcement.reactions ?? {}).length === 0">{{ i18n.ts.nothing }}</div>
+							<MkAnnouncementReactionUsers :announcementId="announcement.id"/>
 						</div>
 						<MkSwitch v-model="announcement.needConfirmationToRead" :helpText="i18n.ts._announcement.needConfirmationToReadDescription">
 							{{ i18n.ts._announcement.needConfirmationToRead }}
@@ -104,6 +105,7 @@ import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkAnnouncementReactions from '@/components/MkAnnouncementReactions.vue';
+import MkAnnouncementReactionUsers from '@/components/MkAnnouncementReactionUsers.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
 import MkRadios from '@/components/MkRadios.vue';
 import MkInfo from '@/components/MkInfo.vue';

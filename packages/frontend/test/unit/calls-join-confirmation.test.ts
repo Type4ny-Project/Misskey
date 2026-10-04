@@ -53,6 +53,29 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
+	test.each([true, false])('puts unmuted speakers first and updates their order (joined: %s)', async joined => {
+		const participants = [
+			{ id: 'zed', userId: 'zed', role: 'host', isMuted: true },
+			{ id: 'alice', userId: 'alice', role: 'speaker', isMuted: false },
+			{ id: 'bob', userId: 'bob', role: 'speaker', isMuted: true },
+			{ id: 'carol', userId: 'carol', role: 'speaker', isMuted: false },
+			{ id: 'eve', userId: 'eve', role: 'listener', isMuted: true },
+		];
+		const source = joined ? fixture.session : fixture.connection;
+		source.participants.value = participants;
+		if (joined) {
+			fixture.session.currentRoomId.value = 'room';
+			fixture.session.isActive.value = true;
+		}
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		const names = () => Array.from(view.getByRole('complementary', { name: i18n.ts.users }).querySelectorAll('strong'), element => element.textContent);
+		expect(names()).toEqual(['alice', 'carol', 'zed', 'bob', 'eve']);
+		source.participants.value = participants.map(participant => participant.id === 'bob' ? { ...participant, isMuted: false } : participant);
+		await nextTick();
+		expect(names()).toEqual(['alice', 'bob', 'carol', 'zed', 'eve']);
+		expect(participants.map(participant => participant.id)).toEqual(['zed', 'alice', 'bob', 'carol', 'eve']);
+	});
+
 	test.each(['voice tile', 'video tile', 'speaker link', 'listener link'])('right-clicking a %s opens the Calls menu for that participant', async surface => {
 		fixture.session.currentRoomId.value = 'room';
 		fixture.session.isActive.value = true;

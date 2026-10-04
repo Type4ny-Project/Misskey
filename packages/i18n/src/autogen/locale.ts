@@ -10501,6 +10501,10 @@ export interface Locale extends ILocale {
          */
         "peopleSpeaking": ParameterizedString<"count">;
         /**
+         * {count}人が発言中
+         */
+        "peopleWithMicrophoneOn": ParameterizedString<"count">;
+        /**
          * 接続済み
          */
         "connected": string;

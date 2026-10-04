@@ -6761,6 +6761,10 @@ export interface Locale extends ILocale {
          */
         "reactInDetail": string;
         /**
+         * リアクションしたユーザー
+         */
+        "reactionUsers": string;
+        /**
          * 既存ユーザーのみ
          */
         "forExistingUsers": string;
@@ -8542,9 +8546,49 @@ export interface Locale extends ILocale {
              */
             "chatAvailability": string;
             /**
-             * コールへの参加を許可
+             * Callsの使用
              */
             "canJoinCalls": string;
+            /**
+             * Callsでの発言
+             */
+            "canSpeakInCalls": string;
+            /**
+             * Callsでの映像配信
+             */
+            "canPublishCallsVideo": string;
+            /**
+             * Callsでの画面共有
+             */
+            "canShareCallsScreen": string;
+            /**
+             * Callsのスピーカー数の上限
+             */
+            "callsRoomSpeakerLimit": string;
+            /**
+             * Callsのリスナー数の上限
+             */
+            "callsRoomListenerLimit": string;
+            /**
+             * ポイントの送信
+             */
+            "canSendPoints": string;
+            /**
+             * 1日あたりのイベント作成上限
+             */
+            "eventCreationDailyLimit": string;
+            /**
+             * 作成したCallsに適用されます。ホストを含み、0にすると無制限です。
+             */
+            "callsRoomSpeakerLimitDescription": string;
+            /**
+             * 作成したCallsに適用されます。0にすると無制限です。
+             */
+            "callsRoomListenerLimitDescription": string;
+            /**
+             * 0にするとイベントを作成できません。
+             */
+            "eventCreationDailyLimitDescription": string;
             /**
              * アップロード可能なファイル種別
              */
@@ -10455,6 +10499,10 @@ export interface Locale extends ILocale {
          */
         "leftCall": string;
         /**
+         * 通話時間
+         */
+        "elapsedTime": string;
+        /**
          * 新しい通話
          */
         "newCall": string;
@@ -10533,6 +10581,10 @@ export interface Locale extends ILocale {
          * ルーム名
          */
         "roomTitle": string;
+        /**
+         * タイトルを変更
+         */
+        "changeTitle": string;
         /**
          * 説明
          */
@@ -10741,6 +10793,30 @@ export interface Locale extends ILocale {
          * 参加者から削除
          */
         "removeParticipant": string;
+        /**
+         * ホストを譲る
+         */
+        "transferHost": string;
+        /**
+         * この参加者にホストを譲りますか？あなたはスピーカーとして通話に残ります。
+         */
+        "transferHostConfirm": string;
+        /**
+         * この参加者のマイクをミュートしますか？
+         */
+        "muteParticipantConfirm": string;
+        /**
+         * この参加者のカメラを停止しますか？
+         */
+        "stopParticipantCameraConfirm": string;
+        /**
+         * この参加者の画面共有を停止しますか？
+         */
+        "stopParticipantScreenSharingConfirm": string;
+        /**
+         * この参加者を通話から退出させますか？
+         */
+        "removeParticipantConfirm": string;
         /**
          * ホスト
          */
@@ -14644,7 +14720,7 @@ export interface Locale extends ILocale {
          */
         "tagsCaption": string;
         /**
-         * イベントの作成上限に達しました（1日5件まで）
+         * 本日のイベント作成上限に達しました
          */
         "rateLimitReached": string;
         /**

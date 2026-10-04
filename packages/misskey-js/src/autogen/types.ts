@@ -169,6 +169,15 @@ export type paths = {
          */
         post: operations['admin___announcements___list'];
     };
+    '/admin/announcements/reactions': {
+        /**
+         * admin/announcements/reactions
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:admin:announcements*
+         */
+        post: operations['admin___announcements___reactions'];
+    };
     '/admin/announcements/update': {
         /**
          * admin/announcements/update
@@ -1484,6 +1493,24 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:calls*
          */
         post: operations['calls___rooms___stop-participant-video'];
+    };
+    '/calls/rooms/transfer-host': {
+        /**
+         * calls/rooms/transfer-host
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:calls*
+         */
+        post: operations['calls___rooms___transfer-host'];
+    };
+    '/calls/rooms/update-title': {
+        /**
+         * calls/rooms/update-title
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:calls*
+         */
+        post: operations['calls___rooms___update-title'];
     };
     '/calls/users/active-rooms': {
         /**
@@ -6026,6 +6053,13 @@ export type components = {
             canManageAvatarDecorations: boolean;
             canSearchNotes: boolean;
             canSearchUsers: boolean;
+            canSpeakInCalls: boolean;
+            canPublishCallsVideo: boolean;
+            canShareCallsScreen: boolean;
+            callsRoomSpeakerLimit: number;
+            callsRoomListenerLimit: number;
+            canSendPoints: boolean;
+            eventCreationDailyLimit: number;
             canJoinCalls: boolean;
             canUseTranslator: boolean;
             canHideAds: boolean;
@@ -7789,6 +7823,87 @@ export interface operations {
                             [key: string]: number;
                         };
                         reads: number;
+                    }[];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    admin___announcements___reactions: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    announcementId: string;
+                    /** @default 10 */
+                    limit?: number;
+                    /** Format: misskey:id */
+                    sinceId?: string;
+                    /** Format: misskey:id */
+                    untilId?: string;
+                    sinceDate?: number;
+                    untilDate?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** Format: id */
+                        id: string;
+                        /** Format: date-time */
+                        createdAt: string;
+                        reaction: string;
+                        user: components['schemas']['UserLite'];
                     }[];
                 };
             };
@@ -18547,6 +18662,143 @@ export interface operations {
             204: {
                 headers: {
                     [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'calls___rooms___transfer-host': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    participantId: string;
+                    expectedRevision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['CallsRoom'];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'calls___rooms___update-title': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    title: string;
+                    expectedRevision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['CallsRoom'];
                 };
             };
             /** @description Client error */

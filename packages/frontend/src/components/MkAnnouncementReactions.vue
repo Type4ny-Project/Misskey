@@ -38,7 +38,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<i class="ti ti-mood-plus"></i>
 		</button>
 	</div>
-	<div v-if="interactive && $i && !announcement.isRead" :class="$style.description">{{ i18n.ts._announcement.reactionReadDescription }}</div>
 </div>
 </template>
 
@@ -106,12 +105,6 @@ function choose() {
 <style lang="scss" module>
 .root {
 	margin-top: 16px;
-}
-
-.description {
-	margin-top: 8px;
-	font-size: 0.85em;
-	color: var(--MI_THEME-fgTransparentWeak);
 }
 
 .reactions {

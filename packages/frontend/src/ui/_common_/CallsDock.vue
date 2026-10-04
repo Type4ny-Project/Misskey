@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:leaveActiveClass="$style.dockLeaveActive"
 		:leaveToClass="$style.dockLeaveTo"
 	>
-		<div v-if="session.isActive.value && room != null && callsWindowRoomId !== session.currentRoomId.value" ref="rootEl" :class="$style.root">
+		<div v-if="session.isActive.value && room != null && callsWindowRoomId !== session.currentRoomId.value" ref="rootEl" :class="$style.root" @keydown.esc="expanded = false">
 			<Transition
 				:enterActiveClass="$style.panelEnterActive"
 				:enterFromClass="$style.panelEnterFrom"
@@ -79,13 +79,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</Transition>
 
 			<div :class="$style.summaryRow">
-				<button type="button" class="_button _panel" :class="[$style.main, expanded && $style.mainExpanded]" :aria-expanded="expanded" aria-controls="calls-dock-panel" @click="expanded = !expanded">
+				<button type="button" class="_button _panel" :class="[$style.main, $style.compactMain, expanded && $style.mainExpanded]" :aria-label="room.title" :title="room.title" :aria-expanded="expanded" aria-controls="calls-dock-panel" @click="expanded = !expanded">
+					<i class="ti ti-volume" :class="$style.compactIcon" aria-hidden="true"></i>
 					<div :class="[$style.avatarRing, $style.avatarRingActive, isLiveSpeaking && $style.avatarRingLive]">
 						<MkAvatar v-if="hostUser != null" :user="hostUser" :class="$style.avatar"/>
 						<i v-else class="ti ti-phone"></i>
 					</div>
 					<div :class="$style.body">
-						<div :class="$style.titleRow"><strong>{{ room.title }}</strong></div>
+						<div :class="$style.titleRow"><strong>{{ room.title }}</strong><span v-if="session.elapsedTime.value != null" :class="$style.elapsedTime" :title="i18n.ts._calls.elapsedTime"><i class="ti ti-clock" aria-hidden="true"></i> {{ session.elapsedTime.value }}</span></div>
 						<small>{{ participants.length }} {{ i18n.ts.users }} · {{ i18n.tsx._calls.peopleWithMicrophoneOn({ count: microphoneOnCount }) }}</small>
 					</div>
 					<i class="ti ti-chevron-up" :class="[$style.expandIcon, expanded && $style.expandIconExpanded]"></i>
@@ -204,7 +205,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 </script>
 
 <style lang="scss" module>
-.root { position: fixed; right: 16px; bottom: calc(var(--MI-minBottomSpacing) + var(--MI-margin)); z-index: 1200; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: min(420px, calc(100vw - 32px)); }
+.root { position: fixed; right: 16px; bottom: calc(var(--MI-minBottomSpacing) + var(--MI-margin)); z-index: 900; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: min(420px, calc(100vw - 32px)); }
 .panel { display: flex; width: min(420px, calc(100vw - 32px)); max-height: min(70vh, 560px); flex-direction: column; gap: 14px; overflow: hidden auto; padding: 14px; border-radius: 24px; background: color(from var(--MI_THEME-panel) srgb r g b / 0.94); box-shadow: 0 16px 40px color(from var(--MI_THEME-bg) srgb r g b / 0.28); backdrop-filter: blur(18px); }
 .panelHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .panelTitle { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -224,6 +225,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .userBody small { opacity: 0.68; }
 .inlineAction { position: relative; z-index: 2; flex: 0 0 auto; padding: 6px 10px; border-radius: 999px; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); font-size: 0.78rem; font-weight: 700; }
 .summaryRow { display: flex; align-items: stretch; gap: 8px; }
+.compactIcon { display: none; }
 .main { display: flex; min-width: min(310px, calc(100vw - 120px)); align-items: center; gap: 11px; padding: 9px 12px; border-radius: 22px; text-align: left; box-shadow: 0 12px 30px color(from var(--MI_THEME-bg) srgb r g b / 0.24); }
 .resumeMain { min-width: min(350px, calc(100vw - 92px)); }
 .resumeMain:disabled { cursor: wait; opacity: 0.72; }
@@ -237,6 +239,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .body { min-width: 0; flex: 1; }
 .titleRow { display: flex; align-items: center; gap: 7px; }
 .titleRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.elapsedTime { flex-shrink: 0; font-size: 0.8rem; font-variant-numeric: tabular-nums; opacity: 0.66; }
 .body small { display: block; overflow: hidden; margin-top: 3px; opacity: 0.66; text-overflow: ellipsis; white-space: nowrap; }
 .actions { display: flex; gap: 8px; }
 .action { display: grid; width: 52px; place-items: center; border-radius: 20px; font-size: 1.15rem; }
@@ -290,5 +293,17 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 	.root { right: 12px; max-width: calc(100vw - 24px); }
 	.panel { width: calc(100vw - 24px); max-height: min(60vh, 480px); }
 	.main { min-width: calc(100vw - 144px); }
+}
+
+@media (orientation: portrait) {
+	.root { right: max(12px, env(safe-area-inset-right)); max-width: calc(100vw - 24px); }
+	.panel { box-sizing: border-box; width: min(420px, calc(100vw - 24px)); max-height: min(60vh, 480px); }
+	.compactMain { width: 56px; min-width: 56px; height: 60px; justify-content: center; padding: 0; border-radius: 20px; }
+	.compactMain .avatarRing, .compactMain .body, .compactMain .expandIcon { display: none; }
+	.compactIcon { display: block; font-size: 24px; color: var(--MI_THEME-accent); }
+	.mainExpanded { background: var(--MI_THEME-accentedBg); }
+	.actions { display: none; }
+	.panelEnterFrom { transform: translateX(24px) scaleX(0.88); }
+	.panelLeaveTo { transform: translateX(16px) scaleX(0.94); }
 }
 </style>

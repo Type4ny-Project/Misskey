@@ -8,6 +8,7 @@ import { nextTick } from 'vue';
 import type { CallsRemotePublication } from '@/utility/calls-media.js';
 
 const fixture = vi.hoisted(() => ({
+	policies: { canJoinCalls: true, canSpeakInCalls: true, canPublishCallsVideo: true, canShareCallsScreen: true },
 	api: vi.fn(),
 	toast: vi.fn(),
 	alert: vi.fn(),
@@ -23,12 +24,12 @@ const fixture = vi.hoisted(() => ({
 	heartbeat: vi.fn(),
 	role: 'listener' as 'listener' | 'host',
 	revoked: [] as Array<(event: { reason: string; connectionId?: string; generation?: number }) => void>,
-	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null }; participants: { value: Array<{ id: string; userId: string; role: string; isMuted: boolean }> } }>,
+	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null }; participants: { value: Array<{ id: string; userId: string; role: string; isMuted: boolean; joinedAt?: string }> } }>,
 	remoteTrackCallbacks: [] as Array<(track: MediaStreamTrack, publication: CallsRemotePublication) => void>,
 	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
 }));
 
-vi.mock('@/i.js', () => ({ $i: { id: 'user-a' } }));
+vi.mock('@/i.js', () => ({ $i: { id: 'user-a', policies: fixture.policies } }));
 vi.mock('@/i18n.js', () => ({ i18n: {
 	ts: { somethingHappened: 'Something went wrong', _calls: { videoFailed: 'Video failed', videoResolution: 'Resolution', videoSourceQuality: 'Source quality', videoFrameRate: 'Frame rate', connectedOnAnotherDevice: 'Connected on another device', switchDeviceConfirm: 'Disconnect the other device?', hostLeftRoomEnded: 'Host left; room ended' } },
 	tsx: { _calls: { videoResolutionValue: ({ height }: { height: number }) => `${height}p`, videoFrameRateValue: ({ fps }: { fps: number }) => `${fps}fps` } },
@@ -44,7 +45,7 @@ vi.mock('@/composables/use-calls-room.js', async () => {
 			const connection = {
 				room: ref({ id: roomId, title: 'Room', state: 'open', revision: 1 }),
 				endReason: ref<'host-timeout' | null>(null),
-				participants: ref([{ id: 'participant-a', userId: 'user-a', role: fixture.role, isMuted: fixture.participantMuted }]),
+				participants: ref([{ id: 'participant-a', userId: 'user-a', role: fixture.role, isMuted: fixture.participantMuted, joinedAt: new Date().toISOString() }]),
 				speakingParticipantIds: ref(new Set()),
 				connected: ref(true),
 				refresh: vi.fn(), dispose: vi.fn(), setMuted: fixture.setMuted, setSpeaking: vi.fn(), heartbeat: fixture.heartbeat,
@@ -67,7 +68,8 @@ vi.mock('@/utility/calls-media.js', () => ({
 		public startVideo = vi.fn().mockResolvedValue(undefined);
 		public close = vi.fn().mockResolvedValue(undefined);
 		public setVideoQuality = vi.fn().mockResolvedValue(undefined);
-		public setNoiseSuppression = vi.fn().mockResolvedValue(undefined);
+		public setNoiseSuppression = vi.fn();
+		public reconcile = vi.fn().mockResolvedValue(undefined);
 		public connect = vi.fn(async () => {
 			if (fixture.connectionExists && !this.replaceExisting) throw Object.assign(new Error('Connection exists'), { code: 'CALLS_CONNECTION_EXISTS' });
 			this.onState('connected');
@@ -101,12 +103,65 @@ describe('Calls session device handoff', () => {
 		fixture.setMuted.mockClear();
 		fixture.heartbeat.mockClear();
 		fixture.role = 'listener';
+		Object.assign(fixture.policies, { canJoinCalls: true, canSpeakInCalls: true, canPublishCallsVideo: true, canShareCallsScreen: true });
 		fixture.revoked.length = 0;
 		fixture.controllers.length = 0;
 		fixture.connections.length = 0;
 		fixture.remoteTrackCallbacks.length = 0;
 		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { enumerateDevices: async () => [] } });
 		session = (await import('@/utility/calls-session.js')).useCallsSession();
+	});
+
+	test.each(['camera', 'screen'] as const)('a denied %s permission prevents capture and publication', async source => {
+		fixture.role = 'host';
+		fixture.policies[source === 'camera' ? 'canPublishCallsVideo' : 'canShareCallsScreen'] = false;
+		await session.join('room-a', false);
+		await session.toggleVideo(source);
+		expect(fixture.captureCamera).not.toHaveBeenCalled();
+		expect(fixture.controllers[0].startVideo).not.toHaveBeenCalled();
+		expect(session.controls.value[source === 'camera' ? 'canPublishVideo' : 'canShareScreen']).toBe(false);
+	});
+
+	test('a host without speaking permission keeps video controls but cannot unmute', async () => {
+		fixture.role = 'host';
+		fixture.policies.canSpeakInCalls = false;
+		await session.join('room-a', false);
+		expect(session.controls.value.canSpeak).toBe(false);
+		expect(session.controls.value.canPublishVideo).toBe(true);
+		await session.toggleMute();
+		expect(fixture.setMuted).not.toHaveBeenCalled();
+	});
+
+	test('keeps elapsed time from joining through reconnection and resets it after leaving', async () => {
+		const startedAt = new Date('2026-10-05T00:00:00Z');
+		vi.setSystemTime(startedAt);
+		expect(session.elapsedTime.value).toBeNull();
+		const idleTimerCount = vi.getTimerCount();
+		await session.join('room-a', false);
+		expect(session.elapsedTime.value).toBe('00:00');
+		await vi.advanceTimersByTimeAsync(59_000);
+		expect(session.elapsedTime.value).toBe('00:59');
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(session.elapsedTime.value).toBe('01:00');
+
+		const connection = fixture.connections[0];
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, isMuted: false }));
+		await nextTick();
+		fixture.revoked[0]({ reason: 'stale-generation', ...fixture.controllers[0].connectionIdentity });
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fixture.controllers).toHaveLength(2);
+		expect(session.elapsedTime.value).toBe('01:00');
+		// The next tick catches up after a background tab's timers are delayed.
+		vi.setSystemTime(startedAt.getTime() + 3_660_000);
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(session.elapsedTime.value).toBe('01:01:01');
+
+		await session.leave();
+		await nextTick();
+		expect(session.elapsedTime.value).toBeNull();
+		expect(vi.getTimerCount()).toBe(idleTimerCount);
+		await session.join('room-b', false);
+		expect(session.elapsedTime.value).toBe('00:00');
 	});
 
 	test('closes only a removed video window and closes all remaining windows on leaving', async () => {
@@ -303,12 +358,24 @@ describe('Calls session device handoff', () => {
 		expect(fixture.controllers[0].setNoiseSuppression).toHaveBeenLastCalledWith(false);
 		const error = new Error('Unsupported audio constraint');
 		const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		fixture.controllers[0].setNoiseSuppression.mockRejectedValueOnce(error);
+		fixture.controllers[0].setNoiseSuppression.mockImplementationOnce(() => { throw error; });
 		toggle.ref.value = true;
 		await vi.waitFor(() => expect(fixture.alert).toHaveBeenCalledWith({ type: 'error', text: 'Something went wrong' }));
 		expect(toggle.ref.value).toBe(false);
 		expect(log).toHaveBeenCalledWith('[Calls] Noise suppression change failed', error);
 		log.mockRestore();
+	});
+
+	test('microphone suppression switch reflects rapid toggles immediately', async () => {
+		fixture.role = 'host';
+		await session.join('room-a', true);
+		await session.openDeviceMenu('microphone', new MouseEvent('click'));
+		const toggle = fixture.popupMenu.mock.calls[0][0].at(-1);
+		for (const enabled of [false, true, false, true]) {
+			toggle.ref.value = enabled;
+			expect(toggle.ref.value).toBe(enabled);
+			expect(fixture.controllers[0].setNoiseSuppression).toHaveBeenLastCalledWith(enabled);
+		}
 	});
 
 	test('screen quality menu updates the sender and retains the previous selection on failure', async () => {
@@ -438,6 +505,28 @@ describe('Calls session device handoff', () => {
 		expect(fixture.controllers[1].connectionIdentity).toEqual(identity);
 		expect(session.isActive.value).toBe(true);
 		expect(session.replacedRoomId.value).toBeNull();
+	});
+
+	test('a listener receiving the host reconnects media and can end the room', async () => {
+		await session.join('room-a', false);
+		const connection = fixture.connections[fixture.connections.length - 1];
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, role: 'host' }));
+		await vi.waitFor(() => expect(fixture.controllers).toHaveLength(2));
+		expect(session.isHost.value).toBe(true);
+		await session.leave();
+		expect(fixture.api).toHaveBeenCalledWith('calls/rooms/end', expect.objectContaining({ roomId: 'room-a' }));
+	});
+
+	test('the previous host leaves without ending the room after transfer', async () => {
+		fixture.role = 'host';
+		await session.join('room-a', false);
+		const connection = fixture.connections[fixture.connections.length - 1];
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, role: 'speaker' }));
+		await nextTick();
+		expect(session.isHost.value).toBe(false);
+		await session.leave();
+		expect(fixture.api).toHaveBeenCalledWith('calls/rooms/leave', expect.objectContaining({ roomId: 'room-a' }));
+		expect(fixture.api).not.toHaveBeenCalledWith('calls/rooms/end', expect.anything());
 	});
 
 	test.each(['host', 'listener'] as const)('explicit %s exit sends its connection identity', async role => {

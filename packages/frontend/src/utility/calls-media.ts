@@ -5,11 +5,14 @@
 
 import { detectCallsMediaCapabilities, normalizeCallsMediaError, normalizeCallsStats, preferOpus } from './calls-media-core.js';
 import type { CallsNormalizedStats } from './calls-media-core.js';
+import { createCallsNoiseSuppression } from './calls-noise-suppression.js';
+import type { CallsNoiseSuppression } from './calls-noise-suppression.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 
 export type CallsVideoSource = 'camera' | 'screen';
 export type CallsVideoQuality = { height: 480 | 720 | 1080 | 1440 | 2160 | 'source'; frameRate: 15 | 30 | 60 | 90 | 120 | 144 };
 export type CallsRemotePublication = { id: string; participantId: string; mediaKind: 'audio' | 'video'; mediaSource: 'microphone' | CallsVideoSource };
+type CallsMicrophone = { track: MediaStreamTrack; processing: CallsNoiseSuppression | null };
 
 function videoConstraints(quality: CallsVideoQuality): MediaTrackConstraints {
 	if (quality.height === 'source') return { frameRate: { ideal: quality.frameRate, max: quality.frameRate } };
@@ -30,6 +33,7 @@ export class CallsMediaController {
 	public generation = 0;
 	public participantId: string | null = null;
 	public localTrack: MediaStreamTrack | null = null;
+	private microphone: CallsMicrophone | null = null;
 	private peer: RTCPeerConnection | null = null;
 	private localVideos = new Map<CallsVideoSource, { track: MediaStreamTrack; publicationId?: string; transceiver?: RTCRtpTransceiver }>();
 	private remotePublications = new Map<string, CallsRemotePublication>();
@@ -37,6 +41,7 @@ export class CallsMediaController {
 	private connectionId: string = crypto.randomUUID();
 	private queue = Promise.resolve();
 	private reconnectTimer: number | null = null;
+	private reconnectPromise: Promise<void> | null = null;
 	private publications = new Set<string>();
 	private subscribedPublications = new Set<string>();
 	private mediaCredential: string | null = null;
@@ -67,9 +72,12 @@ export class CallsMediaController {
 		private replaceExisting = false,
 		private videoCallbacks?: {
 			localTrack: (source: CallsVideoSource, track: MediaStreamTrack | null) => void;
+			microphoneTrack?: (track: MediaStreamTrack | null) => void;
+			noiseSuppressionChanged?: (enabled: boolean) => void;
 			remoteRemoved: (publicationId: string) => void;
 			error: (error: unknown) => void;
 		},
+		private canUseMicrophone = true,
 	) {
 		if (previousConnection != null) {
 			this.connectionId = previousConnection.connectionId;
@@ -84,10 +92,11 @@ export class CallsMediaController {
 			return;
 		}
 		try {
-			if (this.role !== 'listener' && capabilities.getUserMedia) {
+			if (this.role !== 'listener' && this.canUseMicrophone && capabilities.getUserMedia) {
 				this.setState('acquiring-media');
 				try {
-					await this.acquireMicrophone(deviceId);
+					const microphone = await this.acquireMicrophone(deviceId);
+					this.useMicrophone(microphone);
 				} catch (error) {
 					if (!(error instanceof DOMException) || !['NotFoundError', 'NotReadableError', 'NotAllowedError', 'SecurityError'].includes(error.name)) throw error;
 					console.warn('[Calls] Joining without microphone:', error.name);
@@ -106,12 +115,13 @@ export class CallsMediaController {
 		}
 	}
 
-	private async acquireMicrophone(deviceId?: string, noiseSuppression = this.noiseSuppression): Promise<void> {
+	private async acquireMicrophone(deviceId?: string): Promise<CallsMicrophone> {
 		const mediaRequest = navigator.mediaDevices.getUserMedia({
 			audio: {
 				deviceId: deviceId == null ? undefined : { exact: deviceId },
 				channelCount: { ideal: 1 }, echoCancellation: { ideal: true },
-				noiseSuppression: { exact: noiseSuppression }, autoGainControl: { ideal: true },
+				// RNNoise owns noise suppression. Preserve browser echo cancellation and gain control.
+				noiseSuppression: false, autoGainControl: { ideal: true },
 			},
 		});
 		const stream = await new Promise<MediaStream>((resolve, reject) => {
@@ -134,10 +144,43 @@ export class CallsMediaController {
 				reject(error);
 			});
 		});
-		this.localTrack = stream.getAudioTracks()[0] ?? null;
-		if (this.localTrack == null) throw new DOMException('No audio track', 'NotFoundError');
-		this.localTrack.enabled = !this.muted;
-		this.localTrack.addEventListener('ended', () => void this.recoverFromDeviceLoss());
+		const track = stream.getAudioTracks()[0];
+		if (track == null) throw new DOMException('No audio track', 'NotFoundError');
+		if (this.isClosed()) { track.stop(); throw new DOMException('Call ended', 'AbortError'); }
+		track.enabled = !this.muted;
+		const abort = new AbortController();
+		this.cancelAcquisition = () => { track.stop(); abort.abort(); };
+		let processing: CallsNoiseSuppression | null = null;
+		try {
+			processing = await createCallsNoiseSuppression(stream, error => {
+				if (this.microphone?.track !== track) return;
+				console.warn('[Calls] Noise suppression failed', error);
+				this.noiseSuppression = false;
+				this.videoCallbacks?.noiseSuppressionChanged?.(false);
+			}, abort.signal);
+			abort.signal.throwIfAborted();
+			processing.setEnabled(this.noiseSuppression);
+		} catch (error) {
+			processing?.close();
+			processing = null;
+			if (abort.signal.aborted) throw new DOMException('Microphone acquisition cancelled', 'AbortError');
+			console.warn('[Calls] Noise suppression unavailable; using unprocessed microphone', error);
+			this.noiseSuppression = false;
+			this.videoCallbacks?.noiseSuppressionChanged?.(false);
+		} finally {
+			this.cancelAcquisition = null;
+		}
+		return { track, processing };
+	}
+
+	private useMicrophone(microphone: CallsMicrophone): void {
+		this.microphone = microphone;
+		this.localTrack = microphone.processing?.track ?? microphone.track;
+		this.setMuted(this.muted);
+		this.videoCallbacks?.microphoneTrack?.(this.localTrack);
+		microphone.track.addEventListener('ended', () => {
+			if (this.microphone === microphone) void this.recoverFromDeviceLoss();
+		});
 	}
 
 	public cancelMicrophoneRequest(): void {
@@ -217,6 +260,10 @@ export class CallsMediaController {
 	}
 
 	public reconcile(): Promise<boolean> {
+		if (this.reconnectPromise != null) return this.reconnectPromise.then(() => false);
+		if (!this.isClosed() && this.generation !== 0 && (this.state === 'failed' || this.peer?.connectionState === 'failed' || this.peer?.connectionState === 'disconnected')) {
+			return this.scheduleReconnect(this.peer?.connectionState === 'disconnected' ? 'disconnected' : 'failed').then(() => false);
+		}
 		return this.enqueue(() => this.reconcileNow());
 	}
 
@@ -439,17 +486,23 @@ export class CallsMediaController {
 	public setMuted(muted: boolean): void {
 		this.muted = muted;
 		if (this.localTrack != null) this.localTrack.enabled = !muted;
+		if (this.microphone != null) this.microphone.track.enabled = !muted;
 	}
 
-	public async setNoiseSuppression(enabled: boolean): Promise<void> {
+	public setNoiseSuppression(enabled: boolean): void {
 		if (this.noiseSuppression === enabled) return;
-		if (this.localTrack != null) await this.switchMicrophone(this.localTrack.getSettings().deviceId, enabled);
+		if (enabled && this.microphone != null && this.microphone.processing == null) throw new Error('RNNoise is unavailable');
+		this.microphone?.processing?.setEnabled(enabled);
 		this.noiseSuppression = enabled;
 	}
 
-	public async switchMicrophone(deviceId?: string, noiseSuppression = this.noiseSuppression): Promise<void> {
+	public async switchMicrophone(deviceId?: string): Promise<void> {
+		if (!this.canUseMicrophone) return;
 		const oldTrack = this.localTrack;
-		await this.acquireMicrophone(deviceId, noiseSuppression);
+		const oldMicrophone = this.microphone;
+		const microphone = await this.acquireMicrophone(deviceId);
+		if (this.isClosed()) { microphone.processing?.close(); microphone.track.stop(); return; }
+		this.useMicrophone(microphone);
 		if (oldTrack == null && this.peer != null) {
 			await this.enqueue(() => this.createConnection());
 			return;
@@ -458,17 +511,23 @@ export class CallsMediaController {
 		try {
 			await sender?.replaceTrack(this.localTrack);
 		} catch (error) {
-			this.localTrack?.stop();
+			microphone.processing?.close();
+			microphone.track.stop();
+			this.microphone = oldMicrophone;
 			this.localTrack = oldTrack;
+			oldMicrophone?.processing?.setEnabled(this.noiseSuppression);
+			this.setMuted(this.muted);
+			this.videoCallbacks?.microphoneTrack?.(oldTrack);
 			throw error;
 		}
-		oldTrack?.stop();
+		oldMicrophone?.processing?.close();
+		oldMicrophone?.track.stop();
 	}
 
 	private async recoverFromDeviceLoss(): Promise<void> {
-		if (this.role === 'listener' || this.state === 'leaving' || this.state === 'closed') return;
+		if (this.role === 'listener' || !this.canUseMicrophone || this.state === 'leaving' || this.state === 'closed') return;
 		try {
-			await this.acquireMicrophone();
+			await this.switchMicrophone();
 			this.scheduleReconnect('failed');
 		} catch (error) {
 			this.fail(error instanceof DOMException ? normalizeCallsMediaError(error) : 'hardware-failure');
@@ -490,16 +549,20 @@ export class CallsMediaController {
 
 	private isClosed(): boolean { return this.state === 'leaving' || this.state === 'closed'; }
 
-	private scheduleReconnect(reason: Exclude<CallsNormalizedStats['reconnectReason'], null>): void {
-		if (this.isClosed() || this.state === 'reconnecting') return;
+	private scheduleReconnect(reason: Exclude<CallsNormalizedStats['reconnectReason'], null>): Promise<void> {
+		if (this.isClosed()) return Promise.resolve();
+		if (this.reconnectPromise != null) return this.reconnectPromise;
 		this.reconnectReason = reason;
 		this.reconnectStartedAt = performance.now();
 		this.recoveryTimeMs = null;
 		this.setState('reconnecting');
-		void this.enqueue(() => this.createConnection()).catch(error => {
+		this.reconnectPromise = this.enqueue(() => this.createConnection()).catch(error => {
 			console.error('[Calls] Media reconnection failed', error);
 			if (!this.isClosed()) this.fail('negotiation-failed');
+		}).finally(() => {
+			this.reconnectPromise = null;
 		});
+		return this.reconnectPromise;
 	}
 
 	private async ensureCredential(): Promise<void> {
@@ -590,7 +653,13 @@ export class CallsMediaController {
 			}
 			this.localVideos.clear();
 		}
-		if (stopTrack) { this.localTrack?.stop(); this.localTrack = null; }
+		if (stopTrack) {
+			this.microphone?.processing?.close();
+			this.microphone?.track.stop();
+			this.microphone = null;
+			this.localTrack = null;
+			this.videoCallbacks?.microphoneTrack?.(null);
+		}
 	}
 
 	private setState(state: CallsMediaState): void { this.state = state; this.failure = null; this.onState?.(state, null); }

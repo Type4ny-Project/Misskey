@@ -21,15 +21,32 @@ afterEach(() => {
 
 test('speaker and listener rows link to their profiles', async () => {
 	fixture.session = {
-		isActive: ref(true), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'stage' }),
+		elapsedTime: ref('03:12'), isActive: ref(true), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'stage' }),
 		participants: ref([{ id: 'speaker', userId: 'alice', role: 'speaker', isMuted: true, user: { id: 'alice', username: 'alice' } }, { id: 'listener', userId: 'bob', role: 'listener', user: { id: 'bob', username: 'bob' } }]),
 		myParticipant: ref(null), speakingParticipantIds: ref(new Set()), controls: ref({}),
 		isHost: ref(false), isSpeaker: ref(false), joining: ref(false),
 	};
 	const view = render(CallsDock, { global: { stubs: { MkAvatar: true, MkUserName: true, MkCallsControls: true } } });
-	await fireEvent.click(view.getByRole('button', { name: /Room/ }));
+	const toggle = view.getByRole('button', { name: /Room/ });
+	expect(toggle.getAttribute('aria-expanded')).toBe('false');
+	await fireEvent.click(toggle);
+	expect(toggle.getAttribute('aria-expanded')).toBe('true');
 	expect(view.getByRole('link', { name: 'alice' }).getAttribute('href')).toBe('/@alice');
 	expect(view.getByRole('link', { name: 'bob' }).getAttribute('href')).toBe('/@bob');
+	expect(view.getByTitle(i18n.ts._calls.elapsedTime).textContent).toContain('03:12');
+	fixture.session.elapsedTime.value = '03:13';
+	await nextTick();
+	expect(view.getByTitle(i18n.ts._calls.elapsedTime).textContent).toContain('03:13');
+
+	await fireEvent.click(toggle);
+	expect(toggle.getAttribute('aria-expanded')).toBe('false');
+	expect(view.queryByRole('link', { name: 'alice' })).toBeNull();
+	await fireEvent.click(toggle);
+	await fireEvent.pointerDown(document.body);
+	expect(toggle.getAttribute('aria-expanded')).toBe('false');
+	await fireEvent.click(toggle);
+	await fireEvent.keyDown(toggle, { key: 'Escape' });
+	expect(toggle.getAttribute('aria-expanded')).toBe('false');
 });
 
 test('prioritizes and counts unmuted speakers as mute state changes', async () => {
@@ -41,7 +58,7 @@ test('prioritizes and counts unmuted speakers as mute state changes', async () =
 		{ id: 'eve', userId: 'eve', role: 'listener', isMuted: true },
 	].map(participant => ({ ...participant, user: { id: participant.userId, username: participant.userId } }));
 	fixture.session = {
-		isActive: ref(true), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'stage' }),
+		elapsedTime: ref(null), isActive: ref(true), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'stage' }),
 		participants: ref(participants),
 		myParticipant: ref(null), speakingParticipantIds: ref(new Set()), controls: ref({}),
 		isHost: ref(false), isSpeaker: ref(false), joining: ref(false),
@@ -72,7 +89,7 @@ test.each(['active', 'reconnect'])('%s dock reserves notification space until it
 		disconnect = disconnect;
 	});
 	fixture.session = {
-		isActive: ref(state === 'active'), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'open' }),
+		elapsedTime: ref(null), isActive: ref(state === 'active'), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'open' }),
 		participants: ref([]), myParticipant: ref(null), speakingParticipantIds: ref(new Set()),
 		controls: ref({}), isHost: ref(false), isSpeaker: ref(false), joining: ref(false),
 		reconnectCandidate: ref(state === 'reconnect' ? { title: 'Room' } : null),

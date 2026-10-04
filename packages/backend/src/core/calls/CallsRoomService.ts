@@ -5,12 +5,13 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import type { OnApplicationShutdown, OnModuleInit } from '@nestjs/common';
-import { In, IsNull } from 'typeorm';
+import { In, IsNull, QueryFailedError } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type {
 	CallsModerationLogsRepository,
 	CallsParticipantsRepository,
 	CallsRoomsRepository,
+	MiCallsModerationLog,
 	ChatRoomsRepository,
 	MiCallsParticipant,
 	MiCallsRoom,
@@ -39,6 +40,7 @@ export type CallsRoomErrorCode =
 	| 'invalid-metadata'
 	| 'participant-not-found'
 	| 'room-not-found'
+	| 'room-full'
 	| 'stale-revision';
 
 export class CallsFeatureDisabledError extends Error {}
@@ -295,6 +297,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 
 	@bindThis
 	public async open(host: MiUser, roomId: string, expectedRevision: number): Promise<MiCallsRoom> {
+		await this.assertCanJoin(host);
 		return this.transition(host, roomId, expectedRevision, 'scheduled', 'open');
 	}
 
@@ -359,8 +362,31 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 	}
 
 	@bindThis
-	public async assertCanJoin(user: MiUser): Promise<void> {
+	public async assertCanJoin(user: Pick<MiUser, 'id'>): Promise<void> {
 		if (!(await this.roleService.getUserPolicies(user.id)).canJoinCalls) throw new CallsRoomError('access-denied');
+	}
+
+	@bindThis
+	public async assertCanPublish(user: Pick<MiUser, 'id'>, mediaSource: 'microphone' | 'camera' | 'screen'): Promise<void> {
+		const policies = await this.roleService.getUserPolicies(user.id);
+		if (!policies.canJoinCalls || (mediaSource === 'microphone' && !policies.canSpeakInCalls)
+			|| (mediaSource === 'camera' && !policies.canPublishCallsVideo)
+			|| (mediaSource === 'screen' && !policies.canShareCallsScreen)) {
+			throw new CallsRoomError('access-denied');
+		}
+	}
+
+	private async assertCapacity(room: MiCallsRoom, role: CallsParticipantRole, excludingParticipantId?: string): Promise<void> {
+		const policies = await this.roleService.getUserPolicies(room.ownerUserId);
+		const limit = role === 'listener' ? policies.callsRoomListenerLimit : policies.callsRoomSpeakerLimit;
+		if (limit === 0) return;
+		const candidates = await this.callsParticipantsRepository.findBy({
+			roomId: room.id, state: 'active', role: role === 'listener' ? 'listener' : In(['host', 'speaker']),
+		});
+		const joiningSince = Date.now() - CallsLiveConnectionService.ttlSeconds * 1000;
+		const connected = await Promise.all(candidates.filter(participant => participant.id !== excludingParticipantId).map(async participant =>
+			participant.joinedAt.getTime() >= joiningSince || await this.callsLiveConnectionService.get(participant.id) != null));
+		if (connected.filter(Boolean).length >= limit) throw new CallsRoomError('room-full');
 	}
 
 	private async joinLocked(user: MiUser, roomId: string): Promise<MiCallsParticipant> {
@@ -371,6 +397,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		const current = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id });
 		if (current?.state === 'active') return current;
 		const role = current?.role === 'host' ? 'host' : room.mode === 'open' ? 'speaker' : 'listener';
+		await this.assertCapacity(room, role);
 
 		const now = new Date();
 		let joined: MiCallsParticipant;
@@ -456,7 +483,8 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 
 	@bindThis
 	public async setRole(host: MiUser, roomId: string, participantId: string, role: Exclude<CallsParticipantRole, 'host'>, expectedRevision: number): Promise<MiCallsParticipant> {
-		return this.moderateRole(host, roomId, participantId, role, expectedRevision, role === 'speaker' ? 'promote' : 'demote');
+		return this.callsLiveConnectionService.withRoomLock(roomId, () =>
+			this.moderateRole(host, roomId, participantId, role, expectedRevision, role === 'speaker' ? 'promote' : 'demote'));
 	}
 
 	private async moderateRole(host: MiUser, roomId: string, participantId: string, role: Exclude<CallsParticipantRole, 'host'>, expectedRevision: number, action: CallsModerationAction): Promise<MiCallsParticipant> {
@@ -465,6 +493,9 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		if (room.state !== 'open' || room.mode !== 'stage') throw new CallsRoomError('invalid-state');
 		const participant = await this.callsParticipantsRepository.findOneBy({ id: participantId, roomId, state: 'active' });
 		if (participant == null || participant.role === 'host') throw new CallsRoomError('participant-not-found');
+
+		if (role === 'speaker') await this.assertCanJoin({ id: participant.userId });
+		if (role === 'speaker' && participant.role !== role) await this.assertCapacity(room, role, participant.id);
 
 		const revisionResult = await this.callsRoomsRepository.createQueryBuilder()
 			.update()
@@ -505,6 +536,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 
 	@bindThis
 	public async requestSpeaker(user: MiUser, roomId: string): Promise<void> {
+		await this.assertCanPublish(user, 'microphone');
 		const room = await this.getRoom(roomId);
 		if (room.mode !== 'stage') throw new CallsRoomError('invalid-state');
 		const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active', role: 'listener' });
@@ -526,6 +558,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 
 	@bindThis
 	public async setMuted(user: MiUser, roomId: string, isMuted: boolean): Promise<void> {
+		if (!isMuted) await this.assertCanPublish(user, 'microphone');
 		const room = await this.getRoom(roomId);
 		await this.assertCanAccess(user, room);
 		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
@@ -591,12 +624,83 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 
 	@bindThis
 	public async reportSpeaking(user: MiUser, roomId: string, speaking: boolean): Promise<void> {
+		if (speaking) await this.assertCanPublish(user, 'microphone');
 		const room = await this.getRoom(roomId);
 		await this.assertCanAccess(user, room);
 		if (room.state !== 'open') return;
 		const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
 		if (participant == null || participant.role === 'listener' || participant.isMuted) return;
 		await this.callsEventService.reportSpeaking(roomId, room.revision, participant.id, speaking);
+	}
+
+	@bindThis
+	public async updateTitle(host: MiUser, roomId: string, title: string, expectedRevision: number): Promise<MiCallsRoom> {
+		const room = await this.getRoom(roomId);
+		if (room.ownerUserId !== host.id) throw new CallsRoomError('access-denied');
+		if (room.state !== 'scheduled' && room.state !== 'open') throw new CallsRoomError('invalid-state');
+		const sanitizedTitle = this.sanitizeMetadata(title);
+		if (sanitizedTitle.length === 0) throw new CallsRoomError('invalid-metadata');
+		const result = await this.callsRoomsRepository.createQueryBuilder().update()
+			.set({ title: sanitizedTitle, revision: () => '"revision" + 1', updatedAt: new Date() })
+			.where('id = :roomId AND revision = :expectedRevision AND state = :state', { roomId, expectedRevision, state: room.state })
+			.returning('*').execute();
+		if (result.affected !== 1) throw new CallsRoomError('stale-revision');
+		const updated = result.raw[0] as MiCallsRoom;
+		await this.callsEventService.publish(roomId, updated.revision, 'title', { title: updated.title });
+		this.callsEventService.publishRoomsList('updated', { roomId, action: 'title' });
+		return updated;
+	}
+
+	@bindThis
+	public async transferHost(host: MiUser, roomId: string, participantId: string, expectedRevision: number): Promise<MiCallsRoom> {
+		return this.callsLiveConnectionService.withRoomLock(roomId, async () => {
+			let transfer: { room: MiCallsRoom; formerHostParticipantId: string; formerHostRole: CallsParticipantRole };
+			try {
+				transfer = await this.callsRoomsRepository.manager.transaction(async manager => {
+					const rooms = manager.getRepository<MiCallsRoom>(this.callsRoomsRepository.target);
+					const participants = manager.getRepository<MiCallsParticipant>(this.callsParticipantsRepository.target);
+					const logs = manager.getRepository<MiCallsModerationLog>(this.callsModerationLogsRepository.target);
+					const room = await rooms.findOneBy({ id: roomId });
+					if (room == null) throw new CallsRoomError('room-not-found');
+					// Only the actor recorded by this committed transfer may resend its notifications.
+					const retry = room.ownerUserId !== host.id && await logs.existsBy({ roomId, actorUserId: host.id, targetParticipantId: participantId, action: 'promote', nextRole: 'host', reason: 'host-transfer', roomRevision: expectedRevision + 1 });
+					if (room.ownerUserId !== host.id && !retry) throw new CallsRoomError('access-denied');
+					if (room.state !== 'open') throw new CallsRoomError('invalid-state');
+					const participant = await participants.findOneBy({ id: participantId, roomId, state: 'active' });
+					if (participant == null) throw new CallsRoomError('participant-not-found');
+					const formerHost = await participants.findOneByOrFail({ roomId, userId: host.id });
+					if (retry) {
+						if (participant.role !== 'host' || room.ownerUserId !== participant.userId) throw new CallsRoomError('access-denied');
+						return { room, formerHostParticipantId: formerHost.id, formerHostRole: formerHost.role };
+					}
+					if (participant.role === 'host') throw new CallsRoomError('participant-not-found');
+					await this.assertCanJoin({ id: participant.userId });
+					const now = new Date();
+					// Keep current participants' access when the owner-based visibility changes.
+					const activeParticipants = room.visibility === 'public' ? [] : await participants.findBy({ roomId, state: 'active' });
+					const visibleUserIds = room.visibility === 'public' ? room.visibleUserIds : [...new Set([...room.visibleUserIds, host.id, ...activeParticipants.map(item => item.userId)])];
+					const result = await rooms.createQueryBuilder().update()
+						.set({ ownerUserId: participant.userId, visibleUserIds, moderatorUserIds: room.moderatorUserIds.filter(id => id !== participant.userId), revision: () => '"revision" + 1', updatedAt: now })
+						.where('id = :roomId AND revision = :expectedRevision AND state = :state AND "ownerUserId" = :ownerUserId', { roomId, expectedRevision, state: 'open', ownerUserId: host.id })
+						.returning('*').execute();
+					if (result.affected !== 1) throw new CallsRoomError('stale-revision');
+					await participants.update({ roomId, userId: host.id, role: 'host' }, { role: 'speaker', updatedAt: now });
+					const promoted = await participants.update({ id: participant.id, state: 'active' }, { role: 'host', speakerRequestedAt: null, updatedAt: now });
+					if (promoted.affected !== 1) throw new CallsRoomError('participant-not-found');
+					const updated = result.raw[0] as MiCallsRoom;
+					await logs.insert({ id: this.idService.gen(), roomId, actorUserId: host.id, targetParticipantId: participant.id, action: 'promote', previousRole: participant.role, nextRole: 'host', reason: 'host-transfer', roomRevision: updated.revision, createdAt: now });
+					return { room: updated, formerHostParticipantId: formerHost.id, formerHostRole: 'speaker' as const };
+				});
+			} catch (error) {
+				if (error instanceof QueryFailedError && error.driverError.code === '23505' && error.driverError.constraint === 'IDX_calls_room_active_personal_owner') throw new CallsRoomError('active-attachment');
+				throw error;
+			}
+			await this.callsLiveConnectionService.touchHost(roomId);
+			await this.callsEventService.publish(roomId, transfer.room.revision, 'role', { participantId: transfer.formerHostParticipantId, role: transfer.formerHostRole });
+			await this.callsEventService.publish(roomId, transfer.room.revision, 'participant', { participantId, action: 'updated' });
+			this.callsTelemetryService.lifecycle({ action: 'host-transferred', roomId, participantId });
+			return transfer.room;
+		});
 	}
 
 	@bindThis

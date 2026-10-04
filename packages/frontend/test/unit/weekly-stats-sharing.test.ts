@@ -40,8 +40,9 @@ test.each(['共有', 'ノートで共有'])('uses the current-account Stats link
 	if (button === '共有') {
 		await waitFor(() => expect(fixture.share).toHaveBeenCalledOnce());
 		expect(fixture.share.mock.calls[0][0].url).toBe(`${url}/:my/stats`);
+		expect(fixture.share.mock.calls[0][0].text).toContain('\n\nあなたも、自分のStatsを見てみませんか？');
 	} else {
 		await waitFor(() => expect(fixture.post).toHaveBeenCalledOnce());
-		expect(fixture.post.mock.calls[0][0].initialText).toContain(`${url}/:my/stats`);
+		expect(fixture.post.mock.calls[0][0].initialText).toContain(`\n\n[あなたも、自分のStatsを見てみませんか？](${url}/:my/stats)`);
 	}
 });

@@ -123,7 +123,7 @@ describe('Calls room window', () => {
 		fixture.session.room.value.moderatorUserIds = actor === 'moderator' ? ['viewer'] : [];
 		fixture.session.participants.value = [
 			{ id: 'viewer-participant', userId: 'viewer', role: actor === 'moderator' ? 'listener' : 'host', isMuted: true },
-			{ id: 'speaker-participant', userId: 'speaker', role: 'speaker', isMuted: false },
+			{ id: 'speaker-participant', userId: 'speaker', role: 'speaker', isMuted: false, user: { id: 'speaker', username: 'speaker', name: 'Speaker' } },
 		];
 		fixture.connection.participants.value = fixture.session.participants.value;
 		vi.mocked(misskeyApi).mockResolvedValue({ roomRevision: 1, publications: ['camera', 'screen'].map(mediaSource => ({ id: mediaSource, participantId: 'speaker-participant', mediaKind: 'video', mediaSource })) } as never);
@@ -132,13 +132,46 @@ describe('Calls room window', () => {
 		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
 		expect(misskeyApi).toHaveBeenCalledWith('calls/media/reconcile', { roomId: 'room' });
 		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
+		fixture.confirm.mockClear().mockResolvedValue({ canceled: false });
 		await menu.find(item => item.text === i18n.ts._calls.mute)!.action(new PointerEvent('click'));
 		expect(vi.mocked(misskeyApi)).toHaveBeenCalledWith('calls/rooms/mute-participant', { roomId: 'room', participantId: 'speaker-participant', expectedRevision: 1 });
 		await menu.find(item => item.text === i18n.ts._calls.stopCamera)!.action(new PointerEvent('click'));
 		expect(vi.mocked(misskeyApi)).toHaveBeenCalledWith('calls/rooms/stop-participant-video', { roomId: 'room', participantId: 'speaker-participant', mediaSource: 'camera', expectedRevision: 1 });
 		await menu.find(item => item.text === i18n.ts._calls.stopScreenSharing)!.action(new PointerEvent('click'));
 		expect(vi.mocked(misskeyApi)).toHaveBeenCalledWith('calls/rooms/stop-participant-video', { roomId: 'room', participantId: 'speaker-participant', mediaSource: 'screen', expectedRevision: 1 });
+		await menu.find(item => item.text === i18n.ts._calls.removeParticipant)!.action(new PointerEvent('click'));
+		expect(misskeyApi).toHaveBeenCalledWith('calls/rooms/remove-participant', { roomId: 'room', participantId: 'speaker-participant', expectedRevision: 1 });
+		expect(fixture.confirm.mock.calls.map(([options]) => options)).toEqual([
+			{ type: 'warning', title: 'Speaker', text: i18n.ts._calls.muteParticipantConfirm },
+			{ type: 'warning', title: 'Speaker', text: i18n.ts._calls.stopParticipantCameraConfirm },
+			{ type: 'warning', title: 'Speaker', text: i18n.ts._calls.stopParticipantScreenSharingConfirm },
+			{ type: 'warning', title: 'Speaker', text: i18n.ts._calls.removeParticipantConfirm },
+		]);
 		if (actor === 'moderator') expect(menu.map(item => item.text)).toEqual([i18n.ts._calls.mute, i18n.ts._calls.stopCamera, i18n.ts._calls.stopScreenSharing, i18n.ts._calls.removeParticipant]);
+	});
+
+	test.each(['mute', 'stopCamera', 'stopScreenSharing', 'removeParticipant'] as const)('waits for confirmation and cancels %s without a moderation API call', async action => {
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		fixture.session.room.value.moderatorUserIds = ['viewer'];
+		fixture.session.participants.value = [
+			{ id: 'viewer-participant', userId: 'viewer', role: 'listener', isMuted: true },
+			{ id: 'speaker-participant', userId: 'speaker', role: 'speaker', isMuted: false },
+		];
+		vi.mocked(misskeyApi).mockResolvedValue({ roomRevision: 1, publications: ['camera', 'screen'].map(mediaSource => ({ id: mediaSource, participantId: 'speaker-participant', mediaKind: 'video', mediaSource })) } as never);
+		let finish!: (result: { canceled: boolean }) => void;
+		fixture.confirm.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
+		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
+		vi.mocked(misskeyApi).mockClear();
+		const pending = menu.find(item => item.text === i18n.ts._calls[action])!.action(new PointerEvent('click'));
+		expect(fixture.confirm).toHaveBeenCalledOnce();
+		expect(misskeyApi).not.toHaveBeenCalled();
+		finish({ canceled: true });
+		await pending;
+		expect(misskeyApi).not.toHaveBeenCalled();
 	});
 
 	test('an ordinary participant has no moderation menu', () => {

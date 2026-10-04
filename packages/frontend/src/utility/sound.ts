@@ -79,6 +79,12 @@ export const operationTypes = [
 	'notification',
 	'reaction',
 	'chatMessage',
+	'callsJoin',
+	'callsLeave',
+	'callsParticipantJoin',
+	'callsParticipantLeave',
+	'callsMute',
+	'callsUnmute',
 ] as const;
 
 /** サウンドの種類 */

@@ -2551,6 +2551,12 @@ _sfx:
   notification: "通知"
   reaction: "リアクション選択時"
   chatMessage: "ダイレクトメッセージ"
+  callsJoin: "通話に参加したとき（自分）"
+  callsLeave: "通話から退出したとき（自分）"
+  callsParticipantJoin: "通話に参加したとき（他の人）"
+  callsParticipantLeave: "通話から退出したとき（他の人）"
+  callsMute: "通話のマイクをミュートしたとき"
+  callsUnmute: "通話のマイクをアンミュートしたとき"
 
 _soundSettings:
   driveFile: "ドライブの音声を使用"

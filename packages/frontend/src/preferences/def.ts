@@ -522,6 +522,25 @@ export const PREF_DEF = definePreferences({
 		default: { type: 'syuilo/waon', volume: 1 } as SoundStore,
 	},
 
+	'sound.on.callsJoin': {
+		default: { type: 'syuilo/up', volume: 0.5 } as SoundStore,
+	},
+	'sound.on.callsLeave': {
+		default: { type: 'syuilo/down', volume: 0.5 } as SoundStore,
+	},
+	'sound.on.callsParticipantJoin': {
+		default: { type: 'syuilo/up', volume: 0.5 } as SoundStore,
+	},
+	'sound.on.callsParticipantLeave': {
+		default: { type: 'syuilo/down', volume: 0.5 } as SoundStore,
+	},
+	'sound.on.callsMute': {
+		default: { type: 'syuilo/down', volume: 0.5 } as SoundStore,
+	},
+	'sound.on.callsUnmute': {
+		default: { type: 'syuilo/up', volume: 0.5 } as SoundStore,
+	},
+
 	'deck.alwaysShowMainColumn': {
 		default: true,
 	},

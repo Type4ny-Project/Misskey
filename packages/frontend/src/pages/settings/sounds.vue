@@ -87,6 +87,12 @@ const sounds = ref<Record<OperationType, Ref<SoundStore>>>({
 	notification: prefer.r['sound.on.notification'],
 	reaction: prefer.r['sound.on.reaction'],
 	chatMessage: prefer.r['sound.on.chatMessage'],
+	callsJoin: prefer.r['sound.on.callsJoin'],
+	callsLeave: prefer.r['sound.on.callsLeave'],
+	callsParticipantJoin: prefer.r['sound.on.callsParticipantJoin'],
+	callsParticipantLeave: prefer.r['sound.on.callsParticipantLeave'],
+	callsMute: prefer.r['sound.on.callsMute'],
+	callsUnmute: prefer.r['sound.on.callsUnmute'],
 });
 
 function getSoundTypeName(f: SoundType): string {

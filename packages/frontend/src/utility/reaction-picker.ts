@@ -29,6 +29,7 @@ class ReactionPicker {
 		targetNote: Misskey.entities.Note | null,
 		onChosen?: (reaction: string) => void,
 		onClosed?: () => void,
+		checkReactionRoles = false,
 	) {
 		const anchorRef = shallowRef(anchorElement);
 		const targetNoteRef = ref(targetNote);
@@ -38,6 +39,7 @@ class ReactionPicker {
 			anchorElement: anchorRef,
 			pinnedEmojis: this.reactionsRef,
 			asReactionPicker: true,
+			checkReactionRoles,
 			targetNote: targetNoteRef,
 		}, {
 			done: (reaction: string) => {

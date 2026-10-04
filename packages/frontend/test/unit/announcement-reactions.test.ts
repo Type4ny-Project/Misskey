@@ -74,6 +74,7 @@ describe('announcement reactions', () => {
 		const update = mount(true);
 		mocks.api.mockRejectedValue(new Error('Reactions disabled'));
 		root.querySelector<HTMLButtonElement>('button[aria-label="Add reaction"]')?.click();
+		expect(mocks.picker.mock.calls[0][4]).toBe(true);
 		const chosen = mocks.picker.mock.calls[0][2] as (reaction: string) => void;
 		chosen('🎉');
 		await Promise.resolve();

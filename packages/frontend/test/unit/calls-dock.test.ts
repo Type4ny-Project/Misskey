@@ -21,8 +21,7 @@ afterEach(() => {
 test('speaker and listener rows link to their profiles', async () => {
 	fixture.session = {
 		isActive: ref(true), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'stage' }),
-		participants: ref([{ id: 'speaker', userId: 'alice', role: 'speaker', isMuted: true }, { id: 'listener', userId: 'bob', role: 'listener' }]),
-		usersById: ref(new Map([['alice', { id: 'alice', username: 'alice' }], ['bob', { id: 'bob', username: 'bob' }]])),
+		participants: ref([{ id: 'speaker', userId: 'alice', role: 'speaker', isMuted: true, user: { id: 'alice', username: 'alice' } }, { id: 'listener', userId: 'bob', role: 'listener', user: { id: 'bob', username: 'bob' } }]),
 		myParticipant: ref(null), speakingParticipantIds: ref(new Set()), controls: ref({}),
 		isHost: ref(false), isSpeaker: ref(false), joining: ref(false),
 	};
@@ -44,7 +43,7 @@ test.each(['active', 'reconnect'])('%s dock reserves notification space until it
 	});
 	fixture.session = {
 		isActive: ref(state === 'active'), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'open' }),
-		participants: ref([]), usersById: ref(new Map()), myParticipant: ref(null), speakingParticipantIds: ref(new Set()),
+		participants: ref([]), myParticipant: ref(null), speakingParticipantIds: ref(new Set()),
 		controls: ref({}), isHost: ref(false), isSpeaker: ref(false), joining: ref(false),
 		reconnectCandidate: ref(state === 'reconnect' ? { title: 'Room' } : null),
 		reconnectRoomState: ref('open'), reconnectSecondsRemaining: ref(60),

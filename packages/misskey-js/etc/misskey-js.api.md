@@ -1204,6 +1204,13 @@ export type Channels = {
             participant: (payload: CallsRoomEventBase & {
                 participantId: string;
                 action: 'joined' | 'left' | 'removed' | 'updated';
+                participant?: CallsParticipant & {
+                    user: (UserLite & {
+                        isFollowing: boolean;
+                        isFollowed: boolean;
+                    }) | null;
+                };
+                moderatorUserIds?: string[];
             }) => void;
             role: (payload: CallsRoomEventBase & {
                 participantId: string;
@@ -4422,9 +4429,9 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:236:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:251:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:308:4 - (ae-forgotten-export) The symbol "CallsRoomEventBase" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:237:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:252:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:309:4 - (ae-forgotten-export) The symbol "CallsRoomEventBase" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

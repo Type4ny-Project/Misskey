@@ -1,6 +1,7 @@
 import {
 	Antenna,
 	CallsRoom,
+	CallsParticipant,
 	ChatMessage,
 	ChatMessageLite,
 	DriveFile,
@@ -306,7 +307,12 @@ export type Channels = {
 		};
 		events: {
 			lifecycle: (payload: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled'; reason?: 'host-timeout' }) => void;
-			participant: (payload: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' | 'updated' }) => void;
+			participant: (payload: CallsRoomEventBase & {
+				participantId: string;
+				action: 'joined' | 'left' | 'removed' | 'updated';
+				participant?: CallsParticipant & { user: (UserLite & { isFollowing: boolean; isFollowed: boolean }) | null };
+				moderatorUserIds?: string[];
+			}) => void;
 			role: (payload: CallsRoomEventBase & { participantId: string; role: 'host' | 'speaker' | 'listener' }) => void;
 			speakerRequest: (payload: CallsRoomEventBase & { participantId: string; requested: boolean }) => void;
 			mute: (payload: CallsRoomEventBase & { participantId: string; isMuted: boolean }) => void;

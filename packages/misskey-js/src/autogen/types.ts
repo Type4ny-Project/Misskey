@@ -2517,7 +2517,7 @@ export type paths = {
          * federation/update-remote-user
          * @description No description provided.
          *
-         *     **Credential required**: *No*
+         *     **Credential required**: *Yes* / **Permission**: *read:account*
          */
         post: operations['federation___update-remote-user'];
     };
@@ -3373,10 +3373,9 @@ export type paths = {
     '/i/revoke-token': {
         /**
          * i/revoke-token
-         * @description No description provided.
+         * @description Revoke an access token of the authenticated user. Requires credential. When called with an access token (third-party app), only the token currently in use can be revoked.
          *
-         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
-         *     **Credential required**: *Yes*
+         *     **Credential required**: *No*
          */
         post: operations['i___revoke-token'];
     };
@@ -18322,7 +18321,79 @@ export interface operations {
                 content: {
                     'application/json': {
                         room: components['schemas']['CallsRoom'];
-                        participants: components['schemas']['CallsParticipant'][];
+                        participants: {
+                            /** Format: id */
+                            id: string;
+                            /** Format: id */
+                            roomId: string;
+                            /** Format: id */
+                            userId: string;
+                            /** @enum {string} */
+                            role: 'host' | 'speaker' | 'listener';
+                            /** @enum {string} */
+                            state: 'active' | 'left' | 'removed';
+                            isMuted: boolean;
+                            /** Format: date-time */
+                            joinedAt: string;
+                            /** Format: date-time */
+                            leftAt: string | null;
+                            /** Format: date-time */
+                            speakerRequestedAt: string | null;
+                            user: {
+                                /**
+                                 * Format: id
+                                 * @example xxxxxxxxxx
+                                 */
+                                id: string;
+                                /** @example 藍 */
+                                name: string | null;
+                                /** @example ai */
+                                username: string;
+                                /**
+                                 * @description The local host is represented with `null`.
+                                 * @example misskey.example.com
+                                 */
+                                host: string | null;
+                                /** Format: url */
+                                avatarUrl: string;
+                                avatarBlurhash: string | null;
+                                avatarDecorations: {
+                                    /** Format: id */
+                                    id: string;
+                                    angle?: number;
+                                    flipH?: boolean;
+                                    /** Format: url */
+                                    url: string;
+                                    offsetX?: number;
+                                    offsetY?: number;
+                                }[];
+                                isBot?: boolean;
+                                isCat?: boolean;
+                                requireSigninToViewContents?: boolean;
+                                makeNotesFollowersOnlyBefore?: number | null;
+                                makeNotesHiddenBefore?: number | null;
+                                instance?: {
+                                    name: string | null;
+                                    softwareName: string | null;
+                                    softwareVersion: string | null;
+                                    iconUrl: string | null;
+                                    faviconUrl: string | null;
+                                    themeColor: string | null;
+                                };
+                                emojis: {
+                                    [key: string]: string;
+                                };
+                                /** @enum {string} */
+                                onlineStatus: 'unknown' | 'online' | 'active' | 'offline';
+                                badgeRoles?: {
+                                    name: string;
+                                    iconUrl: string | null;
+                                    displayOrder: number;
+                                }[];
+                                isFollowing: boolean;
+                                isFollowed: boolean;
+                            } | null;
+                        }[];
                     };
                 };
             };
@@ -26676,6 +26747,15 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -40290,6 +40370,8 @@ export interface operations {
             content: {
                 'application/json': {
                     endpoint: string;
+                    auth: string;
+                    publickey: string;
                 };
             };
         };
@@ -40329,6 +40411,15 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

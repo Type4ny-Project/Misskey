@@ -388,11 +388,8 @@ async function refreshRoom(): Promise<void> {
 	else await pageConnection.value?.refresh();
 }
 
-function participantUser(userId: string): Misskey.entities.UserLite | null { return session.usersById.value.get(userId) ?? null; }
+function participantUser(userId: string): Misskey.entities.UserLite | null { return participants.value.find(participant => participant.userId === userId)?.user ?? null; }
 
-watch(() => participants.value.map(participant => participant.userId).join(','), userIds => {
-	void session.loadParticipantUsers(userIds === '' ? [] : userIds.split(','));
-}, { immediate: true });
 watch(isSessionRoom, active => {
 	if (active) {
 		pageConnection.value?.dispose();

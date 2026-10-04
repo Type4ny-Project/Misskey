@@ -44,7 +44,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 </template>
 <template v-else-if="localEventId !== null">
-	<MkUrlEventCard :event-id="localEventId"/>
+	<MkUrlEventCard :eventId="localEventId"/>
 </template>
 <div v-else>
 	<component :is="self ? 'MkA' : 'a'" :class="[$style.link, { [$style.compact]: compact }]" :[attr]="maybeRelativeUrl" rel="nofollow noopener" :target="target" :title="url">

@@ -12,7 +12,7 @@
 
 ## 既存コードと実装の入口
 
-`packages/frontend/src/pages/settings/profile.vue`に受け入れ設定があり、`packages/backend/src/models/Note.ts`に`reactionAcceptance`、`packages/backend/src/core/RoleService.ts`にロールポリシーがある。`NoteCreateService`でローカルユーザーの新規投稿を固定する。予約投稿にも投稿実行時のポリシーを適用する。`ReactionService`では既存ノートの設定を変更しない。クライアント設定と下書きに保存済みの受け入れ設定は維持し、ロール解除後はその設定を再び選択・適用できる。
+`packages/frontend/src/pages/settings/profile.vue`に受け入れ設定があり、`packages/backend/src/models/Note.ts`に`reactionAcceptance`、`packages/backend/src/core/RoleService.ts`にロールポリシーがある。`NoteCreateService`でローカルユーザーの新規投稿を固定する。予約投稿にも投稿実行時のポリシーを適用する。`ReactionService`では既存ノートの設定を変更しない。既存ノートの編集画面では保存済みの受け入れ設定を表示し、変更操作を無効にする。クライアント設定と下書きに保存済みの受け入れ設定は維持し、ロール解除後はその設定を再び選択・適用できる。
 
 ## 完了条件
 
@@ -26,4 +26,6 @@
 
 ## 検証
 
-RoleServiceの54件のunit test、ノート作成APIのE2E（制限設定の上書き、センシティブ絵文字の追加、過去投稿の保持、解除後の設定）、backend/frontendの型チェックを実行した。実ブラウザでは通常設定の変更、ロール適用後の固定表示と操作抑止、解除後の保存済み設定への復帰、投稿フォームの固定表示、変更禁止ロール適用中のサーバー下書き再保存で元の設定が保持されることを確認した。投稿フォームから制限のない別アカウントを選び、受け入れ設定を変更できることと「いいねのみ」のまま投稿されることも確認した。変更禁止の古いキャッシュが残っていても、選択時に最新ポリシーを取得して設定変更と投稿ができることを確認した。情報取得を保留したまま投稿しても、選択したアカウントで投稿されることを確認した。変更ファイルのlintとlocale safetyはPASS。SPDX検査は統合先に既存のmigration 2件の欠落でFAIL（今回の変更では新規欠落なし）。
+最新のdevelopをマージした状態で、RoleServiceの54件のunit test、ノート作成APIのE2E 53件、frontendの型チェックと全体lint、misskey-jsの再生成を実行した。空の専用DBから全migrationを実行し、check-migrationsでスキーマ差分がないことを確認した。変更ファイルのlint、SPDX、locale safetyはすべてPASS。
+
+実ブラウザでは、変更禁止ロールのユーザーが過去の「いいねのみ」ノートを編集すると、保存済みの設定が表示され、選択操作が無効になることと、本文の編集後も設定が維持されることを確認した。新規投稿の固定表示、ロール解除後の設定復帰、サーバー下書きの設定保持、別アカウント選択時のポリシー更新と通信待ち中の投稿先は、実装時のブラウザ確認および対象E2Eで検証した。

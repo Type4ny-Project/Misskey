@@ -212,8 +212,10 @@ if (props.initialVisibleUsers) {
 }
 const reactionAcceptance = ref(store.s.reactionAcceptance);
 const postAccount = ref<Misskey.entities.MeDetailed | null>(null);
-const canChangeReactionAcceptance = computed(() => (postAccount.value ?? $i).policies.canChangeReactionAcceptance !== false);
-const effectiveReactionAcceptance = computed(() => canChangeReactionAcceptance.value ? reactionAcceptance.value : null);
+const canChangeReactionAcceptance = computed(() => !props.updateMode && (postAccount.value ?? $i).policies.canChangeReactionAcceptance !== false);
+const effectiveReactionAcceptance = computed(() => props.updateMode
+	? props.initialNote?.reactionAcceptance ?? null
+	: canChangeReactionAcceptance.value ? reactionAcceptance.value : null);
 const scheduledAt = ref<number | null>(null);
 const draghover = ref(false);
 const quoteId = ref<string | null>(null);
@@ -673,7 +675,7 @@ function showOtherSettings() {
 	}, { type: 'divider' }, {
 		icon: reactionAcceptanceIcon,
 		text: i18n.ts.reactionAcceptance,
-		caption: canChangeReactionAcceptance.value ? reactionAcceptanceCaption : i18n.ts.reactionAcceptanceLockedByRole,
+		caption: props.updateMode || canChangeReactionAcceptance.value ? reactionAcceptanceCaption : i18n.ts.reactionAcceptanceLockedByRole,
 		disabled: !canChangeReactionAcceptance.value,
 		action: () => {
 			toggleReactionAcceptance();

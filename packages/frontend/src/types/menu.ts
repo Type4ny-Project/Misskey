@@ -22,6 +22,7 @@ export interface MenuButton {
 	indicate?: boolean;
 	danger?: boolean;
 	active?: boolean | ComputedRef<boolean>;
+	disabled?: boolean | Ref<boolean>;
 	avatar?: Misskey.entities.User;
 	action: MenuAction;
 }

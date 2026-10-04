@@ -66,6 +66,7 @@ describe('InboxRuleService activity conditions', () => {
 		['thisActivityIsRenote', { type: 'Create', object: { type: 'Note' } }, false],
 		['thisActivityIsReply', { type: 'Create', object: { type: 'Note', inReplyTo: 'https://local.example/notes/1' } }, true],
 		['thisActivityIsReply', { type: 'Create', object: { type: 'Note', inReplyTo: null } }, false],
+		['thisActivityIsReply', { type: 'Create', object: { type: 'Question', inReplyTo: 'https://local.example/notes/1' } }, true],
 	] as const)('%s: %j matches %s', async (type, activity, expected) => {
 		expect(await createService().evalCond(activity as IObject, sender, { id: 'condition', type })).toBe(expected);
 	});
@@ -135,6 +136,7 @@ test('hourly counters include each receipt, share server counts, isolate account
 test.each([
 	[{ type: 'Note', inReplyTo: 'https://local.example/notes/1' }, true],
 	[{ type: 'Note', inReplyTo: null }, false],
+	[{ type: 'Question', inReplyTo: 'https://local.example/notes/1' }, true],
 ])('reply condition also resolves URL-referenced Create.object: %j', async (note, expected) => {
 	const service = createService(undefined, note as IObject);
 	expect(await service.evalCond({ type: 'Create', object: 'https://remote.example/notes/2' } as IObject, sender, { id: 'reply', type: 'thisActivityIsReply' })).toBe(expected);

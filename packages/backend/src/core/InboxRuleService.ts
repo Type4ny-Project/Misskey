@@ -8,7 +8,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { bindThis } from '@/decorators.js';
 import type { MiRemoteUser } from '@/models/User.js';
 import { IdService } from '@/core/IdService.js';
-import { isAnnounce, isCreate, isFollow, isLike, isNote } from '@/core/activitypub/type.js';
+import { isAnnounce, isCreate, isFollow, isLike, isNote, isPost } from '@/core/activitypub/type.js';
 import type { IObject, IPost } from '@/core/activitypub/type.js';
 import type { InstancesRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
@@ -168,7 +168,7 @@ export class InboxRuleService {
 					const note = isCreate(activity) && typeof activity.object === 'string'
 						? await (await this.apResolverService.createResolver()).resolve(activity.object)
 						: object;
-					return isNote(note) && note.inReplyTo != null;
+					return isPost(note) && note.inReplyTo != null;
 				}
 				case 'thisActivityIsNote': {
 					return isNote(object);

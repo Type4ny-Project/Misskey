@@ -3758,3 +3758,9 @@ _events:
   tagsCaption: "カンマ区切りで入力"
   rateLimitReached: "イベントの作成上限に達しました（1日5件まで）"
   unknownError: "エラーが発生しました"
+
+_compactTimeline:
+  enable: "タイムラインを1行で表示"
+  hiddenContent: "内容を隠したノート"
+  cw: "内容に関する警告"
+  link: "リンク"

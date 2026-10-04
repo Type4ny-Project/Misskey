@@ -150,6 +150,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 					<div class="_gaps_m">
 						<div class="_gaps_s">
+							<SearchMarker :keywords="['timeline', 'compact', 'single', 'line']">
+								<MkPreferenceContainer k="compactTimeline">
+									<MkSwitch v-model="compactTimeline">
+										<template #label><SearchLabel>{{ i18n.ts._compactTimeline.enable }}</SearchLabel></template>
+									</MkSwitch>
+								</MkPreferenceContainer>
+							</SearchMarker>
+
 							<SearchMarker :keywords="['post', 'form', 'timeline']">
 								<MkPreferenceContainer k="showFixedPostForm">
 									<MkSwitch v-model="showFixedPostForm">
@@ -980,6 +988,7 @@ const overridedDeviceKind = prefer.model('overridedDeviceKind');
 const pollingInterval = prefer.model('pollingInterval');
 const showTitlebar = prefer.model('showTitlebar');
 const keepCw = prefer.model('keepCw');
+const compactTimeline = prefer.model('compactTimeline');
 const serverDisconnectedBehavior = prefer.model('serverDisconnectedBehavior');
 const hemisphere = prefer.model('hemisphere');
 const showVisibilityColor = prefer.model('showVisibilityColor');

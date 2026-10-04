@@ -5,6 +5,7 @@
 
 import { throttle } from 'throttle-debounce';
 import { nextTick, onActivated, onDeactivated, watch } from 'vue';
+import { getStickyTop } from '@@/js/scroll.js';
 import type { Ref } from 'vue';
 
 // note render skippingがオンだとズレるため、遷移直前にスクロール範囲に表示されているdata-scroll-anchor要素を特定して、復元時に当該要素までスクロールするようにする
@@ -15,6 +16,7 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 	let anchorId: string | null = null;
 	// キャプチャ時のアンカー要素上端のコンテナ上端からの距離
 	let anchorContainerLocalY = 0;
+	let anchorHeight = 0;
 	let savedScrollTop = 0;
 	let ready = true;
 
@@ -37,12 +39,14 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 			const anchorEls = el.querySelectorAll<HTMLElement>('[data-scroll-anchor]');
 			for (let i = anchorEls.length - 1; i > -1; i--) { // 下から見た方が速い
 				const anchorEl = anchorEls[i];
-				const anchorTop = anchorEl.getBoundingClientRect().top;
+				const anchorRect = anchorEl.getBoundingClientRect();
+				const anchorTop = anchorRect.top;
 				// 上端が viewPosition 以下の最初の要素（＝中央を跨ぐか、中央より上にある中で最も近いもの）を選択する
 				// 最下部スクロール時に min-height による空白に viewPosition が入った場合も最後のアイテムをキャプチャできる
 				if (anchorTop <= viewPosition) {
 					anchorId = anchorEl.getAttribute('data-scroll-anchor');
 					anchorContainerLocalY = anchorTop - scrollContainerRect.top;
+					anchorHeight = anchorRect.height;
 					break;
 				}
 			}
@@ -66,6 +70,11 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 		const scrollAnchorEl = scrollContainer.querySelector<HTMLElement>(`[data-scroll-anchor="${CSS.escape(anchorId)}"]`);
 		if (!scrollAnchorEl) return;
 		const anchorRect = scrollAnchorEl.getBoundingClientRect();
+		const stickyTop = getStickyTop(scrollAnchorEl, scrollContainer);
+		// 設定画面で1行表示に変えた場合、縮んだノートをヘッダーの上へ復元しない。
+		if (anchorRect.height < anchorHeight && anchorContainerLocalY + anchorRect.height <= stickyTop) {
+			anchorContainerLocalY = stickyTop;
+		}
 		// anchorContentY: コンテンツ先頭からのアンカー要素上端の距離（scrollTopに依存しない）
 		const anchorContentY = scrollContainer.scrollTop + anchorRect.top - scrollContainer.getBoundingClientRect().top;
 		// キャプチャ時と同じ scrollTop になるよう直接セット（コンテナ高さ変化に依存しない）

@@ -26,7 +26,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:leaveActiveClass="$style.transition_x_leaveActive"
 			:enterFromClass="$style.transition_x_enterFrom"
 			:leaveToClass="$style.transition_x_leaveTo"
-			:moveClass="$style.transition_x_move"
+			:moveClass="changingDensity ? '' : $style.transition_x_move"
 			tag="div"
 		>
 			<template v-for="(note, i) in paginator.items.value" :key="note.id">
@@ -36,15 +36,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<span style="height: 1em; width: 1px; background: var(--MI_THEME-divider);"></span>
 						<span>{{ getSeparatorInfo(paginator.items.value[i -1].createdAt, note.createdAt)?.nextText }} <i class="ti ti-chevron-down"></i></span>
 					</div>
-					<MkNote :class="$style.note" :note="note" :withHardMute="true"/>
+					<MkNote :class="$style.note" :note="note" :withHardMute="true" :compact="compact"/>
 				</div>
 				<div v-else-if="note._shouldInsertAd_" :data-scroll-anchor="note.id">
-					<MkNote :class="$style.note" :note="note" :withHardMute="true"/>
+					<MkNote :class="$style.note" :note="note" :withHardMute="true" :compact="compact"/>
 					<div :class="$style.ad">
 						<MkAd :preferForms="['horizontal', 'horizontal-big']"/>
 					</div>
 				</div>
-				<MkNote v-else :class="$style.note" :note="note" :withHardMute="true" :data-scroll-anchor="note.id"/>
+				<MkNote v-else :class="$style.note" :note="note" :withHardMute="true" :compact="compact" :data-scroll-anchor="note.id"/>
 			</template>
 		</component>
 		<button v-show="paginator.canFetchOlder.value" key="_more_" v-appear="prefer.s.enableInfiniteScroll ? paginator.fetchOlder : null" :disabled="paginator.fetchingOlder.value" class="_button" :class="$style.more" @click="paginator.fetchOlder">
@@ -56,11 +56,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, onUnmounted, provide, useTemplateRef, TransitionGroup, onMounted, shallowRef, ref, markRaw } from 'vue';
+import { computed, watch, onUnmounted, provide, useTemplateRef, TransitionGroup, onMounted, shallowRef, ref, markRaw, nextTick } from 'vue';
 import * as Misskey from 'misskey-js';
 import { useInterval } from '@@/js/use-interval.js';
 import { useDocumentVisibility } from '@@/js/use-document-visibility.js';
-import { getScrollContainer, scrollToTop } from '@@/js/scroll.js';
+import { getScrollContainer, getStickyTop, scrollToTop } from '@@/js/scroll.js';
 import type { BasicTimelineType } from '@/timelines.js';
 import type { SoundStore } from '@/preferences/def.js';
 import type { IPaginator, MisskeyEntity } from '@/utility/paginator.js';
@@ -92,6 +92,7 @@ const props = withDefaults(defineProps<{
 	withReplies?: boolean;
 	withSensitive?: boolean;
 	onlyFiles?: boolean;
+	compact?: boolean;
 }>(), {
 	withRenotes: true,
 	withReplies: false,
@@ -235,6 +236,33 @@ watch(rootEl, (el) => {
 		scrollContainer.addEventListener('scroll', onScrollContainerScroll, { passive: true }); // ほんとはscrollendにしたいけどiosが非対応
 	}
 }, { immediate: true });
+
+// 表示密度だけを変更し、取得済みの一覧と表示中のノートの位置を保つ。
+const changingDensity = ref(false);
+watch(() => props.compact, async () => {
+	changingDensity.value = true;
+	nextTick(() => { changingDensity.value = false; });
+	const root = rootEl.value;
+	if (root == null || isTop()) return;
+	const container = getScrollContainer(root);
+	const viewportTop = (container?.getBoundingClientRect().top ?? 0) + getStickyTop(root, container);
+	const anchor = Array.from(root.querySelectorAll<HTMLElement>('[data-scroll-anchor]'))
+		.find(el => el.getBoundingClientRect().bottom > viewportTop);
+	if (anchor == null) return;
+	const anchorId = anchor.dataset.scrollAnchor!;
+	const previousTop = anchor.getBoundingClientRect().top;
+	await nextTick();
+	const updatedAnchor = root.querySelector<HTMLElement>(`[data-scroll-anchor="${CSS.escape(anchorId)}"]`);
+	if (updatedAnchor == null) return;
+	const updatedRect = updatedAnchor.getBoundingClientRect();
+	const targetTop = previousTop + updatedRect.height > viewportTop ? previousTop : viewportTop;
+	const delta = updatedRect.top - targetTop;
+	if (container) {
+		container.scrollBy({ top: delta, behavior: 'instant' });
+	} else {
+		window.scrollBy({ top: delta, behavior: 'instant' });
+	}
+});
 
 onUnmounted(() => {
 	if (scrollContainer) {

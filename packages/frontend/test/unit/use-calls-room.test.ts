@@ -4,6 +4,7 @@
  */
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { watch } from 'vue';
 
 const fixture = vi.hoisted(() => ({
 	api: vi.fn(),
@@ -75,6 +76,22 @@ describe('useCallsRoom streaming reconciliation', () => {
 		await calls.refresh();
 		expect(calls.room.value?.revision).toBe(2);
 		expect(calls.participants.value[0]?.role).toBe('speaker');
+	});
+
+	test.each([1, 10])('preserves the timeout reason when sequence %s requires a refresh', async sequence => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		fixture.channelHandlers.get('role')?.({ sequence: 8, roomRevision: 2, participantId: 'participant-a', role: 'speaker' });
+		await vi.waitFor(() => expect(calls.room.value?.revision).toBe(2));
+		const ended = vi.fn();
+		const stop = watch(() => calls.room.value?.state, state => {
+			if (state === 'ended') ended(calls.endReason.value);
+		}, { flush: 'sync' });
+		fixture.api.mockResolvedValue({ ...snapshot, room: { ...snapshot.room, state: 'ended', revision: 3 } });
+		fixture.channelHandlers.get('lifecycle')?.({ sequence, roomRevision: 3, state: 'ended', reason: 'host-timeout' });
+		await vi.waitFor(() => expect(ended).toHaveBeenCalledWith('host-timeout'));
+		expect(fixture.api).not.toHaveBeenCalledWith('calls/media/reconcile', { roomId: 'room-a' });
+		stop();
 	});
 
 	test('keeps the room revision current after mute changes for subsequent moderation', async () => {

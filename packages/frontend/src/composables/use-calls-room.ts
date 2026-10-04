@@ -10,7 +10,7 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { $i } from '@/i.js';
 
 type Snapshot = Misskey.entities.CallsRoomsShowResponse;
-type EventBase = { sequence: number; roomRevision: number };
+type EventBase = { sequence: number; roomRevision: number; reason?: string };
 export type CallsRevokedEvent = Parameters<Misskey.Channels['callsRoom']['events']['revoked']>[0];
 
 export function createCallsRoomConnection(roomId: string) {
@@ -39,8 +39,10 @@ export function createCallsRoomConnection(roomId: string) {
 	}
 
 	async function accept(event: EventBase, apply: () => void | Promise<void>) {
+		if (event.sequence <= lastSequence.value && event.roomRevision <= lastRoomRevision.value) return;
+		// A gap refresh can end the room before the lifecycle callback runs.
+		if (event.roomRevision >= lastRoomRevision.value && event.reason === 'host-timeout') endReason.value = event.reason;
 		if (event.sequence <= lastSequence.value) {
-			if (event.roomRevision <= lastRoomRevision.value) return;
 			await refresh();
 			if (room.value?.state === 'open') await misskeyApi('calls/media/reconcile', { roomId });
 			lastSequence.value = event.sequence;

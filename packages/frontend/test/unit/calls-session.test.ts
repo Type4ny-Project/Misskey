@@ -62,7 +62,7 @@ vi.mock('@/utility/calls-media.js', () => ({
 		public setVideoQuality = vi.fn().mockResolvedValue(undefined);
 		public setNoiseSuppression = vi.fn().mockResolvedValue(undefined);
 		public connect = vi.fn(async () => {
-			if (fixture.connectionExists && !this.replaceExisting) throw { code: 'CALLS_CONNECTION_EXISTS' };
+			if (fixture.connectionExists && !this.replaceExisting) throw Object.assign(new Error('Connection exists'), { code: 'CALLS_CONNECTION_EXISTS' });
 			this.onState('connected');
 		});
 		public setMuted = vi.fn();
@@ -154,6 +154,24 @@ describe('Calls session device handoff', () => {
 		await enabling;
 		expect(track.stop).toHaveBeenCalled();
 		expect(fixture.controllers[0].startVideo).not.toHaveBeenCalled();
+	});
+
+	test('reconnecting while previewing stops the camera and closes the preview', async () => {
+		fixture.role = 'host';
+		await session.join('room-a', true);
+		const track = { stop: vi.fn() };
+		const dispose = vi.fn();
+		fixture.popup.mockReturnValue({ dispose });
+		fixture.captureCamera.mockResolvedValue({ getTracks: () => [track] });
+		const enabling = session.toggleVideo('camera');
+		await vi.waitFor(() => expect(fixture.popup).toHaveBeenCalled());
+		fixture.revoked[0]({ reason: 'stale-generation', ...fixture.controllers[0].connectionIdentity });
+		await enabling;
+		await vi.waitFor(() => expect(fixture.controllers).toHaveLength(2));
+		expect(track.stop).toHaveBeenCalled();
+		expect(dispose).toHaveBeenCalled();
+		expect(fixture.controllers[0].startVideo).not.toHaveBeenCalled();
+		expect(session.controls.value.busy).toBe(false);
 	});
 
 	test('microphone settings toggle noise suppression and keep the old choice on failure', async () => {

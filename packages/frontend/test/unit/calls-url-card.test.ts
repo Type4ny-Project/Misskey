@@ -37,5 +37,6 @@ describe('Calls URL cards', () => {
 		const view = render(MkUrlCallsCard, { props: { roomId: 'room-a' }, global: { stubs: { MkLoading: true } } });
 		await waitFor(() => expect(view.container.querySelector('mk-loading-stub')).toBeNull());
 		expect(view.queryByTestId('calls-card')).toBeNull();
+		expect(view.getByRole('link').getAttribute('href')).toBe(`${local}/calls/room-a`);
 	});
 });

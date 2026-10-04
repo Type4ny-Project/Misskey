@@ -350,6 +350,7 @@ async function join(roomId: string, alreadyParticipant: boolean, reconnectToken?
 
 async function reconnectMedia(): Promise<void> {
 	if (!isActive.value) return;
+	cancelCameraPreview?.();
 	const generation = ++sessionGeneration;
 	const controller = media.value;
 	const identity = controller?.connectionIdentity ?? undefined;

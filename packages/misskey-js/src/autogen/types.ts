@@ -6053,6 +6053,13 @@ export type components = {
             canManageAvatarDecorations: boolean;
             canSearchNotes: boolean;
             canSearchUsers: boolean;
+            canSpeakInCalls: boolean;
+            canPublishCallsVideo: boolean;
+            canShareCallsScreen: boolean;
+            callsRoomSpeakerLimit: number;
+            callsRoomListenerLimit: number;
+            canSendPoints: boolean;
+            eventCreationDailyLimit: number;
             canJoinCalls: boolean;
             canUseTranslator: boolean;
             canHideAds: boolean;

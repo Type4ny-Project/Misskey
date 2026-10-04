@@ -152,12 +152,16 @@ watch(() => isActive.value ? myParticipant.value?.joinedAt ?? null : null, (join
 }, { immediate: true });
 
 const isHost = computed(() => myParticipant.value?.role === 'host');
+const canSpeak = computed(() => $i?.policies.canJoinCalls === true && $i.policies.canSpeakInCalls);
 const isSpeaker = computed(() => myParticipant.value?.role === 'host' || myParticipant.value?.role === 'speaker');
+const canPublishVideo = computed(() => isSpeaker.value && $i?.policies.canJoinCalls === true && $i.policies.canPublishCallsVideo === true);
+const canShareScreenMedia = computed(() => isSpeaker.value && $i?.policies.canJoinCalls === true && $i.policies.canShareCallsScreen === true);
 const controls = computed(() => ({
 	role: myParticipant.value?.role ?? 'listener',
+	canSpeak: isSpeaker.value && canSpeak.value, canPublishVideo: canPublishVideo.value, canShareScreen: canShareScreenMedia.value,
 	muted: muted.value, cameraOn: localVideos.value.has('camera'), screenOn: localVideos.value.has('screen'),
 	status: mediaState.value, busy: videoBusy.value, joining: joining.value, screenSupported: canShareScreen,
-	speakerRequestEnabled: room.value?.mode === 'stage',
+	speakerRequestEnabled: canSpeak.value && room.value?.mode === 'stage',
 	speakerRequested: myParticipant.value?.speakerRequestedAt != null,
 }));
 
@@ -265,6 +269,7 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 				void alert({ type: 'error', text: i18n.ts._calls.videoFailed });
 			},
 		},
+		canSpeak.value,
 	);
 	media.value = controller;
 	controller.setMuted(muted.value);
@@ -461,7 +466,7 @@ function onReconnectStorage(event: StorageEvent): void {
 }
 
 async function toggleMute(): Promise<void> {
-	if (!isSpeaker.value) return;
+	if (!isSpeaker.value || !canSpeak.value) return;
 	if (muted.value && media.value?.localTrack === null) {
 		try {
 			await media.value.switchMicrophone(selectedMicrophone.value || undefined);
@@ -477,7 +482,7 @@ async function toggleMute(): Promise<void> {
 }
 
 async function requestSpeaker(): Promise<void> {
-	if (currentRoomId.value == null || room.value?.mode !== 'stage' || myParticipant.value?.role !== 'listener') return;
+	if (!canSpeak.value || currentRoomId.value == null || room.value?.mode !== 'stage' || myParticipant.value?.role !== 'listener') return;
 	speakerRequestResult.value = null;
 	await misskeyApi('calls/rooms/request-speaker', { roomId: currentRoomId.value });
 	await connection.value?.refresh();
@@ -495,6 +500,7 @@ async function cancelSpeakerRequest(): Promise<void> {
 }
 
 async function switchMicrophone(deviceId: string): Promise<void> {
+	if (!canSpeak.value) return;
 	selectedMicrophone.value = deviceId;
 	await media.value?.switchMicrophone(deviceId);
 }
@@ -502,6 +508,7 @@ async function switchMicrophone(deviceId: string): Promise<void> {
 async function toggleVideo(source: CallsVideoSource): Promise<void> {
 	const controller = media.value;
 	if (!isSpeaker.value || joining.value || videoBusy.value || mediaState.value !== 'connected' || controller == null) return;
+	if (!localVideos.value.has(source) && !(source === 'camera' ? canPublishVideo.value : canShareScreenMedia.value)) return;
 	videoBusy.value = true;
 	try {
 		if (localVideos.value.has(source)) await controller.stopVideo(source);
@@ -536,7 +543,7 @@ async function toggleVideo(source: CallsVideoSource): Promise<void> {
 }
 
 async function openDeviceMenu(kind: 'microphone' | 'camera', event: MouseEvent): Promise<void> {
-	if (joining.value || videoBusy.value || !isSpeaker.value) return;
+	if (joining.value || videoBusy.value || !isSpeaker.value || !(kind === 'camera' ? canPublishVideo.value : canSpeak.value)) return;
 	const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined;
 	await loadMicrophones();
 	const devices = kind === 'microphone' ? microphones.value : cameras.value;
@@ -583,7 +590,7 @@ async function setNoiseSuppression(enabled: boolean): Promise<void> {
 }
 
 async function setVideoQuality(source: CallsVideoSource, quality: CallsVideoQuality): Promise<void> {
-	if (joining.value || videoBusy.value || !isSpeaker.value) return;
+	if (joining.value || videoBusy.value || !(source === 'camera' ? canPublishVideo.value : canShareScreenMedia.value)) return;
 	videoBusy.value = true;
 	try {
 		await media.value?.setVideoQuality(source, quality);
@@ -612,7 +619,7 @@ function videoQualityMenu(source: CallsVideoSource): MenuItem[] {
 }
 
 function openScreenSettings(event: MouseEvent): void {
-	if (joining.value || videoBusy.value || !isSpeaker.value) return;
+	if (joining.value || videoBusy.value || !canShareScreenMedia.value) return;
 	popupMenu(videoQualityMenu('screen'), event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
 }
 

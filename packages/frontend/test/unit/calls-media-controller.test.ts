@@ -493,6 +493,19 @@ describe('CallsMediaController', () => {
 		expect(states).toEqual(expect.arrayContaining(['creating-session', 'reconnecting']));
 	});
 
+	test('speaking permission disables microphone capture without disabling camera publication', async () => {
+		const getUserMedia = vi.fn().mockResolvedValue(stream(makeTrack('video')));
+		installBrowserMedia(getUserMedia);
+		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, undefined, undefined, false, undefined, false);
+		await controller.connect();
+		await controller.switchMicrophone();
+		expect(getUserMedia).not.toHaveBeenCalled();
+		await controller.startVideo('camera');
+		expect(getUserMedia).toHaveBeenCalledWith(expect.objectContaining({ audio: false }));
+		expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/publish', expect.objectContaining({ mediaSource: 'camera' }));
+		await controller.close();
+	});
+
 	test.each([
 		['host', 'NotFoundError'],
 		['speaker', 'NotReadableError'],

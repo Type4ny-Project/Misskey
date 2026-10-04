@@ -104,6 +104,7 @@ export class CallsMediaService {
 		const connection = await this.liveConnectionService.assertCurrent(participant.id, input.connectionId, input.generation);
 		if (connection.sessionId == null) throw new CallsMediaAccessError();
 		const mediaSource = input.mediaSource ?? 'microphone';
+		await this.roomService.assertCanPublish(user, mediaSource);
 		const mediaKind = mediaSource === 'microphone' ? 'audio' : 'video';
 		const trackName = `${mediaSource}-${participant.id}-${input.generation}-${input.mid}`;
 		await this.quotaService.reserveTrack(connection.applicationId, trackName);
@@ -116,6 +117,7 @@ export class CallsMediaService {
 			providerMid = track?.mid ?? input.mid;
 			const currentParticipant = await this.authorizeParticipant(user, input.roomId);
 			if (currentParticipant.role === 'listener') throw new CallsMediaAccessError();
+			await this.roomService.assertCanPublish(user, mediaSource);
 			await this.liveConnectionService.assertCurrent(participant.id, input.connectionId, input.generation);
 			publication = await this.bindingService.createPublication({
 				roomId: input.roomId,

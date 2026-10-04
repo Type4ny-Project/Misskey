@@ -429,6 +429,8 @@ async function setModerator(participantId: string, isModerator: boolean): Promis
 
 async function muteParticipant(participantId: string): Promise<void> {
 	if (room.value == null) return;
+	const { canceled } = await os.confirm({ type: 'warning', title: videoLabel(participantId), text: i18n.ts._calls.muteParticipantConfirm });
+	if (canceled || room.value == null) return;
 	try {
 		await misskeyApi('calls/rooms/mute-participant', { roomId: props.roomId, participantId, expectedRevision: room.value.revision });
 		await refreshRoom();
@@ -440,6 +442,8 @@ async function muteParticipant(participantId: string): Promise<void> {
 
 async function stopParticipantVideo(participantId: string, mediaSource: 'camera' | 'screen'): Promise<void> {
 	if (room.value == null) return;
+	const { canceled } = await os.confirm({ type: 'warning', title: videoLabel(participantId), text: mediaSource === 'camera' ? i18n.ts._calls.stopParticipantCameraConfirm : i18n.ts._calls.stopParticipantScreenSharingConfirm });
+	if (canceled || room.value == null) return;
 	try {
 		await misskeyApi('calls/rooms/stop-participant-video', { roomId: props.roomId, participantId, mediaSource, expectedRevision: room.value.revision });
 		await refreshRoom();
@@ -451,8 +455,8 @@ async function stopParticipantVideo(participantId: string, mediaSource: 'camera'
 
 async function removeParticipant(participantId: string): Promise<void> {
 	if (room.value == null) return;
-	const { canceled } = await os.confirm({ type: 'warning', text: i18n.ts._calls.removeParticipant });
-	if (canceled) return;
+	const { canceled } = await os.confirm({ type: 'warning', title: videoLabel(participantId), text: i18n.ts._calls.removeParticipantConfirm });
+	if (canceled || room.value == null) return;
 	try {
 		await misskeyApi('calls/rooms/remove-participant', { roomId: props.roomId, participantId, expectedRevision: room.value.revision });
 		await refreshRoom();

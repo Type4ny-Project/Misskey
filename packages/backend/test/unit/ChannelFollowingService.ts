@@ -12,6 +12,7 @@ import { CoreModule } from '@/core/CoreModule.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { IdService } from '@/core/IdService.js';
 import {
+	type ChannelFollowRequestsRepository,
 	type ChannelFollowingsRepository,
 	ChannelsRepository,
 	DriveFilesRepository,
@@ -31,6 +32,7 @@ describe('ChannelFollowingService', () => {
 	let service: ChannelFollowingService;
 	let channelsRepository: ChannelsRepository;
 	let channelFollowingsRepository: ChannelFollowingsRepository;
+	let channelFollowRequestsRepository: ChannelFollowRequestsRepository;
 	let usersRepository: UsersRepository;
 	let userProfilesRepository: UserProfilesRepository;
 	let driveFilesRepository: DriveFilesRepository;
@@ -83,6 +85,14 @@ describe('ChannelFollowingService', () => {
 		return await channelFollowingsRepository.findBy({});
 	}
 
+	async function fetchChannelFollowRequests() {
+		return await channelFollowRequestsRepository.findBy({});
+	}
+
+	async function fetchFollowersCount(channel = channel1) {
+		return (await channelsRepository.findOneByOrFail({ id: channel.id })).followersCount;
+	}
+
 	async function createDriveFile(data: Partial<MiDriveFile> = {}) {
 		return await driveFilesRepository
 			.insert({
@@ -117,6 +127,7 @@ describe('ChannelFollowingService', () => {
 		idService = app.get<IdService>(IdService);
 		channelsRepository = app.get<ChannelsRepository>(DI.channelsRepository);
 		channelFollowingsRepository = app.get<ChannelFollowingsRepository>(DI.channelFollowingsRepository);
+		channelFollowRequestsRepository = app.get<ChannelFollowRequestsRepository>(DI.channelFollowRequestsRepository);
 		usersRepository = app.get<UsersRepository>(DI.usersRepository);
 		userProfilesRepository = app.get<UserProfilesRepository>(DI.userProfilesRepository);
 		driveFilesRepository = app.get<DriveFilesRepository>(DI.driveFilesRepository);
@@ -137,6 +148,7 @@ describe('ChannelFollowingService', () => {
 	});
 
 	afterEach(async () => {
+		await channelFollowRequestsRepository.deleteAll();
 		await channelFollowingsRepository.deleteAll();
 		await channelsRepository.deleteAll();
 		await userProfilesRepository.deleteAll();
@@ -218,18 +230,158 @@ describe('ChannelFollowingService', () => {
 			expect(followings).toHaveLength(1);
 			expect(followings[0].followeeId).toBe(channel1.id);
 			expect(followings[0].followerId).toBe(alice.id);
+			expect(await fetchFollowersCount()).toBe(1);
+
+			await expect(service.follow(alice, channel1)).rejects.toMatchObject({
+				id: '6e335e39-0203-4418-a936-b3f2dc987845',
+			});
+			expect(await fetchFollowersCount()).toBe(1);
+		});
+	});
+
+	describe('followOrRequest', () => {
+		test('follows a channel that does not require approval', async () => {
+			const state = await service.followOrRequest(alice, channel1, false);
+
+			expect(state).toBe('following');
+			expect(await fetchChannelFollowing()).toHaveLength(1);
+			expect(await fetchChannelFollowRequests()).toHaveLength(0);
+		});
+
+		test('reports when the channel is already followed', async () => {
+			await service.followOrRequest(alice, channel1, false);
+
+			const state = await service.followOrRequest(alice, channel1, false);
+
+			expect(state).toBe('alreadyFollowing');
+			expect(await fetchChannelFollowing()).toHaveLength(1);
+			expect(await fetchFollowersCount()).toBe(1);
+		});
+
+		test('creates a request for a channel that requires approval', async () => {
+			await channelsRepository.update(channel1.id, { isFollowApprovalRequired: true });
+
+			const state = await service.followOrRequest(alice, channel1, false);
+
+			expect(state).toBe('pending');
+			expect(await fetchChannelFollowing()).toHaveLength(0);
+			expect(await fetchFollowersCount()).toBe(0);
+			const requests = await fetchChannelFollowRequests();
+			expect(requests).toHaveLength(1);
+			expect(requests[0].channelId).toBe(channel1.id);
+			expect(requests[0].followerId).toBe(alice.id);
+		});
+
+		test('lets a channel manager bypass approval', async () => {
+			await channelsRepository.update(channel1.id, { isFollowApprovalRequired: true });
+
+			const state = await service.followOrRequest(alice, channel1, true);
+
+			expect(state).toBe('following');
+			expect(await fetchChannelFollowing()).toHaveLength(1);
+			expect(await fetchChannelFollowRequests()).toHaveLength(0);
+		});
+	});
+
+	describe('manage requests', () => {
+		async function createFollowRequest() {
+			await channelFollowRequestsRepository.insert({
+				id: idService.gen(),
+				channelId: channel1.id,
+				channel: null,
+				followerId: bob.id,
+				follower: null,
+			});
+		}
+
+		test('approves a request and creates a following', async () => {
+			await createFollowRequest();
+
+			expect(await service.approveRequest(bob, channel1)).toBe(true);
+			expect(await fetchChannelFollowRequests()).toHaveLength(0);
+			const followings = await fetchChannelFollowing();
+			expect(followings).toHaveLength(1);
+			expect(followings[0].followerId).toBe(bob.id);
+			expect(await fetchFollowersCount()).toBe(1);
+		});
+
+		test('rejects a request without creating a following', async () => {
+			await createFollowRequest();
+
+			expect(await service.rejectRequest(bob, channel1)).toBe(true);
+			expect(await fetchChannelFollowRequests()).toHaveLength(0);
+			expect(await fetchChannelFollowing()).toHaveLength(0);
+		});
+
+		test('cancellation wins over a concurrent approval', async () => {
+			for (let i = 0; i < 5; i++) {
+				await createFollowRequest();
+
+				await Promise.all([
+					service.approveRequest(bob, channel1),
+					service.unfollow(bob, channel1),
+				]);
+
+				expect(await fetchChannelFollowRequests()).toHaveLength(0);
+				expect(await fetchChannelFollowing()).toHaveLength(0);
+				expect(await fetchFollowersCount()).toBe(0);
+			}
+		});
+
+		test('approves pending requests when approval is disabled', async () => {
+			await createFollowRequest();
+			const requestId = (await fetchChannelFollowRequests())[0].id;
+
+			await service.setFollowApprovalRequired(channel1, false);
+
+			expect(await fetchChannelFollowRequests()).toHaveLength(0);
+			const followings = await fetchChannelFollowing();
+			expect(followings).toHaveLength(1);
+			expect(followings[0].followerId).toBe(bob.id);
+			expect(followings[0].id).not.toBe(requestId);
+			expect(await fetchFollowersCount()).toBe(1);
 		});
 	});
 
 	describe('unfollow', () => {
 		test('default', async () => {
-			await createChannelFollowing({ followerId: alice.id, followeeId: channel1.id });
+			await service.follow(alice, channel1);
 
 			await service.unfollow(alice, channel1);
 
 			const followings = await fetchChannelFollowing();
 
 			expect(followings).toHaveLength(0);
+			expect(await fetchFollowersCount()).toBe(0);
+		});
+
+		test('cancels a pending follow request', async () => {
+			await channelFollowRequestsRepository.insert({
+				id: idService.gen(),
+				channelId: channel1.id,
+				channel: null,
+				followerId: alice.id,
+				follower: null,
+			});
+
+			await service.unfollow(alice, channel1);
+
+			expect(await fetchChannelFollowRequests()).toHaveLength(0);
+		});
+	});
+
+	describe('unfollowAll', () => {
+		test('removes all channel followings and updates their counts', async () => {
+			await service.follow(alice, channel1);
+			await service.follow(alice, channel2);
+			expect(await fetchFollowersCount(channel1)).toBe(1);
+			expect(await fetchFollowersCount(channel2)).toBe(1);
+
+			await service.unfollowAll(alice);
+
+			expect(await fetchChannelFollowing()).toHaveLength(0);
+			expect(await fetchFollowersCount(channel1)).toBe(0);
+			expect(await fetchFollowersCount(channel2)).toBe(0);
 		});
 	});
 });

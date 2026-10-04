@@ -3,9 +3,9 @@
 services:
   redis:
     restart: always
-    image: redis:7-alpine
+    image: redis:8.8.1-alpine
     ports:
-      - "6379:6379"
+      - "${MISSKEY_DOCKER_BIND:-127.0.0.1}:6379:6379"
     volumes:
       - ./redis:/data
     healthcheck:
@@ -15,9 +15,9 @@ services:
 
   db:
     restart: always
-    image: postgres:18-alpine
+    image: postgres:18.4-alpine
     ports:
-      - "5432:5432"
+      - "${MISSKEY_DOCKER_BIND:-127.0.0.1}:5432:5432"
     env_file:
       - .config/docker.env
     volumes:
@@ -37,4 +37,3 @@ services:
 #      - .config/meilisearch.env
 #    volumes:
 #      - ./meili_data:/meili_data
-

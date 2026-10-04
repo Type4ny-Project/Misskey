@@ -65,6 +65,10 @@ export const packedChannelSchema = {
 			type: 'number',
 			nullable: false, optional: false,
 		},
+		followersCount: {
+			type: 'number',
+			nullable: false, optional: false,
+		},
 		notesCount: {
 			type: 'number',
 			nullable: false, optional: false,
@@ -78,6 +82,10 @@ export const packedChannelSchema = {
 			optional: false, nullable: false,
 		},
 		isFollowing: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
+		hasPendingFollowRequest: {
 			type: 'boolean',
 			optional: true, nullable: false,
 		},
@@ -107,6 +115,14 @@ export const packedChannelSchema = {
 			},
 		},
 		isLocalOnly: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		isUnlisted: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		isFollowApprovalRequired: {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},

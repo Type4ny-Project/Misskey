@@ -1,0 +1,138 @@
+min_version = "2026.7.7"
+
+[tools]
+node = "26.4.0"
+pnpm = "11.9.0"
+python = "3.12.13"
+ffmpeg = "8.1.2"
+caddy = "2.11.4"
+
+[env]
+COMPOSE_FILE = "{{ config_root }}/compose.local-db.yml"
+COMPOSE_PROJECT_NAME = "misskey-typeany-dev"
+MISSKEY_DOCKER_BIND = "127.0.0.1"
+MISSKEY_SOCKET = "{{ config_root }}/.mise/run/misskey.sock"
+MISSKEY_DEV_URL = "http://100.87.128.76:3000/"
+MISSKEY_WEB_HOST = "0.0.0.0"
+VITE_HOST = "0.0.0.0"
+__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS = "lab-02.internal.nanasi-apps.xyz,100.87.128.76,192.168.1.40"
+
+[tasks."docker:init"]
+description = "Create the Docker Compose environment for PostgreSQL and Redis"
+run = '''
+set -eu
+if [ ! -e "$MISE_CONFIG_ROOT/.config/docker.env" ]; then
+	umask 077
+	cat > "$MISE_CONFIG_ROOT/.config/docker.env" <<EOF
+POSTGRES_USER=misskey
+POSTGRES_DB=misskey
+POSTGRES_HOST_AUTH_METHOD=trust
+EOF
+fi
+'''
+
+[tasks."docker:start"]
+description = "Start Dockerized PostgreSQL and Redis on loopback"
+depends = ["docker:init"]
+run = "docker compose up --detach --wait db redis"
+
+[tasks."docker:stop"]
+description = "Stop Dockerized PostgreSQL and Redis"
+run = "docker compose stop db redis"
+
+[tasks."docker:down"]
+description = "Remove development containers while preserving database files"
+run = "docker compose down"
+
+[tasks."docker:logs"]
+description = "Follow PostgreSQL and Redis container logs"
+run = "docker compose logs --follow db redis"
+
+[tasks."docker:status"]
+description = "Show PostgreSQL and Redis container status"
+run = "docker compose ps"
+
+[tasks."config:init"]
+description = "Create a host-accessible Misskey development config"
+run = '''
+set -eu
+if [ ! -e "$MISE_CONFIG_ROOT/.config/default.yml" ]; then
+	cp "$MISE_CONFIG_ROOT/.config/example.yml" "$MISE_CONFIG_ROOT/.config/default.yml"
+	mkdir -p "$MISE_CONFIG_ROOT/.mise/run"
+	sed -i \
+		-e "s|# socket: /path/to/misskey.sock|socket: '$MISSKEY_SOCKET'|" \
+		-e "s|# chmodSocket: '777'|chmodSocket: '600'|" \
+		-e "s|  host: localhost|  host: 127.0.0.1|g" \
+		-e "s|user: example-misskey-user|user: misskey|" \
+		-e "s|pass: example-misskey-pass|pass: ''|" \
+		"$MISE_CONFIG_ROOT/.config/default.yml"
+fi
+sed -i \
+	-e "/^setupPassword:/d" \
+	-e "s|^url: .*|url: $MISSKEY_DEV_URL|" \
+	"$MISE_CONFIG_ROOT/.config/default.yml"
+'''
+
+[tasks."proxy:init"]
+description = "Create a host-accessible Caddy proxy for the Misskey socket"
+run = '''
+set -eu
+mkdir -p "$MISE_CONFIG_ROOT/.mise/log" "$MISE_CONFIG_ROOT/.mise/run"
+cat > "$MISE_CONFIG_ROOT/.mise/Caddyfile" <<EOF
+{
+	admin 127.0.0.1:2019
+	auto_https off
+}
+
+:3000 {
+	bind $MISSKEY_WEB_HOST
+	log {
+		output file $MISE_CONFIG_ROOT/.mise/log/caddy-access.log
+	}
+	reverse_proxy "unix/$MISSKEY_SOCKET"
+}
+EOF
+caddy validate --config "$MISE_CONFIG_ROOT/.mise/Caddyfile" --adapter caddyfile
+'''
+
+[tasks."proxy:start"]
+description = "Start or reload the host-accessible Caddy proxy"
+depends = ["proxy:init"]
+run = '''
+set -eu
+if ! caddy reload --config "$MISE_CONFIG_ROOT/.mise/Caddyfile" --adapter caddyfile >/dev/null 2>&1; then
+	caddy start --config "$MISE_CONFIG_ROOT/.mise/Caddyfile" --adapter caddyfile
+fi
+'''
+
+[tasks."proxy:stop"]
+description = "Stop the loopback-only Caddy proxy"
+run = "caddy stop >/dev/null 2>&1 || true"
+
+[tasks."services:start"]
+description = "Start Dockerized PostgreSQL, Redis, and the host-accessible proxy"
+depends = ["docker:start", "proxy:start"]
+
+[tasks."services:stop"]
+description = "Stop Dockerized PostgreSQL, Redis, and the host-accessible proxy"
+run = [
+	{ tasks = ["docker:stop", "proxy:stop"] },
+]
+
+[tasks.setup]
+description = "Install dependencies and prepare local development services"
+depends = ["config:init", "services:start"]
+run = [
+	"pnpm install --frozen-lockfile",
+	"pnpm build",
+	"pnpm migrate",
+]
+
+[tasks.dev]
+description = "Start Misskey development mode with local services"
+depends = ["config:init", "services:start"]
+run = "pnpm dev"
+
+[tasks.check]
+description = "Run the repository lint and type checks"
+run = "pnpm lint"

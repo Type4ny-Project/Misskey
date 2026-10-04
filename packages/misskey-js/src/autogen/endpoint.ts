@@ -208,8 +208,16 @@ import type {
 	ChannelsFavoriteRequest,
 	ChannelsFeaturedResponse,
 	ChannelsFollowRequest,
+	ChannelsFollowResponse,
+	ChannelsFollowRequestsApproveRequest,
+	ChannelsFollowRequestsListRequest,
+	ChannelsFollowRequestsListResponse,
+	ChannelsFollowRequestsRejectRequest,
 	ChannelsFollowedRequest,
 	ChannelsFollowedResponse,
+	ChannelsFollowersRequest,
+	ChannelsFollowersResponse,
+	ChannelsFollowersRemoveRequest,
 	ChannelsMuteCreateRequest,
 	ChannelsMuteDeleteRequest,
 	ChannelsMuteListResponse,
@@ -878,8 +886,13 @@ export type Endpoints = {
 	'channels/create': { req: ChannelsCreateRequest; res: ChannelsCreateResponse };
 	'channels/favorite': { req: ChannelsFavoriteRequest; res: EmptyResponse };
 	'channels/featured': { req: EmptyRequest; res: ChannelsFeaturedResponse };
-	'channels/follow': { req: ChannelsFollowRequest; res: EmptyResponse };
+	'channels/follow': { req: ChannelsFollowRequest; res: ChannelsFollowResponse };
+	'channels/follow-requests/approve': { req: ChannelsFollowRequestsApproveRequest; res: EmptyResponse };
+	'channels/follow-requests/list': { req: ChannelsFollowRequestsListRequest; res: ChannelsFollowRequestsListResponse };
+	'channels/follow-requests/reject': { req: ChannelsFollowRequestsRejectRequest; res: EmptyResponse };
 	'channels/followed': { req: ChannelsFollowedRequest; res: ChannelsFollowedResponse };
+	'channels/followers': { req: ChannelsFollowersRequest; res: ChannelsFollowersResponse };
+	'channels/followers/remove': { req: ChannelsFollowersRemoveRequest; res: EmptyResponse };
 	'channels/mute/create': { req: ChannelsMuteCreateRequest; res: EmptyResponse };
 	'channels/mute/delete': { req: ChannelsMuteDeleteRequest; res: EmptyResponse };
 	'channels/mute/list': { req: EmptyRequest; res: ChannelsMuteListResponse };

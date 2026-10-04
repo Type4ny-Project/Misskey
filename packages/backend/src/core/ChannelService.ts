@@ -22,18 +22,21 @@ export class ChannelService {
 	}
 
 	@bindThis
+	public isChannelManager(
+		channel: MiChannel,
+		user: Pick<MiUser, 'id'>,
+	): boolean {
+		return channel.userId === user.id || getCollaboratorIds(channel).includes(user.id);
+	}
+
+	@bindThis
 	public async canEditChannel(
 		channel: MiChannel,
 		user: Pick<MiUser, 'id'>,
 		isModerator: boolean,
 	): Promise<boolean> {
-		if (channel.userId === user.id) {
-			return true;
-		}
+		if (this.isChannelManager(channel, user)) return true;
 		if (isModerator) {
-			return true;
-		}
-		if (getCollaboratorIds(channel).includes(user.id)) {
 			return true;
 		}
 		return false;

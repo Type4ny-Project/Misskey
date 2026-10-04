@@ -3,13 +3,39 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { CallsMediaRevocationService } from '@/core/calls/CallsMediaRevocationService.js';
+import { CloudflareRealtimeClient } from '@/core/calls/CloudflareRealtimeClient.js';
+import type { Config } from '@/config.js';
 import type { MiCallsParticipant } from '@/models/_.js';
 
 const participant = { id: 'participant-a', roomId: 'room-a', userId: 'user-a', state: 'active' } as MiCallsParticipant;
 
 describe('CallsMediaRevocationService', () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	test('completes room revocation and releases media bindings after the provider session is gone', async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => new Response('Session is gone', { status: 410 })));
+		const provider = new CloudflareRealtimeClient({ cloudflareRealtime: { enabled: true, appId: 'app', appSecret: 'secret' } } as Config, { providerOperation: vi.fn() } as never);
+		const publications = [{ participantId: participant.id, generation: 3, providerSessionId: 'session', providerMid: '0', applicationId: 'app', providerTrackName: 'audio' }];
+		const bindings = { listGenerationPublications: vi.fn().mockResolvedValue(publications), listSubscriptions: vi.fn().mockResolvedValue([]), clearGeneration: vi.fn(), clearSubscriptions: vi.fn() };
+		const events = { publish: vi.fn() };
+		const quota = { releaseTrack: vi.fn(), release: vi.fn() };
+		const turn = { revokeParticipant: vi.fn() };
+		const service = new CallsMediaRevocationService(
+			{} as never, { findBy: async () => [participant] } as never,
+			{ get: async () => ({ connectionId: 'connection', generation: 3, applicationId: 'app' }), clear: vi.fn() } as never,
+			bindings as never, provider, events as never, turn as never, quota as never,
+		);
+		await service.revokeRoom(participant.roomId, 6, 'room-ended');
+		expect(bindings.clearGeneration).toHaveBeenCalledWith(participant.id, 3);
+		expect(bindings.clearSubscriptions).toHaveBeenCalledWith(participant.id, 3);
+		expect(quota.releaseTrack).toHaveBeenCalledWith('app', 'audio');
+		expect(quota.release).toHaveBeenCalledWith('app', participant.id);
+		expect(turn.revokeParticipant).toHaveBeenCalledWith(participant.id);
+		expect(events.publish).toHaveBeenCalledWith(participant.roomId, 6, 'revoked', { participantId: participant.id, reason: 'room-ended' });
+	});
+
 	test('closes host tracks even after the live connection expired', async () => {
 		const publications = [{ id: 'publication-a', participantId: participant.id, generation: 3, providerSessionId: 'host-session', providerMid: '0', applicationId: 'app-a', providerTrackName: 'camera' }];
 		const bindings = { listRoomPublications: vi.fn().mockResolvedValue(publications), listGenerationPublications: vi.fn().mockResolvedValue(publications), listSubscriptions: vi.fn().mockResolvedValue([]), clearGeneration: vi.fn(), clearSubscriptions: vi.fn() };

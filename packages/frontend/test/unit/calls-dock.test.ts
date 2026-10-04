@@ -27,13 +27,26 @@ test('speaker and listener rows link to their profiles', async () => {
 		isHost: ref(false), isSpeaker: ref(false), joining: ref(false),
 	};
 	const view = render(CallsDock, { global: { stubs: { MkAvatar: true, MkUserName: true, MkCallsControls: true } } });
-	await fireEvent.click(view.getByRole('button', { name: /Room/ }));
+	const toggle = view.getByRole('button', { name: /Room/ });
+	expect(toggle.getAttribute('aria-expanded')).toBe('false');
+	await fireEvent.click(toggle);
+	expect(toggle.getAttribute('aria-expanded')).toBe('true');
 	expect(view.getByRole('link', { name: 'alice' }).getAttribute('href')).toBe('/@alice');
 	expect(view.getByRole('link', { name: 'bob' }).getAttribute('href')).toBe('/@bob');
 	expect(view.getByTitle(i18n.ts._calls.elapsedTime).textContent).toContain('03:12');
 	fixture.session.elapsedTime.value = '03:13';
 	await nextTick();
 	expect(view.getByTitle(i18n.ts._calls.elapsedTime).textContent).toContain('03:13');
+
+	await fireEvent.click(toggle);
+	expect(toggle.getAttribute('aria-expanded')).toBe('false');
+	expect(view.queryByRole('link', { name: 'alice' })).toBeNull();
+	await fireEvent.click(toggle);
+	await fireEvent.pointerDown(document.body);
+	expect(toggle.getAttribute('aria-expanded')).toBe('false');
+	await fireEvent.click(toggle);
+	await fireEvent.keyDown(toggle, { key: 'Escape' });
+	expect(toggle.getAttribute('aria-expanded')).toBe('false');
 });
 
 test.each(['active', 'reconnect'])('%s dock reserves notification space until it disappears', async (state) => {

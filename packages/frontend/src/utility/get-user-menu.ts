@@ -360,7 +360,7 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 		// フォローしたとしても user.isFollowing はリアルタイム更新されないので不便なため
 		//if (user.isFollowing) {
 
-		if ($i) {
+		if ($i?.policies.canSendPoints) {
 			const me = $i;
 			const pointName = instance.pointName ?? i18n.ts.point;
 			menuItems.push({

@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
+import { DEFAULT_POLICIES } from '@/core/RoleService.js';
 import type { Config } from '@/config.js';
 import type { MiCallsRoom, MiUser } from '@/models/_.js';
 import { CallsMediaRevocationService } from '@/core/calls/CallsMediaRevocationService.js';
@@ -13,7 +14,7 @@ function createAccessFixture(options?: { enabled?: boolean; chatMember?: boolean
 	const chatRooms = { findOneBy: async () => ({ id: 'chat-a' }) };
 	const cache = { userFollowingsCache: { fetch: async () => options?.followings ?? {} } };
 	const chat = { isRoomMember: async () => options?.chatMember ?? false };
-	const role = { isModerator: async () => false, getUserPolicies: async () => ({ canJoinCalls: true }) };
+	const role = { isModerator: async () => false, getUserPolicies: async () => ({ ...DEFAULT_POLICIES }) };
 	const service = new CallsRoomService(
 		{ cloudflareRealtime: options?.enabled === false ? undefined : { enabled: true } } as Config,
 		{} as never, {} as never, {} as never, chatRooms as never, cache as never, chat as never,
@@ -40,7 +41,7 @@ function createConnectionFixture(role: 'host' | 'listener') {
 		{ findOneBy: async () => room, createQueryBuilder: () => queryBuilder } as never,
 		{ findOneBy: async () => participant, update } as never,
 		{} as never, {} as never, {} as never, {} as never, {} as never,
-		{ isModerator: async () => false, getUserPolicies: async () => ({ canJoinCalls: true }) } as never, live as never,
+		{ isModerator: async () => false, getUserPolicies: async () => ({ ...DEFAULT_POLICIES }) } as never, live as never,
 		{ publish: vi.fn(), publishRoomsList: vi.fn() } as never,
 		{ revokeRoom, revokeParticipant, revokeDisconnectedGeneration, closeGeneration: vi.fn() } as never, { lifecycle: vi.fn() } as never,
 	);
@@ -124,7 +125,7 @@ describe('CallsRoomService lifecycle', () => {
 			{ findOneBy: async () => null, insertOne: insertRoom } as never,
 			{ insertOne: insertParticipant } as never,
 			{} as never, {} as never, {} as never, {} as never, { gen: () => 'created-a' } as never,
-			{ getUserPolicies: async () => ({ canJoinCalls: true }) } as never, {} as never, { publishRoomsList: vi.fn() } as never, {} as never, { lifecycle: vi.fn() } as never,
+			{ getUserPolicies: async () => ({ ...DEFAULT_POLICIES }) } as never, {} as never, { publishRoomsList: vi.fn() } as never, {} as never, { lifecycle: vi.fn() } as never,
 		);
 		const operation = service.create(viewer, { attachmentType, chatRoomId: 'chat-a', title: 'Call' });
 		if (attachmentType === 'chatRoom') {
@@ -138,9 +139,12 @@ describe('CallsRoomService lifecycle', () => {
 	});
 
 	test.each([
-		['open', 8, 'speaker'],
-		['stage', 100, 'listener'],
-	] as const)('allows joining a %s room beyond the former %i participant limit', async (mode, count, role) => {
+		{ mode: 'open', count: 8, limit: 8, allowed: false, role: 'speaker' },
+		{ mode: 'stage', count: 100, limit: 100, allowed: false, role: 'listener' },
+		{ mode: 'open', count: 8, limit: 0, allowed: true, role: 'speaker' },
+		{ mode: 'stage', count: 100, limit: 0, allowed: true, role: 'listener' },
+		{ mode: 'open', count: 8, limit: 9, allowed: true, role: 'speaker' },
+	])('applies the owner’s $limit limit to $count connected participants in $mode', async ({ mode, count, limit, allowed, role }) => {
 		const room = { ...baseRoom, visibility: 'public', state: 'open', mode };
 		const candidates = Array.from({ length: count }, (_, index) => ({ id: `participant-${index}`, joinedAt: new Date(Date.now() - 120_000) }));
 		const participants = { findOneBy: vi.fn().mockResolvedValue(null), findBy: vi.fn().mockResolvedValue(candidates), insertOne: vi.fn().mockResolvedValue({ id: 'joined' }) };
@@ -148,12 +152,19 @@ describe('CallsRoomService lifecycle', () => {
 		const service = new CallsRoomService(
 			{ cloudflareRealtime: { enabled: true } } as Config,
 			{ findOneBy: async () => room, createQueryBuilder: () => builder } as never, participants as never,
-			{} as never, {} as never, {} as never, {} as never, { gen: () => 'joined' } as never, { isModerator: async () => false, getUserPolicies: async () => ({ canJoinCalls: true }) } as never,
+			{} as never, {} as never, {} as never, {} as never, { gen: () => 'joined' } as never,
+			{ isModerator: async () => false, getUserPolicies: async (id: string) => ({ ...DEFAULT_POLICIES, callsRoomSpeakerLimit: id === room.ownerUserId ? limit : 0, callsRoomListenerLimit: id === room.ownerUserId ? limit : 0 }) } as never,
 			{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback(), get: async () => ({}) } as never,
 			{ publish: vi.fn() } as never, {} as never, { lifecycle: vi.fn() } as never,
 		);
-		await expect(service.join(viewer, room.id)).resolves.toMatchObject({ id: 'joined' });
-		expect(participants.insertOne).toHaveBeenCalledWith(expect.objectContaining({ role, state: 'active' }));
+		const operation = service.join(viewer, room.id);
+		if (allowed) {
+			await expect(operation).resolves.toMatchObject({ id: 'joined' });
+			expect(participants.insertOne).toHaveBeenCalledWith(expect.objectContaining({ role, state: 'active' }));
+		} else {
+			await expect(operation).rejects.toMatchObject({ code: 'room-full' });
+			expect(participants.insertOne).not.toHaveBeenCalled();
+		}
 	});
 	test.each(['host', 'listener'] as const)('an old %s device cannot end or leave the current call', async role => {
 		const fixture = createConnectionFixture(role);
@@ -251,7 +262,7 @@ describe('CallsRoomService lifecycle', () => {
 			{ cloudflareRealtime: { enabled: true } } as Config,
 			{ findOneBy: async () => room, find: async () => [room], insertOne: roomInsert } as never,
 			{} as never, {} as never, {} as never, {} as never, {} as never, {} as never,
-			{ isModerator: async () => false, getUserPolicies: async () => ({ canJoinCalls: true }) } as never, {} as never, {} as never, {} as never, {} as never,
+			{ isModerator: async () => false, getUserPolicies: async () => ({ ...DEFAULT_POLICIES }) } as never, {} as never, {} as never, {} as never, {} as never,
 		);
 		const owner = { id: 'owner-a', host: null } as MiUser;
 		await expect(service.create(owner, { attachmentType: 'personal', title: 'Next room' })).rejects.toMatchObject({ code: 'active-attachment' });
@@ -343,7 +354,7 @@ describe('CallsRoomService access', () => {
 
 function createModerationFixture() {
 	const room = { ...baseRoom, visibility: 'public', state: 'open', mode: 'stage', revision: 1, moderatorUserIds: ['moderator-a'] } as MiCallsRoom;
-	const participant = { id: 'target-a', roomId: room.id, userId: 'target-user', role: 'speaker', isMuted: false };
+	const participant = { id: 'target-a', roomId: room.id, userId: 'target-user', role: 'speaker', isMuted: false, joinedAt: new Date() };
 	const existsBy = vi.fn().mockResolvedValue(true);
 	const update = vi.fn();
 	const set = vi.fn(() => queryBuilder);
@@ -359,10 +370,10 @@ function createModerationFixture() {
 	const service = new CallsRoomService(
 		config,
 		{ findOneBy: async () => room, createQueryBuilder: () => queryBuilder } as never,
-		{ findOneBy: async () => participant, existsBy, update } as never,
+		{ findOneBy: async () => participant, findBy: async () => [], existsBy, update } as never,
 		{ insert: insertLog } as never, {} as never, {} as never, {} as never,
-		{ gen: () => 'log-a' } as never, { isModerator, getUserPolicies: async () => ({ canJoinCalls: true }) } as never,
-		{} as never, { publish, publishRoomsList } as never, { revokeParticipant, stopParticipantVideo } as never, { lifecycle: vi.fn() } as never,
+		{ gen: () => 'log-a' } as never, { isModerator, getUserPolicies: async () => ({ ...DEFAULT_POLICIES }) } as never,
+		{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() } as never, { publish, publishRoomsList } as never, { revokeParticipant, stopParticipantVideo } as never, { lifecycle: vi.fn() } as never,
 	);
 	return { service, config, isModerator, room, participant, existsBy, update, set, execute, revokeParticipant, stopParticipantVideo, insertLog, publish, publishRoomsList };
 }
@@ -478,17 +489,34 @@ describe('Calls VC moderators', () => {
 		expect(fixture.stopParticipantVideo).not.toHaveBeenCalled();
 	});
 
-	test('the host can promote a listener beyond the former speaker limit', async () => {
+	test.each([0, 8])('promotion respects a speaker limit of %i', async limit => {
 		const fixture = createModerationFixture();
 		fixture.participant.role = 'listener';
-		Object.assign(fixture.service, { callsParticipantsRepository: {
-			findOneBy: async () => fixture.participant,
-			countBy: async () => 8,
-			update: fixture.update,
-			findOneByOrFail: async () => ({ ...fixture.participant, role: 'speaker' }),
-		} });
-		await expect(fixture.service.setRole({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, 'speaker', 1)).resolves.toMatchObject({ role: 'speaker' });
-		expect(fixture.publish).toHaveBeenCalledWith(fixture.room.id, 2, 'role', { participantId: fixture.participant.id, role: 'speaker' });
+		Object.assign(fixture.service, {
+			roleService: { getUserPolicies: async () => ({ ...DEFAULT_POLICIES, callsRoomSpeakerLimit: limit }) },
+			callsParticipantsRepository: {
+				findOneBy: async () => fixture.participant,
+				findBy: async () => Array.from({ length: 8 }, (_, index) => ({ id: `speaker-${index}`, joinedAt: new Date() })),
+				update: fixture.update,
+				findOneByOrFail: async () => ({ ...fixture.participant, role: 'speaker' }),
+			},
+		});
+		const operation = fixture.service.setRole({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, 'speaker', 1);
+		if (limit === 0) {
+			await expect(operation).resolves.toMatchObject({ role: 'speaker' });
+			expect(fixture.publish).toHaveBeenCalledWith(fixture.room.id, 2, 'role', { participantId: fixture.participant.id, role: 'speaker' });
+		} else {
+			await expect(operation).rejects.toMatchObject({ code: 'room-full' });
+			expect(fixture.update).not.toHaveBeenCalled();
+		}
+	});
+
+	test('a host cannot promote a listener whose role disallows Calls', async () => {
+		const fixture = createModerationFixture();
+		fixture.participant.role = 'listener';
+		Object.assign(fixture.service, { roleService: { getUserPolicies: async () => ({ ...DEFAULT_POLICIES, canJoinCalls: false }) } });
+		await expect(fixture.service.setRole({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, 'speaker', 1)).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fixture.update).not.toHaveBeenCalled();
 	});
 
 	test.each([true, false])('the host can set moderator permission to %s', async isModerator => {
@@ -544,4 +572,27 @@ describe('Calls VC moderators', () => {
 		await expect(fixture.service.setModerator({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, true, 0)).rejects.toMatchObject({ code: 'stale-revision' });
 		expect(fixture.publish).not.toHaveBeenCalled();
 	});
+});
+
+
+describe('Calls media role policies', () => {
+	test.each([
+		['microphone', 'canSpeakInCalls'],
+		['camera', 'canPublishCallsVideo'],
+		['screen', 'canShareCallsScreen'],
+	] as const)('checks the %s permission', async (source, policy) => {
+		const service = createAccessFixture();
+		Object.assign(service, { roleService: { getUserPolicies: async () => ({ ...DEFAULT_POLICIES, [policy]: false }) } });
+		await expect(service.assertCanPublish(viewer, source)).rejects.toMatchObject({ code: 'access-denied' });
+		if (source !== 'microphone') await expect(service.assertCanPublish(viewer, 'microphone')).resolves.toBeUndefined();
+	});
+});
+
+
+test('camera and screen permissions work with speaking disabled', async () => {
+	const service = createAccessFixture();
+	Object.assign(service, { roleService: { getUserPolicies: async () => ({ ...DEFAULT_POLICIES, canSpeakInCalls: false }) } });
+	await expect(service.assertCanPublish(viewer, 'microphone')).rejects.toMatchObject({ code: 'access-denied' });
+	await expect(service.assertCanPublish(viewer, 'camera')).resolves.toBeUndefined();
+	await expect(service.assertCanPublish(viewer, 'screen')).resolves.toBeUndefined();
 });

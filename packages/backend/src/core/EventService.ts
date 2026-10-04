@@ -101,7 +101,8 @@ export class EventService {
 			createdById: params.user.id,
 			createdAt: MoreThanOrEqual(todayStart),
 		});
-		if (todayCount >= 5) {
+		const policies = await this.roleService.getUserPolicies(params.user.id);
+		if (todayCount >= policies.eventCreationDailyLimit) {
 			throw new EventService.TooManyEventsError();
 		}
 

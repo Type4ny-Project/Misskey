@@ -21,6 +21,7 @@ export const meta = {
 	},
 
 	requireCredential: true,
+	requiredRolePolicy: 'canSendPoints',
 
 	kind: 'write:account',
 

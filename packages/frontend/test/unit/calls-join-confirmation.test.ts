@@ -16,9 +16,10 @@ import type { MenuButton } from '@/types/menu.js';
 const fixture = vi.hoisted(() => ({ confirm: vi.fn(), inputText: vi.fn(), session: null as any, connection: null as any, policies: { canJoinCalls: true } }));
 vi.mock('@/i.js', () => ({ $i: { id: 'viewer', policies: fixture.policies } }));
 vi.mock('@/components/MkModal.vue', () => ({ default: { template: '<section><slot/></section>', methods: { close() {} } } }));
+vi.mock('@/components/MkStreamingNotesTimeline.vue', () => ({ default: { props: ['src', 'channel'], template: '<div data-testid="calls-chat-timeline" :data-channel="channel"/>' } }));
 vi.mock('@/components/MkButton.vue', () => ({ default: { template: '<button><slot/></button>' } }));
 vi.mock('@/components/global/MkA.vue', () => ({ default: { props: ['to'], template: '<a :href="to"><slot/></a>' } }));
-vi.mock('@/os.js', () => ({ confirm: fixture.confirm, inputText: fixture.inputText, toast: vi.fn(), alert: vi.fn(), popupMenu: vi.fn(), contextMenu: vi.fn() }));
+vi.mock('@/os.js', () => ({ __v_isRef: false, post: vi.fn(), confirm: fixture.confirm, inputText: fixture.inputText, toast: vi.fn(), alert: vi.fn(), popupMenu: vi.fn(), contextMenu: vi.fn() }));
 vi.mock('@/utility/calls-session.js', () => ({ useCallsSession: () => fixture.session }));
 vi.mock('@/composables/use-calls-room.js', () => ({ createCallsRoomConnection: () => fixture.connection }));
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: vi.fn().mockResolvedValue({ id: 'host', username: 'host', name: 'Host' }) }));
@@ -27,7 +28,7 @@ const stubs = {
 	MkModal: { template: '<section><slot/></section>', methods: { close() {} } },
 	MkButton: { template: '<button><slot/></button>' },
 	MkA: { props: ['to'], template: '<a :href="to"><slot/></a>' },
-	MkInfo: true, MkAvatar: true, MkUserName: true, MkLoading: true, MkCallsControls: true, CallsVideo: true,
+	MkInfo: true, MkAvatar: true, MkUserName: true, MkLoading: true, MkCallsControls: true, CallsVideo: true, MkStreamingNotesTimeline: true,
 };
 
 beforeEach(() => {
@@ -53,6 +54,19 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
+	test('opens the Calls channel timeline and composes a post to that channel', async () => {
+		const channel = { id: 'calls-channel', name: 'Call chat' };
+		fixture.connection.room.value = { ...fixture.connection.room.value, channelId: channel.id };
+		vi.mocked(misskeyApi).mockImplementation(async endpoint => endpoint === 'channels/show' ? channel : { id: 'host', username: 'host' });
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs: { ...stubs, MkStreamingNotesTimeline: false } } });
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts.chat }));
+		expect(view.getByTestId('calls-chat-timeline').getAttribute('data-channel')).toBe(channel.id);
+		await waitFor(() => expect(view.getByRole('button', { name: i18n.ts.note })).toBeTruthy());
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts.note }));
+		expect(os.post).toHaveBeenCalledWith({ channel });
+	});
+
+
 	test.each([true, false])('puts unmuted speakers first and updates their order (joined: %s)', async joined => {
 		const participants = [
 			{ id: 'zed', userId: 'zed', role: 'host', isMuted: true },

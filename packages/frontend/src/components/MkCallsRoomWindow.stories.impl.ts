@@ -12,6 +12,7 @@ import type * as Misskey from 'misskey-js';
 const host = { ...userLite(), isFollowing: false, isFollowed: false };
 const room = {
 	id: 'calls-window-story', attachment: { type: 'personal', ownerUserId: host.id },
+	channelId: null,
 	title: '今日のMisskeyについて話そう', description: '', mode: 'stage', visibility: 'public',
 	moderatorUserIds: [], state: 'open', scheduledAt: null, startedAt: '2026-10-02T00:00:00.000Z', endedAt: null,
 	revision: 1, createdAt: '2026-10-02T00:00:00.000Z', updatedAt: '2026-10-02T00:00:00.000Z',

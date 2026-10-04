@@ -8,6 +8,7 @@ import { QueryFailedError } from 'typeorm';
 import { DEFAULT_POLICIES } from '@/core/RoleService.js';
 import type { Config } from '@/config.js';
 import type { MiCallsRoom, MiUser } from '@/models/_.js';
+import { MiChannel } from '@/models/Channel.js';
 import { CallsMediaRevocationService } from '@/core/calls/CallsMediaRevocationService.js';
 import { CallsFeatureDisabledError, CallsRoomError, CallsRoomService, isCallsRoomTransitionAllowed } from '@/core/calls/CallsRoomService.js';
 
@@ -20,6 +21,7 @@ function createAccessFixture(options?: { enabled?: boolean; chatMember?: boolean
 		{ cloudflareRealtime: options?.enabled === false ? undefined : { enabled: true } } as Config,
 		{} as never, {} as never, {} as never, chatRooms as never, cache as never, chat as never,
 		{} as never, role as never, {} as never, {} as never, {} as never, {} as never,
+		{} as never, {} as never,
 	);
 	return service;
 }
@@ -45,11 +47,62 @@ function createConnectionFixture(role: 'host' | 'listener') {
 		{ isModerator: async () => false, getUserPolicies: async () => ({ ...DEFAULT_POLICIES }) } as never, live as never,
 		{ publish: vi.fn(), publishRoomsList: vi.fn() } as never,
 		{ revokeRoom, revokeParticipant, revokeDisconnectedGeneration, closeGeneration: vi.fn() } as never, { lifecycle: vi.fn() } as never,
+		{} as never, {} as never,
 	);
 	return { service, room, live, update, execute, revokeRoom, revokeParticipant, revokeDisconnectedGeneration };
 }
 
 describe('CallsRoomService lifecycle', () => {
+	test.each(['public', 'followers', 'specified'] as const)('creates a hidden chat channel only for public Calls (visibility: %s)', async visibility => {
+		const service = createAccessFixture();
+		const saveChannel = vi.fn(async (channel: object) => channel);
+		const saveRoom = vi.fn(async (room: object) => room);
+		const saveParticipant = vi.fn();
+		const followOrRequest = vi.fn();
+		Object.assign(service, {
+			callsRoomsRepository: { target: 'rooms', findOneBy: async () => null, manager: {
+				transaction: async (callback: (manager: unknown) => Promise<unknown>) => callback({
+					getRepository: (target: unknown) => ({ save: target === MiChannel ? saveChannel : target === 'rooms' ? saveRoom : saveParticipant }),
+				}),
+			} },
+			channelsRepository: { findOneByOrFail: async () => ({ id: 'created' }) },
+			channelFollowingService: { followOrRequest },
+			idService: { gen: () => 'created' },
+			callsEventService: { publishRoomsList: vi.fn() },
+			callsTelemetryService: { lifecycle: vi.fn() },
+		});
+		const room = await service.create(viewer, { attachmentType: 'personal', title: 'Call chat', visibility });
+		expect(room.channelId).toBe(visibility === 'public' ? 'created' : null);
+		if (visibility === 'public') {
+			expect(saveChannel).toHaveBeenCalledWith(expect.objectContaining({ name: 'Call chat', isUnlisted: true, isLocalOnly: true, allowRenoteToExternal: false }));
+			expect(followOrRequest).toHaveBeenCalledWith(viewer, { id: 'created' }, true);
+		} else {
+			expect(saveChannel).not.toHaveBeenCalled();
+			expect(followOrRequest).not.toHaveBeenCalled();
+		}
+		expect(saveParticipant).toHaveBeenCalledWith(expect.objectContaining({ role: 'host', userId: viewer.id }));
+	});
+
+	test.each([false, true])('automatically follows the Calls channel when a listener joins, including reconnects (active: %s)', async active => {
+		const service = createAccessFixture();
+		const room = { ...baseRoom, state: 'open', mode: 'stage', visibility: 'public', channelId: 'channel-a' };
+		const participant = { id: 'listener-a', role: 'listener', state: 'active' };
+		const followOrRequest = vi.fn().mockResolvedValue(active ? 'alreadyFollowing' : 'following');
+		const builder = { update: () => builder, set: () => builder, where: () => builder, returning: () => builder, execute: async () => ({ affected: 1, raw: [{ revision: 1 }] }) };
+		Object.assign(service, {
+			callsRoomsRepository: { findOneBy: async () => room, createQueryBuilder: () => builder },
+			callsParticipantsRepository: { findOneBy: async () => active ? participant : null, findBy: async () => [], insertOne: async () => participant },
+			channelsRepository: { findOneByOrFail: async () => ({ id: room.channelId }) },
+			channelFollowingService: { followOrRequest },
+			callsLiveConnectionService: { withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() },
+			idService: { gen: () => participant.id },
+			callsEventService: { publish: vi.fn() },
+			callsTelemetryService: { lifecycle: vi.fn() },
+		});
+		await expect(service.join(viewer, room.id)).resolves.toMatchObject({ role: 'listener' });
+		expect(followOrRequest).toHaveBeenCalledWith(viewer, { id: room.channelId }, true);
+	});
+
 	test('filters followed hosts and active participants before limiting rooms, preserving access checks', async () => {
 		const service = createAccessFixture({ followings: { 'followed-host': {}, 'followed-listener': {} } });
 		const hosted = { ...baseRoom, id: 'hosted', ownerUserId: 'followed-host', state: 'open', visibility: 'public' };
@@ -123,10 +176,11 @@ describe('CallsRoomService lifecycle', () => {
 		const insertParticipant = vi.fn();
 		const service = new CallsRoomService(
 			{ cloudflareRealtime: { enabled: true } } as Config,
-			{ findOneBy: async () => null, insertOne: insertRoom } as never,
+			{ findOneBy: async () => null, target: 'rooms', manager: { transaction: async (callback: (manager: unknown) => Promise<unknown>) => callback({ getRepository: (target: string) => ({ save: target === 'rooms' ? insertRoom : insertParticipant }) }) } } as never,
 			{ insertOne: insertParticipant } as never,
 			{} as never, {} as never, {} as never, {} as never, { gen: () => 'created-a' } as never,
 			{ getUserPolicies: async () => ({ ...DEFAULT_POLICIES }) } as never, {} as never, { publishRoomsList: vi.fn() } as never, {} as never, { lifecycle: vi.fn() } as never,
+			{} as never, {} as never,
 		);
 		const operation = service.create(viewer, { attachmentType, chatRoomId: 'chat-a', title: 'Call' });
 		if (attachmentType === 'chatRoom') {
@@ -157,6 +211,7 @@ describe('CallsRoomService lifecycle', () => {
 			{ isModerator: async () => false, getUserPolicies: async (id: string) => ({ ...DEFAULT_POLICIES, callsRoomSpeakerLimit: id === room.ownerUserId ? limit : 0, callsRoomListenerLimit: id === room.ownerUserId ? limit : 0 }) } as never,
 			{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback(), get: async () => ({}) } as never,
 			{ publish: vi.fn() } as never, {} as never, { lifecycle: vi.fn() } as never,
+			{} as never, {} as never,
 		);
 		const operation = service.join(viewer, room.id);
 		if (allowed) {
@@ -264,6 +319,7 @@ describe('CallsRoomService lifecycle', () => {
 			{ findOneBy: async () => room, find: async () => [room], insertOne: roomInsert } as never,
 			{} as never, {} as never, {} as never, {} as never, {} as never, {} as never,
 			{ isModerator: async () => false, getUserPolicies: async () => ({ ...DEFAULT_POLICIES }) } as never, {} as never, {} as never, {} as never, {} as never,
+			{} as never, {} as never,
 		);
 		const owner = { id: 'owner-a', host: null } as MiUser;
 		await expect(service.create(owner, { attachmentType: 'personal', title: 'Next room' })).rejects.toMatchObject({ code: 'active-attachment' });
@@ -303,6 +359,7 @@ describe('CallsRoomService lifecycle', () => {
 			{} as never, {} as never, {} as never, {} as never, {} as never, {} as never,
 			{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback(), isReconnectTokenConsumed: async () => reconnectConsumed, get: async () => connection, clear: async () => true } as never,
 			{ publish } as never, { revokeDisconnectedGeneration, closeGeneration: vi.fn() } as never, { lifecycle: () => undefined } as never,
+			{} as never, {} as never,
 		);
 
 		const reconnect = { token: crypto.randomUUID(), connectionId: connection.connectionId, generation: connection.generation };
@@ -375,6 +432,7 @@ function createModerationFixture() {
 		{ insert: insertLog } as never, {} as never, {} as never, {} as never,
 		{ gen: () => 'log-a' } as never, { isModerator, getUserPolicies: async () => ({ ...DEFAULT_POLICIES }) } as never,
 		{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() } as never, { publish, publishRoomsList } as never, { revokeParticipant, stopParticipantVideo } as never, { lifecycle: vi.fn() } as never,
+		{} as never, {} as never,
 	);
 	return { service, config, isModerator, room, participant, existsBy, update, set, execute, revokeParticipant, stopParticipantVideo, insertLog, publish, publishRoomsList };
 }
@@ -383,8 +441,12 @@ describe('Calls room titles', () => {
 	test.each(['scheduled', 'open'] as const)('the host can rename a %s room and notify viewers', async state => {
 		const fixture = createModerationFixture();
 		fixture.room.state = state;
+		fixture.room.channelId = 'channel-a';
+		const updateChannel = vi.fn();
+		Object.assign(fixture.service, { channelsRepository: { update: updateChannel } });
 		fixture.execute.mockResolvedValue({ affected: 1, raw: [{ ...fixture.room, title: 'New title', revision: 2 }] });
 		await expect(fixture.service.updateTitle({ id: 'owner-a' } as MiUser, fixture.room.id, ' \u0000New title ', 1)).resolves.toMatchObject({ title: 'New title', revision: 2 });
+		expect(updateChannel).toHaveBeenCalledWith('channel-a', { name: 'New title' });
 		expect(fixture.set).toHaveBeenCalledWith(expect.objectContaining({ title: 'New title' }));
 		expect(fixture.publish).toHaveBeenCalledWith(fixture.room.id, 2, 'title', { title: 'New title' });
 		expect(fixture.publishRoomsList).toHaveBeenCalledWith('updated', { roomId: fixture.room.id, action: 'title' });

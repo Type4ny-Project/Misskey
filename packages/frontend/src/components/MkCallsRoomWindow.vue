@@ -13,6 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<h1 :class="$style.title">{{ room?.title ?? i18n.ts._calls.title }}</h1>
 				<small v-if="sessionIsCurrent && session.elapsedTime.value != null" :class="$style.elapsedTime" :title="i18n.ts._calls.elapsedTime"><i class="ti ti-clock" aria-hidden="true"></i> {{ session.elapsedTime.value }}</small>
 			</div>
+			<button v-if="room?.channelId != null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.chat" :title="i18n.ts.chat" :aria-pressed="showChat" @click="showChat = !showChat"><i class="ti ti-messages" aria-hidden="true"></i></button>
 			<button v-if="room != null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.copyLink" :title="i18n.ts.copyLink" @click="copyRoomLink"><i class="ti ti-link" aria-hidden="true"></i></button>
 			<button v-if="hasRoomMenu" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.details" :disabled="session.joining.value" aria-haspopup="menu" @click="openRoomMenu"><i class="ti ti-dots"></i></button>
 			<button v-if="popoutTarget == null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.popout" :title="i18n.ts.popout" @click="popout"><i class="ti ti-external-link"></i></button>
@@ -27,7 +28,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkInfo v-if="sessionIsCurrent && session.mediaFailure.value != null" warn>{{ failureText }}</MkInfo>
 				<MkInfo v-if="sessionIsCurrent && session.speakerRequestResult.value === 'rejected'" warn>{{ i18n.ts._calls.speakerRequestRejected }}</MkInfo>
 
-				<div :class="$style.callLayout">
+				<section v-if="showChat && room.channelId != null" :class="$style.chat" :aria-label="i18n.ts.chat">
+					<MkInfo v-if="chatLoadFailed" warn>{{ i18n.ts.somethingHappened }}</MkInfo>
+					<MkButton v-if="chatChannel != null && $i != null" primary @click="os.post({ channel: chatChannel })"><i class="ti ti-pencil"></i> {{ i18n.ts.note }}</MkButton>
+					<MkStreamingNotesTimeline :key="room.channelId" src="channel" :channel="room.channelId"/>
+				</section>
+				<div v-else :class="$style.callLayout">
 					<section ref="stage" :class="$style.stage" :aria-label="i18n.ts._calls.title">
 						<div ref="videoGrid" :class="$style.videoGrid" :style="videoGridStyle">
 							<CallsVideo v-for="video in roomVideos" :key="video.id" :stream="video.stream" screenWindow :screenWindowActive="session.screenWindows.has(video.stream)" :label="videoLabel(video.participantId)" :speaking="speakingParticipantIds.has(video.participantId)" :focused="focusedVideoId === video.id" :class="focusedVideoId === video.id && $style.focusedVideo" @contextmenu.capture.stop.prevent="openParticipantMenu(participants.find(participant => participant.id === video.participantId), $event)" @select="focusVideo(video.id)" @screenWindow="showScreenWindow(video.stream, video.participantId)"/>
@@ -110,6 +116,7 @@ import MkModal from '@/components/MkModal.vue';
 import MkCallsControls from '@/components/MkCallsControls.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
+import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue';
 import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
@@ -211,6 +218,22 @@ const canJoinCalls = computed(() => $i?.policies.canJoinCalls !== false);
 const isSessionRoom = computed(() => session.currentRoomId.value === props.roomId);
 const pageConnection = shallowRef<ReturnType<typeof createCallsRoomConnection> | null>(isSessionRoom.value ? null : createCallsRoomConnection(props.roomId));
 const room = computed(() => isSessionRoom.value ? session.room.value : pageConnection.value?.room.value ?? null);
+const showChat = shallowRef(false);
+const chatChannel = shallowRef<Misskey.entities.Channel | null>(null);
+const chatLoadFailed = shallowRef(false);
+watch(() => room.value?.channelId, async (channelId, _, onCleanup) => {
+	let cancelled = false;
+	onCleanup(() => { cancelled = true; });
+	chatChannel.value = null;
+	chatLoadFailed.value = false;
+	if (channelId == null) return;
+	try {
+		const channel = await misskeyApi('channels/show', { channelId });
+		if (!cancelled) chatChannel.value = channel;
+	} catch {
+		if (!cancelled) chatLoadFailed.value = true;
+	}
+}, { immediate: true });
 const participants = computed(() => isSessionRoom.value ? session.participants.value : pageConnection.value?.participants.value ?? []);
 const connected = computed(() => isSessionRoom.value ? session.connected.value : pageConnection.value?.connected.value ?? false);
 const speakingParticipantIds = computed(() => isSessionRoom.value ? session.speakingParticipantIds.value : pageConnection.value?.speakingParticipantIds.value ?? new Set<string>());
@@ -529,6 +552,7 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 .elapsedTime { font-variant-numeric: tabular-nums; color: var(--MI_THEME-fgTransparentWeak); }
 .menuButton { width: 36px; height: 36px; border-radius: 50%; font-size: 20px; }
 .body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 16px; padding: 16px; background: var(--MI_THEME-bg); }
+.chat { flex: 1; min-height: 0; overflow: auto; }
 .callLayout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0; }
 .stage { grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; overflow: auto; }
 .participantArea { grid-column: 1; grid-row: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 24px; padding: 16px; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }

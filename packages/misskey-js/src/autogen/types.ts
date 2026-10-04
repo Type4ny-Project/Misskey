@@ -6483,6 +6483,8 @@ export type components = {
                 /** Format: id */
                 chatRoomId: string;
             };
+            /** Format: id */
+            channelId: string | null;
             title: string;
             description: string;
             moderatorUserIds: string[];

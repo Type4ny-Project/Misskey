@@ -4,6 +4,7 @@
  */
 
 import { Check, Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { MiChannel } from './Channel.js';
 import { MiChatRoom } from './ChatRoom.js';
 import { MiUser } from './User.js';
 import { id } from './util/id.js';
@@ -53,6 +54,13 @@ export class MiCallsRoom {
 	@ManyToOne(() => MiChatRoom, { onDelete: 'CASCADE' })
 	@JoinColumn({ name: 'chatRoomId' })
 	public chatRoom: MiChatRoom | null;
+
+	@Column({ ...id(), nullable: true })
+	public channelId: MiChannel['id'] | null;
+
+	@ManyToOne(() => MiChannel, { onDelete: 'SET NULL' })
+	@JoinColumn({ name: 'channelId', foreignKeyConstraintName: 'FK_calls_room_channel' })
+	public channel: MiChannel | null;
 
 	@Column('varchar', { length: 256 })
 	public title: string;

@@ -2739,6 +2739,7 @@ _calls:
   disconnected: "切断済み"
   joinedCall: "通話に参加しました"
   leftCall: "通話から退出しました"
+  elapsedTime: "通話時間"
   newCall: "新しい通話"
   newCallDescription: "音声ルームを作成して、すぐに通話を始めます。"
   noteIt: "ノートする"

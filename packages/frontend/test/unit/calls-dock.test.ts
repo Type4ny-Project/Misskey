@@ -7,6 +7,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/vue';
 import { nextTick, ref } from 'vue';
 import CallsDock from '@/ui/_common_/CallsDock.vue';
+import { i18n } from '@/i18n.js';
 
 const fixture = vi.hoisted(() => ({ session: null as any }));
 vi.mock('@/utility/calls-session.js', () => ({ useCallsSession: () => fixture.session }));
@@ -20,7 +21,7 @@ afterEach(() => {
 
 test('speaker and listener rows link to their profiles', async () => {
 	fixture.session = {
-		isActive: ref(true), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'stage' }),
+		elapsedTime: ref('03:12'), isActive: ref(true), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'stage' }),
 		participants: ref([{ id: 'speaker', userId: 'alice', role: 'speaker', isMuted: true, user: { id: 'alice', username: 'alice' } }, { id: 'listener', userId: 'bob', role: 'listener', user: { id: 'bob', username: 'bob' } }]),
 		myParticipant: ref(null), speakingParticipantIds: ref(new Set()), controls: ref({}),
 		isHost: ref(false), isSpeaker: ref(false), joining: ref(false),
@@ -29,6 +30,10 @@ test('speaker and listener rows link to their profiles', async () => {
 	await fireEvent.click(view.getByRole('button', { name: /Room/ }));
 	expect(view.getByRole('link', { name: 'alice' }).getAttribute('href')).toBe('/@alice');
 	expect(view.getByRole('link', { name: 'bob' }).getAttribute('href')).toBe('/@bob');
+	expect(view.getByTitle(i18n.ts._calls.elapsedTime).textContent).toContain('03:12');
+	fixture.session.elapsedTime.value = '03:13';
+	await nextTick();
+	expect(view.getByTitle(i18n.ts._calls.elapsedTime).textContent).toContain('03:13');
 });
 
 test.each(['active', 'reconnect'])('%s dock reserves notification space until it disappears', async (state) => {
@@ -42,7 +47,7 @@ test.each(['active', 'reconnect'])('%s dock reserves notification space until it
 		disconnect = disconnect;
 	});
 	fixture.session = {
-		isActive: ref(state === 'active'), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'open' }),
+		elapsedTime: ref(null), isActive: ref(state === 'active'), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'open' }),
 		participants: ref([]), myParticipant: ref(null), speakingParticipantIds: ref(new Set()),
 		controls: ref({}), isHost: ref(false), isSpeaker: ref(false), joining: ref(false),
 		reconnectCandidate: ref(state === 'reconnect' ? { title: 'Room' } : null),

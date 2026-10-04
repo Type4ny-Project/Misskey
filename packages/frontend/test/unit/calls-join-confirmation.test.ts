@@ -43,7 +43,7 @@ beforeEach(() => {
 	fixture.connection = { room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()), refresh: vi.fn().mockResolvedValue(undefined), dispose: vi.fn() };
 	fixture.session = {
 		currentRoomId: ref(null), room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()),
-		isActive: ref(false), joining: ref(false), videos: ref([]), screenWindows: new Map(), mediaState: ref('idle'), mediaFailure: ref(null),
+		elapsedTime: ref(null), isActive: ref(false), joining: ref(false), videos: ref([]), screenWindows: new Map(), mediaState: ref('idle'), mediaFailure: ref(null),
 		speakerRequestResult: ref(null), replacedRoomId: ref(null), needsAudioResume: ref(false), controls: ref({}),
 		refresh: vi.fn().mockResolvedValue(undefined), prepareMicrophones: vi.fn(), join: vi.fn().mockResolvedValue(undefined),
 		getParticipantVolume: vi.fn().mockReturnValue(100), setParticipantVolume: vi.fn(),
@@ -52,6 +52,20 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
+	test('shows elapsed time only while participating in this room', async () => {
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		fixture.session.elapsedTime.value = '01:02:03';
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		expect(view.getByTitle(i18n.ts._calls.elapsedTime).textContent).toContain('01:02:03');
+		fixture.session.elapsedTime.value = '01:02:04';
+		await nextTick();
+		expect(view.getByTitle(i18n.ts._calls.elapsedTime).textContent).toContain('01:02:04');
+		fixture.session.isActive.value = false;
+		await nextTick();
+		expect(view.queryByTitle(i18n.ts._calls.elapsedTime)).toBeNull();
+	});
+
 	test.each(['scheduled', 'open'])('the host can change a %s room title from the menu', async state => {
 		fixture.session.currentRoomId.value = 'room';
 		fixture.session.isActive.value = state === 'open';

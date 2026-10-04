@@ -9,7 +9,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<section class="_panel" :class="$style.space">
 		<header :class="$style.header">
 			<button type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.windowMinimize" :title="i18n.ts.windowMinimize" @click="closeWindow"><i class="ti ti-minus"></i></button>
-			<h1 :class="$style.title">{{ room?.title ?? i18n.ts._calls.title }}</h1>
+			<div :class="$style.heading">
+				<h1 :class="$style.title">{{ room?.title ?? i18n.ts._calls.title }}</h1>
+				<small v-if="sessionIsCurrent && session.elapsedTime.value != null" :class="$style.elapsedTime" :title="i18n.ts._calls.elapsedTime"><i class="ti ti-clock" aria-hidden="true"></i> {{ session.elapsedTime.value }}</small>
+			</div>
 			<button v-if="room != null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.copyLink" :title="i18n.ts.copyLink" @click="copyRoomLink"><i class="ti ti-link" aria-hidden="true"></i></button>
 			<button v-if="hasRoomMenu" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.details" :disabled="session.joining.value" aria-haspopup="menu" @click="openRoomMenu"><i class="ti ti-dots"></i></button>
 			<button v-if="popoutTarget == null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.popout" :title="i18n.ts.popout" @click="popout"><i class="ti ti-external-link"></i></button>
@@ -490,7 +493,9 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 <style lang="scss" module>
 .space { display: flex; flex-direction: column; width: 100vw; height: 100dvh; overflow: hidden; border-radius: 0; }
 .header { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 12px 20px; border-bottom: 1px solid var(--MI_THEME-divider); }
-.title { flex: 1; min-width: 0; margin: 0; font-size: 1.2rem; line-height: 1.4; overflow-wrap: anywhere; }
+.heading { flex: 1; min-width: 0; }
+.title { margin: 0; font-size: 1.2rem; line-height: 1.4; overflow-wrap: anywhere; }
+.elapsedTime { font-variant-numeric: tabular-nums; color: var(--MI_THEME-fgTransparentWeak); }
 .menuButton { width: 36px; height: 36px; border-radius: 50%; font-size: 20px; }
 .body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 16px; padding: 16px; background: var(--MI_THEME-bg); }
 .callLayout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0; }

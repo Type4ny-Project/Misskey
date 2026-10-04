@@ -20,6 +20,7 @@ import type { MiPage } from '@/models/Page.js';
 import type { MiWebhook } from '@/models/Webhook.js';
 import type { MiSystemWebhook } from '@/models/SystemWebhook.js';
 import type { MiMeta } from '@/models/Meta.js';
+import type { DrawingEvent } from './drawing/DrawingService.js';
 import { MiAvatarDecoration, MiChatMessage, MiChatRoom, MiReversiGame, MiRole, MiRoleAssignment } from '@/models/_.js';
 import type { MiCallsRoom } from '@/models/CallsRoom.js';
 import type { Packed } from '@/misc/json-schema.js';
@@ -334,6 +335,10 @@ export type GlobalEvents = {
 		name: `chatRoomStream:${MiChatRoom['id']}`;
 		payload: EventTypesToEventPayload<ChatEventTypes>;
 	};
+	drawing: {
+		name: `drawingStream:${string}`;
+		payload: { type: 'updated'; body: DrawingEvent };
+	};
 	callsRoom: {
 		name: `callsRoomStream:${MiCallsRoom['id']}`;
 		payload: EventTypesToEventPayload<CallsRoomEventTypes>;
@@ -451,6 +456,10 @@ export class GlobalEventService {
 	@bindThis
 	public publishChatRoomStream<K extends keyof ChatEventTypes>(toRoomId: MiChatRoom['id'], type: K, value?: ChatEventTypes[K]): void {
 		this.publish(`chatRoomStream:${toRoomId}`, type, typeof value === 'undefined' ? null : value);
+	}
+
+	public publishDrawingStream(roomId: string, event: DrawingEvent): void {
+		this.publish(`drawingStream:${roomId}`, 'updated', event);
 	}
 
 	@bindThis

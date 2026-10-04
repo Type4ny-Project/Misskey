@@ -73,6 +73,10 @@ export const ROUTE_DEF = [{
 	component: page(() => import('@/pages/calls.vue')),
 	loginRequired: true,
 }, {
+	path: '/calls/:roomId/drawing',
+	component: page(() => import('@/pages/drawing/room.vue')),
+	loginRequired: true,
+}, {
 	path: '/calls/:roomId',
 	component: page(() => import('@/pages/calls.vue')),
 	query: {

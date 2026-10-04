@@ -355,6 +355,16 @@ import type {
 	ClipsUnfavoriteRequest,
 	ClipsUpdateRequest,
 	ClipsUpdateResponse,
+	DrawingClearRequest,
+	DrawingEndRequest,
+	DrawingJoinRequest,
+	DrawingKickRequest,
+	DrawingLeaveRequest,
+	DrawingMessageRequest,
+	DrawingShowRequest,
+	DrawingShowResponse,
+	DrawingStartRequest,
+	DrawingStrokeRequest,
 	DriveResponse,
 	DriveFilesRequest,
 	DriveFilesResponse,
@@ -1016,6 +1026,15 @@ export type Endpoints = {
 	'clips/show': { req: ClipsShowRequest; res: ClipsShowResponse };
 	'clips/unfavorite': { req: ClipsUnfavoriteRequest; res: EmptyResponse };
 	'clips/update': { req: ClipsUpdateRequest; res: ClipsUpdateResponse };
+	'drawing/clear': { req: DrawingClearRequest; res: EmptyResponse };
+	'drawing/end': { req: DrawingEndRequest; res: EmptyResponse };
+	'drawing/join': { req: DrawingJoinRequest; res: EmptyResponse };
+	'drawing/kick': { req: DrawingKickRequest; res: EmptyResponse };
+	'drawing/leave': { req: DrawingLeaveRequest; res: EmptyResponse };
+	'drawing/message': { req: DrawingMessageRequest; res: EmptyResponse };
+	'drawing/show': { req: DrawingShowRequest; res: DrawingShowResponse };
+	'drawing/start': { req: DrawingStartRequest; res: EmptyResponse };
+	'drawing/stroke': { req: DrawingStrokeRequest; res: EmptyResponse };
 	'drive': { req: EmptyRequest; res: DriveResponse };
 	'drive/files': { req: DriveFilesRequest; res: DriveFilesResponse };
 	'drive/files/attached-chat-messages': { req: DriveFilesAttachedChatMessagesRequest; res: DriveFilesAttachedChatMessagesResponse };

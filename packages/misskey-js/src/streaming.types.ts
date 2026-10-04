@@ -276,6 +276,18 @@ export type Channels = {
 			};
 		};
 	};
+	drawing: {
+		params: { roomId: string };
+		events: {
+			updated: (payload: Omit<NonNullable<import('./autogen/entities.js').DrawingShowResponse['canvas']>, 'strokes' | 'messages'> & {
+				action: string;
+				stroke: (NonNullable<import('./autogen/entities.js').DrawingShowResponse['canvas']>)['strokes'][number] | null;
+				message: (NonNullable<import('./autogen/entities.js').DrawingShowResponse['canvas']>)['messages'][number] | null;
+			}) => void;
+			revoked: () => void;
+		};
+		receives: Record<string, never>;
+	};
 	chatRoom: {
 		params: {
 			roomId: string;

@@ -33,6 +33,7 @@ import { ServerStatsChannel } from '@/server/api/stream/channels/server-stats.js
 import { QueueStatsChannel } from '@/server/api/stream/channels/queue-stats.js';
 import { AdminChannel } from '@/server/api/stream/channels/admin.js';
 import { ChatUserChannel } from '@/server/api/stream/channels/chat-user.js';
+import { DrawingChannel } from '@/server/api/stream/channels/drawing.js';
 import { ChatRoomChannel } from '@/server/api/stream/channels/chat-room.js';
 import { CallsRoomChannel } from '@/server/api/stream/channels/calls-room.js';
 import { CallsRoomsChannel } from '@/server/api/stream/channels/calls-rooms.js';
@@ -340,6 +341,7 @@ export default class Connection {
 			case 'admin': return AdminChannel;
 			case 'chatUser': return ChatUserChannel;
 			case 'chatRoom': return ChatRoomChannel;
+			case 'drawing': return DrawingChannel;
 			case 'callsRoom': return CallsRoomChannel;
 			case 'callsRooms': return CallsRoomsChannel;
 			case 'reversi': return ReversiChannel;

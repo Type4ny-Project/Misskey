@@ -10,6 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<header :class="$style.header">
 			<button type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.windowMinimize" :title="i18n.ts.windowMinimize" @click="closeWindow"><i class="ti ti-minus"></i></button>
 			<h1 :class="$style.title">{{ room?.title ?? i18n.ts._calls.title }}</h1>
+			<button v-if="room?.state === 'open' || room?.state === 'scheduled'" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts._drawing.title" :title="i18n.ts._drawing.title" @click="openDrawing"><i class="ti ti-brush"></i></button>
 			<button v-if="hasRoomMenu" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.details" :disabled="session.joining.value" aria-haspopup="menu" @click="openRoomMenu"><i class="ti ti-dots"></i></button>
 			<button v-if="popoutTarget == null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.popout" :title="i18n.ts.popout" @click="popout"><i class="ti ti-external-link"></i></button>
 		</header>
@@ -123,6 +124,10 @@ function cleanupPopout(): void {
 	popup?.close();
 	popoutTarget.value = null;
 	emit('popout', null);
+}
+
+function openDrawing(): void {
+	window.open(`/calls/${props.roomId}/drawing`, '_blank', 'noopener');
 }
 
 function closeWindow(): void {

@@ -1162,6 +1162,20 @@ export type Channels = {
             };
         };
     };
+    drawing: {
+        params: {
+            roomId: string;
+        };
+        events: {
+            updated: (payload: Omit<NonNullable<DrawingShowResponse['canvas']>, 'strokes' | 'messages'> & {
+                action: string;
+                stroke: (NonNullable<DrawingShowResponse['canvas']>)['strokes'][number] | null;
+                message: (NonNullable<DrawingShowResponse['canvas']>)['messages'][number] | null;
+            }) => void;
+            revoked: () => void;
+        };
+        receives: Record<string, never>;
+    };
     chatRoom: {
         params: {
             roomId: string;
@@ -1611,6 +1625,36 @@ type ClipsUpdateResponse = operations['clips___update']['responses']['200']['con
 
 // @public (undocumented)
 type DateString = string;
+
+// @public (undocumented)
+type DrawingClearRequest = operations['drawing___clear']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type DrawingEndRequest = operations['drawing___end']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type DrawingJoinRequest = operations['drawing___join']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type DrawingKickRequest = operations['drawing___kick']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type DrawingLeaveRequest = operations['drawing___leave']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type DrawingMessageRequest = operations['drawing___message']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type DrawingShowRequest = operations['drawing___show']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type DrawingShowResponse = operations['drawing___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type DrawingStartRequest = operations['drawing___start']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type DrawingStrokeRequest = operations['drawing___stroke']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type DriveFile = components['schemas']['DriveFile'];
@@ -2290,6 +2334,16 @@ declare namespace entities {
         ClipsUnfavoriteRequest,
         ClipsUpdateRequest,
         ClipsUpdateResponse,
+        DrawingClearRequest,
+        DrawingEndRequest,
+        DrawingJoinRequest,
+        DrawingKickRequest,
+        DrawingLeaveRequest,
+        DrawingMessageRequest,
+        DrawingShowRequest,
+        DrawingShowResponse,
+        DrawingStartRequest,
+        DrawingStrokeRequest,
         DriveResponse,
         DriveFilesRequest,
         DriveFilesResponse,
@@ -4415,7 +4469,7 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
 // src/streaming.types.ts:236:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
 // src/streaming.types.ts:251:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:308:4 - (ae-forgotten-export) The symbol "CallsRoomEventBase" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:320:4 - (ae-forgotten-export) The symbol "CallsRoomEventBase" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

@@ -93,6 +93,74 @@ describe('CallsMediaController', () => {
 		return { getAudioTracks: () => track.kind === 'audio' ? [track] : [], getVideoTracks: () => track.kind === 'video' ? [track] : [], getTracks: () => [track] } as MediaStream;
 	}
 
+	test('subscribes to remote audio while the publisher transport is still connecting', async () => {
+		installBrowserMedia(vi.fn().mockResolvedValue(stream(makeTrack('audio'))));
+		const respond = apiMock.getMockImplementation()!;
+		apiMock.mockImplementation(async (endpoint: string) => {
+			if (endpoint === 'calls/media/tracks/publish') FakePeerConnection.instances[0].connectionState = 'connecting';
+			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: [{ id: 'remote-audio', participantId: 'participant-b', mediaKind: 'audio', mediaSource: 'microphone' }] };
+			if (endpoint === 'calls/media/tracks/subscribe') return { subscriptions: [{ publicationId: 'remote-audio', mid: '1' }], requiresImmediateRenegotiation: false, sessionDescription: { type: 'offer', sdp: 'subscribe-offer' }, trackErrors: [] };
+			if (endpoint === 'calls/media/renegotiate') return { requiresImmediateRenegotiation: false, sessionDescription: null, trackErrors: [] };
+			return respond(endpoint);
+		});
+		const controller = new CallsMediaController('room-a', 'speaker');
+		const connecting = controller.connect();
+		try {
+			await vi.waitFor(() => expect(apiMock).toHaveBeenCalledWith('calls/media/renegotiate', expect.anything()));
+			expect(FakePeerConnection.instances[0].connectionState).toBe('connecting');
+			expect(controller.state).toBe('negotiating');
+		} finally {
+			FakePeerConnection.instances[0].connectionState = 'connected';
+			FakePeerConnection.instances[0].dispatchEvent(new Event('connectionstatechange'));
+			await connecting;
+			await controller.close();
+		}
+	});
+
+	test('a muted host connects without waiting for outbound audio statistics', async () => {
+		vi.useFakeTimers();
+		installBrowserMedia(vi.fn().mockResolvedValue(stream(makeTrack('audio'))));
+		const stats = vi.spyOn(FakePeerConnection.prototype, 'getStats').mockResolvedValue(new Map());
+		const controller = new CallsMediaController('room-a', 'host');
+		controller.setMuted(true);
+		let connected = false;
+		const connecting = controller.connect().then(() => { connected = true; });
+		try {
+			await vi.advanceTimersByTimeAsync(0);
+			expect(connected).toBe(true);
+			expect(controller.localTrack?.enabled).toBe(false);
+			expect(stats).not.toHaveBeenCalled();
+		} finally {
+			const closing = controller.close();
+			await vi.advanceTimersByTimeAsync(250);
+			await Promise.allSettled([connecting, closing]);
+			stats.mockRestore();
+			vi.useRealTimers();
+		}
+	});
+
+	test('fails and releases the microphone when the transport never connects', async () => {
+		vi.useFakeTimers();
+		const microphone = makeTrack('audio');
+		installBrowserMedia(vi.fn().mockResolvedValue(stream(microphone)));
+		const respond = apiMock.getMockImplementation()!;
+		apiMock.mockImplementation(async (endpoint: string) => {
+			if (endpoint === 'calls/media/tracks/publish') FakePeerConnection.instances[0].connectionState = 'connecting';
+			return respond(endpoint);
+		});
+		const controller = new CallsMediaController('room-a', 'speaker');
+		const connecting = expect(controller.connect()).rejects.toThrow('Calls media connection timed out');
+		try {
+			await vi.advanceTimersByTimeAsync(10_000);
+			await connecting;
+			expect(controller.state).toBe('failed');
+			expect(microphone.stop).toHaveBeenCalledOnce();
+		} finally {
+			await controller.close();
+			vi.useRealTimers();
+		}
+	});
+
 	test('publishes camera and screen separately and browser stop sharing preserves camera and microphone', async () => {
 		const audio = makeTrack('audio');
 		const camera = makeTrack('video');

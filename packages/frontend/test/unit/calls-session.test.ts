@@ -25,7 +25,7 @@ const fixture = vi.hoisted(() => ({
 	heartbeat: vi.fn(),
 	role: 'listener' as 'listener' | 'host',
 	revoked: [] as Array<(event: { reason: string; connectionId?: string; generation?: number }) => void>,
-	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null }; participants: { value: Array<{ id: string; userId: string; role: string; isMuted: boolean; joinedAt?: string }> } }>,
+	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null }; participants: { value: Array<{ id: string; userId: string; role: string; isMuted: boolean; joinedAt?: string }> }; refresh: ReturnType<typeof vi.fn> }>,
 	remoteTrackCallbacks: [] as Array<(track: MediaStreamTrack, publication: CallsRemotePublication) => void>,
 	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
 }));
@@ -113,6 +113,17 @@ describe('Calls session device handoff', () => {
 		fixture.remoteTrackCallbacks.length = 0;
 		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { enumerateDevices: async () => [] } });
 		session = (await import('@/utility/calls-session.js')).useCallsSession();
+	});
+
+	test.each([false, true])('fetches one participant snapshot after joining (alreadyParticipant=%s)', async alreadyParticipant => {
+		await session.join('room-a', alreadyParticipant);
+		const refresh = fixture.connections[0].refresh;
+		expect(refresh).toHaveBeenCalledOnce();
+		if (!alreadyParticipant) {
+			const joinIndex = fixture.api.mock.calls.findIndex(([endpoint]) => endpoint === 'calls/rooms/join');
+			expect(joinIndex).toBeGreaterThanOrEqual(0);
+			expect(refresh.mock.invocationCallOrder[0]).toBeGreaterThan(fixture.api.mock.invocationCallOrder[joinIndex]);
+		}
 	});
 
 	test('plays join, participant changes and leave sounds without sounding the initial snapshot', async () => {

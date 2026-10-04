@@ -248,7 +248,6 @@ export class CallsMediaController {
 			});
 			this.publications.add(result.publicationId);
 			await this.applyNegotiation(result.negotiation);
-			await this.waitUntilPublishing(peer);
 		}
 		for (const [source, video] of this.localVideos) {
 			if (video.track.readyState === 'ended') continue;
@@ -256,6 +255,11 @@ export class CallsMediaController {
 			await this.publishVideo(source, video);
 		}
 		const subscribed = await this.reconcileNow();
+		// SDP exchanges stay serialized, but receiving need not wait for the sender's transport.
+		if (this.localTrack != null) {
+			await this.waitUntilConnected(peer);
+			this.setState('connected');
+		}
 		if (this.localTrack == null && !subscribed && this.peer === peer) this.setState('connected');
 	}
 
@@ -358,22 +362,15 @@ export class CallsMediaController {
 		});
 	}
 
-	private async waitUntilPublishing(peer: RTCPeerConnection): Promise<void> {
+	private async waitUntilConnected(peer: RTCPeerConnection): Promise<void> {
 		const deadline = Date.now() + 10_000;
 		while (Date.now() < deadline) {
 			if (peer !== this.peer) throw new DOMException('Calls media operation was replaced', 'AbortError');
-			if (peer.connectionState === 'failed') throw new Error('Publisher connection failed before sending audio packets');
-			const report = await peer.getStats();
-			let outboundReady = false;
-			let transportReady = false;
-			report.forEach(value => {
-				if (value.type === 'outbound-rtp' && value.kind === 'audio' && (value.packetsSent ?? 0) > 0 && (value.bytesSent ?? 0) > 0) outboundReady = true;
-				if (value.type === 'transport' && value.dtlsState === 'connected') transportReady = true;
-			});
-			if (peer.connectionState === 'connected' && outboundReady && transportReady) return;
+			if (peer.connectionState === 'failed') throw new Error('Calls media connection failed');
+			if (peer.connectionState === 'connected') return;
 			await new Promise(resolve => window.setTimeout(resolve, 250));
 		}
-		throw new Error('Publisher is not actually sending audio packets');
+		throw new Error('Calls media connection timed out');
 	}
 
 	public async startVideo(source: CallsVideoSource, deviceId?: string, quality: CallsVideoQuality = { height: 720, frameRate: 30 }, previewStream?: MediaStream): Promise<void> {

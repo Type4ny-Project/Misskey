@@ -2276,6 +2276,8 @@ _inboxRule:
   serverPubMoreThanOrEq: "サーバー公開投稿数が～以上"
   serverSubLessThanOrEq: "サーバー購読数が～以下"
   serverSubMoreThanOrEq: "サーバー購読数が～以上"
+  sender: "送信者"
+  thisActivityIsFollow: "フォローリクエストか"
   thisActivityIsNote: "このアクティビティがノート"
   and: "すべて満たす"
   or: "いずれかを満たす"
@@ -3151,6 +3153,9 @@ _abuseReport:
     deleteConfirm: "通知先を削除しますか？"
 
 _moderationLogTypes:
+  inboxRejected: "受信アクティビティを拒否"
+  setInboxRule: "受信ルールを追加"
+  deleteInboxRule: "受信ルールを削除"
   clearQueue: "ジョブキューをクリア"
   promoteQueue: "キューのジョブを再試行"
   createRole: "ロールを作成"

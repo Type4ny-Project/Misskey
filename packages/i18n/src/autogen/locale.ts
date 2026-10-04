@@ -8777,6 +8777,14 @@ export interface Locale extends ILocale {
          */
         "serverSubMoreThanOrEq": string;
         /**
+         * 送信者
+         */
+        "sender": string;
+        /**
+         * フォローリクエストか
+         */
+        "thisActivityIsFollow": string;
+        /**
          * このアクティビティがノート
          */
         "thisActivityIsNote": string;
@@ -11894,6 +11902,18 @@ export interface Locale extends ILocale {
         };
     };
     "_moderationLogTypes": {
+        /**
+         * 受信アクティビティを拒否
+         */
+        "inboxRejected": string;
+        /**
+         * 受信ルールを追加
+         */
+        "setInboxRule": string;
+        /**
+         * 受信ルールを削除
+         */
+        "deleteInboxRule": string;
         /**
          * ジョブキューをクリア
          */

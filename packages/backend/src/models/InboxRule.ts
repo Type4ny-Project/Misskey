@@ -175,6 +175,10 @@ type CondFormulaThisActivityIsNote = {
 	type: 'thisActivityIsNote'
 };
 
+type CondFormulaThisActivityIsFollow = {
+	type: 'thisActivityIsFollow';
+};
+
 export type InboxRuleCondFormulaValue = { id: string } & (
 	CondFormulaValueAnd |
 	CondFormulaValueOr |
@@ -201,7 +205,8 @@ export type InboxRuleCondFormulaValue = { id: string } & (
 	CondFormulaValueServerPubMoreThanOrEq |
 	CondFormulaValueServerSubLessThanOrEq |
 	CondFormulaValueServerSubMoreThanOrEq |
-	CondFormulaThisActivityIsNote
+	CondFormulaThisActivityIsNote |
+	CondFormulaThisActivityIsFollow
 	);
 
 export type InboxRuleAction = {

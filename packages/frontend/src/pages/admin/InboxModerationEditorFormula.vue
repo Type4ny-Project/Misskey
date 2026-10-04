@@ -78,6 +78,7 @@ type FormulaType =
 	| 'or'
 	| 'not'
 	| 'thisActivityIsNote'
+	| 'thisActivityIsFollow'
 	| 'isLocked'
 	| 'isBot'
 	| 'isCat'
@@ -117,6 +118,7 @@ function normalizeType(value: string | undefined): FormulaType {
 		case 'or':
 		case 'not':
 		case 'thisActivityIsNote':
+		case 'thisActivityIsFollow':
 		case 'isLocked':
 		case 'isBot':
 		case 'isCat':
@@ -289,6 +291,7 @@ const conditionTypeItems = computed<MkSelectItem<FormulaType>[]>(() => [{
 	label: i18n.ts._inboxRule.conditions,
 	items: [
 		...(!props.isNote ? [{ value: 'thisActivityIsNote' as const, label: i18n.ts._inboxRule.thisActivityIsNote }] : []),
+		{ value: 'thisActivityIsFollow', label: i18n.ts._inboxRule.thisActivityIsFollow },
 		{ value: 'and', label: i18n.ts._inboxRule.and },
 		{ value: 'or', label: i18n.ts._inboxRule.or },
 		{ value: 'not', label: i18n.ts._inboxRule.not },

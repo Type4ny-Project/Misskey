@@ -6,7 +6,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { bindThis } from '@/decorators.js';
 import type { MiRemoteUser } from '@/models/User.js';
 import { IdService } from '@/core/IdService.js';
-import { isCreate, isNote } from '@/core/activitypub/type.js';
+import { isCreate, isFollow, isNote } from '@/core/activitypub/type.js';
 import type { IObject, IPost } from '@/core/activitypub/type.js';
 import type { InstancesRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
@@ -119,6 +119,9 @@ export class InboxRuleService {
 						return object.attachment?.length ? object.attachment.length >= value.value : false;
 					}
 					return false;
+				}
+				case 'thisActivityIsFollow': {
+					return isFollow(activity);
 				}
 				case 'thisActivityIsNote': {
 					return isNote(object);

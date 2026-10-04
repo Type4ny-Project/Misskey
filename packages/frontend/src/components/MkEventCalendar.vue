@@ -7,13 +7,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div :class="$style.root">
 	<div :class="$style.header">
 		<div :class="$style.headerNav">
-			<MkButton :class="$style.navBtn" class="_button" @click="prevPeriod">
+			<MkButton :class="$style.navBtn" class="_button" iconOnly @click="prevPeriod">
 				<i class="ti ti-chevron-left"></i>
 			</MkButton>
 			<MkButton ref="monthLabelEl" :class="$style.monthLabel" class="_button" @click="showMonthPicker">
 				{{ currentRangeLabel }}
 			</MkButton>
-			<MkButton :class="$style.navBtn" class="_button" @click="nextPeriod">
+			<MkButton :class="$style.navBtn" class="_button" iconOnly @click="nextPeriod">
 				<i class="ti ti-chevron-right"></i>
 			</MkButton>
 		</div>
@@ -830,12 +830,12 @@ const calendarWeeks = computed(() => {
 			Math.max(0, Math.floor((eventAreaHeight - EVENT_BAR_BOTTOM_PADDING) / EVENT_BAR_HEIGHT)),
 		);
 		const visibleBars = bars.filter(bar => bar.lane < visibleLaneCount);
-		const visibleBarCountsByDate = new Map<string, number>();
+		const visibleBarLaneCountsByDate = new Map<string, number>();
 		const hiddenBarCountsByDate = new Map<string, number>();
 		const hiddenBarEventsByDate = new Map<string, CalendarEvent[]>();
 
 		for (const cell of cells) {
-			visibleBarCountsByDate.set(cell.date, 0);
+			visibleBarLaneCountsByDate.set(cell.date, 0);
 			hiddenBarCountsByDate.set(cell.date, 0);
 			hiddenBarEventsByDate.set(cell.date, []);
 		}
@@ -843,7 +843,7 @@ const calendarWeeks = computed(() => {
 		for (const bar of visibleBars) {
 			for (let dateIndex = bar.startIndex; dateIndex <= bar.endIndex; dateIndex++) {
 				const date = cells[dateIndex].date;
-				visibleBarCountsByDate.set(date, (visibleBarCountsByDate.get(date) ?? 0) + 1);
+				visibleBarLaneCountsByDate.set(date, Math.max(visibleBarLaneCountsByDate.get(date) ?? 0, bar.lane + 1));
 			}
 		}
 
@@ -859,11 +859,11 @@ const calendarWeeks = computed(() => {
 		const cellsWithTimedEvents = cells.map(cell => {
 			const timedEvents = (timedEventsByDate.get(cell.date) ?? [])
 				.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
-			const visibleBarCount = visibleBarCountsByDate.get(cell.date) ?? 0;
-			const timedEventsOffset = visibleBarCount > 0 ? TIMED_EVENTS_LAYOUT_OFFSET_WITH_BARS : TIMED_EVENTS_LAYOUT_OFFSET_WITHOUT_BARS;
-			const timedEventsCapacityOffset = visibleBarCount > 0 ? TIMED_EVENTS_CAPACITY_OFFSET_WITH_BARS : TIMED_EVENTS_CAPACITY_OFFSET_WITHOUT_BARS;
+			const visibleBarLaneCount = visibleBarLaneCountsByDate.get(cell.date) ?? 0;
+			const timedEventsOffset = visibleBarLaneCount > 0 ? TIMED_EVENTS_LAYOUT_OFFSET_WITH_BARS : TIMED_EVENTS_LAYOUT_OFFSET_WITHOUT_BARS;
+			const timedEventsCapacityOffset = visibleBarLaneCount > 0 ? TIMED_EVENTS_CAPACITY_OFFSET_WITH_BARS : TIMED_EVENTS_CAPACITY_OFFSET_WITHOUT_BARS;
 			const availableTimedContentHeight = eventAreaHeight
-				- (visibleBarCount > 0 ? visibleBarCount * EVENT_BAR_HEIGHT + EVENT_BAR_BOTTOM_PADDING : 0)
+				- (visibleBarLaneCount > 0 ? visibleBarLaneCount * EVENT_BAR_HEIGHT + EVENT_BAR_BOTTOM_PADDING : 0)
 				- timedEventsCapacityOffset;
 			const visibleTimedRowsBase = Math.max(0, Math.floor((availableTimedContentHeight + EVENT_ITEM_GAP) / (EVENT_ITEM_HEIGHT + EVENT_ITEM_GAP)));
 			const hiddenBarCount = hiddenBarCountsByDate.get(cell.date) ?? 0;
@@ -882,7 +882,7 @@ const calendarWeeks = computed(() => {
 					.map(({ key, title, color, sourceEvent }) => ({ key, title, color, sourceEvent })),
 				moreCount: hiddenBarCount + hiddenTimedEventCount,
 				hiddenEvents,
-				allDayHeight: visibleBarCount > 0 ? visibleBarCount * EVENT_BAR_HEIGHT + EVENT_BAR_BOTTOM_PADDING : 0,
+				allDayHeight: visibleBarLaneCount > 0 ? visibleBarLaneCount * EVENT_BAR_HEIGHT + EVENT_BAR_BOTTOM_PADDING : 0,
 				timedEventsOffset,
 			};
 		});
@@ -1068,7 +1068,7 @@ onBeforeUnmount(() => {
 
 .weekdays {
 	display: grid;
-	grid-template-columns: repeat(7, 1fr);
+	grid-template-columns: repeat(7, minmax(0, 1fr));
 	margin-bottom: 0;
 	padding-bottom: 6px;
 }
@@ -1097,11 +1097,12 @@ onBeforeUnmount(() => {
 
 .weekGrid {
 	display: grid;
-	grid-template-columns: repeat(7, 1fr);
+	grid-template-columns: repeat(7, minmax(0, 1fr));
 	gap: 0;
 }
 
 .cell {
+	min-width: 0;
 	min-height: 124px;
 	display: flex;
 	flex-direction: column;
@@ -1132,6 +1133,7 @@ onBeforeUnmount(() => {
 	gap: 3px;
 	width: 100%;
 	padding-right: 2px;
+	box-sizing: border-box;
 }
 
 .timedEvent {
@@ -1187,8 +1189,8 @@ onBeforeUnmount(() => {
 	padding-bottom: 0;
 	box-sizing: border-box;
 	white-space: nowrap;
-	overflow: visible;
-	text-overflow: clip;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	text-align: left;
 
 	/* no hover highlight */
@@ -1208,9 +1210,6 @@ onBeforeUnmount(() => {
 		color: var(--MI_THEME-fgOnAccent);
 		border-radius: 50%;
 		width: 26px;
-		height: 26px;
-		display: flex;
-		align-items: center;
 		justify-content: center;
 		margin-left: 0;
 	}
@@ -1222,11 +1221,15 @@ onBeforeUnmount(() => {
 }
 
 .cellDate {
+	display: flex;
+	align-items: center;
+	height: 26px;
 	font-size: 0.85em;
 	font-weight: 600;
 	line-height: 1;
 	color: var(--MI_THEME-fg);
 	margin-left: 2px;
+	margin-bottom: 2px;
 	flex-shrink: 0;
 }
 
@@ -1446,11 +1449,13 @@ onBeforeUnmount(() => {
 
 	.viewSwitcher {
 		width: 100%;
+		box-sizing: border-box;
 		justify-content: stretch;
 	}
 
 	.viewButton {
 		flex: 1;
+		min-width: 0;
 		justify-content: center;
 		padding: 0 8px;
 	}

@@ -10750,6 +10750,22 @@ export interface Locale extends ILocale {
          */
         "removeParticipant": string;
         /**
+         * この参加者のマイクをミュートしますか？
+         */
+        "muteParticipantConfirm": string;
+        /**
+         * この参加者のカメラを停止しますか？
+         */
+        "stopParticipantCameraConfirm": string;
+        /**
+         * この参加者の画面共有を停止しますか？
+         */
+        "stopParticipantScreenSharingConfirm": string;
+        /**
+         * この参加者を通話から退出させますか？
+         */
+        "removeParticipantConfirm": string;
+        /**
          * ホスト
          */
         "host": string;

@@ -6,6 +6,9 @@
 ### Client
 - Feat: センシティブなメディアをタップ中だけ表示するオプションを追加
 
+### Server
+- Enhance: ActivityPub の featured 応答・JSON-LD エラー処理・フェデレーション集計の負荷を軽減
+
 ## 2026.8.0
 
 ### General

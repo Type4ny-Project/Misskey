@@ -74,7 +74,7 @@ vi.mock('@/utility/calls-media.js', () => ({
 			if (fixture.connectionExists && !this.replaceExisting) throw Object.assign(new Error('Connection exists'), { code: 'CALLS_CONNECTION_EXISTS' });
 			this.onState('connected');
 		});
-		public setMuted = vi.fn();
+		public setMuted = vi.fn().mockResolvedValue(undefined);
 		constructor(_roomId: string, _role: string, private onState: (state: string) => void, onRemoteTrack: typeof fixture.remoteTrackCallbacks[number], _onStats: unknown, previousConnection?: { connectionId: string; generation: number }, public replaceExisting = false) {
 			this.connectionIdentity = previousConnection ?? { connectionId: `device-${fixture.controllers.length}`, generation: 1 };
 			fixture.controllers.push(this);
@@ -220,15 +220,36 @@ describe('Calls session device handoff', () => {
 		expect(session.microphones.value).toEqual([]);
 		expect(session.muted.value).toBe(true);
 		expect(fixture.setMuted).toHaveBeenCalledWith(true);
-		fixture.controllers[0].switchMicrophone.mockRejectedValueOnce(new DOMException('No microphone', 'NotFoundError'));
+		fixture.controllers[0].setMuted.mockClear().mockRejectedValueOnce(new DOMException('No microphone', 'NotFoundError'));
 		await session.toggleMute();
 		expect(session.muted.value).toBe(true);
 		expect(session.isActive.value).toBe(true);
 		expect(fixture.alert).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
 		await session.toggleMute();
-		expect(fixture.controllers[0].switchMicrophone).toHaveBeenCalledTimes(2);
+		expect(fixture.controllers[0].setMuted.mock.calls).toEqual([[false], [false]]);
 		expect(session.muted.value).toBe(false);
 		expect(fixture.setMuted).toHaveBeenLastCalledWith(false);
+	});
+
+	test('waits for capture to resume before announcing unmute and ignores repeated clicks', async () => {
+		fixture.role = 'host';
+		await session.join('room-a', false);
+		fixture.setMuted.mockClear();
+		let resumeCapture!: () => void;
+		fixture.controllers[0].setMuted.mockClear().mockImplementationOnce(() => new Promise<void>(resolve => { resumeCapture = resolve; }));
+		const unmuting = session.toggleMute();
+		await session.toggleMute();
+		expect(fixture.controllers[0].setMuted).toHaveBeenCalledOnce();
+		expect(session.muted.value).toBe(true);
+		expect(fixture.setMuted).not.toHaveBeenCalled();
+		resumeCapture();
+		await unmuting;
+		expect(session.muted.value).toBe(false);
+		expect(fixture.setMuted).toHaveBeenLastCalledWith(false);
+		await session.toggleMute();
+		expect(fixture.controllers[0].setMuted).toHaveBeenLastCalledWith(true);
+		expect(session.muted.value).toBe(true);
+		expect(fixture.setMuted).toHaveBeenLastCalledWith(true);
 	});
 
 	test('adjusts only the selected user audio, retains volume for replacement tracks and clears it on leaving', async () => {

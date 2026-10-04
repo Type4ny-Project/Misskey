@@ -125,6 +125,129 @@ describe('CallsMediaController', () => {
 		expect(audio.stop).toHaveBeenCalled();
 	});
 
+	test('mute releases microphone capture and unmute replaces it without interrupting video or the peer', async () => {
+		const audio = makeTrack('audio');
+		const camera = makeTrack('video');
+		const replacement = makeTrack('audio');
+		const processing = { track: makeTrack('audio'), setEnabled: vi.fn(), close: vi.fn() };
+		noiseSuppressionMock.mockResolvedValueOnce(processing);
+		const getUserMedia = vi.fn().mockResolvedValueOnce(stream(audio)).mockResolvedValueOnce(stream(camera)).mockResolvedValueOnce(stream(replacement));
+		installBrowserMedia(getUserMedia);
+		const controller = new CallsMediaController('room-a', 'speaker');
+		await controller.connect('microphone-a');
+		await controller.startVideo('camera');
+		const peer = FakePeerConnection.instances[0];
+		const publishingCount = apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish').length;
+
+		const muting = controller.setMuted(true);
+		expect(audio.stop).toHaveBeenCalledOnce();
+		expect(processing.close).toHaveBeenCalledOnce();
+		expect(controller.localTrack).toBeNull();
+		await muting;
+		expect(peer.sender.replaceTrack).toHaveBeenLastCalledWith(null);
+		await controller.switchMicrophone('microphone-b');
+		await controller.setNoiseSuppression(false);
+		expect(getUserMedia).toHaveBeenCalledTimes(2);
+		expect(camera.stop).not.toHaveBeenCalled();
+		await controller.setMuted(false);
+
+		expect(controller.localTrack).toBe(replacement);
+		const replacementProcessing = await noiseSuppressionMock.mock.results[1].value;
+		expect(replacementProcessing.setEnabled).toHaveBeenLastCalledWith(false);
+		expect(peer.sender.replaceTrack).toHaveBeenLastCalledWith(replacement);
+		expect(replacement.enabled).toBe(true);
+		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: expect.objectContaining({ deviceId: { exact: 'microphone-b' }, noiseSuppression: false }) }));
+		expect(FakePeerConnection.instances).toHaveLength(1);
+		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish')).toHaveLength(publishingCount);
+		expect(camera.stop).not.toHaveBeenCalled();
+		await controller.close();
+	});
+
+	test.each(['host', 'speaker'] as const)('%s joins and reconnects muted without requesting capture, then can unmute', async role => {
+		const audio = makeTrack('audio');
+		const getUserMedia = vi.fn().mockResolvedValue(stream(audio));
+		installBrowserMedia(getUserMedia);
+		const controller = new CallsMediaController('room-a', role);
+		await controller.setMuted(true);
+		await controller.connect('microphone-a');
+		FakePeerConnection.instances[0].connectionState = 'failed';
+		FakePeerConnection.instances[0].dispatchEvent(new Event('connectionstatechange'));
+		await vi.waitFor(() => expect(FakePeerConnection.instances).toHaveLength(2));
+		await controller.reconcile();
+		expect(getUserMedia).not.toHaveBeenCalled();
+		expect(apiMock).not.toHaveBeenCalledWith('calls/media/tracks/publish', expect.anything());
+		await controller.setMuted(false);
+		expect(getUserMedia).toHaveBeenCalledOnce();
+		expect(controller.localTrack).toBe(audio);
+		expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/publish', expect.anything());
+		await controller.close();
+	});
+
+	test('unmute during peer reconnection stays muted until microphone capture can resume', async () => {
+		const audio = makeTrack('audio');
+		const getUserMedia = vi.fn().mockResolvedValue(stream(audio));
+		installBrowserMedia(getUserMedia);
+		const controller = new CallsMediaController('room-a', 'speaker');
+		await controller.setMuted(true);
+		await controller.connect();
+		let finishReconnect!: (value: unknown) => void;
+		apiMock.mockImplementationOnce(() => new Promise(resolve => { finishReconnect = resolve; }));
+		const peer = FakePeerConnection.instances[0];
+		peer.connectionState = 'failed';
+		peer.dispatchEvent(new Event('connectionstatechange'));
+		await vi.waitFor(() => expect(finishReconnect).toBeTypeOf('function'));
+		try {
+			await expect(controller.setMuted(false)).rejects.toMatchObject({ name: 'NotFoundError' });
+			expect(controller.localTrack).toBeNull();
+			expect(getUserMedia).not.toHaveBeenCalled();
+		} finally {
+			finishReconnect({ participantId: 'participant-a', generation: 2, mediaCredential: 'credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() });
+			await controller.reconcile();
+		}
+		await controller.switchMicrophone('microphone-b');
+		expect(getUserMedia).not.toHaveBeenCalled();
+		await controller.setMuted(false);
+		expect(controller.localTrack).toBe(audio);
+		await controller.close();
+	});
+
+	test('failed unmute leaves capture stopped and can be retried', async () => {
+		const audio = makeTrack('audio');
+		const replacement = makeTrack('audio');
+		const getUserMedia = vi.fn().mockResolvedValueOnce(stream(audio)).mockRejectedValueOnce(new DOMException('Permission denied', 'NotAllowedError')).mockResolvedValueOnce(stream(replacement));
+		installBrowserMedia(getUserMedia);
+		const controller = new CallsMediaController('room-a', 'speaker');
+		await controller.connect();
+		await controller.setMuted(true);
+		await expect(controller.setMuted(false)).rejects.toMatchObject({ name: 'NotAllowedError' });
+		expect(controller.localTrack).toBeNull();
+		expect(FakePeerConnection.instances[0].sender.track).toBeNull();
+		await controller.switchMicrophone('microphone-b');
+		expect(getUserMedia).toHaveBeenCalledTimes(2);
+		await controller.setMuted(false);
+		expect(controller.localTrack).toBe(replacement);
+		await controller.close();
+	});
+
+	test('mute cancels pending unmute capture and stops a late permission grant', async () => {
+		let grantCapture!: (value: MediaStream) => void;
+		const audio = makeTrack('audio');
+		const getUserMedia = vi.fn(() => new Promise<MediaStream>(resolve => { grantCapture = resolve; }));
+		installBrowserMedia(getUserMedia);
+		const controller = new CallsMediaController('room-a', 'speaker');
+		await controller.setMuted(true);
+		await controller.connect();
+		const unmuting = controller.setMuted(false);
+		const rejected = expect(unmuting).rejects.toMatchObject({ name: 'AbortError' });
+		await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
+		await controller.setMuted(true);
+		await rejected;
+		grantCapture(stream(audio));
+		await vi.waitFor(() => expect(audio.stop).toHaveBeenCalledOnce());
+		expect(controller.localTrack).toBeNull();
+		await controller.close();
+	});
+
 	test.each(['camera', 'screen'] as const)('stops local %s capture when moderation removes its publication', async source => {
 		const audio = makeTrack('audio');
 		const camera = makeTrack('video');
@@ -150,7 +273,7 @@ describe('CallsMediaController', () => {
 		await controller.close();
 	});
 
-	test('rapid noise suppression toggles preserve the sender, mute and recording track without recapturing', async () => {
+	test('rapid noise suppression toggles preserve the sender and recording track without recapturing', async () => {
 		const tracks = Array.from({ length: 2 }, () => makeTrack('audio'));
 		const output = makeTrack('audio');
 		const processing = { track: output, setEnabled: vi.fn(), close: vi.fn() };
@@ -164,7 +287,6 @@ describe('CallsMediaController', () => {
 		const sessionCalls = apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/session/create').length;
 		const sender = FakePeerConnection.instances[0].sender;
 		sender.replaceTrack.mockClear();
-		controller.setMuted(true);
 		controller.setNoiseSuppression(false);
 		controller.setNoiseSuppression(true);
 		controller.setNoiseSuppression(false);
@@ -173,8 +295,8 @@ describe('CallsMediaController', () => {
 		expect(sender.replaceTrack).not.toHaveBeenCalled();
 		expect(sender.track).toBe(output);
 		expect(tracks[0].stop).not.toHaveBeenCalled();
-		expect(tracks[0].enabled).toBe(false);
-		expect(output.enabled).toBe(false);
+		expect(tracks[0].enabled).toBe(true);
+		expect(output.enabled).toBe(true);
 		expect(microphoneTrack).toHaveBeenCalledExactlyOnceWith(output);
 		await controller.switchMicrophone('other-mic');
 		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: expect.objectContaining({ noiseSuppression: false, echoCancellation: { ideal: true }, deviceId: { exact: 'other-mic' } }) }));
@@ -184,14 +306,14 @@ describe('CallsMediaController', () => {
 		expect(tracks[0].stop).toHaveBeenCalledOnce();
 		controller.setNoiseSuppression(true);
 		expect(getUserMedia).toHaveBeenCalledTimes(2);
-		expect(tracks[1].enabled).toBe(false);
+		expect(tracks[1].enabled).toBe(true);
 		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/session/create')).toHaveLength(sessionCalls);
 		await controller.close();
 		expect(replacement.close).toHaveBeenCalledOnce();
 		expect(tracks[1].stop).toHaveBeenCalledOnce();
 	});
 
-	test('uses the latest suppression and mute settings when RNNoise finishes loading', async () => {
+	test('muting during RNNoise loading releases capture and never publishes it', async () => {
 		const raw = makeTrack('audio');
 		const processing = { track: makeTrack('audio'), setEnabled: vi.fn(), close: vi.fn() };
 		let finishLoading!: (value: typeof processing) => void;
@@ -204,9 +326,10 @@ describe('CallsMediaController', () => {
 		controller.setMuted(true);
 		finishLoading(processing);
 		await connecting;
-		expect(processing.setEnabled).toHaveBeenLastCalledWith(false);
-		expect(processing.track.enabled).toBe(false);
-		expect(raw.enabled).toBe(false);
+		expect(processing.close).toHaveBeenCalledOnce();
+		expect(raw.stop).toHaveBeenCalledOnce();
+		expect(controller.localTrack).toBeNull();
+		expect(apiMock).not.toHaveBeenCalled();
 		await controller.close();
 	});
 
@@ -245,7 +368,7 @@ describe('CallsMediaController', () => {
 		warning.mockRestore();
 	});
 
-	test('failed microphone replacement releases the new processor and preserves the old muted audio', async () => {
+	test('failed microphone replacement releases the new processor and preserves the old audio', async () => {
 		const tracks = [makeTrack('audio'), makeTrack('audio')];
 		const processors = tracks.map(() => ({ track: makeTrack('audio'), setEnabled: vi.fn(), close: vi.fn() }));
 		noiseSuppressionMock.mockResolvedValueOnce(processors[0]).mockResolvedValueOnce(processors[1]);
@@ -253,7 +376,6 @@ describe('CallsMediaController', () => {
 		const microphoneTrack = vi.fn();
 		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, undefined, undefined, false, { localTrack: vi.fn(), microphoneTrack, remoteRemoved: vi.fn(), error: vi.fn() });
 		await controller.connect();
-		controller.setMuted(true);
 		controller.setNoiseSuppression(false);
 		FakePeerConnection.instances[0].sender.replaceTrack.mockRejectedValueOnce(new Error('Replacement failed'));
 		await expect(controller.switchMicrophone('other-mic')).rejects.toThrow('Replacement failed');
@@ -262,10 +384,38 @@ describe('CallsMediaController', () => {
 		expect(processors[0].close).not.toHaveBeenCalled();
 		expect(tracks[0].stop).not.toHaveBeenCalled();
 		expect(controller.localTrack).toBe(processors[0].track);
-		expect(controller.localTrack?.enabled).toBe(false);
+		expect(controller.localTrack?.enabled).toBe(true);
 		expect(microphoneTrack).toHaveBeenLastCalledWith(processors[0].track);
 		controller.setNoiseSuppression(true);
 		expect(processors[0].setEnabled).toHaveBeenLastCalledWith(true);
+		await controller.close();
+	});
+
+	test('failed microphone replacement after mute releases both microphones without restoring capture', async () => {
+		const tracks = [makeTrack('audio'), makeTrack('audio')];
+		const processors = tracks.map(() => ({ track: makeTrack('audio'), setEnabled: vi.fn(), close: vi.fn() }));
+		noiseSuppressionMock.mockResolvedValueOnce(processors[0]).mockResolvedValueOnce(processors[1]);
+		installBrowserMedia(vi.fn().mockResolvedValueOnce(stream(tracks[0])).mockResolvedValueOnce(stream(tracks[1])));
+		const microphoneTrack = vi.fn();
+		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, undefined, undefined, false, { localTrack: vi.fn(), microphoneTrack, remoteRemoved: vi.fn(), error: vi.fn() });
+		await controller.connect();
+		const sender = FakePeerConnection.instances[0].sender;
+		sender.replaceTrack.mockClear();
+		let failReplacement!: (error: Error) => void;
+		sender.replaceTrack.mockImplementationOnce(() => new Promise((_resolve, reject) => { failReplacement = reject; }));
+		const switching = controller.switchMicrophone('other-mic');
+		const rejected = expect(switching).rejects.toThrow('Replacement failed');
+		await vi.waitFor(() => expect(failReplacement).toBeTypeOf('function'));
+		const muting = controller.setMuted(true);
+		failReplacement(new Error('Replacement failed'));
+		await rejected;
+		await muting;
+		for (const track of tracks) expect(track.stop).toHaveBeenCalled();
+		for (const processor of processors) expect(processor.close).toHaveBeenCalled();
+		expect(controller.localTrack).toBeNull();
+		expect(sender.track).toBeNull();
+		expect(sender.replaceTrack).not.toHaveBeenCalledWith(processors[0].track);
+		expect(microphoneTrack).toHaveBeenLastCalledWith(null);
 		await controller.close();
 	});
 
@@ -686,14 +836,13 @@ describe('CallsMediaController', () => {
 			throw new Error(`unexpected endpoint: ${endpoint}`);
 		});
 		const controller = new CallsMediaController('room-a', 'speaker');
-		controller.setMuted(true);
 		await controller.connect();
-		expect(oldTrack.enabled).toBe(false);
+		expect(oldTrack.enabled).toBe(true);
 		await controller.switchMicrophone('new-device');
 
 		expect(FakePeerConnection.instances[0]?.sender.track).toBe(newTrack);
 		expect(oldTrack.stop).toHaveBeenCalled();
-		expect(newTrack.enabled).toBe(false);
+		expect(newTrack.enabled).toBe(true);
 		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: expect.objectContaining({ deviceId: { exact: 'new-device' } }) }));
 	});
 

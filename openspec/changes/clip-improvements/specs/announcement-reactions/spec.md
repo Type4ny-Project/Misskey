@@ -28,9 +28,9 @@
 
 ## 検証結果
 
-2026年10月4日に専用worktree・専用PostgreSQL/Redisで確認した。API E2Eは9件、既存AnnouncementServiceのunit testは5件、リアクションUI・ピッカーのunit testは4件が通過。backend・frontendの型チェック、frontendビルド、API型再生成、変更ファイルlint、locale safetyも通過した。
+2026年10月4日に専用worktree・専用PostgreSQL/Redisで確認した。API E2Eは10件、既存AnnouncementServiceのunit testは5件、リアクションUI・ピッカーのunit testは4件が通過。backend・frontendの型チェック、frontendビルド、API型再生成、変更ファイルlint、locale safetyも通過した。
 
-ブラウザーでは管理画面の有効化・無効化、詳細画面での追加・ピッカーによる変更・取消、再読込後の状態、「わかった」の確認取消と確定を確認した。一覧は再読込後に集計と自分の状態を確認し、390px幅で横スクロールが生じないことも確認した。PRレビュー後には、保存されたUnicode絵文字の値でも別ユーザーが同じ反応を追加できることをAPI E2Eで追加確認した。ピッカーの修正では、権限のないカスタム絵文字がピッカーで選択不可になることとEnterでも選択されないことをブラウザーで追加確認した。[詳細画面](screenshots/detail.png)と[一覧](screenshots/list.png)のスクリーンショットを保存した。
+ブラウザーでは管理画面の有効化・無効化、詳細画面での追加・ピッカーによる変更・取消、再読込後の状態、「わかった」の確認取消と確定を確認した。一覧は再読込後に集計と自分の状態を確認し、390px幅で横スクロールが生じないことも確認した。PRレビュー後には、ピッカーの合字絵文字と保存されたUnicode絵文字の値でも別ユーザーが同じ反応を追加できることをAPI E2Eで追加確認した。ピッカーの修正では、権限のないカスタム絵文字がピッカーで選択不可になることとEnterでも選択されないことをブラウザーで追加確認した。[詳細画面](screenshots/detail.png)と[一覧](screenshots/list.png)のスクリーンショットを保存した。
 
 新しいmigrationは既存履歴から作った専用DBでup/down/upを実行し、既存お知らせの既定値が無効になることとT03分のpending DDLが0件になることを確認した。既存履歴とモデルの間にある無関係なpending DDL 70件は増減していない。モデルから初期化したプレビューDBでは`pnpm --filter backend check-migrations`も通過した。
 

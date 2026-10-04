@@ -64,15 +64,16 @@ describe('Endpoints', () => {
 			expect((await api('announcements/show', { announcementId }, bob)).body.isRead).toBe(true);
 		});
 
-		test('保存されたUnicode絵文字の値を使って別ユーザーも同じ反応を追加できる', async () => {
+		test.each(['©️', '👁️‍🗨️'])('ピッカーの絵文字 %s を保存し、別ユーザーも同じ反応を追加できる', async reaction => {
 			const announcementId = await createAnnouncement();
-			const first = await api('announcements/react', { announcementId, reaction: '©️' }, bob);
+			const first = await api('announcements/react', { announcementId, reaction }, bob);
 			expect(first.status).toBe(200);
-			expect(first.body.myReaction).toBe('©');
+			const stored = reaction.includes('\u200d') ? reaction : reaction.replace(/\ufe0f/g, '');
+			expect(first.body.myReaction).toBe(stored);
 			const second = await api('announcements/react', { announcementId, reaction: first.body.myReaction }, carol);
 			expect(second.status).toBe(200);
-			expect(second.body.reactions).toEqual({ '©': 2 });
-			expect(second.body.myReaction).toBe('©');
+			expect(second.body.reactions).toEqual({ [stored]: 2 });
+			expect(second.body.myReaction).toBe(stored);
 		});
 
 		test('未設定は無効で、APIによる追加・取消も拒否する', async () => {

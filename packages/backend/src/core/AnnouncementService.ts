@@ -5,6 +5,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { Brackets, EntityNotFoundError } from 'typeorm';
+import emojilist from '@misskey-dev/emoji-data/emojilist.json' with { type: 'json' };
 import { DI } from '@/di-symbols.js';
 import type { MiUser } from '@/models/User.js';
 import type { AnnouncementReadsRepository, AnnouncementReactionsRepository, AnnouncementsRepository, MiAnnouncement, MiAnnouncementRead, UsersRepository } from '@/models/_.js';
@@ -16,8 +17,9 @@ import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { CustomEmojiService } from '@/core/CustomEmojiService.js';
 import { RoleService } from '@/core/RoleService.js';
-import { emojiRegex } from '@/misc/emoji-regex.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
+
+const unicodeReactions = new Set(emojilist.flatMap(([emoji]) => [emoji, emoji.includes('\u200d') ? emoji : emoji.replace(/\ufe0f/g, '')]));
 
 @Injectable()
 export class AnnouncementService {
@@ -229,9 +231,8 @@ export class AnnouncementService {
 				}
 				reaction = `:${emoji.name}:`;
 			} else {
-				const unicode = emojiRegex.exec(reaction)?.[0] ?? emojiRegex.exec(`${reaction}\ufe0f`)?.[0];
-				if (unicode == null || (unicode !== reaction && unicode !== `${reaction}\ufe0f`)) throw new IdentifiableError('INVALID_REACTION');
-				reaction = unicode.includes('\u200d') ? unicode : unicode.replace(/\ufe0f/g, '');
+				if (!unicodeReactions.has(reaction)) throw new IdentifiableError('INVALID_REACTION');
+				reaction = reaction.includes('\u200d') ? reaction : reaction.replace(/\ufe0f/g, '');
 			}
 			await this.announcementReactionsRepository.upsert({
 				id: this.idService.gen(),

@@ -85,6 +85,7 @@ let reconnectCountdownTimer: number | null = null;
 let reconnectConnection: CallsRoomConnection | null = null;
 let stopReconnectRoomWatch: (() => void) | null = null;
 let cancelingSpeakerRequest = false;
+let muteBusy = false;
 let cancelCameraPreview: (() => void) | null = null;
 
 function disposeReconnectConnection(): void {
@@ -250,7 +251,7 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 		},
 	);
 	media.value = controller;
-	controller.setMuted(muted.value);
+	await controller.setMuted(muted.value);
 	await controller.setNoiseSuppression(noiseSuppression.value);
 	await controller.connect(selectedMicrophone.value || undefined);
 	if (generation !== sessionGeneration || media.value !== controller) {
@@ -261,7 +262,7 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 		muted.value = true;
 		connection.value?.setMuted(true);
 	}
-	controller.setMuted(muted.value);
+	await controller.setMuted(muted.value);
 	if (participant.role !== 'listener') await loadMicrophones();
 }
 
@@ -445,19 +446,21 @@ function onReconnectStorage(event: StorageEvent): void {
 }
 
 async function toggleMute(): Promise<void> {
-	if (!isSpeaker.value) return;
-	if (muted.value && media.value?.localTrack === null) {
-		try {
-			await media.value.switchMicrophone(selectedMicrophone.value || undefined);
-		} catch (error) {
-			console.error('[Calls] Microphone unavailable', error);
-			await alert({ type: 'error', text: i18n.ts._calls.mediaFailed });
-			return;
-		}
+	const controller = media.value;
+	if (!isSpeaker.value || joining.value || muteBusy || controller == null) return;
+	const nextMuted = !muted.value;
+	muteBusy = true;
+	try {
+		await controller.setMuted(nextMuted);
+		if (media.value !== controller) return;
+		muted.value = nextMuted;
+		connection.value?.setMuted(nextMuted);
+	} catch (error) {
+		console.error('[Calls] Microphone unavailable', error);
+		if (media.value === controller) await alert({ type: 'error', text: i18n.ts._calls.mediaFailed });
+	} finally {
+		muteBusy = false;
 	}
-	muted.value = !muted.value;
-	media.value?.setMuted(muted.value);
-	connection.value?.setMuted(muted.value);
 }
 
 async function requestSpeaker(): Promise<void> {

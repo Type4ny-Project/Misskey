@@ -31,6 +31,8 @@ export class CallsMediaController {
 	public participantId: string | null = null;
 	public localTrack: MediaStreamTrack | null = null;
 	private peer: RTCPeerConnection | null = null;
+	private microphoneSender: RTCRtpSender | null = null;
+	private microphoneDeviceId: string | undefined;
 	private localVideos = new Map<CallsVideoSource, { track: MediaStreamTrack; publicationId?: string; transceiver?: RTCRtpTransceiver }>();
 	private remotePublications = new Map<string, CallsRemotePublication>();
 	private receivedRemoteTracks = new Map<string, MediaStreamTrack>();
@@ -78,13 +80,14 @@ export class CallsMediaController {
 	}
 
 	public async connect(deviceId?: string): Promise<void> {
+		this.microphoneDeviceId = deviceId;
 		const capabilities = detectCallsMediaCapabilities();
 		if (!capabilities.secureContext || !capabilities.peerConnection || !capabilities.transceiver) {
 			this.fail('unsupported');
 			return;
 		}
 		try {
-			if (this.role !== 'listener' && capabilities.getUserMedia) {
+			if (this.role !== 'listener' && !this.muted && capabilities.getUserMedia) {
 				this.setState('acquiring-media');
 				try {
 					await this.acquireMicrophone(deviceId);
@@ -116,13 +119,17 @@ export class CallsMediaController {
 		});
 		const stream = await new Promise<MediaStream>((resolve, reject) => {
 			const timeout = window.setTimeout(() => {
-				this.cancelAcquisition = null;
+				if (this.cancelAcquisition === cancel) this.cancelAcquisition = null;
 				reject(new DOMException('Microphone permission is still pending', 'TimeoutError'));
 			}, 30_000);
-			this.cancelAcquisition = () => reject(new DOMException('Microphone acquisition cancelled', 'AbortError'));
+			const cancel = () => {
+				window.clearTimeout(timeout);
+				reject(new DOMException('Microphone acquisition cancelled', 'AbortError'));
+			};
+			this.cancelAcquisition = cancel;
 			void mediaRequest.then(value => {
 				window.clearTimeout(timeout);
-				if (this.cancelAcquisition == null) {
+				if (this.cancelAcquisition !== cancel) {
 					for (const track of value.getTracks()) track.stop();
 					return;
 				}
@@ -130,13 +137,17 @@ export class CallsMediaController {
 				resolve(value);
 			}, error => {
 				window.clearTimeout(timeout);
-				this.cancelAcquisition = null;
+				if (this.cancelAcquisition === cancel) this.cancelAcquisition = null;
 				reject(error);
 			});
 		});
 		this.localTrack = stream.getAudioTracks()[0] ?? null;
 		if (this.localTrack == null) throw new DOMException('No audio track', 'NotFoundError');
-		this.localTrack.enabled = !this.muted;
+		if (this.muted || this.isClosed()) {
+			this.localTrack.stop();
+			this.localTrack = null;
+			throw new DOMException('Microphone acquisition cancelled', 'AbortError');
+		}
 		this.localTrack.addEventListener('ended', () => void this.recoverFromDeviceLoss());
 	}
 
@@ -182,6 +193,7 @@ export class CallsMediaController {
 		});
 
 		const sendTransceiver = peer.addTransceiver('audio', { direction: this.localTrack == null ? 'recvonly' : 'sendrecv' });
+		this.microphoneSender = this.localTrack == null ? null : sendTransceiver.sender;
 		const capabilities = RTCRtpReceiver.getCapabilities('audio');
 		if (capabilities != null && typeof sendTransceiver.setCodecPreferences === 'function') {
 			sendTransceiver.setCodecPreferences(preferOpus(capabilities.codecs));
@@ -424,9 +436,22 @@ export class CallsMediaController {
 		});
 	}
 
-	public setMuted(muted: boolean): void {
+	public async setMuted(muted: boolean): Promise<void> {
+		if (this.muted === muted) return;
 		this.muted = muted;
-		if (this.localTrack != null) this.localTrack.enabled = !muted;
+		if (muted) {
+			this.cancelMicrophoneRequest();
+			this.localTrack?.stop();
+			this.localTrack = null;
+			await this.enqueue(async () => { await this.microphoneSender?.replaceTrack(null); });
+		} else if (this.peer != null && this.role !== 'listener' && !this.isClosed()) {
+			try {
+				await this.switchMicrophone(this.microphoneDeviceId);
+			} catch (error) {
+				this.muted = true;
+				throw error;
+			}
+		}
 	}
 
 	public async setNoiseSuppression(enabled: boolean): Promise<void> {
@@ -436,25 +461,26 @@ export class CallsMediaController {
 	}
 
 	public async switchMicrophone(deviceId?: string, noiseSuppression = this.noiseSuppression): Promise<void> {
-		const oldTrack = this.localTrack;
-		await this.acquireMicrophone(deviceId, noiseSuppression);
-		if (oldTrack == null && this.peer != null) {
-			await this.enqueue(() => this.createConnection());
-			return;
-		}
-		const sender = this.peer?.getSenders().find(item => item.track?.kind === 'audio');
-		try {
-			await sender?.replaceTrack(this.localTrack);
-		} catch (error) {
-			this.localTrack?.stop();
-			this.localTrack = oldTrack;
-			throw error;
-		}
-		oldTrack?.stop();
+		this.microphoneDeviceId = deviceId;
+		await this.enqueue(async () => {
+			if (this.muted || this.role === 'listener' || this.isClosed()) return;
+			const oldTrack = this.localTrack;
+			await this.acquireMicrophone(deviceId, noiseSuppression);
+			try {
+				if (this.microphoneSender == null && this.peer != null) await this.createConnection();
+				else await this.microphoneSender?.replaceTrack(this.localTrack);
+			} catch (error) {
+				this.localTrack?.stop();
+				this.localTrack = oldTrack;
+				await this.microphoneSender?.replaceTrack(oldTrack);
+				throw error;
+			}
+			oldTrack?.stop();
+		});
 	}
 
 	private async recoverFromDeviceLoss(): Promise<void> {
-		if (this.role === 'listener' || this.state === 'leaving' || this.state === 'closed') return;
+		if (this.muted || this.role === 'listener' || this.isClosed()) return;
 		try {
 			await this.acquireMicrophone();
 			this.scheduleReconnect('failed');
@@ -567,6 +593,7 @@ export class CallsMediaController {
 		this.cancelMicrophoneRequest();
 		this.peer?.close();
 		this.peer = null;
+		this.microphoneSender = null;
 		this.subscribedPublications.clear();
 		for (const publication of this.remotePublications.values()) this.videoCallbacks?.remoteRemoved(publication.id);
 		this.remotePublications.clear();

@@ -36,3 +36,5 @@ CWの警告文がある場合は、CWの印と警告文の要約を表示する�
 [デスクトップ画面](../../../docs/screenshots/compact-timeline-desktop.png)と[モバイル画面](../../../docs/screenshots/compact-timeline-mobile.png)は合成データで撮影した。本番接続と backend の権限処理を含む E2E は今回の検証に含めていない。
 
 PR レビューで、長いノートの途中から縮小すると同じノートが画面上へ消えるケースを再現して修正した。Playwright で250pxのノートを9px／150px読み進めて32pxへ縮小する場合と、32pxから250pxへ戻す場合を確認し、いずれも同じノートが表示範囲に残った。
+
+日付区切りのある行の移動アニメーションも切り替え中だけ抑止した。Vue の TransitionGroup を含むブラウザ再現で、CSS の `overflow-anchor: auto`／`none` の両方を確認し、切り替え直後の描画と800ms後も同じノートが表示範囲に残った。Safari 実機の確認は含めていない。

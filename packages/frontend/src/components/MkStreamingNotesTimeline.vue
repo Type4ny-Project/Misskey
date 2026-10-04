@@ -26,7 +26,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:leaveActiveClass="$style.transition_x_leaveActive"
 			:enterFromClass="$style.transition_x_enterFrom"
 			:leaveToClass="$style.transition_x_leaveTo"
-			:moveClass="$style.transition_x_move"
+			:moveClass="changingDensity ? '' : $style.transition_x_move"
 			tag="div"
 		>
 			<template v-for="(note, i) in paginator.items.value" :key="note.id">
@@ -238,7 +238,10 @@ watch(rootEl, (el) => {
 }, { immediate: true });
 
 // 表示密度だけを変更し、取得済みの一覧と表示中のノートの位置を保つ。
+const changingDensity = ref(false);
 watch(() => props.compact, async () => {
+	changingDensity.value = true;
+	nextTick(() => { changingDensity.value = false; });
 	const root = rootEl.value;
 	if (root == null || isTop()) return;
 	const container = getScrollContainer(root);

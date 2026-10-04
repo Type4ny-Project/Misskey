@@ -31,7 +31,7 @@ interface RouteDefWithComponent extends RouteDefBase {
 }
 
 interface RouteDefWithRedirect extends RouteDefBase {
-	redirect: string | ((props: Map<string, string | boolean>) => string);
+	redirect: string | ((props: Map<string, string | boolean>, fullPath: string) => string);
 }
 
 export type RouteDef = RouteDefWithComponent | RouteDefWithRedirect;
@@ -203,7 +203,9 @@ function parsePath(path: string): ParsedPath {
 	path = path.substring(1);
 
 	for (const part of path.split('/')) {
-		if (part.includes(':')) {
+		if (part.startsWith('\\:')) {
+			res.push(part.substring(1));
+		} else if (part.includes(':')) {
 			const prefix = part.substring(0, part.indexOf(':'));
 			const placeholder = part.substring(part.indexOf(':') + 1);
 			const wildcard = placeholder.includes('(*)');
@@ -396,7 +398,7 @@ export class Nirax<DEF extends RouteDef[]> extends EventEmitter<RouterEvents> {
 			if ('redirect' in current.route) {
 				let redirectPath: string;
 				if (typeof current.route.redirect === 'function') {
-					redirectPath = current.route.redirect(current.props);
+					redirectPath = current.route.redirect(current.props, fullPath);
 				} else {
 					redirectPath = current.route.redirect + (current._parsedRoute.queryString ? '?' + current._parsedRoute.queryString : '') + (current._parsedRoute.hash ? '#' + current._parsedRoute.hash : '');
 				}

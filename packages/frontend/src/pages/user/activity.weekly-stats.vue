@@ -142,7 +142,7 @@ const weekLabel = computed(() => {
 	return `${new Date(stats.value.sinceDate).toLocaleDateString()} からのまとめ`;
 });
 
-const statsUrl = `${url}/my/stats`;
+const statsUrl = `${url}/:my/stats`;
 
 const metrics = computed(() => {
 	if (stats.value == null) return [];

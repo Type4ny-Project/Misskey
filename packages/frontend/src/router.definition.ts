@@ -29,8 +29,8 @@ export const ROUTE_DEF = [{
 	path: '/timeline',
 	component: PageTimeline,
 }, {
-	path: '/my/stats',
-	redirect: $i ? `/@${$i.username}/stats` : '/',
+	path: '/\\:my/:path(*)?',
+	redirect: (_props, fullPath) => $i ? fullPath.replace('/:my', `/@${$i.username}`) : '/',
 }, {
 	path: '/@:username/pages/:pageName(*)',
 	component: page(() => import('@/pages/page.vue')),

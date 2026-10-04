@@ -701,6 +701,175 @@ type BubbleGameRankingResponse = operations['bubble-game___ranking']['responses'
 // @public (undocumented)
 type BubbleGameRegisterRequest = operations['bubble-game___register']['requestBody']['content']['application/json'];
 
+declare namespace calls {
+    export {
+        negotiateCallsCompatibility,
+        preferCallsOpus,
+        CallsCapabilityDocument,
+        CallsCompatibility,
+        CallsEventSequenceTracker
+    }
+}
+export { calls }
+
+// @public (undocumented)
+type CallsCapabilitiesResponse = operations['calls___capabilities']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsCapabilityDocument = {
+    protocolVersion: string;
+    enabled?: boolean;
+    mediaKinds: readonly string[];
+    codecs: readonly string[];
+    roles: readonly string[];
+    turnAvailable: boolean;
+    guestParticipation: boolean;
+    extensions: readonly string[];
+};
+
+// @public (undocumented)
+type CallsCompatibility = {
+    compatible: true;
+    negotiatedMajor: number;
+} | {
+    compatible: false;
+    reason: 'feature-disabled' | 'version-mismatch' | 'audio-unsupported' | 'opus-unsupported' | 'missing-extension';
+};
+
+// @public (undocumented)
+class CallsEventSequenceTracker {
+    // (undocumented)
+    accept(sequence: number, roomRevision?: number): 'accepted' | 'duplicate' | 'gap';
+    // (undocumented)
+    reset(sequence?: number, roomRevision?: number): void;
+}
+
+// @public (undocumented)
+type CallsMediaCredentialRefreshRequest = operations['calls___media___credential___refresh']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaCredentialRefreshResponse = operations['calls___media___credential___refresh']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaReconcileRequest = operations['calls___media___reconcile']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaReconcileResponse = operations['calls___media___reconcile']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaRenegotiateRequest = operations['calls___media___renegotiate']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaRenegotiateResponse = operations['calls___media___renegotiate']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaSessionCreateRequest = operations['calls___media___session___create']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaSessionCreateResponse = operations['calls___media___session___create']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaTracksCloseRequest = operations['calls___media___tracks___close']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaTracksCloseResponse = operations['calls___media___tracks___close']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaTracksPublishRequest = operations['calls___media___tracks___publish']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaTracksPublishResponse = operations['calls___media___tracks___publish']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaTracksSubscribeRequest = operations['calls___media___tracks___subscribe']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaTracksSubscribeResponse = operations['calls___media___tracks___subscribe']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaTurnCredentialsRequest = operations['calls___media___turn-credentials']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsMediaTurnCredentialsResponse = operations['calls___media___turn-credentials']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsParticipant = components['schemas']['CallsParticipant'];
+
+// @public (undocumented)
+type CallsRoom = components['schemas']['CallsRoom'];
+
+// @public (undocumented)
+type CallsRoomsCancelRequest = operations['calls___rooms___cancel']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsCancelResponse = operations['calls___rooms___cancel']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsCancelSpeakerRequestRequest = operations['calls___rooms___cancel-speaker-request']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsCreateRequest = operations['calls___rooms___create']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsCreateResponse = operations['calls___rooms___create']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsEndRequest = operations['calls___rooms___end']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsEndResponse = operations['calls___rooms___end']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsJoinRequest = operations['calls___rooms___join']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsJoinResponse = operations['calls___rooms___join']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsLeaveRequest = operations['calls___rooms___leave']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsListRequest = operations['calls___rooms___list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsListResponse = operations['calls___rooms___list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsOpenRequest = operations['calls___rooms___open']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsOpenResponse = operations['calls___rooms___open']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsRemoveParticipantRequest = operations['calls___rooms___remove-participant']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsRequestSpeakerRequest = operations['calls___rooms___request-speaker']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsSetModeratorRequest = operations['calls___rooms___set-moderator']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsSetModeratorResponse = operations['calls___rooms___set-moderator']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsSetRoleRequest = operations['calls___rooms___set-role']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsSetRoleResponse = operations['calls___rooms___set-role']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsShowRequest = operations['calls___rooms___show']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsShowResponse = operations['calls___rooms___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsUsersActiveRoomsRequest = operations['calls___users___active-rooms']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsUsersActiveRoomsResponse = operations['calls___users___active-rooms']['responses']['200']['content']['application/json'];
+
 // @public (undocumented)
 type Channel = components['schemas']['Channel'];
 
@@ -1016,6 +1185,71 @@ export type Channels = {
                 id: ChatMessageLite['id'];
             };
         };
+    };
+    callsRoom: {
+        params: {
+            roomId: string;
+        };
+        events: {
+            lifecycle: (payload: CallsRoomEventBase & {
+                state: 'scheduled' | 'open' | 'ended' | 'cancelled';
+                reason?: 'host-timeout';
+            }) => void;
+            participant: (payload: CallsRoomEventBase & {
+                participantId: string;
+                action: 'joined' | 'left' | 'removed' | 'updated';
+            }) => void;
+            role: (payload: CallsRoomEventBase & {
+                participantId: string;
+                role: 'host' | 'speaker' | 'listener';
+            }) => void;
+            speakerRequest: (payload: CallsRoomEventBase & {
+                participantId: string;
+                requested: boolean;
+            }) => void;
+            mute: (payload: CallsRoomEventBase & {
+                participantId: string;
+                isMuted: boolean;
+            }) => void;
+            speaking: (payload: CallsRoomEventBase & {
+                participantIds: string[];
+            }) => void;
+            track: (payload: CallsRoomEventBase & {
+                participantId: string;
+                publicationId: string;
+                available: boolean;
+                mediaKind: 'audio' | 'video';
+                mediaSource?: 'microphone' | 'camera' | 'screen';
+            }) => void;
+            revoked: (payload: CallsRoomEventBase & {
+                participantId?: string;
+                connectionId?: string;
+                generation?: number;
+                reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation' | 'replaced';
+            }) => void;
+        };
+        receives: {
+            mute: boolean;
+            speaking: boolean;
+            heartbeat: {
+                connectionId: string;
+                generation: number;
+            };
+        };
+    };
+    callsRooms: {
+        params: null;
+        events: {
+            created: (payload: {
+                action: 'created';
+                room: CallsRoom;
+            }) => void;
+            updated: (payload: {
+                action: 'open' | 'ended' | 'cancelled' | 'participants';
+                room: CallsRoom;
+            }) => void;
+        };
+        receives: null;
     };
 };
 
@@ -1905,6 +2139,47 @@ declare namespace entities {
         BubbleGameRankingRequest,
         BubbleGameRankingResponse,
         BubbleGameRegisterRequest,
+        CallsCapabilitiesResponse,
+        CallsMediaCredentialRefreshRequest,
+        CallsMediaCredentialRefreshResponse,
+        CallsMediaReconcileRequest,
+        CallsMediaReconcileResponse,
+        CallsMediaRenegotiateRequest,
+        CallsMediaRenegotiateResponse,
+        CallsMediaSessionCreateRequest,
+        CallsMediaSessionCreateResponse,
+        CallsMediaTracksCloseRequest,
+        CallsMediaTracksCloseResponse,
+        CallsMediaTracksPublishRequest,
+        CallsMediaTracksPublishResponse,
+        CallsMediaTracksSubscribeRequest,
+        CallsMediaTracksSubscribeResponse,
+        CallsMediaTurnCredentialsRequest,
+        CallsMediaTurnCredentialsResponse,
+        CallsRoomsCancelRequest,
+        CallsRoomsCancelResponse,
+        CallsRoomsCancelSpeakerRequestRequest,
+        CallsRoomsCreateRequest,
+        CallsRoomsCreateResponse,
+        CallsRoomsEndRequest,
+        CallsRoomsEndResponse,
+        CallsRoomsJoinRequest,
+        CallsRoomsJoinResponse,
+        CallsRoomsLeaveRequest,
+        CallsRoomsListRequest,
+        CallsRoomsListResponse,
+        CallsRoomsOpenRequest,
+        CallsRoomsOpenResponse,
+        CallsRoomsRemoveParticipantRequest,
+        CallsRoomsRequestSpeakerRequest,
+        CallsRoomsSetModeratorRequest,
+        CallsRoomsSetModeratorResponse,
+        CallsRoomsSetRoleRequest,
+        CallsRoomsSetRoleResponse,
+        CallsRoomsShowRequest,
+        CallsRoomsShowResponse,
+        CallsUsersActiveRoomsRequest,
+        CallsUsersActiveRoomsResponse,
         ChannelsCreateRequest,
         ChannelsCreateResponse,
         ChannelsFavoriteRequest,
@@ -2512,7 +2787,9 @@ declare namespace entities {
         ChatRoom,
         ChatRoomInvitation,
         ChatRoomMembership,
-        Event_2 as Event
+        Event_2 as Event,
+        CallsRoom,
+        CallsParticipant
     }
 }
 export { entities }
@@ -3225,7 +3502,7 @@ type ModerationLog = {
 }[keyof ModerationLogPayloads]);
 
 // @public (undocumented)
-export const moderationLogTypes: readonly ["updateServerSettings", "suspend", "unsuspend", "updateUserNote", "addCustomEmoji", "updateCustomEmoji", "deleteCustomEmoji", "assignRole", "unassignRole", "createRole", "updateRole", "deleteRole", "clearQueue", "promoteQueue", "deleteDriveFile", "deleteNote", "createGlobalAnnouncement", "createUserAnnouncement", "updateGlobalAnnouncement", "updateUserAnnouncement", "deleteGlobalAnnouncement", "deleteUserAnnouncement", "resetPassword", "suspendRemoteInstance", "unsuspendRemoteInstance", "updateRemoteInstanceNote", "markSensitiveDriveFile", "unmarkSensitiveDriveFile", "resolveAbuseReport", "forwardAbuseReport", "updateAbuseReportNote", "createInvitation", "createAd", "updateAd", "deleteAd", "createAvatarDecoration", "updateAvatarDecoration", "deleteAvatarDecoration", "unsetMfa", "unsetUserAvatar", "unsetUserBanner", "createSystemWebhook", "updateSystemWebhook", "deleteSystemWebhook", "createAbuseReportNotificationRecipient", "updateAbuseReportNotificationRecipient", "deleteAbuseReportNotificationRecipient", "deleteAccount", "deletePage", "deleteFlash", "deleteGalleryPost", "deleteChatRoom", "updateProxyAccountDescription"];
+export const moderationLogTypes: readonly ["inboxRejected", "setInboxRule", "deleteInboxRule", "updateServerSettings", "suspend", "unsuspend", "updateUserNote", "addCustomEmoji", "updateCustomEmoji", "deleteCustomEmoji", "assignRole", "unassignRole", "createRole", "updateRole", "deleteRole", "clearQueue", "promoteQueue", "deleteDriveFile", "deleteNote", "createGlobalAnnouncement", "createUserAnnouncement", "updateGlobalAnnouncement", "updateUserAnnouncement", "deleteGlobalAnnouncement", "deleteUserAnnouncement", "resetPassword", "suspendRemoteInstance", "unsuspendRemoteInstance", "updateRemoteInstanceNote", "markSensitiveDriveFile", "unmarkSensitiveDriveFile", "resolveAbuseReport", "forwardAbuseReport", "updateAbuseReportNote", "createInvitation", "createAd", "updateAd", "deleteAd", "createAvatarDecoration", "updateAvatarDecoration", "deleteAvatarDecoration", "unsetMfa", "unsetUserAvatar", "unsetUserBanner", "createSystemWebhook", "updateSystemWebhook", "deleteSystemWebhook", "createAbuseReportNotificationRecipient", "updateAbuseReportNotificationRecipient", "deleteAbuseReportNotificationRecipient", "deleteAccount", "deletePage", "deleteFlash", "deleteGalleryPost", "deleteChatRoom", "updateProxyAccountDescription"];
 
 // @public (undocumented)
 type MuteCreateRequest = operations['mute___create']['requestBody']['content']['application/json'];
@@ -3250,6 +3527,12 @@ type MyAppsRequest = operations['my___apps']['requestBody']['content']['applicat
 
 // @public (undocumented)
 type MyAppsResponse = operations['my___apps']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+function negotiateCallsCompatibility(capabilities: CallsCapabilityDocument, options?: {
+    supportedMajor?: number;
+    requiredExtensions?: readonly string[];
+}): CallsCompatibility;
 
 // @public (undocumented)
 type Note = components['schemas']['Note'];
@@ -3547,7 +3830,7 @@ type PartialRolePolicyOverride = Partial<{
 }>;
 
 // @public (undocumented)
-export const permissions: readonly ["read:account", "write:account", "read:blocks", "write:blocks", "read:drive", "write:drive", "read:favorites", "write:favorites", "read:following", "write:following", "read:messaging", "write:messaging", "read:mutes", "write:mutes", "write:notes", "read:notifications", "write:notifications", "read:reactions", "write:reactions", "write:votes", "read:pages", "write:pages", "write:page-likes", "read:page-likes", "read:user-groups", "write:user-groups", "read:channels", "write:channels", "read:gallery", "write:gallery", "read:gallery-likes", "write:gallery-likes", "read:flash", "write:flash", "read:flash-likes", "write:flash-likes", "read:admin:abuse-user-reports", "write:admin:delete-account", "write:admin:delete-all-files-of-a-user", "read:admin:index-stats", "read:admin:table-stats", "read:admin:user-ips", "read:admin:meta", "write:admin:reset-password", "write:admin:resolve-abuse-user-report", "write:admin:send-email", "read:admin:server-info", "read:admin:show-moderation-log", "read:admin:show-user", "write:admin:suspend-user", "write:admin:unset-mfa", "write:admin:unset-user-avatar", "write:admin:unset-user-banner", "write:admin:unsuspend-user", "write:admin:meta", "write:admin:user-note", "write:admin:roles", "read:admin:roles", "write:admin:relays", "read:admin:relays", "write:admin:invite-codes", "read:admin:invite-codes", "write:admin:announcements", "read:admin:announcements", "write:admin:avatar-decorations", "read:admin:avatar-decorations", "write:admin:federation", "write:admin:account", "read:admin:account", "write:admin:emoji", "read:admin:emoji", "write:admin:queue", "read:admin:queue", "write:admin:promo", "write:admin:drive", "read:admin:drive", "write:admin:ad", "read:admin:ad", "write:invite-codes", "read:invite-codes", "write:clip-favorite", "read:clip-favorite", "read:federation", "write:report-abuse", "write:chat", "read:chat"];
+export const permissions: readonly ["read:account", "write:account", "read:blocks", "write:blocks", "read:drive", "write:drive", "read:favorites", "write:favorites", "read:following", "write:following", "read:messaging", "write:messaging", "read:mutes", "write:mutes", "write:notes", "read:notifications", "write:notifications", "read:reactions", "write:reactions", "write:votes", "read:pages", "write:pages", "write:page-likes", "read:page-likes", "read:user-groups", "write:user-groups", "read:channels", "write:channels", "read:gallery", "write:gallery", "read:gallery-likes", "write:gallery-likes", "read:flash", "write:flash", "read:flash-likes", "write:flash-likes", "read:admin:abuse-user-reports", "write:admin:delete-account", "write:admin:delete-all-files-of-a-user", "read:admin:index-stats", "read:admin:table-stats", "read:admin:user-ips", "read:admin:meta", "write:admin:reset-password", "write:admin:resolve-abuse-user-report", "write:admin:send-email", "read:admin:server-info", "read:admin:show-moderation-log", "read:admin:show-user", "write:admin:suspend-user", "write:admin:unset-mfa", "write:admin:unset-user-avatar", "write:admin:unset-user-banner", "write:admin:unsuspend-user", "write:admin:meta", "write:admin:user-note", "write:admin:roles", "read:admin:roles", "write:admin:relays", "read:admin:relays", "write:admin:invite-codes", "read:admin:invite-codes", "write:admin:announcements", "read:admin:announcements", "write:admin:avatar-decorations", "read:admin:avatar-decorations", "write:admin:federation", "write:admin:account", "read:admin:account", "write:admin:emoji", "read:admin:emoji", "write:admin:queue", "read:admin:queue", "write:admin:promo", "write:admin:drive", "read:admin:drive", "write:admin:ad", "read:admin:ad", "write:invite-codes", "read:invite-codes", "write:clip-favorite", "read:clip-favorite", "read:federation", "write:report-abuse", "write:chat", "read:chat", "read:calls", "write:calls"];
 
 // @public (undocumented)
 type PingResponse = operations['ping']['responses']['200']['content']['application/json'];
@@ -3560,6 +3843,11 @@ type PointSendRequest = operations['point___send']['requestBody']['content']['ap
 
 // @public (undocumented)
 type PointSendResponse = operations['point___send']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+function preferCallsOpus<T extends {
+    mimeType: string;
+}>(codecs: readonly T[]): T[];
 
 // @public (undocumented)
 type PromoReadRequest = operations['promo___read']['requestBody']['content']['application/json'];
@@ -4126,8 +4414,9 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:235:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:250:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:236:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:251:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:308:4 - (ae-forgotten-export) The symbol "CallsRoomEventBase" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

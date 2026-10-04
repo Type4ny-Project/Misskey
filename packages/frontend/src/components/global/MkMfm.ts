@@ -12,6 +12,7 @@ import type { MkABehavior } from '@/components/global/MkA.vue';
 import MkUrl from '@/components/global/MkUrl.vue';
 import MkTime from '@/components/global/MkTime.vue';
 import MkUrlEventCard from '@/components/MkUrlEventCard.vue';
+import MkUrlCallsCard from '@/components/MkUrlCallsCard.vue';
 import MkLink from '@/components/MkLink.vue';
 import MkMention from '@/components/MkMention.vue';
 import MkEmoji from '@/components/global/MkEmoji.vue';
@@ -22,7 +23,7 @@ import MkGoogle from '@/components/MkGoogle.vue';
 import MkSparkle from '@/components/MkSparkle.vue';
 import MkA from '@/components/global/MkA.vue';
 import { prefer } from '@/preferences.js';
-import { getLocalEventId } from '@/utility/url-preview.js';
+import { getLocalCallsRoomId, getLocalEventId } from '@/utility/url-preview.js';
 
 function safeParseFloat(str: unknown): number | null {
 	if (typeof str !== 'string' || str === '') return null;
@@ -351,6 +352,13 @@ export default function (props: MfmProps, { emit }: { emit: SetupContext<MfmEven
 			}
 
 			case 'url': {
+				const localCallsRoomId = getLocalCallsRoomId(token.props.url);
+				if (localCallsRoomId !== null) {
+					const prevToken = ast[index - 1];
+					const prevText = prevToken?.type === 'text' ? prevToken.props.text : null;
+					const card = h(MkUrlCallsCard, { key: Math.random(), roomId: localCallsRoomId });
+					return prevText?.endsWith('\n') === true ? [card] : [h('br'), card];
+				}
 				const localEventId = getLocalEventId(token.props.url);
 				if (localEventId !== null) {
 					const prevToken = ast[index - 1];

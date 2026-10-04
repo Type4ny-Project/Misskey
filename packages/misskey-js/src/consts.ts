@@ -134,9 +134,14 @@ export const permissions = [
 	'write:report-abuse',
 	'write:chat',
 	'read:chat',
+	'read:calls',
+	'write:calls',
 ] as const;
 
 export const moderationLogTypes = [
+	'inboxRejected',
+	'setInboxRule',
+	'deleteInboxRule',
 	'updateServerSettings',
 	'suspend',
 	'unsuspend',
@@ -278,6 +283,18 @@ type ReceivedAbuseReport = {
 };
 
 export type ModerationLogPayloads = {
+	inboxRejected: {
+		activity: { type: string | string[]; object?: string | { id?: string } };
+		rule: { name?: string; description?: string; condFormula: Record<string, unknown>; action: { type: string } };
+	};
+	setInboxRule: {
+		userId: string;
+		rule: { name?: string | null; description?: string; condFormula: Record<string, unknown>; action: { type: string } };
+	};
+	deleteInboxRule: {
+		userId: string;
+		rule: { name?: string; condFormula: Record<string, unknown>; action: { type: string } };
+	};
 	updateServerSettings: {
 		before: MetaDetailed | null;
 		after: MetaDetailed | null;

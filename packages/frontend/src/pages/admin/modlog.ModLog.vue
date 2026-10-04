@@ -9,6 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<b
 			:class="{
 				[$style.logGreen]: [
+					'setInboxRule',
 					'createRole',
 					'addCustomEmoji',
 					'createGlobalAnnouncement',
@@ -26,6 +27,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					'suspendRemoteInstance',
 				].includes(log.type),
 				[$style.logRed]: [
+					'inboxRejected',
+					'deleteInboxRule',
 					'suspend',
 					'deleteRole',
 					'deleteGlobalAnnouncement',
@@ -45,7 +48,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				].includes(log.type)
 			}"
 		>{{ i18n.ts._moderationLogTypes[log.type] }}</b>
-		<span v-if="log.type === 'updateUserNote'">: @{{ log.info.userUsername }}{{ log.info.userHost ? '@' + log.info.userHost : '' }}</span>
+		<span v-if="log.type === 'inboxRejected'">: {{ log.info.activity.type }} <i class="ti ti-arrow-right"></i> {{ log.info.rule.name || i18n.ts._inboxRule.unnamedRule }}</span>
+		<span v-else-if="log.type === 'setInboxRule' || log.type === 'deleteInboxRule'">: {{ log.info.rule.name || i18n.ts._inboxRule.unnamedRule }}</span>
+		<span v-else-if="log.type === 'updateUserNote'">: @{{ log.info.userUsername }}{{ log.info.userHost ? '@' + log.info.userHost : '' }}</span>
 		<span v-else-if="log.type === 'suspend'">: @{{ log.info.userUsername }}{{ log.info.userHost ? '@' + log.info.userHost : '' }}</span>
 		<span v-else-if="log.type === 'unsuspend'">: @{{ log.info.userUsername }}{{ log.info.userHost ? '@' + log.info.userHost : '' }}</span>
 		<span v-else-if="log.type === 'resetPassword'">: @{{ log.info.userUsername }}{{ log.info.userHost ? '@' + log.info.userHost : '' }}</span>
@@ -86,7 +91,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<span v-else-if="log.type === 'deleteChatRoom'">: @{{ log.info.room.name }}</span>
 	</template>
 	<template #icon>
-		<i v-if="log.type === 'updateServerSettings'" class="ti ti-settings"></i>
+		<i v-if="log.type === 'inboxRejected'" class="ti ti-mail-x"></i>
+		<i v-else-if="log.type === 'setInboxRule'" class="ti ti-plus"></i>
+		<i v-else-if="log.type === 'deleteInboxRule'" class="ti ti-trash"></i>
+		<i v-else-if="log.type === 'updateServerSettings'" class="ti ti-settings"></i>
 		<i v-else-if="log.type === 'updateUserNote'" class="ti ti-pencil"></i>
 		<i v-else-if="log.type === 'suspend'" class="ti ti-user-x"></i>
 		<i v-else-if="log.type === 'unsuspend'" class="ti ti-user-check"></i>
@@ -136,11 +144,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div>
 		<div style="display: flex; gap: var(--MI-margin); flex-wrap: wrap;">
-			<div style="flex: 1;">{{ i18n.ts.moderator }}: <MkA :to="`/admin/user/${log.userId}`" class="_link">@{{ log.user?.username }}</MkA></div>
+			<div style="flex: 1;">{{ log.type === 'inboxRejected' ? i18n.ts._inboxRule.sender : i18n.ts.moderator }}: <MkA :to="`/admin/user/${log.userId}`" class="_link">@{{ log.user?.username }}{{ log.user?.host ? '@' + log.user.host : '' }}</MkA></div>
 			<div style="flex: 1;">{{ i18n.ts.dateAndTime }}: <MkTime :time="log.createdAt" mode="detail"/></div>
 		</div>
 
-		<template v-if="log.type === 'updateServerSettings'">
+		<template v-if="log.type === 'inboxRejected'">
+			<div>{{ i18n.ts.activity }}: {{ log.info.activity.type }}</div>
+			<div v-if="log.info.activity.object" :class="$style.target">{{ i18n.ts.target }}: {{ typeof log.info.activity.object === 'string' ? log.info.activity.object : log.info.activity.object.id }}</div>
+			<div>{{ i18n.ts._inboxRule.name }}: {{ log.info.rule.name || i18n.ts._inboxRule.unnamedRule }}</div>
+			<div v-if="log.info.rule.description">{{ i18n.ts.description }}: {{ log.info.rule.description }}</div>
+		</template>
+		<template v-else-if="log.type === 'setInboxRule' || log.type === 'deleteInboxRule'">
+			<div>{{ i18n.ts._inboxRule.name }}: {{ log.info.rule.name || i18n.ts._inboxRule.unnamedRule }}</div>
+			<div>{{ i18n.ts._inboxRule.action }}: {{ log.info.rule.action.type === 'reject' ? i18n.ts._inboxRule.reject : log.info.rule.action.type }}</div>
+			<pre :class="$style.rule">{{ JSON5.stringify(log.info.rule.condFormula, null, '\t') }}</pre>
+		</template>
+		<template v-else-if="log.type === 'updateServerSettings'">
 			<div :class="$style.diff">
 				<CodeDiff :context="5" :hideHeader="true" :oldString="JSON5.stringify(log.info.before, null, '\t')" :newString="JSON5.stringify(log.info.after, null, '\t')" language="javascript" maxHeight="300px"/>
 			</div>
@@ -243,6 +262,14 @@ const props = defineProps<{
 </script>
 
 <style lang="scss" module>
+.target {
+	overflow-wrap: anywhere;
+}
+
+.rule {
+	overflow: auto;
+}
+
 .diff {
 	background: #fff;
 	color: #000;

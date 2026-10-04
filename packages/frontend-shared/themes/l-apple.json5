@@ -1,0 +1,28 @@
+{
+	id: '3c240560-e01f-46ad-a441-f7e1d6623ed7',
+
+	name: 'Apple Light',
+	author: 'Type4ny Project',
+	desc: 'Apple-inspired neutral surfaces and blue accents (light)',
+
+	base: 'light',
+
+	props: {
+		accent: '#0066cc',
+		bg: '#f2f2f7',
+		fg: '#1d1d1f',
+		fgHighlighted: '#000000',
+		fgOnAccent: '#ffffff',
+		fgOnWhite: '#0066cc',
+		divider: '#d1d1d6',
+		panel: '#ffffff',
+		navBg: '@panel',
+		link: '@accent',
+		hashtag: '@link',
+		mention: '@link',
+		renote: '#248a3d',
+		love: '#d70040',
+		buttonGradateB: '@accent',
+		badge: '@accent',
+	},
+}

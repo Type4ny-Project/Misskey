@@ -72,9 +72,6 @@
 				"usedSize": 33048000,
 				"totalSize": 55080000
 			},
-			"tabMemory": {
-				"totalBytes": 99144000
-			},
 			"webVitals": {
 				"firstPaintMs": 400,
 				"firstContentfulPaintMs": 450,
@@ -272,9 +269,6 @@
 					"usedSize": 32724000,
 					"totalSize": 54540000
 				},
-				"tabMemory": {
-					"totalBytes": 98172000
-				},
 				"webVitals": {
 					"firstPaintMs": 400,
 					"firstContentfulPaintMs": 450,
@@ -471,9 +465,6 @@
 					"usedSize": 33048000,
 					"totalSize": 55080000
 				},
-				"tabMemory": {
-					"totalBytes": 99144000
-				},
 				"webVitals": {
 					"firstPaintMs": 400,
 					"firstContentfulPaintMs": 450,
@@ -669,9 +660,6 @@
 				"runtimeHeap": {
 					"usedSize": 33372000,
 					"totalSize": 55620000
-				},
-				"tabMemory": {
-					"totalBytes": 100116000
 				},
 				"webVitals": {
 					"firstPaintMs": 400,

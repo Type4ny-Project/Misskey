@@ -17,6 +17,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<MkInput v-model="endAtStr" type="datetime-local" :class="$style.field">
 				<template #label>{{ i18n.ts._events.endAt }}</template>
+				<template v-if="isEndBeforeStart" #caption><span role="alert">{{ i18n.ts._events.endBeforeStart }}</span></template>
 			</MkInput>
 
 			<MkTextarea v-model="description" :class="$style.field">
@@ -100,9 +101,10 @@ const selectedChannelName = ref<string | null>(null);
 const lockedChannelId = ref<string | null>(props.channelId ?? null);
 
 const isChannelLocked = computed(() => lockedChannelId.value != null);
+const isEndBeforeStart = computed(() => endAtStr.value !== '' && new Date(endAtStr.value).getTime() < new Date(startAtStr.value).getTime());
 
 const canSubmit = computed(() => {
-	return title.value.length > 0 && startAtStr.value.length > 0;
+	return title.value.length > 0 && startAtStr.value.length > 0 && !isEndBeforeStart.value;
 });
 
 function toLocalDatetimeInput(date: Date): string {
@@ -201,6 +203,8 @@ function toLocalDatetime(isoStr: string): string {
 }
 
 async function submit() {
+	if (!canSubmit.value) return;
+
 	const tags = tagsStr.value
 		.split(',')
 		.map(t => t.trim())
@@ -238,6 +242,8 @@ async function submit() {
 	} catch (e: any) {
 		if (e.code === 'TOO_MANY_EVENTS') {
 			os.alert({ type: 'error', text: i18n.ts._events.rateLimitReached });
+		} else if (e.code === 'INVALID_EVENT_TIME_RANGE') {
+			os.alert({ type: 'error', text: i18n.ts._events.endBeforeStart });
 		} else {
 			os.alert({ type: 'error', text: e.message || i18n.ts._events.unknownError });
 		}

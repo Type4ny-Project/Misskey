@@ -29,6 +29,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<InboxModerationEditorFormula v-model="nestedValue"/>
 	</div>
 
+	<MkInput v-else-if="type === 'userFollowRequestsLastHourMoreThanOrEq' || type === 'serverFollowRequestsLastHourMoreThanOrEq'" v-model="numericValue" type="number" :min="1">
+		<template #label>{{ i18n.ts._inboxRule.followRequestCount }}</template>
+		<template #caption>{{ i18n.ts._inboxRule.followRequestsLastHourDescription }}</template>
+	</MkInput>
+
 	<MkInput v-else-if="type === 'createdLessThan' || type === 'createdMoreThan'" v-model="secValue" type="number">
 		<template #suffix>sec</template>
 	</MkInput>
@@ -78,6 +83,12 @@ type FormulaType =
 	| 'or'
 	| 'not'
 	| 'thisActivityIsNote'
+	| 'thisActivityIsFollow'
+	| 'thisActivityIsReaction'
+	| 'thisActivityIsRenote'
+	| 'thisActivityIsReply'
+	| 'userFollowRequestsLastHourMoreThanOrEq'
+	| 'serverFollowRequestsLastHourMoreThanOrEq'
 	| 'isLocked'
 	| 'isBot'
 	| 'isCat'
@@ -117,6 +128,12 @@ function normalizeType(value: string | undefined): FormulaType {
 		case 'or':
 		case 'not':
 		case 'thisActivityIsNote':
+		case 'thisActivityIsFollow':
+		case 'thisActivityIsReaction':
+		case 'thisActivityIsRenote':
+		case 'thisActivityIsReply':
+		case 'userFollowRequestsLastHourMoreThanOrEq':
+		case 'serverFollowRequestsLastHourMoreThanOrEq':
 		case 'isLocked':
 		case 'isBot':
 		case 'isCat':
@@ -251,6 +268,9 @@ const conditionTypeItems = computed<MkSelectItem<FormulaType>[]>(() => [{
 	}, {
 		value: 'notesMoreThanOrEq',
 		label: i18n.ts._role._condition.notesMoreThanOrEq,
+	}, {
+		value: 'userFollowRequestsLastHourMoreThanOrEq',
+		label: i18n.ts._inboxRule.userFollowRequestsLastHourMoreThanOrEq,
 	}],
 }, {
 	type: 'group',
@@ -283,12 +303,19 @@ const conditionTypeItems = computed<MkSelectItem<FormulaType>[]>(() => [{
 	}, {
 		value: 'serverSubMoreThanOrEq',
 		label: i18n.ts._inboxRule.serverSubMoreThanOrEq,
+	}, {
+		value: 'serverFollowRequestsLastHourMoreThanOrEq',
+		label: i18n.ts._inboxRule.serverFollowRequestsLastHourMoreThanOrEq,
 	}],
 }, {
 	type: 'group',
 	label: i18n.ts._inboxRule.conditions,
 	items: [
 		...(!props.isNote ? [{ value: 'thisActivityIsNote' as const, label: i18n.ts._inboxRule.thisActivityIsNote }] : []),
+		{ value: 'thisActivityIsFollow', label: i18n.ts._inboxRule.thisActivityIsFollow },
+		{ value: 'thisActivityIsReaction', label: i18n.ts._inboxRule.thisActivityIsReaction },
+		{ value: 'thisActivityIsRenote', label: i18n.ts._inboxRule.thisActivityIsRenote },
+		{ value: 'thisActivityIsReply', label: i18n.ts._inboxRule.thisActivityIsReply },
 		{ value: 'and', label: i18n.ts._inboxRule.and },
 		{ value: 'or', label: i18n.ts._inboxRule.or },
 		{ value: 'not', label: i18n.ts._inboxRule.not },
@@ -320,6 +347,8 @@ const type = computed({
 		if (t === 'followingMoreThanOrEq') v.value.value = 10;
 		if (t === 'maxMentionsMoreThanOrEq') v.value.value = 5;
 		if (t === 'attachmentFileMoreThanOrEq') v.value.value = 16;
+		if (t === 'userFollowRequestsLastHourMoreThanOrEq') v.value.value = 10;
+		if (t === 'serverFollowRequestsLastHourMoreThanOrEq') v.value.value = 100;
 		if (t === 'notesLessThanOrEq') v.value.value = 10;
 		if (t === 'notesMoreThanOrEq') v.value.value = 10;
 		if (t === 'serverPubLessThanOrEq') v.value.value = 5;

@@ -126,6 +126,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</MkButton>
 		</div>
 	</div>
+	<div v-else-if="loadError" :class="$style.root">
+		<MkResult :type="notFound ? 'notFound' : 'error'" :text="loadError" role="status">
+			<div class="_buttonsCenter">
+				<MkButton rounded @click="router.push('/events')">
+					<i class="ti ti-arrow-left" aria-hidden="true"></i>
+					{{ i18n.ts.goBack }}
+				</MkButton>
+			</div>
+		</MkResult>
+	</div>
 	<div v-else :class="$style.loading">
 		<MkLoading/>
 	</div>
@@ -139,6 +149,7 @@ import { url } from '@@/js/config.js';
 import MkButton from '@/components/MkButton.vue';
 import MkAvatar from '@/components/global/MkAvatar.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
+import MkResult from '@/components/global/MkResult.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
@@ -153,6 +164,8 @@ const props = defineProps<{
 const router = useRouter();
 const eventId = toRef(props, 'eventId');
 const event = ref<Misskey.entities.Event | null>(null);
+const loadError = ref<string | null>(null);
+const notFound = ref(false);
 const canManagePendingEvent = ref(false);
 
 const isOwner = computed(() => {
@@ -161,7 +174,17 @@ const isOwner = computed(() => {
 });
 
 async function fetchEvent() {
-	event.value = await misskeyApi('events/show', { eventId: eventId.value });
+	loadError.value = null;
+	try {
+		event.value = await misskeyApi('events/show', { eventId: eventId.value });
+	} catch (error) {
+		event.value = null;
+		notFound.value = (error as { code?: string }).code === 'NO_SUCH_EVENT';
+		loadError.value = notFound.value
+			? i18n.ts._events.eventNotFound
+			: i18n.ts._events.unknownError;
+		return;
+	}
 	await updateManagePermission();
 }
 

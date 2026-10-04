@@ -270,6 +270,11 @@ export class MiUserProfile {
 	})
 	public loggedInDates: string[];
 
+	@Column('varchar', {
+		length: 32, nullable: true,
+	})
+	public lastLoginBonusDate: string | null;
+
 	@Column('enum', {
 		enum: pointsVisibilities,
 		default: 'public',

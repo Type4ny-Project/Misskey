@@ -6,6 +6,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { UsersRepository, UserProfilesRepository } from '@/models/_.js';
 import { randomInt } from 'node:crypto';
+import { DataSource } from 'typeorm';
+import { MiUser } from '@/models/User.js';
+import { MiUserProfile } from '@/models/UserProfile.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { RoleService } from '@/core/RoleService.js';
@@ -14,12 +17,16 @@ import { ApiError } from '@/server/api/error.js';
 
 export interface LoginBonusAward {
   points: number;
+  balance: number;
   notificationId: string;
 }
 
 @Injectable()
 export class LoginBonusService {
   constructor(
+    @Inject(DI.db)
+    private db: DataSource,
+
     @Inject(DI.usersRepository)
     private usersRepository: UsersRepository,
 
@@ -32,7 +39,7 @@ export class LoginBonusService {
   ) {}
 
   /**
-   * Award login bonus points to a user if they haven't logged in today
+   * Award login bonus points to a user if they haven't received today's bonus
    */
   async awardLoginBonus(userId: string): Promise<LoginBonusAward | null> {
     const now = new Date();
@@ -40,15 +47,13 @@ export class LoginBonusService {
 
     const userProfile = await this.userProfilesRepository.findOne({
       where: { userId },
-      relations: { user: true },
     });
 
     if (!userProfile) {
       throw new ApiError({ id: 'login-bonus-profile-not-found', message: 'User profile not found', code: 'USER_PROFILE_NOT_FOUND' });
     }
 
-    // Check if user has already logged in today
-    if (userProfile.loggedInDates.includes(today)) {
+    if (userProfile.lastLoginBonusDate === today) {
       return null;
     }
 
@@ -66,25 +71,30 @@ export class LoginBonusService {
 
     // Award random points (1-5)
     const bonusPoints = randomInt(1, 6);
-    const currentUser = await this.usersRepository.findOneByOrFail({ id: userId });
+    const balance = await this.db.transaction(async manager => {
+      const claimed = await manager.createQueryBuilder()
+        .update(MiUserProfile)
+        .set({ lastLoginBonusDate: today })
+        .where('"userId" = :userId', { userId })
+        .andWhere('"lastLoginBonusDate" IS DISTINCT FROM :today', { today })
+        .execute();
 
-    // Update user points
-    await this.usersRepository.update(userId, {
-      points: currentUser.points + bonusPoints,
+      if (claimed.affected === 0) return null;
+
+      await manager.increment(MiUser, { id: userId }, 'points', bonusPoints);
+      return (await manager.findOneByOrFail(MiUser, { id: userId })).points;
     });
+
+    if (balance == null) return null;
 
     // Create login bonus notification
     await this.notificationService.createNotification(userId, 'loginBonus', {
       points: bonusPoints,
     } as any);
 
-    // Update loggedInDates
-    await this.userProfilesRepository.update({ userId }, {
-      loggedInDates: [...userProfile.loggedInDates, today],
-    });
-
     return {
       points: bonusPoints,
+      balance,
       notificationId: '',
     };
   }

@@ -4,13 +4,10 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { randomInt } from 'node:crypto';
-import type { UserProfilesRepository, UsersRepository } from '@/models/_.js';
+import type { UserProfilesRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
-import { NotificationService } from '@/core/NotificationService.js';
-import { MetaService } from '@/core/MetaService.js';
-import { RoleService } from '@/core/RoleService.js';
+import { LoginBonusService } from '@/core/LoginBonusService.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '../error.js';
 
@@ -48,13 +45,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.userProfilesRepository)
 		private userProfilesRepository: UserProfilesRepository,
 
-		@Inject(DI.usersRepository)
-		private usersRepository: UsersRepository,
-
 		private userEntityService: UserEntityService,
-		private notificationService: NotificationService,
-		private metaService: MetaService,
-		private roleService: RoleService,
+		private loginBonusService: LoginBonusService,
 	) {
 		super(meta, paramDef, async (ps, user, token) => {
 			const isSecure = token == null;
@@ -79,25 +71,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.userIsDeleted);
 			}
 
-			if (!userProfile.loggedInDates.includes(today)) {
-				// ログインボーナス付与
-				const meta = await this.metaService.fetch();
-				if (meta.enableLoginBonus) {
-					const policies = await this.roleService.getUserPolicies(user.id);
-					if (policies.loginBonusGrantEnabled) {
-						const bonusPoints = randomInt(1, 6); // 1-5 points
-						const currentUser = await this.usersRepository.findOneByOrFail({ id: user.id });
-						const updatedPoints = currentUser.points + bonusPoints;
-						await this.usersRepository.update(user.id, {
-							points: updatedPoints,
-						});
-						packedUser.points = updatedPoints;
-						this.notificationService.createNotification(user.id, 'loginBonus', {
-							points: bonusPoints,
-						});
-					}
-				}
+			const bonus = await this.loginBonusService.awardLoginBonus(user.id);
+			packedUser.points = bonus?.balance ?? await this.loginBonusService.getUserPoints(user.id);
 
+			if (!userProfile.loggedInDates.includes(today)) {
 				await this.userProfilesRepository.update({ userId: user.id }, {
 					loggedInDates: [...userProfile.loggedInDates, today],
 				});

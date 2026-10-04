@@ -50,6 +50,9 @@
 - Feat: Cloudflare Realtimeを利用するMisskey Calls APIとリアルタイムイベントを追加
 - Enhance: Misskey Callsの通話モードと発言リクエストの取消・拒否同期に対応
 
+### Server
+- Enhance: ActivityPub の featured 応答・JSON-LD エラー処理・フェデレーション集計の負荷を軽減
+
 ## 2026.8.0
 
 ### General

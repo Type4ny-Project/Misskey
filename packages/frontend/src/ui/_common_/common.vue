@@ -294,12 +294,12 @@ if ($i) {
 	}
 
 	&.notificationsPosition_leftBottom {
-		bottom: calc(var(--MI-minBottomSpacing) + var(--MI-margin));
+		bottom: calc(var(--MI-minBottomSpacing) + var(--MI-margin) + var(--MI-callsDockSpacing, 0px));
 		left: 0;
 	}
 
 	&.notificationsPosition_rightBottom {
-		bottom: calc(var(--MI-minBottomSpacing) + var(--MI-margin));
+		bottom: calc(var(--MI-minBottomSpacing) + var(--MI-margin) + var(--MI-callsDockSpacing, 0px));
 		right: 0;
 	}
 

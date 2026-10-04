@@ -96,7 +96,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 		</div>
-		<div v-else-if="!session.isActive.value && !session.joining.value && session.reconnectCandidate.value != null" :class="$style.root">
+		<div v-else-if="!session.isActive.value && !session.joining.value && session.reconnectCandidate.value != null" ref="rootEl" :class="$style.root">
 			<div :class="$style.summaryRow">
 				<button type="button" class="_button _panel" :class="[$style.main, $style.resumeMain]" :disabled="session.joining.value || session.reconnectRoomState.value !== 'open'" @click="resumeRecentRoom">
 					<div :class="[$style.avatarRing, $style.avatarRingActive]"><i class="ti ti-phone-call"></i></div>
@@ -114,7 +114,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
 import MkCallsControls from '@/components/MkCallsControls.vue';
 import { i18n } from '@/i18n.js';
@@ -137,6 +137,20 @@ const hostParticipant = computed(() => participants.value.find(participant => pa
 const hostUser = computed(() => hostParticipant.value == null ? null : participantUser(hostParticipant.value.userId));
 const isLiveSpeaking = computed(() => session.myParticipant.value != null && session.speakingParticipantIds.value.has(session.myParticipant.value.id));
 const speakingCount = computed(() => session.speakingParticipantIds.value.size);
+
+watch(rootEl, (element, _, onCleanup) => {
+	if (element == null) return;
+	const updateHeight = () => {
+		window.document.body.style.setProperty('--MI-callsDockSpacing', `calc(${element.offsetHeight}px + var(--MI-margin))`);
+	};
+	const observer = new ResizeObserver(updateHeight);
+	observer.observe(element);
+	updateHeight();
+	onCleanup(() => {
+		observer.disconnect();
+		window.document.body.style.removeProperty('--MI-callsDockSpacing');
+	});
+}, { flush: 'post' });
 
 function participantUser(userId: string): Misskey.entities.UserLite | null {
 	return session.usersById.value.get(userId) ?? null;
@@ -190,7 +204,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 </script>
 
 <style lang="scss" module>
-.root { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 1200; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: min(420px, calc(100vw - 32px)); }
+.root { position: fixed; right: 16px; bottom: calc(var(--MI-minBottomSpacing) + var(--MI-margin)); z-index: 1200; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: min(420px, calc(100vw - 32px)); }
 .panel { display: flex; width: min(420px, calc(100vw - 32px)); max-height: min(70vh, 560px); flex-direction: column; gap: 14px; overflow: hidden auto; padding: 14px; border-radius: 24px; background: color(from var(--MI_THEME-panel) srgb r g b / 0.94); box-shadow: 0 16px 40px color(from var(--MI_THEME-bg) srgb r g b / 0.28); backdrop-filter: blur(18px); }
 .panelHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .panelTitle { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -273,7 +287,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 }
 
 @media (max-width: 500px) {
-	.root { right: 12px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 24px); }
+	.root { right: 12px; max-width: calc(100vw - 24px); }
 	.panel { width: calc(100vw - 24px); max-height: min(60vh, 480px); }
 	.main { min-width: calc(100vw - 144px); }
 }

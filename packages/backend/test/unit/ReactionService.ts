@@ -4,11 +4,12 @@
  */
 
 import * as assert from 'assert';
-import { beforeAll, describe, test } from 'vitest';
+import { beforeAll, describe, test, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 
 import { CoreModule } from '@/core/CoreModule.js';
 import { ReactionService } from '@/core/ReactionService.js';
+import { MiNote } from '@/models/Note.js';
 import { GlobalModule } from '@/GlobalModule.js';
 
 describe('ReactionService', () => {
@@ -19,6 +20,26 @@ describe('ReactionService', () => {
 			imports: [GlobalModule, CoreModule],
 		}).compile();
 		reactionService = app.get<ReactionService>(ReactionService);
+	});
+
+	test('ローカルノートへのリモートユーザーのリアクションにも投稿上限を適用する', async () => {
+		const insert = vi.fn();
+		const service = Object.assign(Object.create(ReactionService.prototype), {
+			userBlockingService: { checkBlocked: vi.fn().mockResolvedValue(false) },
+			noteEntityService: { isVisibleForMe: vi.fn().mockResolvedValue(true) },
+			idService: { gen: vi.fn().mockReturnValue('reaction-id') },
+			noteReactionsRepository: {
+				findOneBy: vi.fn().mockResolvedValue(null),
+				countBy: vi.fn().mockResolvedValue(1),
+				insert,
+			},
+			roleService: { getUserPolicies: vi.fn().mockResolvedValue({ reactionLimit: 3 }) },
+		}) as ReactionService;
+		const note = new MiNote({ id: 'local-note', userId: 'author', userHost: null, text: 'test', reactionLimit: 1, reactionAcceptance: null });
+		await expect(service.create({ id: 'remote-user', host: 'example.com', isBot: false }, note, '👍')).rejects.toMatchObject({
+			id: '51c42bb4-931a-456b-bff7-e5a8a70dd298',
+		});
+		expect(insert).not.toHaveBeenCalled();
 	});
 
 	describe('normalize', () => {

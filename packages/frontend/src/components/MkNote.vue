@@ -126,6 +126,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:reactionEmojis="$appearNote.reactionEmojis"
 				:myReaction="$appearNote.myReaction"
 				:myReactions="$appearNote.myReactions"
+				:reactionLimit="appearNote.reactionLimit"
 				:noteId="appearNote.id"
 				:maxNumber="16"
 				@mockUpdateMyReaction="emitUpdReaction"
@@ -152,7 +153,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<button v-else :class="$style.footerButton" class="_button" disabled>
 					<i class="ti ti-ban"></i>
 				</button>
-				<button ref="reactButton" :class="$style.footerButton" class="_button" @click="toggleReact()">
+				<button ref="reactButton" :class="$style.footerButton" class="_button" :disabled="reactionLimitReached && !(appearNote.reactionAcceptance === 'likeOnly' && $appearNote.myReaction != null)" @click="toggleReact()">
 					<i v-if="appearNote.reactionAcceptance === 'likeOnly' && $appearNote.myReaction != null" class="ti ti-heart-filled" style="color: var(--MI_THEME-love);"></i>
 					<i v-else-if="appearNote.reactionAcceptance === 'likeOnly'" class="ti ti-heart"></i>
 					<i v-else class="ti ti-plus"></i>
@@ -236,6 +237,7 @@ import { reactionPicker } from '@/utility/reaction-picker.js';
 import { extractUrlFromMfm } from '@/utility/extract-url-from-mfm.js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
+import { getNoteReactionLimit } from '@/utility/get-note-reaction-limit.js';
 import { getAbuseNoteMenu, getCopyNoteLinkMenu, getNoteClipMenu, getNoteMenu, getRenoteMenu } from '@/utility/get-note-menu.js';
 import { noteEvents, useNoteCapture } from '@/composables/use-note-capture.js';
 import { deepClone } from '@/utility/clone.js';
@@ -427,6 +429,7 @@ const keymap = {
 } as const satisfies Keymap;
 
 provide(DI.mfmEmojiReactCallback, (reaction) => {
+	if (reactionLimitReached.value) return;
 	sound.playMisskeySfx('reaction');
 	misskeyApi('notes/reactions/create', {
 		noteId: appearNote.id,
@@ -513,7 +516,10 @@ async function reply() {
 	});
 }
 
+const reactionLimitReached = computed(() => $i != null && $appearNote.myReactions.length >= getNoteReactionLimit(appearNote, $i.policies.reactionLimit));
+
 async function react() {
+	if (reactionLimitReached.value) return;
 	const isLoggedIn = await pleaseLogin({ openOnRemote: pleaseLoginContext.value });
 	if (!isLoggedIn) return;
 
@@ -546,6 +552,7 @@ async function react() {
 	} else {
 		blur();
 		reactionPicker.show(reactButton.value ?? null, note, async (reaction) => {
+			if (reactionLimitReached.value) return;
 			if (prefer.s.confirmOnReact) {
 				const confirm = await os.confirm({
 					type: 'question',
@@ -604,7 +611,11 @@ function undoReact(): void {
 }
 
 function toggleReact() {
-	react();
+	if (appearNote.reactionAcceptance === 'likeOnly' && $appearNote.myReaction != null) {
+		undoReact();
+	} else {
+		react();
+	}
 }
 
 function onContextmenu(ev: PointerEvent): void {

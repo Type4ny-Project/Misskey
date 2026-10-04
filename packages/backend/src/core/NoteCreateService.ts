@@ -177,6 +177,7 @@ type Option = {
 	poll?: IPoll | null;
 	localOnly?: boolean | null;
 	reactionAcceptance?: MiNote['reactionAcceptance'];
+	reactionLimit?: MiNote['reactionLimit'];
 	cw?: string | null;
 	visibility?: string;
 	visibleUsers?: MinimumUser[] | null;
@@ -292,6 +293,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 		channelId: MiChannel['id'] | null;
 		localOnly: boolean;
 		reactionAcceptance: MiNote['reactionAcceptance'];
+		reactionLimit?: MiNote['reactionLimit'];
 		poll: IPoll | null;
 		apMentions?: MinimumUser[] | null;
 		apHashtags?: string[] | null;
@@ -429,6 +431,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 			cw: data.cw,
 			localOnly: data.localOnly,
 			reactionAcceptance: data.reactionAcceptance,
+			reactionLimit: data.reactionLimit,
 			visibility: data.visibility,
 			visibleUsers,
 			channel,
@@ -446,6 +449,13 @@ export class NoteCreateService implements OnApplicationShutdown {
 		isBot: MiUser['isBot'];
 		isCat: MiUser['isCat'];
 	}, data: Option, silent = false): Promise<MiNote> {
+		if (data.reactionLimit != null && user.host == null) {
+			const policies = await this.roleService.getUserPolicies(user.id);
+			if (!Number.isInteger(data.reactionLimit) || data.reactionLimit < 1 || data.reactionLimit > policies.reactionLimit) {
+				throw new IdentifiableError('a7b81bb7-87ea-47d9-9e01-65d0635d57ad', 'Invalid reaction limit');
+			}
+		}
+
 		// チャンネル外にリプライしたら対象のスコープに合わせる
 		// (クライアントサイドでやっても良い処理だと思うけどとりあえずサーバーサイドで)
 		if (data.reply && data.channel && data.reply.channelId !== data.channel.id) {
@@ -663,6 +673,7 @@ export class NoteCreateService implements OnApplicationShutdown {
 			userId: user.id,
 			localOnly: data.localOnly!,
 			reactionAcceptance: data.reactionAcceptance ?? null,
+			reactionLimit: data.reactionLimit ?? null,
 			visibility: data.visibility as any,
 			visibleUserIds: data.visibility === 'specified'
 				? data.visibleUsers

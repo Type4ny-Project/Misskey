@@ -1581,7 +1581,7 @@ declare module '../api.js' {
 
     /**
      * No description provided.
-     *
+     * 
      * **Credential required**: *Yes* / **Permission**: *write:channels*
      */
     request<E extends 'channels/follow-requests/approve', P extends Endpoints[E]['req']>(
@@ -1592,7 +1592,7 @@ declare module '../api.js' {
 
     /**
      * No description provided.
-     *
+     * 
      * **Credential required**: *Yes* / **Permission**: *read:channels*
      */
     request<E extends 'channels/follow-requests/list', P extends Endpoints[E]['req']>(
@@ -1603,7 +1603,7 @@ declare module '../api.js' {
 
     /**
      * No description provided.
-     *
+     * 
      * **Credential required**: *Yes* / **Permission**: *write:channels*
      */
     request<E extends 'channels/follow-requests/reject', P extends Endpoints[E]['req']>(
@@ -1625,7 +1625,7 @@ declare module '../api.js' {
 
     /**
      * No description provided.
-     *
+     * 
      * **Credential required**: *Yes* / **Permission**: *read:channels*
      */
     request<E extends 'channels/followers', P extends Endpoints[E]['req']>(
@@ -1636,7 +1636,7 @@ declare module '../api.js' {
 
     /**
      * No description provided.
-     *
+     * 
      * **Credential required**: *Yes* / **Permission**: *write:channels*
      */
     request<E extends 'channels/followers/remove', P extends Endpoints[E]['req']>(

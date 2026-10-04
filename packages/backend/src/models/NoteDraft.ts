@@ -82,6 +82,9 @@ export class MiNoteDraft {
 	})
 	public reactionAcceptance: typeof noteReactionAcceptances[number];
 
+	@Column('integer', { nullable: true })
+	public reactionLimit: number | null;
+
 	/**
 	 * public ... 公開
 	 * home ... ホームタイムライン(ユーザーページのタイムライン含む)のみに流す

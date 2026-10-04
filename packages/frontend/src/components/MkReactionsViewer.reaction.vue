@@ -9,6 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	v-ripple="canToggle"
 	class="_button"
 	:class="[$style.root, { [$style.reacted]: (props.myReactions ?? []).includes(reaction), [$style.canToggle]: canToggle, [$style.small]: prefer.s.reactionsDisplaySize === 'small', [$style.large]: prefer.s.reactionsDisplaySize === 'large' }]"
+	:aria-disabled="!canToggle"
 	@click="toggleReaction()"
 	@contextmenu.prevent.stop="menu"
 >
@@ -31,6 +32,7 @@ import { useTooltip } from '@/composables/use-tooltip.js';
 import { $i } from '@/i.js';
 import MkReactionEffect from '@/components/MkReactionEffect.vue';
 import { i18n } from '@/i18n.js';
+import { getNoteReactionLimit } from '@/utility/get-note-reaction-limit.js';
 import * as sound from '@/utility/sound.js';
 import { checkReactionPermissions } from '@/utility/check-reaction-permissions.js';
 import { customEmojisMap } from '@/custom-emojis.js';
@@ -47,6 +49,7 @@ const props = defineProps<{
 	reactionEmojis: Misskey.entities.Note['reactionEmojis'];
 	myReaction: Misskey.entities.Note['myReaction'];
 	myReactions?: string[];
+	reactionLimit?: number | null;
 	count: number;
 	isInitial: boolean;
 }>();
@@ -62,6 +65,7 @@ const buttonEl = useTemplateRef('buttonEl');
 const emojiName = computed(() => props.reaction.replace(/:/g, '').replace(/@\./, ''));
 
 const canToggle = computed(() => {
+	if ($i != null && !(props.myReactions ?? []).includes(props.reaction) && (props.myReactions ?? []).length >= getNoteReactionLimit(props, $i.policies.reactionLimit)) return false;
 	const emoji = customEmojisMap.get(emojiName.value) ?? getUnicodeEmojiOrNull(props.reaction);
 
 	// TODO

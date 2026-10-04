@@ -40,6 +40,12 @@ export const meta = {
 	},
 
 	errors: {
+		invalidReactionLimit: {
+			message: 'Reaction limit must be within your role policy.',
+			code: 'INVALID_REACTION_LIMIT',
+			id: 'bc6324c4-4f9c-46b7-bf33-d4354967b548',
+		},
+
 		noSuchRenoteTarget: {
 			message: 'No such renote target.',
 			code: 'NO_SUCH_RENOTE_TARGET',
@@ -135,6 +141,7 @@ export const paramDef = {
 		} },
 		cw: { type: 'string', nullable: true, minLength: 1, maxLength: 100 },
 		localOnly: { type: 'boolean', default: false },
+		reactionLimit: { type: 'integer', nullable: true, minimum: 1, maximum: 2147483647, default: null },
 		reactionAcceptance: { type: 'string', nullable: true, enum: [null, 'likeOnly', 'likeOnlyForRemote', 'nonSensitiveOnly', 'nonSensitiveOnlyForLocalLikeOnlyForRemote'], default: null },
 		noExtractMentions: { type: 'boolean', default: false },
 		noExtractHashtags: { type: 'boolean', default: false },
@@ -235,6 +242,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					cw: ps.cw ?? null,
 					localOnly: ps.localOnly,
 					reactionAcceptance: ps.reactionAcceptance,
+					reactionLimit: ps.reactionLimit,
 					visibility: ps.visibility,
 					visibleUserIds: ps.visibleUserIds ?? [],
 					channelId: ps.channelId ?? null,
@@ -249,7 +257,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			} catch (err) {
 				// TODO: 他のErrorもここでキャッチしてエラーメッセージを当てるようにしたい
 				if (err instanceof IdentifiableError) {
-					if (err.id === '689ee33f-f97c-479a-ac49-1b9f8140af99') {
+					if (err.id === 'a7b81bb7-87ea-47d9-9e01-65d0635d57ad') {
+						throw new ApiError(meta.errors.invalidReactionLimit);
+					} else if (err.id === '689ee33f-f97c-479a-ac49-1b9f8140af99') {
 						throw new ApiError(meta.errors.containsProhibitedWords);
 					} else if (err.id === '9f466dab-c856-48cd-9e65-ff90ff750580') {
 						throw new ApiError(meta.errors.containsTooManyMentions);

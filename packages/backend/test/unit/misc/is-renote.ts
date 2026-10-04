@@ -21,6 +21,7 @@ const base: MiNote = {
 	user: null,
 	localOnly: false,
 	reactionAcceptance: null,
+	reactionLimit: null,
 	renoteCount: 0,
 	repliesCount: 0,
 	clippedCount: 0,

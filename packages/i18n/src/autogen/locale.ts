@@ -4597,6 +4597,18 @@ export interface Locale extends ILocale {
      */
     "cannotBeChangedLater": string;
     /**
+     * 1人あたりのリアクション上限
+     */
+    "noteReactionLimit": string;
+    /**
+     * 1〜{max}の整数を指定してください。空欄なら従来の上限を使います。
+     */
+    "noteReactionLimitDescription": ParameterizedString<"max">;
+    /**
+     * 1〜{max}の整数を指定してください。
+     */
+    "noteReactionLimitInvalid": ParameterizedString<"max">;
+    /**
      * リアクションの受け入れ
      */
     "reactionAcceptance": string;

@@ -4911,6 +4911,7 @@ export type components = {
                 userId: string | null;
             } | null;
             localOnly?: boolean;
+            reactionLimit: number | null;
             /** @enum {string|null} */
             reactionAcceptance: 'likeOnly' | 'likeOnlyForRemote' | 'nonSensitiveOnly' | 'nonSensitiveOnlyForLocalLikeOnlyForRemote' | null;
             reactionEmojis: {
@@ -4973,6 +4974,7 @@ export type components = {
                 userId: string | null;
             } | null;
             localOnly: boolean;
+            reactionLimit: number | null;
             /** @enum {string|null} */
             reactionAcceptance: 'likeOnly' | 'likeOnlyForRemote' | 'nonSensitiveOnly' | 'nonSensitiveOnlyForLocalLikeOnlyForRemote' | null;
             scheduledAt: number | null;
@@ -32817,6 +32819,8 @@ export interface operations {
                     cw?: string | null;
                     /** @default false */
                     localOnly?: boolean;
+                    /** @default null */
+                    reactionLimit?: number | null;
                     /**
                      * @default null
                      * @enum {string|null}
@@ -33058,6 +33062,8 @@ export interface operations {
                     hashtag?: string | null;
                     /** @default false */
                     localOnly?: boolean;
+                    /** @default null */
+                    reactionLimit?: number | null;
                     /**
                      * @default null
                      * @enum {string|null}
@@ -33299,6 +33305,7 @@ export interface operations {
                     cw?: string | null;
                     hashtag?: string | null;
                     localOnly?: boolean;
+                    reactionLimit?: number | null;
                     /** @enum {string|null} */
                     reactionAcceptance?: null | 'likeOnly' | 'likeOnlyForRemote' | 'nonSensitiveOnly' | 'nonSensitiveOnlyForLocalLikeOnlyForRemote';
                     /** Format: misskey:id */

@@ -23,6 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:noteId="props.noteId"
 		:myReaction="props.myReaction"
 		:myReactions="props.myReactions"
+		:reactionLimit="props.reactionLimit"
 		@reactionToggled="onMockToggleReaction"
 	/>
 	<slot v-if="hasMoreReactions" name="more"></slot>
@@ -46,6 +47,7 @@ const props = withDefaults(defineProps<{
 	reactionEmojis: Misskey.entities.Note['reactionEmojis'];
 	myReaction: Misskey.entities.Note['myReaction'];
 	myReactions?: string[];
+	reactionLimit?: number | null;
 	maxNumber?: number;
 }>(), {
 	maxNumber: Infinity,

@@ -240,6 +240,7 @@ export function note(id = 'somenoteid'): entities.Note {
 		user: userLite(),
 		visibility: 'public',
 		reactionAcceptance: 'nonSensitiveOnly',
+		reactionLimit: null,
 		reactionEmojis: {},
 		reactions: {},
 		myReaction: null,

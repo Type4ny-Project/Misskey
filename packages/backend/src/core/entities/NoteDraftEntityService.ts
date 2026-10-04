@@ -114,6 +114,7 @@ export class NoteDraftEntityService implements OnModuleInit {
 			visibility: noteDraft.visibility,
 			localOnly: noteDraft.localOnly,
 			reactionAcceptance: noteDraft.reactionAcceptance,
+			reactionLimit: noteDraft.reactionLimit ?? null,
 			visibleUserIds: noteDraft.visibleUserIds,
 			hashtag: noteDraft.hashtag,
 			fileIds: noteDraft.fileIds,

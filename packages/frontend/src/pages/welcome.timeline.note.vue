@@ -24,23 +24,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkMediaList :mediaList="note.files.slice(0, 4)"/>
 		</div>
 		<div v-if="note.reactionCount > 0" :class="$style.reactions">
-			<MkReactionsViewer :noteId="note.id" :reactions="note.reactions" :reactionEmojis="note.reactionEmojis" :myReaction="note.myReaction" :maxNumber="16"/>
+			<MkReactionsViewer :noteId="note.id" :reactions="note.reactions" :reactionEmojis="note.reactionEmojis" :myReaction="note.myReaction" :myReactions="myReactions" :reactionLimit="note.reactionLimit" :maxNumber="16"/>
 		</div>
 	</div>
 </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, useTemplateRef, onUpdated, onMounted } from 'vue';
+import { computed, ref, useTemplateRef, onUpdated, onMounted } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkReactionsViewer from '@/components/MkReactionsViewer.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
 import MkPoll from '@/components/MkPoll.vue';
 import MkCwButton from '@/components/MkCwButton.vue';
 
-defineProps<{
+const props = defineProps<{
 	note: Misskey.entities.Note;
 }>();
+
+const myReactions = computed(() => (props.note as Misskey.entities.Note & { myReactions?: string[] }).myReactions ?? (props.note.myReaction ? [props.note.myReaction] : []));
 
 const noteTextEl = useTemplateRef('noteTextEl');
 const shouldCollapse = ref(false);

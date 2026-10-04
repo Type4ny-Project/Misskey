@@ -34,6 +34,12 @@ export const meta = {
 	},
 
 	errors: {
+		invalidReactionLimit: {
+			message: 'Reaction limit must be within your role policy.',
+			code: 'INVALID_REACTION_LIMIT',
+			id: '2f3c9b86-8141-4366-843e-9337e00386b9',
+		},
+
 		noSuchRenoteTarget: {
 			message: 'No such renote target.',
 			code: 'NO_SUCH_RENOTE_TARGET',
@@ -165,6 +171,7 @@ export const paramDef = {
 		cw: { type: 'string', nullable: true, minLength: 1, maxLength: 100 },
 		hashtag: { type: 'string', nullable: true, maxLength: 200 },
 		localOnly: { type: 'boolean', default: false },
+		reactionLimit: { type: 'integer', nullable: true, minimum: 1, maximum: 2147483647, default: null },
 		reactionAcceptance: { type: 'string', nullable: true, enum: [null, 'likeOnly', 'likeOnlyForRemote', 'nonSensitiveOnly', 'nonSensitiveOnlyForLocalLikeOnlyForRemote'], default: null },
 		replyId: { type: 'string', format: 'misskey:id', nullable: true },
 		renoteId: { type: 'string', format: 'misskey:id', nullable: true },
@@ -228,6 +235,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				hashtag: ps.hashtag ?? null,
 				localOnly: ps.localOnly,
 				reactionAcceptance: ps.reactionAcceptance,
+				reactionLimit: ps.reactionLimit,
 				visibility: ps.visibility,
 				visibleUserIds: ps.visibleUserIds ?? [],
 				channelId: ps.channelId ?? null,
@@ -236,6 +244,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}).catch((err) => {
 				if (err instanceof IdentifiableError) {
 					switch (err.id) {
+						case 'a7b81bb7-87ea-47d9-9e01-65d0635d57ad':
+							throw new ApiError(meta.errors.invalidReactionLimit);
 						case '9ee33bbe-fde3-4c71-9b51-e50492c6b9c8':
 							throw new ApiError(meta.errors.tooManyDrafts);
 						case '04da457d-b083-4055-9082-955525eda5a5':

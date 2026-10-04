@@ -43,6 +43,62 @@ describe('Note', () => {
 		assert.strictEqual(res.body.createdNote.text, post.text);
 	});
 
+	describe('リアクション上限', () => {
+		test.each([
+			{ limit: null, count: 3 },
+			{ limit: 1, count: 1 },
+			{ limit: 5, count: 3 },
+		])('投稿上限 $limit とロール上限の小さい方をAPIで適用する', async ({ limit, count }) => {
+			const author = await signup({ username: 'limit_author_' + (limit ?? 'default') });
+			const authorRole = await role(root, {}, { reactionLimit: { useDefault: false, priority: 1, value: 5 } });
+			assert.strictEqual((await api('admin/roles/assign', { roleId: authorRole.id, userId: author.id }, root)).status, 204);
+			const res = await api('notes/create', { text: 'reaction limit', ...(limit == null ? {} : { reactionLimit: limit }) }, author);
+			assert.strictEqual(res.status, 200);
+			const note = res.body.createdNote;
+			assert.strictEqual(note.reactionLimit, limit);
+			assert.strictEqual((await Notes.findOneByOrFail({ id: note.id })).reactionLimit, limit);
+			const reactions = ['👍', '🍅', '🎉', '🍮'];
+			for (const reaction of reactions.slice(0, count)) {
+				assert.strictEqual((await api('notes/reactions/create', { noteId: note.id, reaction }, bob)).status, 204);
+			}
+			const duplicate = await api('notes/reactions/create', { noteId: note.id, reaction: reactions[0] }, bob);
+			assert.strictEqual(duplicate.status, 400);
+			const rejected = await api('notes/reactions/create', { noteId: note.id, reaction: reactions[count] }, bob);
+			assert.strictEqual(rejected.status, 400);
+			assert.strictEqual(castAsError(rejected.body as any).error.code, 'ALREADY_REACTED');
+			assert.strictEqual((await api('notes/reactions/delete', { noteId: note.id, reaction: reactions[0] }, bob)).status, 204);
+			assert.strictEqual((await api('notes/reactions/create', { noteId: note.id, reaction: reactions[count] }, bob)).status, 204);
+			// A different user has their own allowance.
+			assert.strictEqual((await api('notes/reactions/create', { noteId: note.id, reaction: reactions[0] }, alice)).status, 204);
+		});
+
+		test('投稿者のロール範囲外の指定を拒否する', async () => {
+			for (const reactionLimit of [0, 1.5, 4]) {
+				const res = await api('notes/create', { text: 'invalid limit', reactionLimit }, alice);
+				assert.strictEqual(res.status, 400);
+				assert.strictEqual(castAsError(res.body).error.code, reactionLimit === 4 ? 'INVALID_REACTION_LIMIT' : 'INVALID_PARAM');
+			}
+		});
+
+		test('下書きの作成・更新・復元で設定を保持し、未指定に戻せる', async () => {
+			const created = await api('notes/drafts/create', { text: 'draft', reactionLimit: 1 }, alice);
+			assert.strictEqual(created.status, 200);
+			assert.strictEqual(created.body.createdDraft.reactionLimit, 1);
+			const draftId = created.body.createdDraft.id;
+			const updated = await api('notes/drafts/update', { draftId, reactionLimit: 2 }, alice);
+			assert.strictEqual(updated.status, 200);
+			assert.strictEqual(updated.body.updatedDraft.reactionLimit, 2);
+			const shown = await api('notes/drafts/list', {}, alice);
+			assert.strictEqual(shown.body.find(draft => draft.id === draftId)?.reactionLimit, 2);
+			const invalid = await api('notes/drafts/update', { draftId, reactionLimit: 4 }, alice);
+			assert.strictEqual(invalid.status, 400);
+			assert.strictEqual(castAsError(invalid.body).error.code, 'INVALID_REACTION_LIMIT');
+			const cleared = await api('notes/drafts/update', { draftId, reactionLimit: null }, alice);
+			assert.strictEqual(cleared.status, 200);
+			assert.strictEqual(cleared.body.updatedDraft.reactionLimit, null);
+		});
+	});
+
 	test('ファイルを添付できる', async () => {
 		const file = await uploadUrl(alice, 'https://raw.githubusercontent.com/misskey-dev/misskey/develop/packages/backend/test/resources/192.jpg');
 

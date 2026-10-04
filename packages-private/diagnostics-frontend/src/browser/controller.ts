@@ -7,7 +7,7 @@ import { writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { enableNetworkTracking, type NetworkTracker } from './network';
 import type { Browser, BrowserContext, CDPSession, Page } from 'playwright';
-import type { BrowserDiagnostics, BrowserMeasurement, NetworkRequest, TabMemory, WebSocketConnection } from './types';
+import type { BrowserDiagnostics, BrowserMeasurement, NetworkRequest, WebSocketConnection } from './types';
 
 export type HeadlessChromeOptions = {
 	scenarioTimeoutMs: number;
@@ -133,7 +133,6 @@ export class HeadlessChromeController {
 		const cdpMetricsResult = await this.cdp.send('Performance.getMetrics');
 		const cdpMetrics = Object.fromEntries(cdpMetricsResult.metrics.map(metric => [metric.name, metric.value]));
 		const runtimeHeap = await this.cdp.send('Runtime.getHeapUsage').catch(() => undefined);
-		const tabMemory = await this.collectTabMemory();
 		const webVitals = await this.evaluate<BrowserMeasurement['performance']['webVitals']>(`(() => {
 			const navigation = performance.getEntriesByType('navigation')[0];
 			const paintEntries = Object.fromEntries(performance.getEntriesByType('paint').map(entry => [entry.name, entry.startTime]));
@@ -155,26 +154,7 @@ export class HeadlessChromeController {
 		return {
 			cdpMetrics,
 			runtimeHeap,
-			tabMemory,
 			webVitals,
-		};
-	}
-
-	public async collectTabMemory(): Promise<TabMemory> {
-		const userAgentSpecificMemory = await this.evaluate<{ bytes?: number }>(`(async () => {
-			const measureMemory = performance.measureUserAgentSpecificMemory;
-			if (typeof measureMemory !== 'function') return {};
-			const result = await measureMemory.call(performance);
-			return { bytes: result.bytes };
-		})()`, 60_000);
-
-		const userAgentSpecificBytes = userAgentSpecificMemory?.bytes;
-		if (!Number.isFinite(userAgentSpecificBytes)) {
-			throw new Error('performance.measureUserAgentSpecificMemory() did not return finite bytes');
-		}
-
-		return {
-			totalBytes: userAgentSpecificBytes as number,
 		};
 	}
 

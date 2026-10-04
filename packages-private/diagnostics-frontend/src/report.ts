@@ -127,11 +127,6 @@ function renderBrowserSummaryTable(base: BrowserMetricsReport, head: BrowserMetr
 			getValue: sample => sample.diagnostics.console.info,
 			formatValue: formatNumber,
 			absoluteThreshold: 1,
-		}, {
-			label: '**Page-attributed memory**',
-			getValue: sample => sample.performance.tabMemory.totalBytes,
-			formatValue: formatBytes,
-			absoluteThreshold: 10_000,
 		}],
 		{ onlySignificantChanges: true },
 	);

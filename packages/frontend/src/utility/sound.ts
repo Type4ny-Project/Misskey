@@ -20,12 +20,12 @@ export const soundsTypes = [
 	'_driveFile_',
 
 	// プリインストール
-	'calls/self_join',
-	'calls/self_leave',
-	'calls/other_join',
-	'calls/other_leave',
-	'calls/mute',
-	'calls/unmute',
+	'mattyatea/self_join',
+	'mattyatea/self_leave',
+	'mattyatea/other_join',
+	'mattyatea/other_leave',
+	'mattyatea/mute',
+	'mattyatea/unmute',
 	'syuilo/n-aec',
 	'syuilo/n-aec-4va',
 	'syuilo/n-aec-4vb',

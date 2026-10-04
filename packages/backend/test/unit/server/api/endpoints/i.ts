@@ -103,11 +103,24 @@ describe('i login bonus', () => {
 		expect((await profiles.findOneByOrFail({ userId: user.id })).lastLoginBonusDate).toBe(today);
 	});
 
-	test('concurrent requests award and notify only once', async () => {
-		const awards = await Promise.all([service.awardLoginBonus(user.id), service.awardLoginBonus(user.id)]);
-		const granted = awards.filter(award => award != null);
-		expect(granted).toHaveLength(1);
-		expect((await users.findOneByOrFail({ id: user.id })).points).toBe(20 + granted[0]!.points);
+	test('concurrent requests award once and both return the updated balance', async () => {
+		const findOne = profiles.findOne.bind(profiles);
+		let snapshots = 0;
+		let release!: () => void;
+		const bothRead = new Promise<void>(resolve => { release = resolve; });
+		vi.spyOn(profiles, 'findOne').mockImplementation(async options => {
+			const profile = await findOne(options);
+			if (options.relations) {
+				if (++snapshots === 2) release();
+				await bothRead;
+			}
+			return profile;
+		});
+		const responses = await Promise.all([endpoint.exec({}, user, null), endpoint.exec({}, user, null)]);
+		const balance = (await users.findOneByOrFail({ id: user.id })).points;
+		expect(balance).toBeGreaterThanOrEqual(21);
+		expect(balance).toBeLessThanOrEqual(25);
+		expect(responses.map(response => response.points)).toEqual([balance, balance]);
 		expect(notificationService.createNotification).toHaveBeenCalledTimes(1);
 	});
 

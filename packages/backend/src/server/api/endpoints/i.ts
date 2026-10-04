@@ -72,10 +72,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			const bonus = await this.loginBonusService.awardLoginBonus(user.id);
-			if (bonus) {
-				packedUser.points = bonus.balance;
-				userProfile.lastLoginBonusDate = today;
-			}
+			packedUser.points = bonus?.balance ?? await this.loginBonusService.getUserPoints(user.id);
 
 			if (!userProfile.loggedInDates.includes(today)) {
 				await this.userProfilesRepository.update({ userId: user.id }, {

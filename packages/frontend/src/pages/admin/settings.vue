@@ -510,7 +510,6 @@ const federationForm = useForm({
 	fetchInstance(true);
 });
 
-
 const loginBonusForm = useForm({
   	enableLoginBonus: meta.enableLoginBonus,
   	}, async (state) => {

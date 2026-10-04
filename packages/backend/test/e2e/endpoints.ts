@@ -167,6 +167,28 @@ describe('Endpoints', () => {
 		});
 	});
 
+	describe('i login bonus', () => {
+		test('同日のログイン後に有効化してもボーナスを一度だけ受け取れる', async () => {
+			const user = await signup({ username: 'loginbonus' });
+			const before = await api('i', {}, user);
+			expect(before.status).toBe(200);
+			assert.ok(before.body.points != null);
+			await api('admin/update-meta', { enableLoginBonus: true }, alice);
+			try {
+				const awarded = await api('i', {}, user);
+				expect(awarded.status).toBe(200);
+				expect(awarded.body.points).toBeGreaterThanOrEqual(before.body.points + 1);
+				expect(awarded.body.points).toBeLessThanOrEqual(before.body.points + 5);
+				expect(awarded.body.loggedInDays).toBe(before.body.loggedInDays);
+				const repeated = await api('i', {}, user);
+				expect(repeated.status).toBe(200);
+				expect(repeated.body.points).toBe(awarded.body.points);
+			} finally {
+				await api('admin/update-meta', { enableLoginBonus: false }, alice);
+			}
+		});
+	});
+
 	describe('signup', () => {
 		test('不正なユーザー名でアカウントが作成できない', async () => {
 			const res = await api('signup', {
@@ -384,7 +406,7 @@ describe('Endpoints', () => {
 			assert.strictEqual(res.status, 204);
 		});
 
-		test('二重にリアクションすると上書きされる', async () => {
+		test('同じユーザーが異なるリアクションを追加できる', async () => {
 			const bobPost = await post(bob, { text: 'hi' });
 
 			await api('notes/reactions/create', {
@@ -404,7 +426,7 @@ describe('Endpoints', () => {
 			}, alice);
 
 			assert.strictEqual(resNote.status, 200);
-			assert.deepStrictEqual(resNote.body.reactions, { '🚀': 1 });
+			assert.deepStrictEqual(resNote.body.reactions, { '🥰': 1, '🚀': 1 });
 		});
 
 		test('存在しない投稿にはリアクションできない', async () => {

@@ -113,9 +113,6 @@ export function summarizePerformanceSamples(samples: BrowserMeasurementSample[])
 			usedSize: finiteMedian(samples.map(sample => sample.performance.runtimeHeap?.usedSize), 0),
 			totalSize: finiteMedian(samples.map(sample => sample.performance.runtimeHeap?.totalSize), 0),
 		},
-		tabMemory: {
-			totalBytes: finiteMedian(samples.map(sample => sample.performance.tabMemory.totalBytes), 0),
-		},
 		webVitals,
 	};
 }

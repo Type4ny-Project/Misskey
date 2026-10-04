@@ -11,6 +11,7 @@ import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { MetaService } from '@/core/MetaService.js';
 import { envOption } from '@/env.js';
+import { ApiError } from '@/server/api/error.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -18,12 +19,23 @@ export const meta = {
 	requireCredential: true,
 	requireAdmin: true,
 	kind: 'write:admin:meta',
+
+	errors: {
+		invalidLoginBonusPointsRange: {
+			message: 'Minimum login bonus points must not exceed maximum points.',
+			code: 'INVALID_LOGIN_BONUS_POINTS_RANGE',
+			id: '6e2ffe67-587e-41f9-887f-3355e95161e7',
+		},
+	},
 } as const;
 
 export const paramDef = {
 	type: 'object',
 	properties: {
 		enableLoginBonus: { type: 'boolean' },
+		loginBonusResetTime: { type: 'string', pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' },
+		loginBonusMinPoints: { type: 'integer', minimum: 1, maximum: 2147483647 },
+		loginBonusMaxPoints: { type: 'integer', minimum: 1, maximum: 2147483647 },
 		disableRegistration: { type: 'boolean', nullable: true },
 		pinnedUsers: {
 			type: 'array', nullable: true, items: {
@@ -863,8 +875,24 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.enableLoginBonus !== undefined) {
 				set.enableLoginBonus = ps.enableLoginBonus;
 			}
+			if (ps.loginBonusResetTime !== undefined) {
+				set.loginBonusResetTime = ps.loginBonusResetTime;
+			}
+			if (ps.loginBonusMinPoints !== undefined) {
+				set.loginBonusMinPoints = ps.loginBonusMinPoints;
+			}
+			if (ps.loginBonusMaxPoints !== undefined) {
+				set.loginBonusMaxPoints = ps.loginBonusMaxPoints;
+			}
 
 			const before = await this.metaService.fetch(true);
+			if (ps.loginBonusMinPoints !== undefined || ps.loginBonusMaxPoints !== undefined) {
+				const minPoints = ps.loginBonusMinPoints ?? before.loginBonusMinPoints;
+				const maxPoints = ps.loginBonusMaxPoints ?? before.loginBonusMaxPoints;
+				if (minPoints > maxPoints) {
+					throw new ApiError(meta.errors.invalidLoginBonusPointsRange);
+				}
+			}
 
 			await this.metaService.update(set);
 

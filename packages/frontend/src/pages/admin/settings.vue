@@ -354,6 +354,36 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkFolder>
 				</SearchMarker>
 
+				<SearchMarker v-slot="slotProps" :keywords="['login', 'bonus', 'points']">
+					<MkFolder :defaultOpen="slotProps.isParentOfTarget">
+						<template #icon><SearchIcon><i class="ti ti-gift"></i></SearchIcon></template>
+						<template #label><SearchLabel>{{ i18n.ts._serverSettings._loginBonus.title }}</SearchLabel></template>
+						<template v-if="loginBonusForm.modified.value" #footer>
+							<MkFormFooter :form="loginBonusForm" :canSaving="loginBonusSettingsValid"/>
+						</template>
+
+						<div class="_gaps">
+							<MkSwitch v-model="loginBonusForm.state.enableLoginBonus">
+								<template #label>{{ i18n.ts._serverSettings._loginBonus.enabled }}<span v-if="loginBonusForm.modifiedStates.enableLoginBonus" class="_modified">{{ i18n.ts.modified }}</span></template>
+							</MkSwitch>
+							<MkInput v-model="loginBonusForm.state.loginBonusResetTime" type="time" :step="60" required>
+								<template #label>{{ i18n.ts._serverSettings._loginBonus.resetTime }}<span v-if="loginBonusForm.modifiedStates.loginBonusResetTime" class="_modified">{{ i18n.ts.modified }}</span></template>
+								<template #caption>{{ i18n.ts._serverSettings._loginBonus.resetTimeDescription }}</template>
+							</MkInput>
+							<FormSplit>
+								<MkInput v-model="loginBonusForm.state.loginBonusMinPoints" type="number" :min="1" :max="2147483647" :step="1" required>
+									<template #label>{{ i18n.ts._serverSettings._loginBonus.minPoints }}<span v-if="loginBonusForm.modifiedStates.loginBonusMinPoints" class="_modified">{{ i18n.ts.modified }}</span></template>
+								</MkInput>
+								<MkInput v-model="loginBonusForm.state.loginBonusMaxPoints" type="number" :min="1" :max="2147483647" :step="1" required>
+									<template #label>{{ i18n.ts._serverSettings._loginBonus.maxPoints }}<span v-if="loginBonusForm.modifiedStates.loginBonusMaxPoints" class="_modified">{{ i18n.ts.modified }}</span></template>
+								</MkInput>
+							</FormSplit>
+							<MkInfo>{{ i18n.ts._serverSettings._loginBonus.pointsDescription }}</MkInfo>
+							<MkInfo v-if="!loginBonusPointsValid" warn>{{ i18n.ts._serverSettings._loginBonus.invalidPointsRange }}</MkInfo>
+						</div>
+					</MkFolder>
+				</SearchMarker>
+
 				<SearchMarker v-slot="slotProps" :keywords="['proxy', 'account']">
 					<MkFolder :defaultOpen="slotProps.isParentOfTarget">
 						<template #icon><SearchIcon><i class="ti ti-ghost"></i></SearchIcon></template>
@@ -512,12 +542,25 @@ const federationForm = useForm({
 
 const loginBonusForm = useForm({
 	enableLoginBonus: meta.enableLoginBonus,
+	loginBonusResetTime: meta.loginBonusResetTime,
+	loginBonusMinPoints: meta.loginBonusMinPoints,
+	loginBonusMaxPoints: meta.loginBonusMaxPoints,
 }, async (state) => {
 	await os.apiWithDialog('admin/update-meta', {
 		enableLoginBonus: state.enableLoginBonus,
+		loginBonusResetTime: state.loginBonusResetTime,
+		loginBonusMinPoints: state.loginBonusMinPoints,
+		loginBonusMaxPoints: state.loginBonusMaxPoints,
 	});
 	fetchInstance(true);
 });
+
+const loginBonusPointsValid = computed(() => {
+	const { loginBonusMinPoints: min, loginBonusMaxPoints: max } = loginBonusForm.state;
+	return Number.isInteger(min) && Number.isInteger(max) && min >= 1 && max <= 2147483647 && min <= max;
+});
+const loginBonusSettingsValid = computed(() => loginBonusPointsValid.value && /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(loginBonusForm.state.loginBonusResetTime));
+
 const proxyAccountForm = useForm({
 	description: proxyAccount.description,
 }, async (state) => {

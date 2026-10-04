@@ -11259,6 +11259,9 @@ export interface operations {
                         nowLocalUsers: number;
                         maxLocalUsers: number;
                         enableLoginBonus: boolean;
+                        loginBonusResetTime: string;
+                        loginBonusMinPoints: number;
+                        loginBonusMaxPoints: number;
                         cacheRemoteFiles: boolean;
                         cacheRemoteSensitiveFiles: boolean;
                         emailRequiredForSignup: boolean;
@@ -14792,6 +14795,9 @@ export interface operations {
             content: {
                 'application/json': {
                     enableLoginBonus?: boolean;
+                    loginBonusResetTime?: string;
+                    loginBonusMinPoints?: number;
+                    loginBonusMaxPoints?: number;
                     disableRegistration?: boolean | null;
                     pinnedUsers?: string[] | null;
                     hiddenTags?: string[] | null;

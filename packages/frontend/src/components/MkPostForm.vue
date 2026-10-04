@@ -956,7 +956,7 @@ async function saveServerDraft(options: {
 		renoteId: renoteTargetNote.value ? renoteTargetNote.value.id : quoteId.value ? quoteId.value : null,
 		replyId: replyTargetNote.value ? replyTargetNote.value.id : null,
 		channelId: targetChannel.value ? targetChannel.value.id : null,
-		reactionAcceptance: effectiveReactionAcceptance.value,
+		reactionAcceptance: reactionAcceptance.value,
 		scheduledAt: scheduledAt.value,
 		isActuallyScheduled: options.isActuallyScheduled ?? false,
 	});

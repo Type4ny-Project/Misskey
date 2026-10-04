@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { In, IsNull } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type {
@@ -19,8 +19,6 @@ import type {
 import type { CallsModerationAction } from '@/models/CallsModerationLog.js';
 import type { CallsParticipantRole } from '@/models/CallsParticipant.js';
 import type { CallsRoomMode, CallsRoomVisibility } from '@/models/CallsRoom.js';
-import { MiCallsParticipant as MiCallsParticipantEntity } from '@/models/CallsParticipant.js';
-import { MiCallsRoom as MiCallsRoomEntity } from '@/models/CallsRoom.js';
 import { bindThis } from '@/decorators.js';
 import { CacheService } from '@/core/CacheService.js';
 import { ChatService } from '@/core/ChatService.js';
@@ -34,7 +32,6 @@ import type { Config } from '@/config.js';
 
 export const CALLS_MAX_SPEAKERS = 8;
 export const CALLS_MAX_LISTENERS = 100;
-export const CALLS_EMPTY_ROOM_GRACE_MS = 30_000;
 
 export type CallsRoomErrorCode =
 	| 'access-denied'
@@ -60,9 +57,7 @@ export function isCallsRoomTransitionAllowed(from: MiCallsRoom['state'], to: MiC
 }
 
 @Injectable()
-export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
-	private emptyRoomSweepTimer: NodeJS.Timeout | null = null;
-	private emptyRoomSweepRunning = false;
+export class CallsRoomService {
 	constructor(
 		@Inject(DI.config)
 		private config: Config,
@@ -83,21 +78,6 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 		private callsMediaRevocationService: CallsMediaRevocationService,
 		private callsTelemetryService: CallsTelemetryService,
 	) {}
-
-	public onModuleInit(): void {
-		this.emptyRoomSweepTimer = setInterval(() => {
-			if (this.emptyRoomSweepRunning) return;
-			this.emptyRoomSweepRunning = true;
-			void this.sweepEmptyRooms().finally(() => {
-				this.emptyRoomSweepRunning = false;
-			});
-		}, 5000);
-		this.emptyRoomSweepTimer.unref();
-	}
-
-	public onModuleDestroy(): void {
-		if (this.emptyRoomSweepTimer != null) clearInterval(this.emptyRoomSweepTimer);
-	}
 
 	@bindThis
 	public async create(owner: MiUser, params: {
@@ -129,7 +109,7 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 			chatRoomId: params.attachmentType === 'chatRoom' ? params.chatRoomId! : IsNull(),
 			state: In(['scheduled', 'open']),
 		});
-		if (activeAttachment != null && !(await this.endIfEmpty(activeAttachment))) throw new CallsRoomError('active-attachment');
+		if (activeAttachment != null) throw new CallsRoomError('active-attachment');
 
 		const now = new Date();
 		const room = await this.callsRoomsRepository.insertOne({
@@ -142,6 +122,7 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 			mode: params.mode ?? 'open',
 			visibility: params.attachmentType === 'chatRoom' ? 'specified' : (params.visibility ?? 'specified'),
 			visibleUserIds: params.attachmentType === 'personal' && params.visibility === 'specified' ? [...new Set(params.visibleUserIds ?? [])] : [],
+			moderatorUserIds: [],
 			state: 'scheduled',
 			scheduledAt: params.scheduledAt ?? null,
 			startedAt: null,
@@ -217,7 +198,6 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 		});
 		const visible: MiCallsRoom[] = [];
 		for (const room of candidates) {
-			if (await this.endIfEmpty(room)) continue;
 			try {
 				await this.assertCanAccess(user, room);
 				visible.push(room);
@@ -309,9 +289,7 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 	public async join(user: MiUser, roomId: string, reconnectToken?: string): Promise<MiCallsParticipant> {
 		return this.callsLiveConnectionService.withRoomLock(roomId, async () => {
 			if (reconnectToken != null) await this.callsLiveConnectionService.consumeReconnectToken(reconnectToken);
-			const participant = await this.joinLocked(user, roomId);
-			await this.callsLiveConnectionService.clearRoomEmptySince(roomId);
-			return participant;
+			return this.joinLocked(user, roomId);
 		});
 	}
 
@@ -361,7 +339,7 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 	@bindThis
 	public async leave(user: MiUser, roomId: string, identity?: CallsConnectionIdentity & { token?: string }): Promise<void> {
 		if (identity?.token != null) {
-			return this.callsLiveConnectionService.withRoomLock(roomId, async () => {
+			const publications = await this.callsLiveConnectionService.withRoomLock(roomId, async () => {
 				if (await this.callsLiveConnectionService.isReconnectTokenConsumed(identity.token!)) return;
 				const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
 				if (participant == null) return;
@@ -372,9 +350,13 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 				await this.callsParticipantsRepository.update(participant.id, { state: 'left', leftAt: now, updatedAt: now });
 				const revision = await this.bumpRevision(roomId);
 				await this.callsEventService.publish(roomId, revision, 'participant', { participantId: participant.id, action: 'left' });
-				await this.callsMediaRevocationService.revokeDisconnectedGeneration(participant, connection, revision);
+				const publications = await this.callsMediaRevocationService.revokeDisconnectedGeneration(participant, connection, revision);
 				this.callsTelemetryService.lifecycle({ action: 'participant-left', roomId, participantId: participant.id, reason: 'reload' });
+				return publications;
 			});
+			// Provider cleanup can exceed the join timeout; release the room lock first.
+			if (publications != null) await this.callsMediaRevocationService.closeProviderPublications(publications);
+			return;
 		}
 		if (identity != null) {
 			return this.callsLiveConnectionService.withRoomLock(roomId, async () => {
@@ -395,7 +377,6 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 	private async leaveParticipant(user: MiUser, roomId: string): Promise<void> {
 		const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
 		if (participant == null) throw new CallsRoomError('participant-not-found');
-		if (participant.role === 'host') throw new CallsRoomError('invalid-state');
 		const now = new Date();
 		await this.callsParticipantsRepository.update(participant.id, { state: 'left', leftAt: now, updatedAt: now });
 		const revision = await this.bumpRevision(roomId);
@@ -510,9 +491,32 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 	}
 
 	@bindThis
+	public async setModerator(host: MiUser, roomId: string, participantId: string, isModerator: boolean, expectedRevision: number): Promise<MiCallsRoom> {
+		const room = await this.getRoom(roomId);
+		if (room.ownerUserId !== host.id) throw new CallsRoomError('access-denied');
+		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
+		const participant = await this.callsParticipantsRepository.findOneBy({ id: participantId, roomId, state: 'active' });
+		if (participant == null || participant.role === 'host') throw new CallsRoomError('participant-not-found');
+		const moderatorUserIds = room.moderatorUserIds.filter(id => id !== participant.userId);
+		if (isModerator) moderatorUserIds.push(participant.userId);
+		const result = await this.callsRoomsRepository.createQueryBuilder().update()
+			.set({ moderatorUserIds, revision: () => '"revision" + 1', updatedAt: new Date() })
+			.where('id = :roomId AND revision = :expectedRevision AND state = :state', { roomId, expectedRevision, state: 'open' })
+			.returning('*').execute();
+		if (result.affected !== 1) throw new CallsRoomError('stale-revision');
+		const updated = result.raw[0] as MiCallsRoom;
+		await this.callsEventService.publish(roomId, updated.revision, 'participant', { participantId, action: 'updated' });
+		return updated;
+	}
+
+	@bindThis
 	public async removeParticipant(host: MiUser, roomId: string, participantId: string, expectedRevision: number, reason?: string): Promise<void> {
 		const room = await this.getRoom(roomId);
-		if (room.ownerUserId !== host.id && !(await this.roleService.isModerator(host))) throw new CallsRoomError('access-denied');
+		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
+		if (room.ownerUserId !== host.id && !(await this.roleService.isModerator(host))) {
+			if (!room.moderatorUserIds.includes(host.id) || !(await this.callsParticipantsRepository.existsBy({ roomId, userId: host.id, state: 'active' }))) throw new CallsRoomError('access-denied');
+			await this.assertCanAccess(host, room);
+		}
 		const participant = await this.callsParticipantsRepository.findOneBy({ id: participantId, roomId, state: 'active' });
 		if (participant == null || participant.role === 'host') throw new CallsRoomError('participant-not-found');
 		const result = await this.callsRoomsRepository.createQueryBuilder().update()
@@ -538,53 +542,6 @@ export class CallsRoomService implements OnModuleInit, OnModuleDestroy {
 			.where('id = :roomId', { roomId }).returning('revision').execute();
 		if (result.affected !== 1) throw new CallsRoomError('room-not-found');
 		return Number((result.raw[0] as { revision: number }).revision);
-	}
-
-	private async endIfEmpty(room: MiCallsRoom): Promise<boolean> {
-		if (room.state !== 'open') return false;
-		const result = await this.callsLiveConnectionService.withRoomLock(room.id, async (assertLockHeld): Promise<{ room: MiCallsRoom; changed: boolean } | null> => {
-			const current = await this.callsRoomsRepository.findOneBy({ id: room.id });
-			if (current == null || current.state !== 'open') return current?.state === 'ended' ? { room: current, changed: false } : null;
-			const participants = await this.callsParticipantsRepository.findBy({ roomId: room.id, state: 'active' });
-			if (await this.callsLiveConnectionService.hasAny(participants.map(participant => participant.id))) {
-				await this.callsLiveConnectionService.clearRoomEmptySince(room.id);
-				return null;
-			}
-			const emptySince = await this.callsLiveConnectionService.getOrMarkRoomEmptySince(room.id);
-			if (Date.now() - emptySince < CALLS_EMPTY_ROOM_GRACE_MS) return null;
-			const now = new Date();
-			await assertLockHeld();
-			return this.callsRoomsRepository.manager.transaction(async manager => {
-				const roomRepository = manager.getRepository(MiCallsRoomEntity);
-				const participantRepository = manager.getRepository(MiCallsParticipantEntity);
-				const result = await roomRepository.createQueryBuilder().update()
-					.set({ state: 'ended', endedAt: now, revision: () => '"revision" + 1', updatedAt: now })
-					.where('id = :roomId AND revision = :revision AND state = :state', { roomId: room.id, revision: current.revision, state: 'open' })
-					.returning('*').execute();
-				if (result.affected !== 1) {
-					const latest = await roomRepository.findOneBy({ id: room.id });
-					return latest?.state === 'ended' ? { room: latest, changed: false } : null;
-				}
-				await participantRepository.update({ roomId: room.id, state: 'active' }, { state: 'left', leftAt: now, isMuted: true, updatedAt: now });
-				return { room: result.raw[0] as MiCallsRoom, changed: true };
-			});
-		});
-		if (result == null || result.room.state !== 'ended') return false;
-		if (!result.changed) return true;
-		const updated = result.room;
-		await this.callsEventService.publish(room.id, updated.revision, 'lifecycle', { state: 'ended' });
-		this.callsEventService.publishRoomsList('updated', { roomId: room.id, action: 'ended' });
-		await this.callsMediaRevocationService.revokeRoom(room.id, updated.revision, 'room-ended');
-		this.callsTelemetryService.lifecycle({ action: 'room-ended', roomId: room.id, reason: 'empty' });
-		return true;
-	}
-
-	private async sweepEmptyRooms(): Promise<void> {
-		for (let skip = 0; ; skip += 100) {
-			const rooms = await this.callsRoomsRepository.find({ where: { state: 'open' }, order: { id: 'ASC' }, take: 100, skip });
-			for (const room of rooms) await this.endIfEmpty(room).catch(() => undefined);
-			if (rooms.length < 100) break;
-		}
 	}
 
 	private sanitizeMetadata(value: string): string {

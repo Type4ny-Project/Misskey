@@ -59,6 +59,11 @@ function installBrowserMedia(getUserMedia: ReturnType<typeof vi.fn>, getDisplayM
 	});
 	vi.stubGlobal('RTCPeerConnection', FakePeerConnection);
 	vi.stubGlobal('RTCRtpReceiver', { getCapabilities: vi.fn().mockReturnValue({ codecs: [{ mimeType: 'audio/opus', clockRate: 48_000 }] }) });
+	vi.stubGlobal('RTCRtpSender', { getCapabilities: vi.fn().mockReturnValue({ codecs: [
+		{ mimeType: 'video/VP8', clockRate: 90_000 },
+		{ mimeType: 'video/rtx', clockRate: 90_000 },
+		{ mimeType: 'video/H264', clockRate: 90_000 },
+	] }) });
 }
 
 describe('CallsMediaController', () => {
@@ -76,7 +81,7 @@ describe('CallsMediaController', () => {
 	});
 
 	function makeTrack(kind: 'audio' | 'video'): MediaStreamTrack {
-		return Object.assign(new EventTarget(), { kind, enabled: true, readyState: 'live', stop: vi.fn(), contentHint: '' }) as unknown as MediaStreamTrack;
+		return Object.assign(new EventTarget(), { kind, enabled: true, readyState: 'live', stop: vi.fn(), applyConstraints: vi.fn().mockResolvedValue(undefined), contentHint: '', getSettings: () => ({ deviceId: 'microphone-a' }) }) as unknown as MediaStreamTrack;
 	}
 
 	function stream(track: MediaStreamTrack): MediaStream {
@@ -97,6 +102,12 @@ describe('CallsMediaController', () => {
 		expect(getDisplayMedia).not.toHaveBeenCalled();
 		await controller.startVideo('camera');
 		await controller.startVideo('screen');
+		for (const transceiver of FakePeerConnection.instances[0].transceivers.slice(1)) {
+			expect(transceiver.setCodecPreferences).toHaveBeenCalledWith([
+				{ mimeType: 'video/VP8', clockRate: 90_000 },
+				{ mimeType: 'video/rtx', clockRate: 90_000 },
+			]);
+		}
 		expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/publish', expect.objectContaining({ mediaSource: 'camera', mid: '1' }));
 		expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/publish', expect.objectContaining({ mediaSource: 'screen', mid: '2' }));
 		screen.dispatchEvent(new Event('ended'));
@@ -107,6 +118,51 @@ describe('CallsMediaController', () => {
 		await controller.close();
 		expect(camera.stop).toHaveBeenCalled();
 		expect(audio.stop).toHaveBeenCalled();
+	});
+
+	test('toggles noise suppression without reconnecting and retains it when switching microphones', async () => {
+		const tracks = Array.from({ length: 4 }, () => makeTrack('audio'));
+		const getUserMedia = vi.fn();
+		for (const track of tracks) getUserMedia.mockResolvedValueOnce(stream(track));
+		installBrowserMedia(getUserMedia);
+		const controller = new CallsMediaController('room-a', 'speaker');
+		await controller.connect();
+		const sessionCalls = apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/session/create').length;
+		await controller.setNoiseSuppression(false);
+		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: expect.objectContaining({ noiseSuppression: { exact: false }, deviceId: { exact: 'microphone-a' } }) }));
+		expect(tracks[0].stop).toHaveBeenCalled();
+		await controller.switchMicrophone('other-mic');
+		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: expect.objectContaining({ noiseSuppression: { exact: false } }) }));
+		await controller.setNoiseSuppression(true);
+		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: expect.objectContaining({ noiseSuppression: { exact: true } }) }));
+		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/session/create')).toHaveLength(sessionCalls);
+		await controller.close();
+	});
+
+	test.each(['camera', 'screen'] as const)('changes %s quality on the existing track without republishing', async source => {
+		const audio = makeTrack('audio');
+		const video = makeTrack('video');
+		const getUserMedia = vi.fn().mockResolvedValueOnce(stream(audio)).mockResolvedValue(stream(video));
+		const getDisplayMedia = vi.fn().mockResolvedValue(stream(video));
+		installBrowserMedia(getUserMedia, getDisplayMedia);
+		const controller = new CallsMediaController('room-a', 'speaker');
+		await controller.connect();
+		await controller.startVideo(source, undefined, { height: 1080, frameRate: 60 });
+		const capture = source === 'camera' ? getUserMedia : getDisplayMedia;
+		expect(capture).toHaveBeenLastCalledWith(expect.objectContaining({ video: expect.objectContaining({
+			width: { ideal: 1920, max: 1920 }, height: { ideal: 1080, max: 1080 }, frameRate: { ideal: 60, max: 60 },
+		}) }));
+		const publicationCount = apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish').length;
+		await controller.setVideoQuality(source, { height: 480, frameRate: 15 });
+		expect(video.applyConstraints).toHaveBeenCalledWith({ width: { ideal: 854, max: 854 }, height: { ideal: 480, max: 480 }, frameRate: { ideal: 15, max: 15 } });
+		await controller.setVideoQuality(source, { height: 2160, frameRate: 144 });
+		expect(video.applyConstraints).toHaveBeenLastCalledWith({ width: { ideal: 3840, max: 3840 }, height: { ideal: 2160, max: 2160 }, frameRate: { ideal: 144, max: 144 } });
+		await controller.setVideoQuality(source, { height: 'source', frameRate: 144 });
+		expect(video.applyConstraints).toHaveBeenLastCalledWith({ frameRate: { ideal: 144, max: 144 } });
+		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish')).toHaveLength(publicationCount);
+		expect(capture).toHaveBeenCalledTimes(source === 'camera' ? 2 : 1);
+		expect(video.stop).not.toHaveBeenCalled();
+		await controller.close();
 	});
 
 	test('switches the active camera without republishing or interrupting microphone audio', async () => {
@@ -145,17 +201,20 @@ describe('CallsMediaController', () => {
 		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish')).toHaveLength(1);
 	});
 
-	test('video publication failure stops capture and leaves microphone usable', async () => {
+	test.each(['local description', 'publication'] as const)('video %s failure stops capture and leaves microphone usable', async stage => {
 		const audio = makeTrack('audio');
 		const camera = makeTrack('video');
 		installBrowserMedia(vi.fn().mockResolvedValueOnce(stream(audio)).mockResolvedValueOnce(stream(camera)));
 		const controller = new CallsMediaController('room-a', 'speaker');
 		await controller.connect();
-		apiMock.mockRejectedValueOnce(new Error('video unavailable'));
+		const description = stage === 'local description' ? vi.spyOn(FakePeerConnection.prototype, 'setLocalDescription').mockRejectedValueOnce(new Error('video unavailable')) : null;
+		if (stage === 'publication') apiMock.mockRejectedValueOnce(new Error('video unavailable'));
 		await expect(controller.startVideo('camera')).rejects.toThrow('video unavailable');
 		expect(camera.stop).toHaveBeenCalled();
 		expect(audio.stop).not.toHaveBeenCalled();
 		expect(FakePeerConnection.instances[0]?.signalingState).toBe('stable');
+		expect(FakePeerConnection.instances[0].transceivers[1].stop).toHaveBeenCalledOnce();
+		description?.mockRestore();
 		await controller.close();
 	});
 

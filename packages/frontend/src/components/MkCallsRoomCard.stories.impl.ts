@@ -15,7 +15,7 @@ const host = userDetailed();
 const room = {
 	id: 'calls-room-story', attachment: { type: 'personal', ownerUserId: host.id },
 	title: '今日のMisskeyについて話そう', description: '', mode: 'stage', visibility: 'public',
-	state: 'open', scheduledAt: null, startedAt: '2026-10-02T00:00:00.000Z', endedAt: null,
+	moderatorUserIds: [], state: 'open', scheduledAt: null, startedAt: '2026-10-02T00:00:00.000Z', endedAt: null,
 	revision: 1, createdAt: '2026-10-02T00:00:00.000Z', updatedAt: '2026-10-02T00:00:00.000Z',
 } satisfies Misskey.entities.CallsRoom;
 

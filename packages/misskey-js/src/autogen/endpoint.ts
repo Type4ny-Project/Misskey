@@ -236,6 +236,8 @@ import type {
 	CallsRoomsOpenResponse,
 	CallsRoomsRemoveParticipantRequest,
 	CallsRoomsRequestSpeakerRequest,
+	CallsRoomsSetModeratorRequest,
+	CallsRoomsSetModeratorResponse,
 	CallsRoomsSetRoleRequest,
 	CallsRoomsSetRoleResponse,
 	CallsRoomsShowRequest,
@@ -247,8 +249,16 @@ import type {
 	ChannelsFavoriteRequest,
 	ChannelsFeaturedResponse,
 	ChannelsFollowRequest,
+	ChannelsFollowResponse,
+	ChannelsFollowRequestsApproveRequest,
+	ChannelsFollowRequestsListRequest,
+	ChannelsFollowRequestsListResponse,
+	ChannelsFollowRequestsRejectRequest,
 	ChannelsFollowedRequest,
 	ChannelsFollowedResponse,
+	ChannelsFollowersRequest,
+	ChannelsFollowersResponse,
+	ChannelsFollowersRemoveRequest,
 	ChannelsMuteCreateRequest,
 	ChannelsMuteDeleteRequest,
 	ChannelsMuteListResponse,
@@ -933,14 +943,20 @@ export type Endpoints = {
 	'calls/rooms/open': { req: CallsRoomsOpenRequest; res: CallsRoomsOpenResponse };
 	'calls/rooms/remove-participant': { req: CallsRoomsRemoveParticipantRequest; res: EmptyResponse };
 	'calls/rooms/request-speaker': { req: CallsRoomsRequestSpeakerRequest; res: EmptyResponse };
+	'calls/rooms/set-moderator': { req: CallsRoomsSetModeratorRequest; res: CallsRoomsSetModeratorResponse };
 	'calls/rooms/set-role': { req: CallsRoomsSetRoleRequest; res: CallsRoomsSetRoleResponse };
 	'calls/rooms/show': { req: CallsRoomsShowRequest; res: CallsRoomsShowResponse };
 	'calls/users/active-rooms': { req: CallsUsersActiveRoomsRequest; res: CallsUsersActiveRoomsResponse };
 	'channels/create': { req: ChannelsCreateRequest; res: ChannelsCreateResponse };
 	'channels/favorite': { req: ChannelsFavoriteRequest; res: EmptyResponse };
 	'channels/featured': { req: EmptyRequest; res: ChannelsFeaturedResponse };
-	'channels/follow': { req: ChannelsFollowRequest; res: EmptyResponse };
+	'channels/follow': { req: ChannelsFollowRequest; res: ChannelsFollowResponse };
+	'channels/follow-requests/approve': { req: ChannelsFollowRequestsApproveRequest; res: EmptyResponse };
+	'channels/follow-requests/list': { req: ChannelsFollowRequestsListRequest; res: ChannelsFollowRequestsListResponse };
+	'channels/follow-requests/reject': { req: ChannelsFollowRequestsRejectRequest; res: EmptyResponse };
 	'channels/followed': { req: ChannelsFollowedRequest; res: ChannelsFollowedResponse };
+	'channels/followers': { req: ChannelsFollowersRequest; res: ChannelsFollowersResponse };
+	'channels/followers/remove': { req: ChannelsFollowersRemoveRequest; res: EmptyResponse };
 	'channels/mute/create': { req: ChannelsMuteCreateRequest; res: EmptyResponse };
 	'channels/mute/delete': { req: ChannelsMuteDeleteRequest; res: EmptyResponse };
 	'channels/mute/list': { req: EmptyRequest; res: ChannelsMuteListResponse };

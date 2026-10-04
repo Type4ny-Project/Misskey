@@ -34,6 +34,7 @@ import { HealthServerService } from './HealthServerService.js';
 import { ClientServerService } from './web/ClientServerService.js';
 import { OpenApiServerService } from './api/openapi/OpenApiServerService.js';
 import { OAuth2ProviderService } from './oauth/OAuth2ProviderService.js';
+import { registerHttpAccessLog } from './http-access-log.js';
 
 const _dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -84,6 +85,7 @@ export class ServerService implements OnApplicationShutdown {
 			logger: false,
 		});
 		this.#fastify = fastify;
+		registerHttpAccessLog(fastify);
 
 		// HSTS
 		// 6months (15552000sec)

@@ -122,6 +122,7 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkCallsRoomCard from '@/components/MkCallsRoomCard.vue';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
 import { useCallsSession } from '@/utility/calls-session.js';
+import { openCallsRoom } from '@/utility/calls-window.js';
 
 const $i = ensureSignin();
 const router = useRouter();
@@ -410,10 +411,11 @@ async function startAttachedCall(): Promise<void> {
 		});
 		call = await misskeyApi('calls/rooms/open', { roomId: call.id, expectedRevision: call.revision });
 		attachedCall.value = call;
-		router.push('/calls/:roomId', { params: { roomId: call.id } });
+		await openCallsRoom(call.id, true);
 		await callsSession.join(call.id, true);
 	} catch (error) {
-		await os.alert({ type: 'error', text: error instanceof Error ? error.message : i18n.ts.somethingHappened });
+		console.error('[Calls] Chat room call creation failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
 		await reloadAttachedCall().catch(() => undefined);
 	} finally {
 		creatingCall.value = false;

@@ -19,6 +19,7 @@ export class CallsEntityService {
 			},
 			title: room.title,
 			description: room.description,
+			moderatorUserIds: room.moderatorUserIds,
 			mode: room.mode,
 			visibility: room.visibility,
 			state: room.state,

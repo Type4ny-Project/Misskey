@@ -64,6 +64,22 @@ describe('CallsMediaRevocationService', () => {
 		expect(events.publish).toHaveBeenCalledWith(participant.roomId, 9, 'revoked', { participantId: participant.id, reason: 'stale-generation', connectionId: 'connection-a', generation: 7 });
 	});
 
+	test('detaches reload media locally and targets revocation at the old connection', async () => {
+		const publications = [{ applicationId: 'app-a', providerSessionId: 'session-a' }];
+		const closeTracks = vi.fn();
+		const publish = vi.fn();
+		const service = new CallsMediaRevocationService(
+			{} as never, {} as never, {} as never,
+			{ clearGeneration: vi.fn().mockResolvedValue(publications) } as never,
+			{ closeTracks } as never, { publish } as never,
+			{ revokeParticipant: vi.fn() } as never, { release: vi.fn() } as never,
+		);
+		const connection = { connectionId: 'old-connection', generation: 7, applicationId: 'app-a' };
+		await expect(service.revokeDisconnectedGeneration(participant, connection as never, 9)).resolves.toBe(publications);
+		expect(closeTracks).not.toHaveBeenCalled();
+		expect(publish).toHaveBeenCalledWith(participant.roomId, 9, 'revoked', { participantId: participant.id, reason: 'access', connectionId: 'old-connection', generation: 7 });
+	});
+
 	test('revokes current media immediately after ChatRoom membership loss', async () => {
 		const rooms = { findBy: vi.fn().mockResolvedValue([{ id: participant.roomId, revision: 5 }]) };
 		const participants = { findOneBy: vi.fn().mockResolvedValue(participant) };

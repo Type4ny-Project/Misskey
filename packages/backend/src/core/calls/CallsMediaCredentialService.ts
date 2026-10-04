@@ -41,7 +41,7 @@ export class CallsMediaCredentialService {
 		return { credential: `${payload}.${signature}`, expiresAt: new Date(exp * 1000).toISOString() };
 	}
 
-	public verify(credential: string, expected: Pick<CallsMediaCredentialClaims, 'userId' | 'applicationId' | 'roomId' | 'participantId' | 'connectionId' | 'generation'> & { publish?: boolean; mediaKind?: 'audio' | 'video' }): CallsMediaCredentialClaims {
+	public verify(credential: string, expected: Pick<CallsMediaCredentialClaims, 'userId' | 'applicationId' | 'roomId' | 'participantId' | 'connectionId' | 'generation'> & { publish?: boolean; mediaKind?: 'audio' | 'video' }, allowExpired = false): CallsMediaCredentialClaims {
 		const [payload, signature, extra] = credential.split('.');
 		if (payload == null || signature == null || extra != null) throw new InvalidCallsMediaCredentialError();
 		const expectedSignature = this.sign(payload);
@@ -50,7 +50,7 @@ export class CallsMediaCredentialService {
 		if (actualBuffer.length !== expectedBuffer.length || !timingSafeEqual(actualBuffer, expectedBuffer)) throw new InvalidCallsMediaCredentialError();
 		let claims: CallsMediaCredentialClaims;
 		try { claims = JSON.parse(Buffer.from(payload, 'base64url').toString()) as CallsMediaCredentialClaims; } catch { throw new InvalidCallsMediaCredentialError(); }
-		if (claims.v !== 1 || claims.iss !== this.config.url || claims.exp <= Math.floor(Date.now() / 1000) ||
+		if (claims.v !== 1 || claims.iss !== this.config.url || (!allowExpired && claims.exp <= Math.floor(Date.now() / 1000)) ||
 			claims.userId !== expected.userId || claims.applicationId !== expected.applicationId || claims.roomId !== expected.roomId ||
 			claims.participantId !== expected.participantId || claims.connectionId !== expected.connectionId || claims.generation !== expected.generation ||
 			(expected.publish === true && (!claims.canPublish || (expected.mediaKind != null && !claims.mediaKinds.includes(expected.mediaKind))))) throw new InvalidCallsMediaCredentialError();

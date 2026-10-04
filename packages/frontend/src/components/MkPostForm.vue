@@ -223,12 +223,11 @@ const justEndedComposition = ref(false);
 const renoteTargetNote: ShallowRef<PostFormProps['renote'] | null> = shallowRef(props.renote);
 const replyTargetNote: ShallowRef<PostFormProps['reply'] | null> = shallowRef(props.reply);
 const targetChannel = shallowRef(props.channel);
-const isChannelLocalOnly = ref(targetChannel.value?.isLocalOnly ?? false);
+const isChannelLocalOnly = computed(() => targetChannel.value?.isLocalOnly ?? false);
 
 function applyChannelPostDefaults() {
 	if (targetChannel.value) {
 		visibility.value = 'public';
-		console.log(isChannelLocalOnly.value);
 		if (isChannelLocalOnly.value)	localOnly.value = true;
 	}
 }
@@ -466,7 +465,7 @@ function checkMissingMention() {
 		const ast = mfm.parse(text.value);
 
 		for (const x of extractMentions(ast)) {
-			if (!visibleUsers.value.some(u => (u.username === x.username) && (u.host === x.host))) {
+			if (!visibleUsers.value.some(u => (u.username === x.username) && ((u.host === x.host) || (x.host === host && u.host == null)))) {
 				hasNotSpecifiedMentions.value = true;
 				return;
 			}
@@ -1339,7 +1338,10 @@ async function openAccountMenu(ev: PointerEvent) {
 				replyTargetNote.value = draft.reply;
 				reactionAcceptance.value = draft.reactionAcceptance;
 				scheduledAt.value = draft.scheduledAt ?? null;
-				if (draft.channel) targetChannel.value = draft.channel as unknown as Misskey.entities.Channel;
+				if (draft.channel) {
+					targetChannel.value = draft.channel as unknown as Misskey.entities.Channel;
+					applyChannelPostDefaults();
+				}
 
 				visibleUsers.value = [];
 				draft.visibleUserIds?.forEach(uid => {

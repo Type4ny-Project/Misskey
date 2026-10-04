@@ -20,7 +20,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	constructor(service: CallsMediaService, credentials: CallsMediaCredentialService, guard: CallsOperationGuardService) {
 		super(meta, paramDef, async (ps, me, token) => {
 			try {
-				return executeCallsMediaOperation(guard, me, token, ps, 'session-create', async () => {
+				return await executeCallsMediaOperation(guard, me, token, ps, 'session-create', async () => {
 					const result = await service.createSession(me, { ...ps, applicationId: callsApplicationId(token, me) });
 					const issued = credentials.issue({ userId: me.id, applicationId: callsApplicationId(token, me), roomId: ps.roomId, participantId: result.participantId, connectionId: ps.connectionId, generation: result.generation, canPublish: result.canPublish });
 					return { participantId: result.participantId, generation: result.generation, sessionDescription: result.sessionDescription ?? null, mediaCredential: issued.credential, credentialExpiresAt: issued.expiresAt };

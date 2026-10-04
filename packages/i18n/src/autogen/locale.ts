@@ -4381,6 +4381,10 @@ export interface Locale extends ILocale {
      */
     "cannotLoad": string;
     /**
+     * プレビューできません
+     */
+    "cannotPreview": string;
+    /**
      * プロフィール表示回数
      */
     "numberOfProfileView": string;
@@ -5915,6 +5919,10 @@ export interface Locale extends ILocale {
      * スペースで区切るとAND指定になり、改行で区切るとOR指定になります。スラッシュで囲むと正規表現になります。一致した場合、サムネイルが表示されなくなります。
      */
     "urlPreviewSensitiveListDescription": string;
+    /**
+     * ピクセルアート拡大モード
+     */
+    "pixelatedZoom": string;
     "_imageEditing": {
         "_vars": {
             /**
@@ -9201,6 +9209,42 @@ export interface Locale extends ILocale {
          */
         "isLocalOnly": string;
         /**
+         * チャンネル一覧に掲載しない
+         */
+        "isUnlisted": string;
+        /**
+         * チャンネル一覧・トレンドには表示されません。検索やURLからは引き続き閲覧できます。
+         */
+        "isUnlistedDescription": string;
+        /**
+         * フォローを承認制にする
+         */
+        "isFollowApprovalRequired": string;
+        /**
+         * 共同管理者またはチャンネル管理者が承認するまで、フォローは申請中になります。
+         */
+        "isFollowApprovalRequiredDescription": string;
+        /**
+         * フォロワー管理
+         */
+        "followerManagement": string;
+        /**
+         * フォロー申請
+         */
+        "followRequests": string;
+        /**
+         * フォロワーはいません
+         */
+        "noFollowers": string;
+        /**
+         * {name}をこのチャンネルのフォロワーから削除しますか？
+         */
+        "removeFollowerConfirm": ParameterizedString<"name">;
+        /**
+         * {name}へのフォロー申請をキャンセルしますか？
+         */
+        "cancelFollowRequestConfirm": ParameterizedString<"name">;
+        /**
          * 共同管理者を追加
          */
         "addCollaborator": string;
@@ -10175,6 +10219,62 @@ export interface Locale extends ILocale {
     };
     "_calls": {
         /**
+         * カメラの設定
+         */
+        "cameraSettings": string;
+        /**
+         * 画面共有の設定
+         */
+        "screenSettings": string;
+        /**
+         * 解像度
+         */
+        "videoResolution": string;
+        /**
+         * ソース画質
+         */
+        "videoSourceQuality": string;
+        /**
+         * フレームレート
+         */
+        "videoFrameRate": string;
+        /**
+         * {height}p
+         */
+        "videoResolutionValue": ParameterizedString<"height">;
+        /**
+         * {fps}fps
+         */
+        "videoFrameRateValue": ParameterizedString<"fps">;
+        /**
+         * 別ウィンドウを開けませんでした。ブラウザーでポップアップを許可してください。
+         */
+        "popoutBlocked": string;
+        /**
+         * 発言できるユーザー
+         */
+        "whoCanSpeak": string;
+        /**
+         * 参加者全員
+         */
+        "everyoneCanSpeak": string;
+        /**
+         * ホストが許可したユーザーのみ
+         */
+        "approvedSpeakersOnly": string;
+        /**
+         * この映像を大きく表示
+         */
+        "focusVideo": string;
+        /**
+         * 映像一覧に戻る
+         */
+        "showVideoGrid": string;
+        /**
+         * 映像を再生
+         */
+        "resumeVideo": string;
+        /**
          * ルームを見る
          */
         "viewRoom": string;
@@ -10453,6 +10553,22 @@ export interface Locale extends ILocale {
          * この開催場所には、通話中または開始予定のルームがあります。新しいルームを作らず、既存のルームを確認できます。
          */
         "activeAttachmentExists": string;
+        /**
+         * ノイズキャンセル
+         */
+        "noiseSuppression": string;
+        /**
+         * VCモデレーター
+         */
+        "vcModerator": string;
+        /**
+         * VCモデレーターに指定
+         */
+        "assignVcModerator": string;
+        /**
+         * VCモデレーターを解除
+         */
+        "removeVcModerator": string;
         /**
          * 既存のルームを見る
          */

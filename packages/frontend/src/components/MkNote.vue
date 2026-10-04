@@ -97,7 +97,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</div>
 					<div v-if="appearNote.files && appearNote.files.length > 0" style="margin-top: 8px;">
-						<MkMediaList ref="galleryEl" :mediaList="appearNote.files"/>
+						<MkMediaList ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user"/>
 					</div>
 					<MkPoll
 						v-if="appearNote.poll"
@@ -254,7 +254,7 @@ import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
 import { DI } from '@/di.js';
 import { globalEvents, useGlobalEvent } from '@/events.js';
-import MkCallsJoinDialog from '@/components/MkCallsJoinDialog.vue';
+import { openCallsRoom as showCallsRoom } from '@/utility/calls-window.js';
 import { useCallsUserRoom } from '@/composables/use-calls-user-room.js';
 
 const props = withDefaults(defineProps<{
@@ -342,7 +342,7 @@ const pleaseLoginContext = computed<OpenOnRemoteOptions>(() => ({
 
 function openCallsRoom(): void {
 	if (callsRoomId.value == null) return;
-	os.popup(MkCallsJoinDialog, { roomId: callsRoomId.value }, { closed: () => undefined });
+	void showCallsRoom(callsRoomId.value);
 }
 
 useGlobalEvent('noteUpdated', (updatedNote) => {

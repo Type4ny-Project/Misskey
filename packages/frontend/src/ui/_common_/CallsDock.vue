@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:leaveActiveClass="$style.dockLeaveActive"
 		:leaveToClass="$style.dockLeaveTo"
 	>
-		<div v-if="session.isActive.value && room != null && !isRoomPage" ref="rootEl" :class="$style.root">
+		<div v-if="session.isActive.value && room != null && callsWindowRoomId !== session.currentRoomId.value" ref="rootEl" :class="$style.root">
 			<Transition
 				:enterActiveClass="$style.panelEnterActive"
 				:enterFromClass="$style.panelEnterFrom"
@@ -23,12 +23,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<header :class="$style.panelHeader">
 						<div>
 							<strong :class="$style.panelTitle">{{ room.title }}</strong>
-							<div :class="$style.panelMeta"><span>{{ i18n.ts._calls.live }}</span><span>{{ participants.length }} {{ i18n.ts.users }}</span></div>
+							<div :class="$style.panelMeta"><span>{{ participants.length }} {{ i18n.ts.users }}</span></div>
 						</div>
 						<button type="button" class="_button" :class="$style.circleButton" :aria-label="i18n.ts.close" @click="expanded = false"><i class="ti ti-chevron-down"></i></button>
 					</header>
 
-					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="session.toggleVideo('camera')" @screen="session.toggleVideo('screen')" @microphoneSettings="session.openDeviceMenu('microphone', $event)" @cameraSettings="session.openDeviceMenu('camera', $event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveRoom">
+					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="session.toggleVideo('camera')" @screen="session.toggleVideo('screen')" @microphoneSettings="session.openDeviceMenu('microphone', $event)" @cameraSettings="session.openDeviceMenu('camera', $event)" @screenSettings="session.openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveRoom">
 						<button type="button" class="_button" :class="$style.detailsButton" :aria-label="i18n.ts.details" :title="i18n.ts.details" @click="openRoom"><i class="ti ti-layout-dashboard"></i></button>
 					</MkCallsControls>
 
@@ -82,8 +82,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<i v-else class="ti ti-phone"></i>
 					</div>
 					<div :class="$style.body">
-						<div :class="$style.titleRow"><span :class="$style.live">{{ i18n.ts._calls.live }}</span><strong>{{ room.title }}</strong></div>
-						<small>{{ participants.length }} {{ i18n.ts.users }} · {{ i18n.tsx._calls.peopleSpeaking({ count: speakingCount }) }} · {{ connectionStatus }}</small>
+						<div :class="$style.titleRow"><strong>{{ room.title }}</strong></div>
+						<small>{{ participants.length }} {{ i18n.ts.users }} · {{ i18n.tsx._calls.peopleSpeaking({ count: speakingCount }) }}</small>
 					</div>
 					<i class="ti ti-chevron-up" :class="[$style.expandIcon, expanded && $style.expandIconExpanded]"></i>
 				</button>
@@ -93,7 +93,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 		</div>
-		<div v-else-if="session.reconnectCandidate.value != null" :class="$style.root">
+		<div v-else-if="!session.isActive.value && !session.joining.value && session.reconnectCandidate.value != null" :class="$style.root">
 			<div :class="$style.summaryRow">
 				<button type="button" class="_button _panel" :class="[$style.main, $style.resumeMain]" :disabled="session.joining.value || session.reconnectRoomState.value !== 'open'" @click="resumeRecentRoom">
 					<div :class="[$style.avatarRing, $style.avatarRingActive]"><i class="ti ti-phone-call"></i></div>
@@ -116,13 +116,12 @@ import type * as Misskey from 'misskey-js';
 import MkCallsControls from '@/components/MkCallsControls.vue';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
-import { mainRouter } from '@/router.js';
+import { callsWindowRoomId, openCallsRoom } from '@/utility/calls-window.js';
 import { useCallsSession } from '@/utility/calls-session.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 
 const session = useCallsSession();
 const expanded = ref(false);
-const isRoomPage = computed(() => mainRouter.currentRef.value.route.path === '/calls/:roomId' && mainRouter.currentRef.value.props.get('roomId') === session.currentRoomId.value);
 const rootEl = ref<HTMLElement | null>(null);
 const room = computed(() => session.room.value);
 const participants = computed(() => session.participants.value);
@@ -133,7 +132,6 @@ const hostParticipant = computed(() => participants.value.find(participant => pa
 const hostUser = computed(() => hostParticipant.value == null ? null : participantUser(hostParticipant.value.userId));
 const isLiveSpeaking = computed(() => session.myParticipant.value != null && session.speakingParticipantIds.value.has(session.myParticipant.value.id));
 const speakingCount = computed(() => session.speakingParticipantIds.value.size);
-const connectionStatus = computed(() => session.mediaState.value === 'reconnecting' ? i18n.ts._calls.reconnectingShort : session.mediaState.value === 'connected' ? i18n.ts._calls.connected : session.mediaState.value === 'failed' ? i18n.ts._calls.connectionFailed : session.mediaState.value === 'closed' ? i18n.ts._calls.disconnected : i18n.ts._calls.connecting);
 
 function participantUser(userId: string): Misskey.entities.UserLite | null {
 	return session.usersById.value.get(userId) ?? null;
@@ -142,17 +140,20 @@ function participantUser(userId: string): Misskey.entities.UserLite | null {
 function openRoom(): void {
 	if (session.currentRoomId.value == null) return;
 	expanded.value = false;
-	mainRouter.push('/calls/:roomId', { params: { roomId: session.currentRoomId.value } });
+	void openCallsRoom(session.currentRoomId.value);
 }
 
 async function leaveRoom(): Promise<void> {
-	const wasOnRoomPage = /^\/calls\/[^/]+$/.test(mainRouter.currentRoute.value.path);
 	const { canceled } = await os.confirm({ type: 'warning', text: session.isHost.value ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom });
 	if (canceled) return;
 	expanded.value = false;
-	await session.leave();
-	os.toast(i18n.ts._calls.leftCall);
-	if (wasOnRoomPage) mainRouter.push('/calls');
+	try {
+		await session.leave();
+		os.toast(i18n.ts._calls.leftCall);
+	} catch (error) {
+		console.error('[Calls] Dock operation failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
 }
 
 async function resumeRecentRoom(): Promise<void> {
@@ -162,8 +163,9 @@ async function resumeRecentRoom(): Promise<void> {
 		os.toast(i18n.ts._calls.joinedCall);
 		openRoom();
 	} catch (error) {
+		console.error('[Calls] Dock operation failed', error);
 		session.dismissReconnectCandidate();
-		await os.alert({ type: 'error', text: error instanceof Error ? error.message : i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
 	}
 }
 

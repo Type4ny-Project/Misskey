@@ -21,7 +21,6 @@ function createFixture(role: MiCallsParticipant['role'] = 'speaker') {
 	const live = {
 		get: vi.fn().mockResolvedValue(null),
 		withRoomLock: vi.fn(async (_roomId: string, callback: (assertHeld: () => Promise<void>) => Promise<unknown>) => callback(async () => undefined)),
-		clearRoomEmptySince: vi.fn(),
 		replace: vi.fn().mockResolvedValue({ current: { participantId: participant.id, connectionId: 'connection-a', generation: 2, applicationId: 'app-a', sessionId: null }, previous: null }),
 		bindSession: vi.fn().mockResolvedValue(undefined),
 		assertCurrent: vi.fn().mockResolvedValue({ participantId: participant.id, connectionId: 'connection-a', generation: 2, applicationId: 'app-a', sessionId: 'session-a' }),

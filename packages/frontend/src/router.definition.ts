@@ -70,11 +70,11 @@ export const ROUTE_DEF = [{
 	loginRequired: true,
 }, {
 	path: '/calls',
-	component: page(() => import('@/pages/calls/index.vue')),
+	component: page(() => import('@/pages/calls.vue')),
 	loginRequired: true,
 }, {
 	path: '/calls/:roomId',
-	component: page(() => import('@/pages/calls/room.vue')),
+	component: page(() => import('@/pages/calls.vue')),
 	query: {
 		join: 'join',
 	},

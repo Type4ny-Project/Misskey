@@ -57,12 +57,12 @@ export class CallsMediaRevocationService {
 		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason: 'stale-generation', connectionId, generation });
 	}
 
-	public async revokeDisconnectedGeneration(participant: MiCallsParticipant, connection: CallsLiveConnection, roomRevision: number): Promise<void> {
+	public async revokeDisconnectedGeneration(participant: MiCallsParticipant, connection: CallsLiveConnection, roomRevision: number): Promise<CallsPublicationBinding[]> {
 		const publications = await this.bindings.clearGeneration(participant.id, connection.generation);
-		await this.closeProviderPublications(publications);
 		await this.quota.release(connection.applicationId, participant.id);
 		await this.turnCredentials.revokeParticipant(participant.id);
-		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason: 'access' });
+		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason: 'access', connectionId: connection.connectionId, generation: connection.generation });
+		return publications;
 	}
 
 	public async revokeRoom(roomId: string, roomRevision: number, reason: CallsRevocationReason): Promise<void> {
@@ -86,7 +86,7 @@ export class CallsMediaRevocationService {
 		}
 	}
 
-	private async closeProviderPublications(publications: CallsPublicationBinding[]): Promise<void> {
+	public async closeProviderPublications(publications: CallsPublicationBinding[]): Promise<void> {
 		await Promise.all(publications.map(publication => this.quota.releaseTrack(publication.applicationId, publication.providerTrackName)));
 		const bySession = Map.groupBy(publications, publication => publication.providerSessionId);
 		await Promise.allSettled([...bySession].map(([sessionId, sessionPublications]) => this.provider.closeTracks(

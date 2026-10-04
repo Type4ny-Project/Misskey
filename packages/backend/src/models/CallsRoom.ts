@@ -69,6 +69,9 @@ export class MiCallsRoom {
 	@Column('varchar', { array: true, default: '{}' })
 	public visibleUserIds: MiUser['id'][];
 
+	@Column('varchar', { array: true, default: '{}' })
+	public moderatorUserIds: MiUser['id'][];
+
 	@Index()
 	@Column('varchar', { length: 16, default: 'scheduled' })
 	public state: CallsRoomState;

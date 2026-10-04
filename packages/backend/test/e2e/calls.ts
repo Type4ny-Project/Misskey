@@ -13,7 +13,7 @@ describe('Calls', () => {
 	let alice: misskey.entities.SignupResponse;
 
 	beforeAll(async () => {
-		alice = await signup({ username: 'calls-alice' });
+		alice = await signup({ username: 'calls_alice' });
 	});
 
 	describe('rooms/join', () => {

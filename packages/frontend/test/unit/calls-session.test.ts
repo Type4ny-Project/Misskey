@@ -8,20 +8,26 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 const fixture = vi.hoisted(() => ({
 	api: vi.fn(),
 	toast: vi.fn(),
+	alert: vi.fn(),
 	confirm: vi.fn(),
+	popupMenu: vi.fn(),
+	keepalive: vi.fn(),
 	connectionExists: false,
 	participantMuted: true,
 	setMuted: vi.fn(),
 	role: 'listener' as 'listener' | 'host',
 	revoked: [] as Array<(event: { reason: string; connectionId?: string; generation?: number }) => void>,
-	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; close: ReturnType<typeof vi.fn> }>,
+	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; close: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
 }));
 
 vi.mock('@/i.js', () => ({ $i: { id: 'user-a' } }));
-vi.mock('@/i18n.js', () => ({ i18n: { ts: { _calls: { connectedOnAnotherDevice: 'Connected on another device', switchDeviceConfirm: 'Disconnect the other device?' } } } }));
-vi.mock('@/os.js', () => ({ toast: fixture.toast, confirm: fixture.confirm }));
+vi.mock('@/i18n.js', () => ({ i18n: {
+	ts: { somethingHappened: 'Something went wrong', _calls: { videoFailed: 'Video failed', videoResolution: 'Resolution', videoSourceQuality: 'Source quality', videoFrameRate: 'Frame rate', connectedOnAnotherDevice: 'Connected on another device', switchDeviceConfirm: 'Disconnect the other device?' } },
+	tsx: { _calls: { videoResolutionValue: ({ height }: { height: number }) => `${height}p`, videoFrameRateValue: ({ fps }: { fps: number }) => `${fps}fps` } },
+} }));
+vi.mock('@/os.js', () => ({ toast: fixture.toast, alert: fixture.alert, confirm: fixture.confirm, popupMenu: fixture.popupMenu }));
 vi.mock('@/local-storage.js', () => ({ miLocalStorage: { getItemAsJson: () => null, removeItem: vi.fn() } }));
-vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: fixture.api, misskeyApiKeepalive: vi.fn() }));
+vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: fixture.api, misskeyApiKeepalive: fixture.keepalive }));
 vi.mock('@/utility/calls-media-core.js', () => ({ detectCallsMediaCapabilities: () => ({ secureContext: true, peerConnection: true, transceiver: true }) }));
 vi.mock('@/composables/use-calls-room.js', async () => {
 	const { ref } = await import('vue');
@@ -41,6 +47,8 @@ vi.mock('@/utility/calls-media.js', () => ({
 	CallsMediaController: class {
 		public connectionIdentity: { connectionId: string; generation: number };
 		public close = vi.fn().mockResolvedValue(undefined);
+		public setVideoQuality = vi.fn().mockResolvedValue(undefined);
+		public setNoiseSuppression = vi.fn().mockResolvedValue(undefined);
 		public connect = vi.fn(async () => {
 			if (fixture.connectionExists && !this.replaceExisting) throw { code: 'CALLS_CONNECTION_EXISTS' };
 		});
@@ -60,6 +68,9 @@ describe('Calls session device handoff', () => {
 		vi.useFakeTimers();
 		fixture.api.mockReset().mockResolvedValue({});
 		fixture.toast.mockClear();
+		fixture.alert.mockClear();
+		fixture.popupMenu.mockClear();
+		fixture.keepalive.mockClear();
 		fixture.confirm.mockReset().mockResolvedValue({ canceled: true });
 		fixture.connectionExists = false;
 		fixture.participantMuted = true;
@@ -69,6 +80,89 @@ describe('Calls session device handoff', () => {
 		fixture.controllers.length = 0;
 		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { enumerateDevices: async () => [] } });
 		session = (await import('@/utility/calls-session.js')).useCallsSession();
+	});
+
+	test('microphone settings toggle noise suppression and keep the old choice on failure', async () => {
+		fixture.role = 'host';
+		await session.join('room-a', true);
+		await session.openDeviceMenu('microphone', new MouseEvent('click'));
+		const toggle = fixture.popupMenu.mock.calls[0][0].at(-1);
+		expect(toggle.type).toBe('switch');
+		expect(toggle.ref.value).toBe(true);
+		toggle.ref.value = false;
+		await vi.waitFor(() => expect(session.noiseSuppression.value).toBe(false));
+		expect(fixture.controllers[0].setNoiseSuppression).toHaveBeenLastCalledWith(false);
+		const error = new Error('Unsupported audio constraint');
+		const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		fixture.controllers[0].setNoiseSuppression.mockRejectedValueOnce(error);
+		toggle.ref.value = true;
+		await vi.waitFor(() => expect(fixture.alert).toHaveBeenCalledWith({ type: 'error', text: 'Something went wrong' }));
+		expect(toggle.ref.value).toBe(false);
+		expect(log).toHaveBeenCalledWith('[Calls] Noise suppression change failed', error);
+		log.mockRestore();
+	});
+
+	test('screen quality menu updates the sender and retains the previous selection on failure', async () => {
+		fixture.role = 'host';
+		await session.join('room-a', true);
+		session.openScreenSettings(new MouseEvent('click'));
+		await fixture.popupMenu.mock.calls[0][0][0].children[0].action();
+		expect(fixture.controllers[0].setVideoQuality).toHaveBeenCalledWith('screen', { height: 480, frameRate: 30 });
+		expect(session.videoQuality.value.screen).toEqual({ height: 480, frameRate: 30 });
+		session.openScreenSettings(new MouseEvent('click'));
+		const qualityMenu = fixture.popupMenu.mock.calls[1][0];
+		expect(qualityMenu[0].children[5].text).toBe('Source quality');
+		await qualityMenu[0].children[5].action();
+		await qualityMenu[1].children[5].action();
+		expect(fixture.controllers[0].setVideoQuality).toHaveBeenLastCalledWith('screen', { height: 'source', frameRate: 144 });
+		expect(session.videoQuality.value.screen).toEqual({ height: 'source', frameRate: 144 });
+		const error = new Error('Constraints not supported');
+		const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		fixture.controllers[0].setVideoQuality.mockRejectedValueOnce(error);
+		session.openScreenSettings(new MouseEvent('click'));
+		await fixture.popupMenu.mock.calls[2][0][0].children[2].action();
+		expect(session.videoQuality.value.screen).toEqual({ height: 'source', frameRate: 144 });
+		expect(fixture.alert).toHaveBeenCalledWith({ type: 'error', text: 'Video failed' });
+		expect(log).toHaveBeenCalledWith('[Calls] screen quality change failed', error);
+		log.mockRestore();
+	});
+
+	test.each(['host', 'listener'] as const)('page-close leaves as %s with the current device identity', async role => {
+		fixture.role = role;
+		await session.join('room-a', true);
+		window.dispatchEvent(new Event('pagehide'));
+		expect(fixture.keepalive).toHaveBeenCalledWith('calls/rooms/leave', expect.objectContaining({ roomId: 'room-a', ...fixture.controllers[0].connectionIdentity }));
+		const params = fixture.keepalive.mock.calls.at(-1)![1];
+		expect(params.reconnectToken).toEqual(expect.any(String));
+	});
+
+	test('a failed server leave reports the error while keeping local media disconnected', async () => {
+		const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		fixture.role = 'host';
+		await session.join('room-a', true);
+		const error = new Error('Unable to leave');
+		fixture.api.mockRejectedValueOnce(error);
+		await session.leave();
+		expect(session.currentRoomId.value).toBeNull();
+		expect(fixture.controllers[0].close).toHaveBeenCalledOnce();
+		expect(fixture.alert).toHaveBeenCalledWith({ type: 'error', text: 'Something went wrong' });
+		expect(log).toHaveBeenCalledWith('[Calls] Disconnect request failed', error);
+		log.mockRestore();
+	});
+
+	test('leave returns with media disconnected while server and media cleanup are still pending', async () => {
+		fixture.role = 'host';
+		await session.join('room-a', true);
+		let finishServer!: (value: unknown) => void;
+		let finishCleanup!: () => void;
+		fixture.api.mockImplementationOnce(() => new Promise(resolve => { finishServer = resolve; }));
+		fixture.controllers[0].close.mockImplementationOnce(() => new Promise<void>(resolve => { finishCleanup = resolve; }));
+		await session.leave();
+		expect(session.currentRoomId.value).toBeNull();
+		expect(session.isActive.value).toBe(false);
+		expect(fixture.controllers[0].close).toHaveBeenCalledOnce();
+		finishServer({});
+		finishCleanup();
 	});
 
 	test.each([true, false])('only replaces the existing device when confirmation is accepted (canceled: %s)', async canceled => {
@@ -142,6 +236,9 @@ describe('Calls session device handoff', () => {
 		await session.join('room-a', true);
 		const identity = fixture.controllers[0].connectionIdentity;
 		await session.leave();
-		expect(fixture.api).toHaveBeenCalledWith(role === 'host' ? 'calls/rooms/end' : 'calls/rooms/leave', expect.objectContaining({ roomId: 'room-a', ...identity }));
+		const endpoint = role === 'host' ? 'calls/rooms/end' : 'calls/rooms/leave';
+		expect(fixture.api).toHaveBeenCalledWith(endpoint, { roomId: 'room-a', ...identity, ...(role === 'host' ? { expectedRevision: 1 } : {}) });
+		const leaveCallIndex = fixture.api.mock.calls.findIndex(([calledEndpoint]) => calledEndpoint === endpoint);
+		expect(fixture.controllers[0].close.mock.invocationCallOrder[0]).toBeLessThan(fixture.api.mock.invocationCallOrder[leaveCallIndex]);
 	});
 });

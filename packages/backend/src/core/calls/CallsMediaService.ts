@@ -58,7 +58,6 @@ export class CallsMediaService {
 				await assertLockHeld();
 				await this.quotaService.reserveSession(input.applicationId, lockedParticipant.id);
 				quotaReserved = true;
-				await this.liveConnectionService.clearRoomEmptySince(input.roomId);
 				return {
 					participant: lockedParticipant,
 					replacement: await this.liveConnectionService.replace(lockedParticipant.id, input.connectionId, input.applicationId),

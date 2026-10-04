@@ -6,6 +6,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { Config } from '@/config.js';
 import type { MiCallsRoom, MiUser } from '@/models/_.js';
+import { CallsMediaRevocationService } from '@/core/calls/CallsMediaRevocationService.js';
 import { CallsFeatureDisabledError, CallsRoomError, CallsRoomService, isCallsRoomTransitionAllowed } from '@/core/calls/CallsRoomService.js';
 
 function createAccessFixture(options?: { enabled?: boolean; chatMember?: boolean; followings?: Record<string, unknown> }) {
@@ -22,7 +23,7 @@ function createAccessFixture(options?: { enabled?: boolean; chatMember?: boolean
 }
 
 const viewer = { id: 'viewer-a', host: null } as MiUser;
-const baseRoom = { id: 'room-a', ownerUserId: 'owner-a', attachmentType: 'personal', visibility: 'specified', visibleUserIds: [] } as unknown as MiCallsRoom;
+const baseRoom = { id: 'room-a', ownerUserId: 'owner-a', attachmentType: 'personal', visibility: 'specified', visibleUserIds: [], moderatorUserIds: [] } as unknown as MiCallsRoom;
 
 function createConnectionFixture(role: 'host' | 'listener') {
 	const room = { ...baseRoom, state: 'open', revision: 1 } as MiCallsRoom;
@@ -30,9 +31,10 @@ function createConnectionFixture(role: 'host' | 'listener') {
 	const update = vi.fn();
 	const execute = vi.fn(async () => ({ affected: 1, raw: [{ ...room, state: 'ended', revision: 2 }] }));
 	const queryBuilder = { update: () => queryBuilder, set: () => queryBuilder, where: () => queryBuilder, returning: () => queryBuilder, execute };
-	const live = { get: vi.fn().mockResolvedValue({ connectionId: 'new-device', generation: 2 }), withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() };
+	const live = { clear: vi.fn().mockResolvedValue(true), isReconnectTokenConsumed: vi.fn().mockResolvedValue(false), get: vi.fn().mockResolvedValue({ connectionId: 'new-device', generation: 2 }), withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() };
 	const revokeRoom = vi.fn();
 	const revokeParticipant = vi.fn();
+	const revokeDisconnectedGeneration = vi.fn().mockResolvedValue([]);
 	const service = new CallsRoomService(
 		{ cloudflareRealtime: { enabled: true } } as Config,
 		{ findOneBy: async () => room, createQueryBuilder: () => queryBuilder } as never,
@@ -40,9 +42,9 @@ function createConnectionFixture(role: 'host' | 'listener') {
 		{} as never, {} as never, {} as never, {} as never, {} as never,
 		{ isModerator: async () => false } as never, live as never,
 		{ publish: vi.fn(), publishRoomsList: vi.fn() } as never,
-		{ revokeRoom, revokeParticipant } as never, { lifecycle: vi.fn() } as never,
+		{ revokeRoom, revokeParticipant, revokeDisconnectedGeneration, closeProviderPublications: vi.fn() } as never, { lifecycle: vi.fn() } as never,
 	);
-	return { service, room, live, update, execute, revokeRoom, revokeParticipant };
+	return { service, room, live, update, execute, revokeRoom, revokeParticipant, revokeDisconnectedGeneration };
 }
 
 describe('CallsRoomService lifecycle', () => {
@@ -71,6 +73,52 @@ describe('CallsRoomService lifecycle', () => {
 			expect(fixture.revokeParticipant).toHaveBeenCalled();
 		}
 	});
+	test.each([false, true])('keeps the room open when the current host leaves (reconnect token: %s)', async reconnect => {
+		const fixture = createConnectionFixture('host');
+		const identity = { connectionId: 'new-device', generation: 2, ...(reconnect ? { token: crypto.randomUUID() } : {}) };
+		await fixture.service.leave({ id: 'owner-a' } as MiUser, fixture.room.id, identity);
+		expect(fixture.update).toHaveBeenCalledWith('participant-a', expect.objectContaining({ state: 'left' }));
+		expect(fixture.revokeRoom).not.toHaveBeenCalled();
+		expect(reconnect ? fixture.revokeDisconnectedGeneration : fixture.revokeParticipant).toHaveBeenCalled();
+	});
+
+	test('allows host recovery while the previous provider connection is still closing', async () => {
+		const fixture = createConnectionFixture('host');
+		let locked = false;
+		fixture.live.withRoomLock = async (_roomId, callback) => {
+			if (locked) throw new Error('Room is still locked');
+			locked = true;
+			try { return await callback(); } finally { locked = false; }
+		};
+		let finishClose!: () => void;
+		const closeTracks = vi.fn(() => new Promise<void>(resolve => { finishClose = resolve; }));
+		const publication = { providerSessionId: 'old-session', providerMid: '0', providerTrackName: 'old-track', applicationId: 'first-party' };
+		const revocation = new CallsMediaRevocationService(
+			{} as never, {} as never, fixture.live as never,
+			{ clearGeneration: async () => [publication] } as never,
+			{ closeTracks } as never, { publish: vi.fn() } as never,
+			{ revokeParticipant: vi.fn() } as never,
+			{ release: vi.fn(), releaseTrack: vi.fn() } as never,
+		);
+		Object.assign(fixture.service, { callsMediaRevocationService: revocation });
+		const leaving = fixture.service.leave({ id: 'owner-a' } as MiUser, fixture.room.id, { connectionId: 'new-device', generation: 2, token: crypto.randomUUID() });
+		await vi.waitFor(() => expect(closeTracks).toHaveBeenCalled());
+		try {
+			expect(locked).toBe(false);
+			await expect(fixture.service.join({ id: 'owner-a', host: null } as MiUser, fixture.room.id)).resolves.toMatchObject({ role: 'host' });
+		} finally {
+			finishClose();
+			await leaving;
+		}
+	});
+
+	test('ignores a delayed host page-close from a replaced device', async () => {
+		const fixture = createConnectionFixture('host');
+		await fixture.service.leave({ id: 'owner-a' } as MiUser, fixture.room.id, { connectionId: 'old-device', generation: 1, token: crypto.randomUUID() });
+		expect(fixture.revokeRoom).not.toHaveBeenCalled();
+		expect(fixture.execute).not.toHaveBeenCalled();
+	});
+
 	test.each([
 		['scheduled', 'open'],
 		['scheduled', 'cancelled'],
@@ -89,47 +137,34 @@ describe('CallsRoomService lifecycle', () => {
 		expect(isCallsRoomTransitionAllowed(from, to)).toBe(false);
 	});
 
-	test('ends a stale open room without live connections before creating another room for the attachment', async () => {
-		const staleRoom = {
-			id: 'room-stale', attachmentType: 'personal', ownerUserId: 'owner-a', chatRoomId: null,
-			state: 'open', revision: 3, updatedAt: new Date(Date.now() - 120_000),
-		} as MiCallsRoom;
-		const insertedRoom = { ...staleRoom, id: 'room-next', state: 'scheduled', revision: 0 } as MiCallsRoom;
-		const roomInsert = vi.fn(async () => insertedRoom);
-		const participantUpdate = vi.fn(async () => undefined);
-		const queryBuilder = {
-			update: () => queryBuilder,
-			set: () => queryBuilder,
-			where: () => queryBuilder,
-			returning: () => queryBuilder,
-			execute: async () => ({ affected: 1, raw: [{ ...staleRoom, state: 'ended', revision: 4 }] }),
-		};
-		const roomRepository = { createQueryBuilder: () => queryBuilder };
-		const transactionManager = {
-			getRepository: (entity: { name: string }) => entity.name === 'MiCallsRoom' ? roomRepository : { update: participantUpdate },
-		};
+	test('keeps an existing attachment available for host recovery', async () => {
+		const room = { ...baseRoom, state: 'open', revision: 3, updatedAt: new Date(Date.now() - 120_000) } as MiCallsRoom;
+		const roomInsert = vi.fn();
 		const service = new CallsRoomService(
 			{ cloudflareRealtime: { enabled: true } } as Config,
-			{ findOneBy: async () => staleRoom, insertOne: roomInsert, manager: { transaction: async (callback: (manager: typeof transactionManager) => Promise<unknown>) => callback(transactionManager) } } as never,
-			{ findBy: async () => [{ id: 'participant-host' }], update: participantUpdate, insertOne: async () => ({}) } as never,
-			{} as never, {} as never, {} as never, {} as never, { gen: () => 'generated-id' } as never,
-			{ isModerator: async () => false } as never, { hasAny: async () => false, getOrMarkRoomEmptySince: async () => Date.now() - 31_000, withRoomLock: async (_roomId: string, callback: (assertHeld: () => Promise<void>) => Promise<unknown>) => callback(async () => undefined) } as never,
-			{ publish: async () => undefined, publishRoomsList: () => undefined } as never,
-			{ revokeRoom: async () => undefined } as never, { lifecycle: () => undefined } as never,
+			{ findOneBy: async () => room, find: async () => [room], insertOne: roomInsert } as never,
+			{} as never, {} as never, {} as never, {} as never, {} as never, {} as never,
+			{ isModerator: async () => false } as never, {} as never, {} as never, {} as never, {} as never,
 		);
-
-		await expect(service.create({ id: 'owner-a', host: null } as MiUser, {
-			attachmentType: 'personal', title: 'Next room', visibility: 'public',
-		})).resolves.toBe(insertedRoom);
-		expect(participantUpdate).toHaveBeenCalledWith(
-			{ roomId: staleRoom.id, state: 'active' },
-			expect.objectContaining({ state: 'left', isMuted: true }),
-		);
-		expect(roomInsert).toHaveBeenCalledOnce();
+		const owner = { id: 'owner-a', host: null } as MiUser;
+		await expect(service.create(owner, { attachmentType: 'personal', title: 'Next room' })).rejects.toMatchObject({ code: 'active-attachment' });
+		expect(roomInsert).not.toHaveBeenCalled();
+		await expect(service.listDiscoverable(owner, 100)).resolves.toEqual([room]);
 	});
 
-	test('allows a host to leave temporarily without ending the room', async () => {
-		const participant = { id: 'participant-host', roomId: 'room-a', userId: 'owner-a', role: 'host', state: 'active' };
+	test('restores the returning host without a reconnect token', async () => {
+		const fixture = createConnectionFixture('host');
+		const participant = { id: 'participant-a', role: 'host', state: 'left' };
+		const update = vi.fn();
+		Object.assign(fixture.service, {
+			callsParticipantsRepository: { findOneBy: async () => participant, countBy: async () => 0, update, findOneByOrFail: async () => ({ ...participant, role: 'host', state: 'active' }) },
+		});
+		await expect(fixture.service.join({ id: 'owner-a', host: null } as MiUser, fixture.room.id)).resolves.toMatchObject({ role: 'host', state: 'active' });
+		expect(update).toHaveBeenCalledWith(participant.id, expect.objectContaining({ role: 'host', state: 'active' }));
+	});
+
+	test.each(['host', 'listener'] as const)('allows a %s to leave temporarily without ending the room', async role => {
+		const participant = { id: 'participant-listener', roomId: 'room-a', userId: 'owner-a', role, state: 'active' };
 		const participantUpdate = vi.fn(async () => undefined);
 		let reconnectConsumed = false;
 		const queryBuilder = {
@@ -141,17 +176,16 @@ describe('CallsRoomService lifecycle', () => {
 		};
 		const publish = vi.fn(async () => undefined);
 		const connection = { participantId: participant.id, connectionId: 'connection-a', generation: 4, applicationId: 'first-party' };
-		const revokeDisconnectedGeneration = vi.fn(async () => undefined);
+		const revokeDisconnectedGeneration = vi.fn(async () => []);
 		const service = new CallsRoomService(
 			{ cloudflareRealtime: { enabled: true } } as Config,
 			{ createQueryBuilder: () => queryBuilder } as never,
 			{ findOneBy: async () => participant, update: participantUpdate } as never,
 			{} as never, {} as never, {} as never, {} as never, {} as never, {} as never,
 			{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback(), isReconnectTokenConsumed: async () => reconnectConsumed, get: async () => connection, clear: async () => true } as never,
-			{ publish } as never, { revokeDisconnectedGeneration } as never, { lifecycle: () => undefined } as never,
+			{ publish } as never, { revokeDisconnectedGeneration, closeProviderPublications: vi.fn() } as never, { lifecycle: () => undefined } as never,
 		);
 
-		await expect(service.leave({ id: 'owner-a' } as MiUser, 'room-a')).rejects.toMatchObject({ code: 'invalid-state' });
 		const reconnect = { token: crypto.randomUUID(), connectionId: connection.connectionId, generation: connection.generation };
 		await expect(service.leave({ id: 'owner-a' } as MiUser, 'room-a', reconnect)).resolves.toBeUndefined();
 		expect(participantUpdate).toHaveBeenCalledWith(participant.id, expect.objectContaining({ state: 'left' }));
@@ -184,5 +218,74 @@ describe('CallsRoomService access', () => {
 
 	test('feature flag rejects Calls access before room visibility is evaluated', async () => {
 		await expect(createAccessFixture({ enabled: false }).assertCanAccess(viewer, { ...baseRoom, visibility: 'public' })).rejects.toBeInstanceOf(CallsFeatureDisabledError);
+	});
+});
+
+function createModerationFixture() {
+	const room = { ...baseRoom, visibility: 'public', state: 'open', mode: 'stage', revision: 1, moderatorUserIds: ['moderator-a'] } as MiCallsRoom;
+	const participant = { id: 'target-a', roomId: room.id, userId: 'target-user', role: 'speaker' };
+	const existsBy = vi.fn().mockResolvedValue(true);
+	const update = vi.fn();
+	const set = vi.fn(() => queryBuilder);
+	const execute = vi.fn().mockResolvedValue({ affected: 1, raw: [{ ...room, revision: 2 }] });
+	const queryBuilder = { update: () => queryBuilder, set, where: () => queryBuilder, returning: () => queryBuilder, execute };
+	const revokeParticipant = vi.fn();
+	const publish = vi.fn();
+	const service = new CallsRoomService(
+		{ cloudflareRealtime: { enabled: true } } as Config,
+		{ findOneBy: async () => room, createQueryBuilder: () => queryBuilder } as never,
+		{ findOneBy: async () => participant, existsBy, update } as never,
+		{ insert: vi.fn() } as never, {} as never, {} as never, {} as never,
+		{ gen: () => 'log-a' } as never, { isModerator: async () => false } as never,
+		{} as never, { publish } as never, { revokeParticipant } as never, { lifecycle: vi.fn() } as never,
+	);
+	return { service, room, participant, existsBy, update, set, execute, revokeParticipant, publish };
+}
+
+describe('Calls VC moderators', () => {
+	test.each([true, false])('the host can set moderator permission to %s', async isModerator => {
+		const fixture = createModerationFixture();
+		fixture.room.moderatorUserIds.push('target-user');
+		await fixture.service.setModerator({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, isModerator, 1);
+		expect(fixture.set).toHaveBeenCalledWith(expect.objectContaining({ moderatorUserIds: isModerator ? ['moderator-a', 'target-user'] : ['moderator-a'] }));
+		expect(fixture.publish).toHaveBeenCalledWith(fixture.room.id, 2, 'participant', { participantId: fixture.participant.id, action: 'updated' });
+	});
+
+	test.each(['viewer-a', 'moderator-a'])('%s cannot appoint moderators, change speakers, or end the room', async id => {
+		const fixture = createModerationFixture();
+		const user = { id, host: null } as MiUser;
+		await expect(fixture.service.setModerator(user, fixture.room.id, fixture.participant.id, true, 1)).rejects.toMatchObject({ code: 'access-denied' });
+		await expect(fixture.service.setRole(user, fixture.room.id, fixture.participant.id, 'listener', 1)).rejects.toMatchObject({ code: 'access-denied' });
+		await expect(fixture.service.end(user, fixture.room.id, 1)).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fixture.execute).not.toHaveBeenCalled();
+	});
+
+	test('an active VC moderator can kick a participant and revoke their media', async () => {
+		const fixture = createModerationFixture();
+		await fixture.service.removeParticipant({ id: 'moderator-a', host: null } as MiUser, fixture.room.id, fixture.participant.id, 1);
+		expect(fixture.update).toHaveBeenCalledWith(fixture.participant.id, expect.objectContaining({ state: 'removed', isMuted: true }));
+		expect(fixture.revokeParticipant).toHaveBeenCalledWith(fixture.participant, 2, 'moderation');
+	});
+
+	test.each(['ordinary', 'inactive', 'no-access'])('a %s participant cannot use VC moderator kick permission', async reason => {
+		const fixture = createModerationFixture();
+		if (reason === 'inactive') fixture.existsBy.mockResolvedValue(false);
+		if (reason === 'no-access') fixture.room.visibility = 'specified';
+		await expect(fixture.service.removeParticipant({ id: reason === 'ordinary' ? 'viewer-a' : 'moderator-a', host: null } as MiUser, fixture.room.id, fixture.participant.id, 1)).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fixture.update).not.toHaveBeenCalled();
+	});
+
+	test('a VC moderator cannot kick the host', async () => {
+		const fixture = createModerationFixture();
+		fixture.participant.role = 'host';
+		await expect(fixture.service.removeParticipant({ id: 'moderator-a', host: null } as MiUser, fixture.room.id, fixture.participant.id, 1)).rejects.toMatchObject({ code: 'participant-not-found' });
+		expect(fixture.update).not.toHaveBeenCalled();
+	});
+
+	test('a stale moderator assignment does not change permissions', async () => {
+		const fixture = createModerationFixture();
+		fixture.execute.mockResolvedValue({ affected: 0, raw: [] });
+		await expect(fixture.service.setModerator({ id: 'owner-a' } as MiUser, fixture.room.id, fixture.participant.id, true, 0)).rejects.toMatchObject({ code: 'stale-revision' });
+		expect(fixture.publish).not.toHaveBeenCalled();
 	});
 });

@@ -8,7 +8,14 @@ import type { CallsNormalizedStats } from './calls-media-core.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 
 export type CallsVideoSource = 'camera' | 'screen';
+export type CallsVideoQuality = { height: 480 | 720 | 1080 | 1440 | 2160 | 'source'; frameRate: 15 | 30 | 60 | 90 | 120 | 144 };
 export type CallsRemotePublication = { id: string; participantId: string; mediaKind: 'audio' | 'video'; mediaSource: 'microphone' | CallsVideoSource };
+
+function videoConstraints(quality: CallsVideoQuality): MediaTrackConstraints {
+	if (quality.height === 'source') return { frameRate: { ideal: quality.frameRate, max: quality.frameRate } };
+	const width = { 480: 854, 720: 1280, 1080: 1920, 1440: 2560, 2160: 3840 }[quality.height];
+	return { width: { ideal: width, max: width }, height: { ideal: quality.height, max: quality.height }, frameRate: { ideal: quality.frameRate, max: quality.frameRate } };
+}
 
 export type CallsMediaState = 'idle' | 'acquiring-media' | 'creating-session' | 'negotiating' | 'connected' | 'reconnecting' | 'leaving' | 'closed' | 'failed';
 export type CallsMediaFailure = 'unsupported' | 'permission-denied' | 'device-not-found' | 'hardware-failure' | 'constraint-mismatch' | 'permission-pending' | 'negotiation-failed';
@@ -36,6 +43,7 @@ export class CallsMediaController {
 	private lastStatsAt = 0;
 	private speaking = false;
 	private muted = false;
+	private noiseSuppression = true;
 	private reconnectReason: CallsNormalizedStats['reconnectReason'] = null;
 	private reconnectStartedAt = 0;
 	private recoveryTimeMs: number | null = null;
@@ -85,14 +93,13 @@ export class CallsMediaController {
 		}
 	}
 
-	private async acquireMicrophone(deviceId?: string): Promise<void> {
+	private async acquireMicrophone(deviceId?: string, noiseSuppression = this.noiseSuppression): Promise<void> {
 		this.setState('acquiring-media');
-		this.localTrack?.stop();
 		const mediaRequest = navigator.mediaDevices.getUserMedia({
 			audio: {
 				deviceId: deviceId == null ? undefined : { exact: deviceId },
 				channelCount: { ideal: 1 }, echoCancellation: { ideal: true },
-				noiseSuppression: { ideal: true }, autoGainControl: { ideal: true },
+				noiseSuppression: { exact: noiseSuppression }, autoGainControl: { ideal: true },
 			},
 		});
 		const stream = await new Promise<MediaStream>((resolve, reject) => {
@@ -287,12 +294,12 @@ export class CallsMediaController {
 		throw new Error('Publisher is not actually sending audio packets');
 	}
 
-	public async startVideo(source: CallsVideoSource, deviceId?: string): Promise<void> {
+	public async startVideo(source: CallsVideoSource, deviceId?: string, quality: CallsVideoQuality = { height: 720, frameRate: 30 }): Promise<void> {
 		if (this.role === 'listener' || this.isClosed() || this.peer == null || this.localVideos.has(source)) return;
 		// Call directly from the click handler so screen capture retains user activation.
 		const stream = source === 'camera'
-			? await navigator.mediaDevices.getUserMedia({ video: { deviceId: deviceId == null ? undefined : { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } }, audio: false })
-			: await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 30 } }, audio: false });
+			? await navigator.mediaDevices.getUserMedia({ video: { ...videoConstraints(quality), deviceId: deviceId == null ? undefined : { exact: deviceId } }, audio: false })
+			: await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints(quality), audio: false });
 		const track = stream.getVideoTracks()[0];
 		for (const extra of stream.getTracks()) if (extra !== track) extra.stop();
 		if (this.isClosed() || this.peer == null) { track?.stop(); return; }
@@ -318,11 +325,14 @@ export class CallsMediaController {
 		await this.ensureCredential();
 		const transceiver = peer.addTransceiver(video.track, { direction: 'sendonly' });
 		video.transceiver = transceiver;
-		const offer = await peer.createOffer();
-		await peer.setLocalDescription(offer);
-		await this.waitForIceGathering(peer);
-		if (this.peer !== peer || this.isClosed()) return;
 		try {
+			// Keep screen/camera encoding consistent across browser and SFU renegotiations.
+			const codecs = RTCRtpSender.getCapabilities('video')?.codecs.filter(codec => ['video/vp8', 'video/rtx'].includes(codec.mimeType.toLowerCase()));
+			if (codecs?.some(codec => codec.mimeType.toLowerCase() === 'video/vp8') && typeof transceiver.setCodecPreferences === 'function') transceiver.setCodecPreferences(codecs);
+			const offer = await peer.createOffer();
+			await peer.setLocalDescription(offer);
+			await this.waitForIceGathering(peer);
+			if (this.peer !== peer || this.isClosed()) return;
 			const result = await misskeyApi('calls/media/tracks/publish', {
 				roomId: this.roomId, participantId: this.participantId!, connectionId: this.connectionId,
 				generation: this.generation, operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential!,
@@ -338,10 +348,19 @@ export class CallsMediaController {
 		}
 	}
 
-	public async switchCamera(deviceId: string): Promise<void> {
+	public async setVideoQuality(source: CallsVideoSource, quality: CallsVideoQuality): Promise<void> {
+		const video = this.localVideos.get(source);
+		if (video == null || this.isClosed()) return;
+		await this.enqueue(async () => {
+			if (this.isClosed() || this.localVideos.get(source) !== video) return;
+			await video.track.applyConstraints(videoConstraints(quality));
+		});
+	}
+
+	public async switchCamera(deviceId: string, quality: CallsVideoQuality = { height: 720, frameRate: 30 }): Promise<void> {
 		const video = this.localVideos.get('camera');
 		if (video == null) return;
-		const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } }, audio: false });
+		const stream = await navigator.mediaDevices.getUserMedia({ video: { ...videoConstraints(quality), deviceId: { exact: deviceId } }, audio: false });
 		const track = stream.getVideoTracks()[0];
 		for (const extra of stream.getTracks()) if (extra !== track) extra.stop();
 		if (track == null) throw new DOMException('No video track', 'NotFoundError');
@@ -384,11 +403,23 @@ export class CallsMediaController {
 		if (this.localTrack != null) this.localTrack.enabled = !muted;
 	}
 
-	public async switchMicrophone(deviceId: string): Promise<void> {
+	public async setNoiseSuppression(enabled: boolean): Promise<void> {
+		if (this.noiseSuppression === enabled) return;
+		if (this.localTrack != null) await this.switchMicrophone(this.localTrack.getSettings().deviceId, enabled);
+		this.noiseSuppression = enabled;
+	}
+
+	public async switchMicrophone(deviceId?: string, noiseSuppression = this.noiseSuppression): Promise<void> {
 		const oldTrack = this.localTrack;
-		await this.acquireMicrophone(deviceId);
+		await this.acquireMicrophone(deviceId, noiseSuppression);
 		const sender = this.peer?.getSenders().find(item => item.track?.kind === 'audio');
-		await sender?.replaceTrack(this.localTrack);
+		try {
+			await sender?.replaceTrack(this.localTrack);
+		} catch (error) {
+			this.localTrack?.stop();
+			this.localTrack = oldTrack;
+			throw error;
+		}
 		oldTrack?.stop();
 	}
 
@@ -423,7 +454,10 @@ export class CallsMediaController {
 		this.reconnectStartedAt = performance.now();
 		this.recoveryTimeMs = null;
 		this.setState('reconnecting');
-		void this.enqueue(() => this.createConnection()).catch(() => { if (!this.isClosed()) this.fail('negotiation-failed'); });
+		void this.enqueue(() => this.createConnection()).catch(error => {
+			console.error('[Calls] Media reconnection failed', error);
+			if (!this.isClosed()) this.fail('negotiation-failed');
+		});
 	}
 
 	private async ensureCredential(): Promise<void> {

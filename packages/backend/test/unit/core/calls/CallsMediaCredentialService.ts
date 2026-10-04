@@ -17,6 +17,15 @@ describe('CallsMediaCredentialService', () => {
 	beforeEach(() => vi.useFakeTimers().setSystemTime(new Date('2026-01-01T00:00:00Z')));
 	afterEach(() => vi.useRealTimers());
 
+	test('expired credentials can only be verified for renewal', () => {
+		const service = new CallsMediaCredentialService(config);
+		const { credential } = service.issue(input);
+		vi.advanceTimersByTime(301_000);
+		expect(() => service.verify(credential, input)).toThrow(InvalidCallsMediaCredentialError);
+		expect(service.verify(credential, input, true)).toMatchObject(input);
+		expect(() => service.verify(credential, { ...input, userId: 'user-b' }, true)).toThrow(InvalidCallsMediaCredentialError);
+	});
+
 	test('binds the credential to every media security boundary', () => {
 		const service = new CallsMediaCredentialService(config);
 		const { credential } = service.issue(input);

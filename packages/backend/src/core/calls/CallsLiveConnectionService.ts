@@ -46,31 +46,12 @@ export class CallsLiveConnectionService {
 		return value == null ? null : JSON.parse(value) as CallsLiveConnection;
 	}
 
-	public async hasAny(participantIds: string[]): Promise<boolean> {
-		if (participantIds.length === 0) return false;
-		const connections = await this.redis.mget(participantIds.map(participantId => this.connectionKey(participantId)));
-		return connections.some(connection => connection != null);
-	}
-
 	public async consumeReconnectToken(token: string): Promise<void> {
 		await this.redis.set(`calls:reconnect-consumed:${token}`, '1', 'EX', 60);
 	}
 
 	public async isReconnectTokenConsumed(token: string): Promise<boolean> {
 		return await this.redis.exists(`calls:reconnect-consumed:${token}`) === 1;
-	}
-
-	public async getOrMarkRoomEmptySince(roomId: string): Promise<number> {
-		const key = `calls:room-empty-since:${roomId}`;
-		const now = Date.now();
-		const stored = await this.redis.get(key);
-		if (stored != null) return Number(stored);
-		await this.redis.set(key, now.toString(), 'EX', 180, 'NX');
-		return Number(await this.redis.get(key) ?? now);
-	}
-
-	public async clearRoomEmptySince(roomId: string): Promise<void> {
-		await this.redis.del(`calls:room-empty-since:${roomId}`);
 	}
 
 	public async withRoomLock<T>(roomId: string, callback: (assertHeld: () => Promise<void>) => Promise<T>): Promise<T> {

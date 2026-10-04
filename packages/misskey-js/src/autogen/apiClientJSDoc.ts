@@ -903,7 +903,7 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
-     * **Credential required**: *Yes* / **Permission**: *read:admin:emoji*
+     * **Credential required**: *Yes* / **Permission**: *read:admin:queue*
      */
     request<E extends 'admin/queue/stats', P extends Endpoints[E]['req']>(
       endpoint: E,
@@ -1749,6 +1749,17 @@ declare module '../api.js' {
      * 
      * **Credential required**: *Yes* / **Permission**: *write:calls*
      */
+    request<E extends 'calls/rooms/set-moderator', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:calls*
+     */
     request<E extends 'calls/rooms/set-role', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
@@ -1824,9 +1835,64 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Credential required**: *Yes* / **Permission**: *write:channels*
+     */
+    request<E extends 'channels/follow-requests/approve', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *read:channels*
+     */
+    request<E extends 'channels/follow-requests/list', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:channels*
+     */
+    request<E extends 'channels/follow-requests/reject', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
      * **Credential required**: *Yes* / **Permission**: *read:channels*
      */
     request<E extends 'channels/followed', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *read:channels*
+     */
+    request<E extends 'channels/followers', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:channels*
+     */
+    request<E extends 'channels/followers/remove', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,

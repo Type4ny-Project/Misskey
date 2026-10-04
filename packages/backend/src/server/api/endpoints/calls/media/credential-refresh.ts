@@ -6,6 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { CallsMediaCredentialService } from '@/core/calls/CallsMediaCredentialService.js';
 import { CallsMediaService } from '@/core/calls/CallsMediaService.js';
+import { CallsLiveConnectionService } from '@/core/calls/CallsLiveConnectionService.js';
 import { CallsOperationGuardService } from '@/core/calls/CallsOperationGuardService.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { callsApplicationId, callsMediaApiError, callsMediaErrors, executeCallsMediaOperation, operationIdParam } from '../_media-shared.js';
@@ -13,13 +14,14 @@ export const meta = { tags: ['calls'], stability: 'experimental', requireCredent
 export const paramDef = { type: 'object', properties: { roomId: { type: 'string', format: 'misskey:id' }, participantId: { type: 'string', format: 'misskey:id' }, connectionId: { type: 'string', minLength: 8, maxLength: 128 }, generation: { type: 'integer', minimum: 1 }, operationId: operationIdParam, mediaCredential: { type: 'string', minLength: 32, maxLength: 4096 } }, required: ['roomId', 'participantId', 'connectionId', 'generation', 'operationId', 'mediaCredential'] } as const;
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
-	constructor(credentials: CallsMediaCredentialService, media: CallsMediaService, guard: CallsOperationGuardService) {
+	constructor(credentials: CallsMediaCredentialService, media: CallsMediaService, guard: CallsOperationGuardService, connections: CallsLiveConnectionService) {
 		super(meta, paramDef, async (ps, me, token) => {
 			try {
-				return executeCallsMediaOperation(guard, me, token, ps, 'credential-refresh', async () => {
+				return await executeCallsMediaOperation(guard, me, token, ps, 'credential-refresh', async () => {
 					const applicationId = callsApplicationId(token, me);
-					const claims = credentials.verify(ps.mediaCredential, { ...ps, userId: me.id, applicationId });
+					const claims = credentials.verify(ps.mediaCredential, { ...ps, userId: me.id, applicationId }, true);
 					await media.reconcile(me, ps.roomId);
+					await connections.assertCurrent(ps.participantId, ps.connectionId, ps.generation);
 					const issued = credentials.issue({ userId: me.id, applicationId, roomId: ps.roomId, participantId: ps.participantId, connectionId: ps.connectionId, generation: ps.generation, canPublish: claims.canPublish });
 					return { mediaCredential: issued.credential, credentialExpiresAt: issued.expiresAt };
 				});

@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<MkA :to="`/calls/${room.id}`" :class="$style.root">
+<button type="button" class="_button" :class="$style.root" @click="openCallsRoom(room.id)">
 	<div :class="$style.meta">
 		<span v-if="room.state === 'open'" :class="$style.live"><i class="ti ti-wave-sine" aria-hidden="true"></i> {{ i18n.ts._calls.live }}</span>
 		<span v-else>{{ i18n.ts._calls[room.state] }}</span>
@@ -27,13 +27,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 		<span :class="$style.openRoom">{{ i18n.ts._calls.viewRoom }} <i class="ti ti-arrow-right" aria-hidden="true"></i></span>
 	</div>
-</MkA>
+</button>
 </template>
 
 <script setup lang="ts">
 import { computed, onUnmounted, shallowRef, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
 import { i18n } from '@/i18n.js';
+import { openCallsRoom } from '@/utility/calls-window.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
 
@@ -70,7 +71,7 @@ onUnmounted(() => connection.value?.dispose());
 </script>
 
 <style lang="scss" module>
-.root { display: flex; flex-direction: column; gap: 14px; padding: 20px; border: 1px solid var(--MI_THEME-divider); border-radius: var(--MI-radius); color: var(--MI_THEME-fg); transition: background-color 0.15s ease; }
+.root { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 14px; padding: 20px; border: 1px solid var(--MI_THEME-divider); border-radius: var(--MI-radius); color: var(--MI_THEME-fg); transition: background-color 0.15s ease; }
 .root:hover { background: var(--MI_THEME-buttonHoverBg); }
 .root:focus-visible { outline: 2px solid var(--MI_THEME-accent); outline-offset: 2px; }
 .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 0.8rem; color: var(--MI_THEME-fgTransparentWeak); }

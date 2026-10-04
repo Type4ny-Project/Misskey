@@ -34,7 +34,7 @@ import type { EventEmitter } from 'events';
 type CallsRoomEventBase = { sequence: number; roomRevision: number; occurredAt: string };
 export interface CallsRoomEventTypes {
 	lifecycle: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled' };
-	participant: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' };
+	participant: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' | 'updated' };
 	role: CallsRoomEventBase & { participantId: string; role: 'host' | 'speaker' | 'listener' };
 	speakerRequest: CallsRoomEventBase & { participantId: string; requested: boolean };
 	mute: CallsRoomEventBase & { participantId: string; isMuted: boolean };

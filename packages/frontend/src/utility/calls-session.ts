@@ -5,7 +5,8 @@
 
 import { computed, ref, shallowRef, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
-import type { CallsMediaFailure, CallsMediaState, CallsRemotePublication, CallsVideoSource } from '@/utility/calls-media.js';
+import type { CallsMediaFailure, CallsMediaState, CallsRemotePublication, CallsVideoQuality, CallsVideoSource } from '@/utility/calls-media.js';
+import type { MenuItem } from '@/types/menu.js';
 import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
 import { $i } from '@/i.js';
 import { CallsMediaController } from '@/utility/calls-media.js';
@@ -14,6 +15,7 @@ import { miLocalStorage } from '@/local-storage.js';
 import { i18n } from '@/i18n.js';
 import { alert, confirm, popupMenu, toast } from '@/os.js';
 import { misskeyApi, misskeyApiKeepalive } from '@/utility/misskey-api.js';
+import { callsScreenWindowStream, clearCallsScreenWindow, showCallsScreenWindow } from '@/utility/calls-screen-window.js';
 
 type CallsRoomConnection = ReturnType<typeof createCallsRoomConnection>;
 type CallsReconnectCandidate = { roomId: string; title: string; userId: string; reconnectToken: string; expiresAt: number };
@@ -52,6 +54,7 @@ const mediaFailure = ref<CallsMediaFailure | null>(null);
 const muted = ref(false);
 const joining = ref(false);
 const replacedRoomId = ref<string | null>(null);
+const noiseSuppression = ref(true);
 const selectedMicrophone = ref('');
 const selectedCamera = ref('');
 const cameras = ref<MediaDeviceInfo[]>([]);
@@ -66,6 +69,7 @@ const remoteAudio = new Map<string, HTMLAudioElement>();
 const localVideos = shallowRef(new Map<CallsVideoSource, MediaStream>());
 const remoteVideos = shallowRef(new Map<string, { participantId: string; source: CallsVideoSource; stream: MediaStream }>());
 const videoBusy = ref(false);
+const videoQuality = ref<Record<CallsVideoSource, CallsVideoQuality>>({ camera: { height: 720, frameRate: 30 }, screen: { height: 1080, frameRate: 30 } });
 const canShareScreen = typeof navigator.mediaDevices?.getDisplayMedia === 'function';
 const videos = computed(() => [
 	...[...localVideos.value].map(([source, stream]) => ({ id: `local-${source}`, participantId: myParticipant.value?.id ?? '', source, stream, local: true })),
@@ -219,11 +223,15 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 				localVideos.value = next;
 			},
 			remoteRemoved: removeRemoteTrack,
-			error: () => { void alert({ type: 'error', text: i18n.ts._calls.videoFailed }); },
+			error: error => {
+				console.error('[Calls] Video connection failed', error);
+				void alert({ type: 'error', text: i18n.ts._calls.videoFailed });
+			},
 		},
 	);
 	media.value = controller;
 	controller.setMuted(muted.value);
+	await controller.setNoiseSuppression(noiseSuppression.value);
 	await controller.connect(selectedMicrophone.value || undefined);
 	controller.setMuted(muted.value);
 	if (generation !== sessionGeneration || media.value !== controller) {
@@ -234,6 +242,7 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 }
 
 async function clearSession(): Promise<void> {
+	clearCallsScreenWindow();
 	sessionGeneration += 1;
 	const controller = media.value;
 	media.value = null;
@@ -349,7 +358,9 @@ async function reconnectMedia(): Promise<void> {
 	videoBusy.value = false;
 	await controller?.close().catch(() => undefined);
 	if (generation !== sessionGeneration) return;
-	await connectMedia(generation, identity).catch(() => undefined);
+	await connectMedia(generation, identity).catch(error => {
+		console.error('[Calls] Media reconnection failed', error);
+	});
 }
 
 async function leave(): Promise<void> {
@@ -360,13 +371,16 @@ async function leave(): Promise<void> {
 	if (targetRoomId == null) return;
 	setReconnectCandidate(null);
 	safeRemoveReconnectCandidate();
-	await clearSession();
-	if (identity == null) return;
-	if (targetIsHost && targetRoom?.state === 'open') {
-		await misskeyApi('calls/rooms/end', { roomId: targetRoomId, expectedRevision: targetRoom.revision, ...identity }).catch(() => undefined);
-	} else {
-		await misskeyApi('calls/rooms/leave', { roomId: targetRoomId, ...identity }).catch(() => undefined);
-	}
+	void clearSession();
+	const request = targetIsHost && targetRoom?.state === 'open'
+		? misskeyApi('calls/rooms/end', { roomId: targetRoomId, expectedRevision: targetRoom.revision, ...identity })
+		: identity != null
+			? misskeyApi('calls/rooms/leave', { roomId: targetRoomId, ...identity })
+			: null;
+	void request?.catch(error => {
+		console.error('[Calls] Disconnect request failed', error);
+		void alert({ type: 'error', text: i18n.ts.somethingHappened });
+	});
 }
 
 async function resumeRecentRoom(): Promise<void> {
@@ -439,9 +453,10 @@ async function toggleVideo(source: CallsVideoSource): Promise<void> {
 	videoBusy.value = true;
 	try {
 		if (localVideos.value.has(source)) await controller.stopVideo(source);
-		else await controller.startVideo(source, source === 'camera' ? selectedCamera.value || undefined : undefined);
+		else await controller.startVideo(source, source === 'camera' ? selectedCamera.value || undefined : undefined, videoQuality.value[source]);
 		await loadMicrophones();
 	} catch (error) {
+		console.error(`[Calls] ${source} start/stop failed`, error);
 		if (controller !== media.value) return;
 		if (source === 'screen' && error instanceof DOMException && error.name === 'NotAllowedError') return;
 		const failure = error instanceof DOMException ? normalizeCallsMediaError(error) : 'negotiation-failed';
@@ -472,16 +487,64 @@ async function openDeviceMenu(kind: 'microphone' | 'camera', event: MouseEvent):
 						if (controller == null) return;
 						videoBusy.value = true;
 						try {
-							await controller.switchCamera(device.deviceId);
+							await controller.switchCamera(device.deviceId, videoQuality.value.camera);
 							selectedCamera.value = device.deviceId;
 						} finally {
 							if (media.value === controller) videoBusy.value = false;
 						}
 					}
-				} catch { await alert({ type: 'error', text: kind === 'camera' ? i18n.ts._calls.videoFailed : i18n.ts._calls.mediaFailed }); }
+				} catch (error) {
+					console.error(`[Calls] ${kind} device switch failed`, error);
+					await alert({ type: 'error', text: kind === 'camera' ? i18n.ts._calls.videoFailed : i18n.ts._calls.mediaFailed });
+				}
 			},
 		})),
+		...(kind === 'camera' ? [null, ...videoQualityMenu('camera')] : [null, { type: 'switch' as const, text: i18n.ts._calls.noiseSuppression, ref: computed({ get: () => noiseSuppression.value, set: value => { void setNoiseSuppression(value); } }) }]),
 	], target);
+}
+
+async function setNoiseSuppression(enabled: boolean): Promise<void> {
+	try {
+		await media.value?.setNoiseSuppression(enabled);
+		noiseSuppression.value = enabled;
+	} catch (error) {
+		console.error('[Calls] Noise suppression change failed', error);
+		await alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
+}
+
+async function setVideoQuality(source: CallsVideoSource, quality: CallsVideoQuality): Promise<void> {
+	if (joining.value || videoBusy.value || !isSpeaker.value) return;
+	videoBusy.value = true;
+	try {
+		await media.value?.setVideoQuality(source, quality);
+		videoQuality.value[source] = quality;
+	} catch (error) {
+		console.error(`[Calls] ${source} quality change failed`, error);
+		await alert({ type: 'error', text: i18n.ts._calls.videoFailed });
+	} finally {
+		videoBusy.value = false;
+	}
+}
+
+function videoQualityMenu(source: CallsVideoSource): MenuItem[] {
+	const quality = videoQuality.value[source];
+	const resolutionLabel = (height: CallsVideoQuality['height']) => height === 'source' ? i18n.ts._calls.videoSourceQuality : i18n.tsx._calls.videoResolutionValue({ height });
+	return [
+		{ type: 'parent', text: `${i18n.ts._calls.videoResolution} · ${resolutionLabel(quality.height)}`, children: ([480, 720, 1080, 1440, 2160, 'source'] as const).map(height => ({
+			type: 'radioOption', text: resolutionLabel(height), active: quality.height === height,
+			action: () => setVideoQuality(source, { ...videoQuality.value[source], height }),
+		})) },
+		{ type: 'parent', text: `${i18n.ts._calls.videoFrameRate} · ${i18n.tsx._calls.videoFrameRateValue({ fps: quality.frameRate })}`, children: ([15, 30, 60, 90, 120, 144] as const).map(frameRate => ({
+			type: 'radioOption', text: i18n.tsx._calls.videoFrameRateValue({ fps: frameRate }), active: quality.frameRate === frameRate,
+			action: () => setVideoQuality(source, { ...videoQuality.value[source], frameRate }),
+		})) },
+	];
+}
+
+function openScreenSettings(event: MouseEvent): void {
+	if (joining.value || videoBusy.value || !isSpeaker.value) return;
+	popupMenu(videoQualityMenu('screen'), event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
 }
 
 async function resumeAudio(): Promise<void> {
@@ -489,8 +552,15 @@ async function resumeAudio(): Promise<void> {
 	needsAudioResume.value = false;
 }
 
+watch(videos, current => {
+	if (callsScreenWindowStream.value != null && !current.some(video => video.stream === callsScreenWindowStream.value)) clearCallsScreenWindow();
+});
+
 watch(() => participants.value.filter(participant => participant.role !== 'listener').map(participant => participant.id).join(','), () => {
-	void media.value?.reconcile().catch(() => toast(i18n.ts._calls.mediaFailed));
+	void media.value?.reconcile().catch(error => {
+		console.error('[Calls] Media reconciliation failed', error);
+		toast(i18n.ts._calls.mediaFailed);
+	});
 });
 
 watch(() => myParticipant.value?.isMuted, value => {
@@ -547,8 +617,13 @@ export function useCallsSession() {
 		muted,
 		controls,
 		openDeviceMenu,
+		openScreenSettings,
+		videoQuality,
+		noiseSuppression,
 		localVideos,
 		videos,
+		screenWindowStream: callsScreenWindowStream,
+		showScreenWindow: showCallsScreenWindow,
 		videoBusy,
 		canShareScreen,
 		toggleVideo,

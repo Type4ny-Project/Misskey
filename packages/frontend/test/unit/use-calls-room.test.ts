@@ -77,6 +77,17 @@ describe('useCallsRoom streaming reconciliation', () => {
 		expect(calls.participants.value[0]?.role).toBe('speaker');
 	});
 
+	test('keeps the room revision current after mute changes for subsequent moderation', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		fixture.channelHandlers.get('mute')?.({ sequence: 1, roomRevision: 2, participantId: 'participant-a', isMuted: true });
+		await vi.waitFor(() => expect(calls.participants.value[0]?.isMuted).toBe(true));
+		expect(calls.room.value?.revision).toBe(2);
+		await calls.refresh();
+		expect(calls.room.value?.revision).toBe(2);
+		expect(calls.participants.value[0]?.isMuted).toBe(true);
+	});
+
 	test('refreshes authoritative state on WebSocket reconnect and treats channel-wide revoke as local', async () => {
 		const calls = useCallsRoom('room-a');
 		await calls.refresh();

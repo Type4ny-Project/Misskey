@@ -45,6 +45,7 @@ export function createCallsRoomConnection(roomId: string) {
 			lastSequence.value = event.sequence;
 			if (event.roomRevision < lastRoomRevision.value) return;
 			lastRoomRevision.value = event.roomRevision;
+			if (room.value != null) room.value = { ...room.value, revision: event.roomRevision };
 			await apply();
 			return;
 		}
@@ -55,6 +56,7 @@ export function createCallsRoomConnection(roomId: string) {
 		lastSequence.value = event.sequence;
 		if (event.roomRevision < lastRoomRevision.value) return;
 		lastRoomRevision.value = Math.max(lastRoomRevision.value, event.roomRevision);
+		if (room.value != null) room.value = { ...room.value, revision: event.roomRevision };
 		await apply();
 	}
 

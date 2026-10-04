@@ -72,6 +72,7 @@ export const DI = {
 	relaysRepository: Symbol('relaysRepository'),
 	channelsRepository: Symbol('channelsRepository'),
 	channelFollowingsRepository: Symbol('channelFollowingsRepository'),
+	channelFollowRequestsRepository: Symbol('channelFollowRequestsRepository'),
 	channelFavoritesRepository: Symbol('channelFavoritesRepository'),
 	channelMutingRepository: Symbol('channelMutingRepository'),
 	registryItemsRepository: Symbol('registryItemsRepository'),

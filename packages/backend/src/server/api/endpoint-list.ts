@@ -412,6 +412,7 @@ export * as 'calls/rooms/end' from './endpoints/calls/rooms/end.js';
 export * as 'calls/rooms/cancel' from './endpoints/calls/rooms/cancel.js';
 export * as 'calls/rooms/join' from './endpoints/calls/rooms/join.js';
 export * as 'calls/rooms/leave' from './endpoints/calls/rooms/leave.js';
+export * as 'calls/rooms/transfer-host' from './endpoints/calls/rooms/transfer-host.js';
 export * as 'calls/rooms/set-moderator' from './endpoints/calls/rooms/set-moderator.js';
 export * as 'calls/rooms/set-role' from './endpoints/calls/rooms/set-role.js';
 export * as 'calls/rooms/remove-participant' from './endpoints/calls/rooms/remove-participant.js';

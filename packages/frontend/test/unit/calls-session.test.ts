@@ -69,6 +69,7 @@ vi.mock('@/utility/calls-media.js', () => ({
 		public close = vi.fn().mockResolvedValue(undefined);
 		public setVideoQuality = vi.fn().mockResolvedValue(undefined);
 		public setNoiseSuppression = vi.fn();
+		public reconcile = vi.fn().mockResolvedValue(undefined);
 		public connect = vi.fn(async () => {
 			if (fixture.connectionExists && !this.replaceExisting) throw Object.assign(new Error('Connection exists'), { code: 'CALLS_CONNECTION_EXISTS' });
 			this.onState('connected');
@@ -504,6 +505,28 @@ describe('Calls session device handoff', () => {
 		expect(fixture.controllers[1].connectionIdentity).toEqual(identity);
 		expect(session.isActive.value).toBe(true);
 		expect(session.replacedRoomId.value).toBeNull();
+	});
+
+	test('a listener receiving the host reconnects media and can end the room', async () => {
+		await session.join('room-a', false);
+		const connection = fixture.connections[fixture.connections.length - 1];
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, role: 'host' }));
+		await vi.waitFor(() => expect(fixture.controllers).toHaveLength(2));
+		expect(session.isHost.value).toBe(true);
+		await session.leave();
+		expect(fixture.api).toHaveBeenCalledWith('calls/rooms/end', expect.objectContaining({ roomId: 'room-a' }));
+	});
+
+	test('the previous host leaves without ending the room after transfer', async () => {
+		fixture.role = 'host';
+		await session.join('room-a', false);
+		const connection = fixture.connections[fixture.connections.length - 1];
+		connection.participants.value = connection.participants.value.map(participant => ({ ...participant, role: 'speaker' }));
+		await nextTick();
+		expect(session.isHost.value).toBe(false);
+		await session.leave();
+		expect(fixture.api).toHaveBeenCalledWith('calls/rooms/leave', expect.objectContaining({ roomId: 'room-a' }));
+		expect(fixture.api).not.toHaveBeenCalledWith('calls/rooms/end', expect.anything());
 	});
 
 	test.each(['host', 'listener'] as const)('explicit %s exit sends its connection identity', async role => {

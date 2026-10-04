@@ -73,6 +73,7 @@ export function createCallsRoomConnection(roomId: string) {
 				? participants.value.map(participant => participant.id === next.id ? next : participant)
 				: [...participants.value, next];
 			if (next.userId === $i?.id) ownParticipantId = next.id;
+			if (event.action === 'updated' && next.role === 'host') void refresh().catch(() => undefined);
 		}
 	}));
 	channel.on('role', event => accept(event, () => {

@@ -883,6 +883,12 @@ type CallsRoomsShowResponse = operations['calls___rooms___show']['responses']['2
 type CallsRoomsStopParticipantVideoRequest = operations['calls___rooms___stop-participant-video']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
+type CallsRoomsTransferHostRequest = operations['calls___rooms___transfer-host']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsTransferHostResponse = operations['calls___rooms___transfer-host']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type CallsRoomsUpdateTitleRequest = operations['calls___rooms___update-title']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -2222,6 +2228,8 @@ declare namespace entities {
         CallsRoomsShowRequest,
         CallsRoomsShowResponse,
         CallsRoomsStopParticipantVideoRequest,
+        CallsRoomsTransferHostRequest,
+        CallsRoomsTransferHostResponse,
         CallsRoomsUpdateTitleRequest,
         CallsRoomsUpdateTitleResponse,
         CallsUsersActiveRoomsRequest,

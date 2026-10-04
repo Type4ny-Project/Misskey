@@ -9,6 +9,8 @@ import { getBuiltinThemes } from '@@/js/theme.js';
 import type { Theme } from '@@/js/theme.js';
 import lightTheme from '@@/themes/_light.json5';
 import darkTheme from '@@/themes/_dark.json5';
+import defaultLightTheme from '@@/themes/l-TypeLightEmerald.json5';
+import defaultDarkTheme from '@@/themes/d-TypeDarkEmerald.json5';
 
 vi.mock('@/i18n.js', () => ({
 	i18n: {
@@ -100,6 +102,29 @@ describe('ThemeManager', () => {
 
 	afterEach(() => {
 		window.localStorage.clear();
+	});
+
+	test('デフォルトのEmeraldと本流テーマは別の組み込みテーマとして切り替えられる', async () => {
+		const themes = await getBuiltinThemes();
+		const { themeManager } = await loadThemeModule();
+
+		for (const emerald of [defaultLightTheme, defaultDarkTheme]) {
+			assert.deepStrictEqual(themes.find(theme => theme.id === emerald.id), emerald);
+			const upstream = themes.find(theme => theme.name === (emerald.base === 'light' ? 'Mi Light' : 'Mi Dark'));
+			assert.ok(upstream);
+			assert.notStrictEqual(emerald.id, upstream.id);
+
+			themeManager.updateTheme(emerald);
+			const emeraldBackground = themeManager.currentCompiledTheme?.bg;
+			themeManager.updateTheme(upstream);
+			assert.strictEqual(themeManager.currentThemeId, upstream.id);
+			assert.notStrictEqual(themeManager.currentCompiledTheme?.bg, emeraldBackground);
+			assert.strictEqual(window.localStorage.getItem('themeId'), upstream.id);
+
+			themeManager.updateTheme(emerald);
+			assert.strictEqual(themeManager.currentThemeId, emerald.id);
+			assert.strictEqual(themeManager.currentCompiledTheme?.bg, emeraldBackground);
+		}
 	});
 
 	test('追加した組み込みテーマはライト・ダーク両方で選択でき、適用とプレビューができる', async () => {

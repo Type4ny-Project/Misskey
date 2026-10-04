@@ -55,6 +55,7 @@ vi.mock('@/composables/use-calls-room.js', async () => {
 		},
 	};
 });
+vi.mock('@/components/MkCallsScreenWindow.vue', () => ({ default: {} }));
 vi.mock('@/components/MkCallsCameraPreviewDialog.vue', () => ({ default: {} }));
 vi.mock('@/utility/calls-media.js', () => ({
 	captureCallsCamera: fixture.captureCamera,
@@ -105,6 +106,28 @@ describe('Calls session device handoff', () => {
 		fixture.remoteTrackCallbacks.length = 0;
 		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { enumerateDevices: async () => [] } });
 		session = (await import('@/utility/calls-session.js')).useCallsSession();
+	});
+
+	test('closes only a removed video window and closes all remaining windows on leaving', async () => {
+		const { nextTick } = await import('vue');
+		fixture.popup.mockImplementation(() => ({ dispose: vi.fn() }));
+		await session.join('room-a', false);
+		const first = new MediaStream();
+		const second = new MediaStream();
+		session.localVideos.value = new Map([['camera', first], ['screen', second]]);
+		await nextTick();
+		await session.showScreenWindow(first, 'Camera');
+		await session.showScreenWindow(second, 'Screen');
+		const [firstWindow, secondWindow] = fixture.popup.mock.results.map(result => result.value);
+		session.localVideos.value = new Map([['screen', second]]);
+		await nextTick();
+		expect(session.screenWindows.has(first)).toBe(false);
+		expect(session.screenWindows.has(second)).toBe(true);
+		expect(firstWindow.dispose).toHaveBeenCalledOnce();
+		expect(secondWindow.dispose).not.toHaveBeenCalled();
+		await session.leave();
+		expect(session.screenWindows.size).toBe(0);
+		expect(secondWindow.dispose).toHaveBeenCalledOnce();
 	});
 
 	test('joins with zero capture devices muted and retries capture when unmuting', async () => {

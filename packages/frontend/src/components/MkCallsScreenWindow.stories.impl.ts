@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, shallowRef } from 'vue';
 import MkCallsScreenWindow from './MkCallsScreenWindow.vue';
-import { callsScreenWindowLabel, callsScreenWindowStream } from '@/utility/calls-screen-window.js';
 import type { StoryObj } from '@storybook/vue3';
 
 export const Default = {
@@ -13,20 +12,20 @@ export const Default = {
 		return {
 			components: { MkCallsScreenWindow },
 			setup() {
+				const stream = shallowRef<MediaStream | null>(null);
 				onMounted(() => {
 					const canvas = window.document.createElement('canvas');
 					canvas.width = 640;
 					canvas.height = 360;
-					callsScreenWindowLabel.value = 'owner';
-					callsScreenWindowStream.value = canvas.captureStream();
+					stream.value = canvas.captureStream();
 				});
 				onUnmounted(() => {
-					callsScreenWindowStream.value?.getTracks().forEach(track => track.stop());
-					callsScreenWindowStream.value = null;
-					callsScreenWindowLabel.value = '';
+					stream.value?.getTracks().forEach(track => track.stop());
+					stream.value = null;
 				});
+				return { stream };
 			},
-			template: '<MkCallsScreenWindow />',
+			template: '<MkCallsScreenWindow v-if="stream" :stream="stream" label="owner" />',
 		};
 	},
 	parameters: { layout: 'fullscreen' },

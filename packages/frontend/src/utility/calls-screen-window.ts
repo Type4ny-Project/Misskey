@@ -3,32 +3,37 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { shallowRef } from 'vue';
+import { shallowReactive } from 'vue';
 import * as os from '@/os.js';
 
-export const callsScreenWindowStream = shallowRef<MediaStream | null>(null);
-export const callsScreenWindowLabel = shallowRef('');
-let disposeWindow: (() => void) | null = null;
+export const callsScreenWindows = shallowReactive(new Map<MediaStream, { dispose?: () => void }>());
 
-export function clearCallsScreenWindow(): void {
-	callsScreenWindowStream.value = null;
-	callsScreenWindowLabel.value = '';
-	disposeWindow?.();
-	disposeWindow = null;
+export function clearCallsScreenWindow(stream: MediaStream): void {
+	const screenWindow = callsScreenWindows.get(stream);
+	callsScreenWindows.delete(stream);
+	screenWindow?.dispose?.();
+}
+
+export function clearCallsScreenWindows(): void {
+	for (const stream of callsScreenWindows.keys()) clearCallsScreenWindow(stream);
 }
 
 export async function showCallsScreenWindow(stream: MediaStream, label: string): Promise<void> {
-	if (callsScreenWindowStream.value === stream) {
-		clearCallsScreenWindow();
+	if (callsScreenWindows.has(stream)) {
+		clearCallsScreenWindow(stream);
 		return;
 	}
-	callsScreenWindowStream.value = stream;
-	callsScreenWindowLabel.value = label;
-	if (disposeWindow != null) return;
 
-	const { default: ScreenWindow } = await import('@/components/MkCallsScreenWindow.vue');
-	if (callsScreenWindowStream.value == null || disposeWindow != null) return;
+	const screenWindow: { dispose?: () => void } = {};
+	callsScreenWindows.set(stream, screenWindow);
+	try {
+		const { default: ScreenWindow } = await import('@/components/MkCallsScreenWindow.vue');
+		if (callsScreenWindows.get(stream) !== screenWindow) return;
 
-	const { dispose } = os.popup(ScreenWindow, {}, { closed: clearCallsScreenWindow });
-	disposeWindow = dispose;
+		const { dispose } = os.popup(ScreenWindow, { stream, label }, { closed: () => clearCallsScreenWindow(stream) });
+		screenWindow.dispose = dispose;
+	} catch (error) {
+		clearCallsScreenWindow(stream);
+		throw error;
+	}
 }

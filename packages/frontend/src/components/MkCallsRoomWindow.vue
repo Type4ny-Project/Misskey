@@ -27,7 +27,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="$style.callLayout">
 					<section ref="stage" :class="$style.stage" :aria-label="i18n.ts._calls.title">
 						<div ref="videoGrid" :class="$style.videoGrid" :style="videoGridStyle">
-							<CallsVideo v-for="video in roomVideos" :key="video.id" :stream="video.stream" screenWindow :screenWindowActive="session.screenWindowStream.value === video.stream" :label="videoLabel(video.participantId)" :speaking="speakingParticipantIds.has(video.participantId)" :focused="focusedVideoId === video.id" :class="focusedVideoId === video.id && $style.focusedVideo" @select="focusVideo(video.id)" @screenWindow="showScreenWindow(video.stream, video.participantId)"/>
+							<CallsVideo v-for="video in roomVideos" :key="video.id" :stream="video.stream" screenWindow :screenWindowActive="session.screenWindows.has(video.stream)" :label="videoLabel(video.participantId)" :speaking="speakingParticipantIds.has(video.participantId)" :focused="focusedVideoId === video.id" :class="focusedVideoId === video.id && $style.focusedVideo" @select="focusVideo(video.id)" @screenWindow="showScreenWindow(video.stream, video.participantId)"/>
 							<div v-for="participant in audioOnlySpeakers" :key="participant.id" :class="[$style.voiceTile, speakingParticipantIds.has(participant.id) && $style.speaking]">
 								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.stageAvatar"/>
 								<i v-else class="ti ti-user" :class="$style.stageAvatarPlaceholder"></i>
@@ -296,7 +296,7 @@ function openParticipantMenu(participant: (typeof participants.value)[number], e
 async function showScreenWindow(stream: MediaStream, participantId: string): Promise<void> {
 	try {
 		await session.showScreenWindow(stream, videoLabel(participantId));
-		if (session.screenWindowStream.value != null) closeWindow();
+		if (session.screenWindows.has(stream)) closeWindow();
 	} catch (error) {
 		console.error('[Calls] Room operation failed', error);
 		if (popoutWindow != null) window.focus();

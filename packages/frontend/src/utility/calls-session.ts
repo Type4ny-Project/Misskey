@@ -15,7 +15,7 @@ import { miLocalStorage } from '@/local-storage.js';
 import { i18n } from '@/i18n.js';
 import { alert, confirm, popup, popupMenu, toast } from '@/os.js';
 import { misskeyApi, misskeyApiKeepalive } from '@/utility/misskey-api.js';
-import { callsScreenWindowStream, clearCallsScreenWindow, showCallsScreenWindow } from '@/utility/calls-screen-window.js';
+import { callsScreenWindows, clearCallsScreenWindow, clearCallsScreenWindows, showCallsScreenWindow } from '@/utility/calls-screen-window.js';
 
 type CallsRoomConnection = ReturnType<typeof createCallsRoomConnection>;
 type CallsReconnectCandidate = { roomId: string; title: string; userId: string; reconnectToken: string; expiresAt: number };
@@ -267,7 +267,7 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 
 async function clearSession(): Promise<void> {
 	cancelCameraPreview?.();
-	clearCallsScreenWindow();
+	clearCallsScreenWindows();
 	sessionGeneration += 1;
 	const controller = media.value;
 	media.value = null;
@@ -606,7 +606,9 @@ async function resumeAudio(): Promise<void> {
 }
 
 watch(videos, current => {
-	if (callsScreenWindowStream.value != null && !current.some(video => video.stream === callsScreenWindowStream.value)) clearCallsScreenWindow();
+	for (const stream of callsScreenWindows.keys()) {
+		if (!current.some(video => video.stream === stream)) clearCallsScreenWindow(stream);
+	}
 });
 
 watch(participants, applyParticipantVolumes);
@@ -682,7 +684,7 @@ export function useCallsSession() {
 		noiseSuppression,
 		localVideos,
 		videos,
-		screenWindowStream: callsScreenWindowStream,
+		screenWindows: callsScreenWindows,
 		showScreenWindow: showCallsScreenWindow,
 		videoBusy,
 		canShareScreen,

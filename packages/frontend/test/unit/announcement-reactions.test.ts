@@ -157,11 +157,11 @@ describe('announcement surfaces', () => {
 		}
 		app.mount(root);
 		await vi.waitFor(() => expect(root.querySelector('button[aria-label="👍 (2)"]')).not.toBeNull());
+		expect(root.textContent).not.toContain('Reacting marks this as read.');
 		root.querySelector<HTMLButtonElement>('button[aria-label="👍 (2)"]')!.click();
 		await vi.waitFor(() => expect(root.querySelector('button[aria-label="👍 (3)"]')?.getAttribute('aria-pressed')).toBe('true'));
 		expect(mocks.api).toHaveBeenCalledWith('announcements/react', { announcementId: target.id, reaction: '👍' });
 		expect(mocks.confirm).toHaveBeenCalledTimes(1);
-		expect(root.textContent).not.toContain('Reacting marks this as read.');
 		mocks.api.mockResolvedValue({ reactions: { '👍': 2 }, myReaction: null, isRead: true });
 		root.querySelector<HTMLButtonElement>('button[aria-label="👍 (3)"]')!.click();
 		await vi.waitFor(() => expect(root.querySelector('button[aria-label="👍 (2)"]')?.getAttribute('aria-pressed')).toBe('false'));

@@ -10,6 +10,7 @@ import { url } from '@@/js/config.js';
 import MkCallsRoomWindow from '@/components/MkCallsRoomWindow.vue';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 
 const fixture = vi.hoisted(() => ({ confirm: vi.fn(), session: null as any, connection: null as any }));
 vi.mock('@/i.js', () => ({ $i: { id: 'viewer', policies: {} } }));
@@ -32,14 +33,11 @@ beforeEach(() => {
 	fixture.confirm.mockReset().mockResolvedValue({ canceled: true });
 	vi.mocked(os.toast).mockClear();
 	vi.mocked(os.alert).mockClear();
+	vi.mocked(misskeyApi).mockClear();
 	const room = { id: 'room', title: 'Another user’s room', state: 'open', mode: 'stage', revision: 1, moderatorUserIds: [] };
-	const participants = [{ id: 'host-participant', userId: 'host', role: 'host', isMuted: true }];
+	const participants = [{ id: 'host-participant', userId: 'host', role: 'host', isMuted: true, user: { id: 'host', username: 'host', name: 'Host' } }];
 	fixture.connection = { room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()), refresh: vi.fn().mockResolvedValue(undefined), dispose: vi.fn() };
 	fixture.session = {
-		usersById: ref(new Map()),
-		loadParticipantUsers: vi.fn(async () => {
-			fixture.session.usersById.value = new Map([['host', { id: 'host', username: 'host', name: 'Host' }]]);
-		}),
 		currentRoomId: ref(null), room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()),
 		isActive: ref(false), joining: ref(false), videos: ref([]), screenWindows: new Map(), mediaState: ref('idle'), mediaFailure: ref(null),
 		speakerRequestResult: ref(null), replacedRoomId: ref(null), needsAudioResume: ref(false), controls: ref({}),
@@ -50,15 +48,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
-	test('uses the session user loader and does not reload users for mute updates', async () => {
+	test('renders participant users without profile requests on mute updates', async () => {
 		fixture.session.currentRoomId.value = 'room';
 		fixture.session.isActive.value = true;
 		render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
 		await nextTick();
-		expect(fixture.session.loadParticipantUsers).toHaveBeenCalledWith(['host']);
-		fixture.session.participants.value = fixture.session.participants.value.map(participant => ({ ...participant, isMuted: false }));
+		fixture.session.participants.value = fixture.session.participants.value.map((participant: typeof fixture.session.participants.value[number]) => ({ ...participant, isMuted: false }));
 		await nextTick();
-		expect(fixture.session.loadParticipantUsers).toHaveBeenCalledTimes(1);
+		expect(misskeyApi).not.toHaveBeenCalled();
 	});
 
 	test('recalculates the video grid when the stage is resized and disconnects on close', async () => {

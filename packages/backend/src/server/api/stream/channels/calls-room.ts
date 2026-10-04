@@ -9,6 +9,9 @@ import { bindThis } from '@/decorators.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
 import { CallsFeatureDisabledError, CallsRoomError, CallsRoomService } from '@/core/calls/CallsRoomService.js';
 import { CallsMediaService } from '@/core/calls/CallsMediaService.js';
+import { CallsEntityService } from '@/core/entities/CallsEntityService.js';
+import { DI } from '@/di-symbols.js';
+import type { CallsParticipantsRepository } from '@/models/_.js';
 import type { JsonObject, JsonValue } from '@/misc/json-value.js';
 import Channel, { type ChannelRequest } from '../channel.js';
 
@@ -24,6 +27,9 @@ export class CallsRoomChannel extends Channel {
 		@Inject(REQUEST) request: ChannelRequest,
 		private callsRoomService: CallsRoomService,
 		private callsMediaService: CallsMediaService,
+		@Inject(DI.callsParticipantsRepository)
+		private callsParticipantsRepository: CallsParticipantsRepository,
+		private callsEntityService: CallsEntityService,
 	) { super(request); }
 
 	@bindThis
@@ -41,8 +47,9 @@ export class CallsRoomChannel extends Channel {
 	@bindThis
 	private async onEvent(data: GlobalEvents['callsRoom']['payload']) {
 		if (this.user == null) return;
+		let room: Awaited<ReturnType<CallsRoomService['getRoom']>>;
 		try {
-			const room = await this.callsRoomService.getRoom(this.roomId);
+			room = await this.callsRoomService.getRoom(this.roomId);
 			await this.callsRoomService.assertCanAccess(this.user, room);
 		} catch (error) {
 			this.dispose();
@@ -58,6 +65,16 @@ export class CallsRoomChannel extends Channel {
 				reason: 'access',
 			});
 			return;
+		}
+		if (data.type === 'participant' && (data.body.action === 'joined' || data.body.action === 'updated')) {
+			const participant = await this.callsParticipantsRepository.findOneBy({ id: data.body.participantId, roomId: this.roomId });
+			if (participant != null) {
+				const [packedParticipant] = await this.callsEntityService.packParticipants([participant], this.user);
+				this.send(data.type, data.body.action === 'updated'
+					? { ...data.body, participant: packedParticipant, moderatorUserIds: room.moderatorUserIds }
+					: { ...data.body, participant: packedParticipant });
+				return;
+			}
 		}
 		this.send(data.type, data.body);
 	}

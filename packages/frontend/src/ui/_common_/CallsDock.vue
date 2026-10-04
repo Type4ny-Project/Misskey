@@ -153,7 +153,7 @@ watch(rootEl, (element, _, onCleanup) => {
 }, { flush: 'post' });
 
 function participantUser(userId: string): Misskey.entities.UserLite | null {
-	return session.usersById.value.get(userId) ?? null;
+	return participants.value.find(participant => participant.userId === userId)?.user ?? null;
 }
 
 function openRoom(): void {

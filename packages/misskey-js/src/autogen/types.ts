@@ -18321,7 +18321,79 @@ export interface operations {
                 content: {
                     'application/json': {
                         room: components['schemas']['CallsRoom'];
-                        participants: components['schemas']['CallsParticipant'][];
+                        participants: {
+                            /** Format: id */
+                            id: string;
+                            /** Format: id */
+                            roomId: string;
+                            /** Format: id */
+                            userId: string;
+                            /** @enum {string} */
+                            role: 'host' | 'speaker' | 'listener';
+                            /** @enum {string} */
+                            state: 'active' | 'left' | 'removed';
+                            isMuted: boolean;
+                            /** Format: date-time */
+                            joinedAt: string;
+                            /** Format: date-time */
+                            leftAt: string | null;
+                            /** Format: date-time */
+                            speakerRequestedAt: string | null;
+                            user: {
+                                /**
+                                 * Format: id
+                                 * @example xxxxxxxxxx
+                                 */
+                                id: string;
+                                /** @example 藍 */
+                                name: string | null;
+                                /** @example ai */
+                                username: string;
+                                /**
+                                 * @description The local host is represented with `null`.
+                                 * @example misskey.example.com
+                                 */
+                                host: string | null;
+                                /** Format: url */
+                                avatarUrl: string;
+                                avatarBlurhash: string | null;
+                                avatarDecorations: {
+                                    /** Format: id */
+                                    id: string;
+                                    angle?: number;
+                                    flipH?: boolean;
+                                    /** Format: url */
+                                    url: string;
+                                    offsetX?: number;
+                                    offsetY?: number;
+                                }[];
+                                isBot?: boolean;
+                                isCat?: boolean;
+                                requireSigninToViewContents?: boolean;
+                                makeNotesFollowersOnlyBefore?: number | null;
+                                makeNotesHiddenBefore?: number | null;
+                                instance?: {
+                                    name: string | null;
+                                    softwareName: string | null;
+                                    softwareVersion: string | null;
+                                    iconUrl: string | null;
+                                    faviconUrl: string | null;
+                                    themeColor: string | null;
+                                };
+                                emojis: {
+                                    [key: string]: string;
+                                };
+                                /** @enum {string} */
+                                onlineStatus: 'unknown' | 'online' | 'active' | 'offline';
+                                badgeRoles?: {
+                                    name: string;
+                                    iconUrl: string | null;
+                                    displayOrder: number;
+                                }[];
+                                isFollowing: boolean;
+                                isFollowed: boolean;
+                            } | null;
+                        }[];
                     };
                 };
             };

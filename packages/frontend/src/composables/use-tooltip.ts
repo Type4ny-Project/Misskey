@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { ref, watch, onBeforeUnmount } from 'vue';
+import { ref, watch } from 'vue';
 import type { Ref } from 'vue';
 
 export function useTooltip(
@@ -85,30 +85,28 @@ export function useTooltip(
 		close();
 	};
 
-	const stop = watch(elRef, () => {
-		if (elRef.value) {
-			stop();
-			const el = elRef.value instanceof Element ? elRef.value : elRef.value.$el;
-			el.addEventListener('mouseover', onMouseover, { passive: true });
-			el.addEventListener('mouseleave', onMouseleave, { passive: true });
-			el.addEventListener('touchstart', onTouchstart, { passive: true });
-			el.addEventListener('touchend', onTouchend, { passive: true });
-			el.addEventListener('click', close, { passive: true });
-		}
-	}, {
-		immediate: true,
-		flush: 'post',
-	});
+	watch(elRef, (value, _, onCleanup) => {
+		if (value == null) return;
+		const el = value instanceof Element ? value : value.$el;
+		el.addEventListener('mouseover', onMouseover, { passive: true });
+		el.addEventListener('mouseleave', onMouseleave, { passive: true });
+		el.addEventListener('touchstart', onTouchstart, { passive: true });
+		el.addEventListener('touchend', onTouchend, { passive: true });
+		el.addEventListener('click', close, { passive: true });
 
-	onBeforeUnmount(() => {
-		close();
-		if (elRef.value) {
-			const el = elRef.value instanceof Element ? elRef.value : elRef.value.$el;
+		onCleanup(() => {
+			isHovering = false;
+			window.clearTimeout(timeoutId);
+			if (autoHidingTimer != null) window.clearInterval(autoHidingTimer);
+			close();
 			el.removeEventListener('mouseover', onMouseover);
 			el.removeEventListener('mouseleave', onMouseleave);
 			el.removeEventListener('touchstart', onTouchstart);
 			el.removeEventListener('touchend', onTouchend);
 			el.removeEventListener('click', close);
-		}
+		});
+	}, {
+		immediate: true,
+		flush: 'post',
 	});
 }

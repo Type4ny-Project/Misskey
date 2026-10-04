@@ -10,9 +10,19 @@ import type { MiCallsParticipant } from '@/models/_.js';
 const participant = { id: 'participant-a', roomId: 'room-a', userId: 'user-a', state: 'active' } as MiCallsParticipant;
 
 describe('CallsMediaRevocationService', () => {
+	test('retains close bindings when the provider fails and does not release track quota', async () => {
+		const bindings = { listGenerationPublications: vi.fn().mockResolvedValue([{ providerSessionId: 'session-a', providerMid: '1', applicationId: 'app-a', providerTrackName: 'audio' }]), listSubscriptions: vi.fn().mockResolvedValue([]), clearGeneration: vi.fn(), clearSubscriptions: vi.fn() };
+		const quota = { releaseTrack: vi.fn() };
+		const provider = { closeTracks: vi.fn().mockRejectedValue(new Error('close failed')) };
+		const service = new CallsMediaRevocationService({} as never, {} as never, {} as never, bindings as never, provider as never, {} as never, {} as never, quota as never);
+		await expect(service.closeGeneration(participant.id, 3)).rejects.toThrow('close failed');
+		expect(bindings.clearGeneration).not.toHaveBeenCalled();
+		expect(bindings.clearSubscriptions).not.toHaveBeenCalled();
+		expect(quota.releaseTrack).not.toHaveBeenCalled();
+	});
 	test('closes receive-only subscriptions on participant revocation', async () => {
 		const live = { get: vi.fn().mockResolvedValue({ connectionId: 'connection-a', generation: 3, applicationId: 'app-a' }), clear: vi.fn() };
-		const bindings = { clearGeneration: vi.fn().mockResolvedValue([]), clearSubscriptions: vi.fn().mockResolvedValue([{ providerSessionId: 'listener-session', providerMid: '1' }]) };
+		const bindings = { clearGeneration: vi.fn(), clearSubscriptions: vi.fn(), listGenerationPublications: vi.fn().mockResolvedValue([]), listSubscriptions: vi.fn().mockResolvedValue([{ providerSessionId: 'listener-session', providerMid: '1' }]) };
 		const provider = { closeTracks: vi.fn() };
 		const service = new CallsMediaRevocationService({} as never, {} as never, live as never, bindings as never, provider as never, { publish: vi.fn() } as never, { revokeParticipant: vi.fn() } as never, { release: vi.fn() } as never);
 		await service.revokeParticipant(participant, 8, 'access');
@@ -26,9 +36,9 @@ describe('CallsMediaRevocationService', () => {
 			get: vi.fn().mockResolvedValue({ participantId: participant.id, connectionId: 'connection-a', generation: 3, applicationId: 'first-party', sessionId: 'session-a' }),
 			clear: vi.fn().mockResolvedValue(true),
 		};
-		const bindings = {
-			clearSubscriptions: vi.fn().mockResolvedValue([]),
-			clearGeneration: vi.fn().mockResolvedValue([{ id: 'publication-a', roomId: participant.roomId, participantId: participant.id, connectionId: 'connection-a', generation: 3, providerSessionId: 'session-a', providerTrackName: 'audio-a', providerMid: '0', mediaKind: 'audio', createdAt: new Date().toISOString() }]),
+		const bindings = { clearGeneration: vi.fn(), clearSubscriptions: vi.fn(),
+			listSubscriptions: vi.fn().mockResolvedValue([]),
+			listGenerationPublications: vi.fn().mockResolvedValue([{ id: 'publication-a', roomId: participant.roomId, participantId: participant.id, connectionId: 'connection-a', generation: 3, providerSessionId: 'session-a', providerTrackName: 'audio-a', providerMid: '0', mediaKind: 'audio', createdAt: new Date().toISOString() }]),
 		};
 		const provider = { closeTracks: vi.fn().mockResolvedValue({}) };
 		const events = { publish: vi.fn().mockResolvedValue(undefined) };
@@ -60,7 +70,7 @@ describe('CallsMediaRevocationService', () => {
 
 	test('closes orphaned provider tracks when Redis live state is lost', async () => {
 		const publications = [{ id: 'publication-a', participantId: participant.id, generation: 7, providerSessionId: 'session-a', providerMid: '0', applicationId: 'app-a' }];
-		const bindings = { clearGeneration: vi.fn().mockResolvedValue(publications), clearSubscriptions: vi.fn().mockResolvedValue([]) };
+		const bindings = { clearGeneration: vi.fn(), clearSubscriptions: vi.fn(), listGenerationPublications: vi.fn().mockResolvedValue(publications), listSubscriptions: vi.fn().mockResolvedValue([]) };
 		const provider = { closeTracks: vi.fn().mockResolvedValue({}) };
 		const events = { publish: vi.fn().mockResolvedValue(undefined) };
 		const turn = { revokeParticipant: vi.fn().mockResolvedValue(undefined) };
@@ -80,12 +90,12 @@ describe('CallsMediaRevocationService', () => {
 		const publish = vi.fn();
 		const service = new CallsMediaRevocationService(
 			{} as never, {} as never, {} as never,
-			{ clearGeneration: vi.fn().mockResolvedValue(publications), clearSubscriptions: vi.fn().mockResolvedValue([]) } as never,
+			{ listGenerationPublications: vi.fn().mockResolvedValue(publications), listSubscriptions: vi.fn().mockResolvedValue([]), clearGeneration: vi.fn(), clearSubscriptions: vi.fn() } as never,
 			{ closeTracks } as never, { publish } as never,
 			{ revokeParticipant: vi.fn() } as never, { release: vi.fn() } as never,
 		);
 		const connection = { connectionId: 'old-connection', generation: 7, applicationId: 'app-a' };
-		await expect(service.revokeDisconnectedGeneration(participant, connection as never, 9)).resolves.toEqual({ publications, subscriptions: [] });
+		await expect(service.revokeDisconnectedGeneration(participant, connection as never, 9)).resolves.toEqual({ participantId: participant.id, generation: 7 });
 		expect(closeTracks).not.toHaveBeenCalled();
 		expect(publish).toHaveBeenCalledWith(participant.roomId, 9, 'revoked', { participantId: participant.id, reason: 'access', connectionId: 'old-connection', generation: 7 });
 	});

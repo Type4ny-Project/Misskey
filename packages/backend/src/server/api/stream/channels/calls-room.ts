@@ -7,7 +7,7 @@ import { Inject, Injectable, Scope } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { bindThis } from '@/decorators.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
-import { CallsRoomService } from '@/core/calls/CallsRoomService.js';
+import { CallsFeatureDisabledError, CallsRoomError, CallsRoomService } from '@/core/calls/CallsRoomService.js';
 import { CallsMediaService } from '@/core/calls/CallsMediaService.js';
 import type { JsonObject, JsonValue } from '@/misc/json-value.js';
 import Channel, { type ChannelRequest } from '../channel.js';
@@ -44,14 +44,19 @@ export class CallsRoomChannel extends Channel {
 		try {
 			const room = await this.callsRoomService.getRoom(this.roomId);
 			await this.callsRoomService.assertCanAccess(this.user, room);
-		} catch {
+		} catch (error) {
+			this.dispose();
+			if (error instanceof CallsFeatureDisabledError || (error instanceof CallsRoomError && error.code === 'access-denied')) {
+				await this.callsRoomService.leave(this.user, this.roomId).catch(leaveError => {
+					if (!(leaveError instanceof CallsRoomError && leaveError.code === 'participant-not-found')) console.error('[Calls] Access revocation failed', leaveError);
+				});
+			}
 			this.send('revoked', {
 				sequence: data.body.sequence,
 				roomRevision: data.body.roomRevision,
 				occurredAt: new Date().toISOString(),
 				reason: 'access',
 			});
-			this.dispose();
 			return;
 		}
 		this.send(data.type, data.body);

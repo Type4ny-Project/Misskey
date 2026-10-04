@@ -88,19 +88,23 @@ export class CallsMediaBindingService {
 		await pipeline.exec();
 	}
 
+	public async listGenerationPublications(participantId: string, generation: number): Promise<CallsPublicationBinding[]> {
+		const ids = await this.redis.smembers(this.generationKey(participantId, generation));
+		const bindings = await Promise.all(ids.map(async id => this.getPublication(id).catch(() => null)));
+		return bindings.filter((binding): binding is CallsPublicationBinding => binding != null);
+	}
+
 	public async clearGeneration(participantId: string, generation: number): Promise<CallsPublicationBinding[]> {
 		const key = this.generationKey(participantId, generation);
-		const ids = await this.redis.smembers(key);
-		const bindings = await Promise.all(ids.map(async id => this.getPublication(id).catch(() => null)));
+		const bindings = await this.listGenerationPublications(participantId, generation);
 		const pipeline = this.redis.pipeline();
 		for (const binding of bindings) {
-			if (binding == null) continue;
 			pipeline.del(this.publicationKey(binding.id));
 			pipeline.srem(this.roomKey(binding.roomId), binding.id);
 		}
 		pipeline.del(key);
 		await pipeline.exec();
-		return bindings.filter((binding): binding is CallsPublicationBinding => binding != null);
+		return bindings;
 	}
 
 	public async addSubscriptions(participantId: string, generation: number, providerSessionId: string, mids: string[]): Promise<void> {
@@ -114,9 +118,13 @@ export class CallsMediaBindingService {
 
 	public async clearSubscriptions(participantId: string, generation: number): Promise<CallsSubscriptionBinding[]> {
 		const key = this.subscriptionKey(participantId, generation);
-		const subscriptions = await this.redis.smembers(key);
+		const subscriptions = await this.listSubscriptions(participantId, generation);
 		await this.redis.del(key);
-		return subscriptions.map(value => JSON.parse(value) as CallsSubscriptionBinding);
+		return subscriptions;
+	}
+
+	public async listSubscriptions(participantId: string, generation: number): Promise<CallsSubscriptionBinding[]> {
+		return (await this.redis.smembers(this.subscriptionKey(participantId, generation))).map(value => JSON.parse(value) as CallsSubscriptionBinding);
 	}
 
 	private publicationKey(id: string): string { return `calls:publication:${id}`; }

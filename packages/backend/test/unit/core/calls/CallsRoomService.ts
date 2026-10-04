@@ -34,7 +34,7 @@ function createConnectionFixture(role: 'host' | 'listener') {
 	const live = { clear: vi.fn().mockResolvedValue(true), isReconnectTokenConsumed: vi.fn().mockResolvedValue(false), get: vi.fn().mockResolvedValue({ connectionId: 'new-device', generation: 2 }), withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() };
 	const revokeRoom = vi.fn();
 	const revokeParticipant = vi.fn();
-	const revokeDisconnectedGeneration = vi.fn().mockResolvedValue({ publications: [], subscriptions: [] });
+	const revokeDisconnectedGeneration = vi.fn().mockResolvedValue({ participantId: 'participant-a', generation: 2 });
 	const service = new CallsRoomService(
 		{ cloudflareRealtime: { enabled: true } } as Config,
 		{ findOneBy: async () => room, createQueryBuilder: () => queryBuilder } as never,
@@ -42,25 +42,31 @@ function createConnectionFixture(role: 'host' | 'listener') {
 		{} as never, {} as never, {} as never, {} as never, {} as never,
 		{ isModerator: async () => false } as never, live as never,
 		{ publish: vi.fn(), publishRoomsList: vi.fn() } as never,
-		{ revokeRoom, revokeParticipant, revokeDisconnectedGeneration, closeProviderPublications: vi.fn() } as never, { lifecycle: vi.fn() } as never,
+		{ revokeRoom, revokeParticipant, revokeDisconnectedGeneration, closeGeneration: vi.fn() } as never, { lifecycle: vi.fn() } as never,
 	);
 	return { service, room, live, update, execute, revokeRoom, revokeParticipant, revokeDisconnectedGeneration };
 }
 
 describe('CallsRoomService lifecycle', () => {
-	test('counts hosts and speakers before admitting a speaker in open mode', async () => {
+	test.each([true, false])('counts connected hosts and speakers, excluding expired connections (connected: %s)', async connected => {
 		const room = { ...baseRoom, visibility: 'public', state: 'open', mode: 'open' };
-		const participants = { findOneBy: vi.fn().mockResolvedValue(null), countBy: vi.fn().mockResolvedValue(8), insertOne: vi.fn() };
+		const candidates = Array.from({ length: 8 }, (_, index) => ({ id: `speaker-${index}`, joinedAt: new Date(Date.now() - 120_000) }));
+		const participants = { findOneBy: vi.fn().mockResolvedValue(null), findBy: vi.fn().mockResolvedValue(candidates), insertOne: vi.fn().mockResolvedValue({ id: 'joined' }) };
+		const builder = { update: () => builder, set: () => builder, where: () => builder, returning: () => builder, execute: async () => ({ affected: 1, raw: [{ revision: 2 }] }) };
 		const service = new CallsRoomService(
 			{ cloudflareRealtime: { enabled: true } } as Config,
-			{ findOneBy: async () => room } as never, participants as never,
-			{} as never, {} as never, {} as never, {} as never, {} as never, { isModerator: async () => false } as never,
-			{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() } as never,
-			{} as never, {} as never, {} as never,
+			{ findOneBy: async () => room, createQueryBuilder: () => builder } as never, participants as never,
+			{} as never, {} as never, {} as never, {} as never, { gen: () => 'joined' } as never, { isModerator: async () => false } as never,
+			{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback(), get: async () => connected ? {} : null } as never,
+			{ publish: vi.fn() } as never, {} as never, { lifecycle: vi.fn() } as never,
 		);
-		await expect(service.join(viewer, room.id)).rejects.toMatchObject({ code: 'room-full' });
-		expect(participants.countBy).toHaveBeenCalledWith(expect.objectContaining({ role: expect.objectContaining({ _value: ['host', 'speaker'] }) }));
-		expect(participants.insertOne).not.toHaveBeenCalled();
+		if (connected) {
+			await expect(service.join(viewer, room.id)).rejects.toMatchObject({ code: 'room-full' });
+			expect(participants.insertOne).not.toHaveBeenCalled();
+		} else {
+			await expect(service.join(viewer, room.id)).resolves.toMatchObject({ id: 'joined' });
+		}
+		expect(participants.findBy).toHaveBeenCalledWith(expect.objectContaining({ role: expect.objectContaining({ _value: ['host', 'speaker'] }) }));
 	});
 	test.each(['host', 'listener'] as const)('an old %s device cannot end or leave the current call', async role => {
 		const fixture = createConnectionFixture(role);
@@ -109,7 +115,7 @@ describe('CallsRoomService lifecycle', () => {
 		const publication = { providerSessionId: 'old-session', providerMid: '0', providerTrackName: 'old-track', applicationId: 'first-party' };
 		const revocation = new CallsMediaRevocationService(
 			{} as never, {} as never, fixture.live as never,
-			{ clearGeneration: async () => [publication], clearSubscriptions: async () => [] } as never,
+			{ listGenerationPublications: async () => [publication], listSubscriptions: async () => [], clearGeneration: vi.fn(), clearSubscriptions: vi.fn() } as never,
 			{ closeTracks } as never, { publish: vi.fn() } as never,
 			{ revokeParticipant: vi.fn() } as never,
 			{ release: vi.fn(), releaseTrack: vi.fn() } as never,
@@ -171,7 +177,7 @@ describe('CallsRoomService lifecycle', () => {
 		const participant = { id: 'participant-a', role: 'host', state: 'left' };
 		const update = vi.fn();
 		Object.assign(fixture.service, {
-			callsParticipantsRepository: { findOneBy: async () => participant, countBy: async () => 0, update, findOneByOrFail: async () => ({ ...participant, role: 'host', state: 'active' }) },
+			callsParticipantsRepository: { findOneBy: async () => participant, findBy: async () => [], update, findOneByOrFail: async () => ({ ...participant, role: 'host', state: 'active' }) },
 		});
 		await expect(fixture.service.join({ id: 'owner-a', host: null } as MiUser, fixture.room.id)).resolves.toMatchObject({ role: 'host', state: 'active' });
 		expect(update).toHaveBeenCalledWith(participant.id, expect.objectContaining({ role: 'host', state: 'active' }));
@@ -190,14 +196,14 @@ describe('CallsRoomService lifecycle', () => {
 		};
 		const publish = vi.fn(async () => undefined);
 		const connection = { participantId: participant.id, connectionId: 'connection-a', generation: 4, applicationId: 'first-party' };
-		const revokeDisconnectedGeneration = vi.fn(async () => ({ publications: [], subscriptions: [] }));
+		const revokeDisconnectedGeneration = vi.fn(async () => ({ participantId: 'participant-a', generation: 2 }));
 		const service = new CallsRoomService(
 			{ cloudflareRealtime: { enabled: true } } as Config,
 			{ createQueryBuilder: () => queryBuilder } as never,
 			{ findOneBy: async () => participant, update: participantUpdate } as never,
 			{} as never, {} as never, {} as never, {} as never, {} as never, {} as never,
 			{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback(), isReconnectTokenConsumed: async () => reconnectConsumed, get: async () => connection, clear: async () => true } as never,
-			{ publish } as never, { revokeDisconnectedGeneration, closeProviderPublications: vi.fn() } as never, { lifecycle: () => undefined } as never,
+			{ publish } as never, { revokeDisconnectedGeneration, closeGeneration: vi.fn() } as never, { lifecycle: () => undefined } as never,
 		);
 
 		const reconnect = { token: crypto.randomUUID(), connectionId: connection.connectionId, generation: connection.generation };

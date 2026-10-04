@@ -15,6 +15,7 @@ const fixture = vi.hoisted(() => ({
 	connectionExists: false,
 	participantMuted: true,
 	setMuted: vi.fn(),
+	heartbeat: vi.fn(),
 	role: 'listener' as 'listener' | 'host',
 	revoked: [] as Array<(event: { reason: string; connectionId?: string; generation?: number }) => void>,
 	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; close: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
@@ -37,7 +38,7 @@ vi.mock('@/composables/use-calls-room.js', async () => {
 			participants: ref([{ id: 'participant-a', userId: 'user-a', role: fixture.role, isMuted: fixture.participantMuted }]),
 			speakingParticipantIds: ref(new Set()),
 			connected: ref(true),
-			refresh: vi.fn(), dispose: vi.fn(), setMuted: fixture.setMuted, setSpeaking: vi.fn(), heartbeat: vi.fn(),
+			refresh: vi.fn(), dispose: vi.fn(), setMuted: fixture.setMuted, setSpeaking: vi.fn(), heartbeat: fixture.heartbeat,
 			onTrackChange: () => vi.fn(),
 			onRevoked: (callback: typeof fixture.revoked[number]) => { fixture.revoked.push(callback); return vi.fn(); },
 		}),
@@ -75,11 +76,25 @@ describe('Calls session device handoff', () => {
 		fixture.connectionExists = false;
 		fixture.participantMuted = true;
 		fixture.setMuted.mockClear();
+		fixture.heartbeat.mockClear();
 		fixture.role = 'listener';
 		fixture.revoked.length = 0;
 		fixture.controllers.length = 0;
 		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { enumerateDevices: async () => [] } });
 		session = (await import('@/utility/calls-session.js')).useCallsSession();
+	});
+
+	test('sends a heartbeat with the current connection every 30 seconds and stops after leaving', async () => {
+		await session.join('room-a', false);
+		await vi.advanceTimersByTimeAsync(29_999);
+		expect(fixture.heartbeat).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(fixture.heartbeat).toHaveBeenCalledWith('device-0', 1);
+		await vi.advanceTimersByTimeAsync(30_000);
+		expect(fixture.heartbeat).toHaveBeenCalledTimes(2);
+		await session.leave();
+		await vi.advanceTimersByTimeAsync(30_000);
+		expect(fixture.heartbeat).toHaveBeenCalledTimes(2);
 	});
 
 	test('microphone settings toggle noise suppression and keep the old choice on failure', async () => {

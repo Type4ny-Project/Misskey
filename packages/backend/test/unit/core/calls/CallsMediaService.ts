@@ -18,7 +18,7 @@ function createFixture(role: MiCallsParticipant['role'] = 'speaker') {
 		findOneBy: vi.fn().mockResolvedValue(participant),
 		findBy: vi.fn().mockResolvedValue([]),
 	};
-	const rooms = { getRoom: vi.fn().mockResolvedValue(room), assertCanAccess: vi.fn().mockResolvedValue(undefined), snapshot: vi.fn() };
+	const rooms = { getRoom: vi.fn().mockResolvedValue(room), assertCanAccess: vi.fn().mockResolvedValue(undefined), snapshot: vi.fn(), leave: vi.fn().mockResolvedValue(undefined) };
 	const live = {
 		get: vi.fn().mockResolvedValue(null),
 		withRoomLock: vi.fn(async (_roomId: string, callback: (assertHeld: () => Promise<void>) => Promise<unknown>) => callback(async () => undefined)),
@@ -40,6 +40,14 @@ function createFixture(role: MiCallsParticipant['role'] = 'speaker') {
 
 describe('CallsMediaService authorization boundaries', () => {
 	beforeEach(() => vi.clearAllMocks());
+
+	test('revokes existing media when a heartbeat observes access loss', async () => {
+		const fixture = createFixture('listener');
+		fixture.rooms.assertCanAccess.mockRejectedValue(new CallsRoomError('access-denied'));
+		await expect(fixture.service.heartbeat(user, room.id, 'connection-a', 2)).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fixture.rooms.leave).toHaveBeenCalledWith(user, room.id);
+		expect(fixture.live.heartbeat).not.toHaveBeenCalled();
+	});
 
 	test.each(['removed', 'demoted', 'replaced'] as const)('closes a pending publication when its participant is %s', async change => {
 		const fixture = createFixture();

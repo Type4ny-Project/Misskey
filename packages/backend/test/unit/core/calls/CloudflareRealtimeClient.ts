@@ -68,4 +68,18 @@ describe('CloudflareRealtimeClient', () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ errorCode: 'session-not-found' }), { status: 200 })));
 		await expect(new CloudflareRealtimeClient(config, telemetry as never).addTracks('session-a', [])).rejects.toMatchObject({ detail: { providerCode: 'session-not-found' } });
 	});
+
+	test('rejects a per-track close failure without treating HTTP 200 as completion', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ tracks: [{ mid: '1', errorCode: 'internal_error' }] }), { status: 200 })));
+		await expect(new CloudflareRealtimeClient(config, telemetry as never).closeTracks('session-a', [{ mid: '1' }], true)).rejects.toMatchObject({ detail: { providerCode: 'internal_error' } });
+	});
+
+	test('allows closing existing media after disabling Calls while rejecting new sessions', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ tracks: [{ mid: '1' }] }), { status: 200 }));
+		vi.stubGlobal('fetch', fetchMock);
+		const client = new CloudflareRealtimeClient({ ...config, cloudflareRealtime: { ...config.cloudflareRealtime!, enabled: false } }, telemetry as never);
+		await client.closeTracks('session-a', [{ mid: '1' }], true);
+		await expect(client.createSession()).rejects.toThrow();
+		expect(fetchMock).toHaveBeenCalledOnce();
+	});
 });

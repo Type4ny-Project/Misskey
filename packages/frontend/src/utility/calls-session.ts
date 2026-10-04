@@ -597,7 +597,7 @@ window.addEventListener('storage', onReconnectStorage);
 window.setInterval(() => {
 	const identity = media.value?.connectionIdentity;
 	if (identity != null) connection.value?.heartbeat(identity.connectionId, identity.generation);
-}, 10_000);
+}, 30_000);
 
 export function useCallsSession() {
 	return {

@@ -54,7 +54,10 @@ export class CloudflareRealtimeClient {
 	}
 
 	public async closeTracks(sessionId: string, tracks: Array<Pick<CloudflareRealtimeTrack, 'mid'>>, force = false, sessionDescription?: CloudflareRealtimeSessionDescription): Promise<CloudflareRealtimeTracksResponse> {
-		return this.request('close-tracks', 'PUT', this.path(cloudflareRealtimeEndpoints.closeTracks, sessionId), { tracks, force, sessionDescription });
+		const response = await this.request<CloudflareRealtimeTracksResponse>('close-tracks', 'PUT', this.path(cloudflareRealtimeEndpoints.closeTracks, sessionId), { tracks, force, sessionDescription });
+		const failed = response.tracks?.find(track => track.errorCode != null);
+		if (failed != null) throw new CloudflareRealtimeClientError(mapCloudflareRealtimeError(200, failed));
+		return response;
 	}
 
 	public async renegotiate(sessionId: string, sessionDescription: CloudflareRealtimeSessionDescription): Promise<CloudflareRealtimeTracksResponse> {
@@ -67,7 +70,7 @@ export class CloudflareRealtimeClient {
 
 	private async request<T>(operation: string, method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown): Promise<T> {
 		const provider = this.config.cloudflareRealtime;
-		if (provider == null || !provider.enabled) throw new CloudflareRealtimeNotConfiguredError();
+		if (provider == null || (!provider.enabled && operation !== 'close-tracks')) throw new CloudflareRealtimeNotConfiguredError();
 		const url = `${CLOUDFLARE_REALTIME_API_BASE_URL}${path.replace('{appId}', encodeURIComponent(provider.appId))}`;
 		let response: Response;
 		const startedAt = performance.now();

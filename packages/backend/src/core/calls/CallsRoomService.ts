@@ -301,7 +301,11 @@ export class CallsRoomService {
 		const current = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id });
 		if (current?.state === 'active') return current;
 		const role = current?.role === 'host' ? 'host' : room.mode === 'open' ? 'speaker' : 'listener';
-		const count = await this.callsParticipantsRepository.countBy({ roomId, state: 'active', role: role === 'listener' ? 'listener' : In(['host', 'speaker']) });
+		const candidates = await this.callsParticipantsRepository.findBy({ roomId, state: 'active', role: role === 'listener' ? 'listener' : In(['host', 'speaker']) });
+		// Reserve a slot while the participant creates their initial media connection.
+		const joiningSince = Date.now() - CallsLiveConnectionService.ttlSeconds * 1000;
+		const connected = await Promise.all(candidates.map(async candidate => candidate.joinedAt.getTime() > joiningSince || await this.callsLiveConnectionService.get(candidate.id) != null));
+		const count = connected.filter(Boolean).length;
 		if (count >= (role === 'listener' ? CALLS_MAX_LISTENERS : CALLS_MAX_SPEAKERS)) throw new CallsRoomError('room-full');
 
 		const now = new Date();
@@ -340,7 +344,7 @@ export class CallsRoomService {
 	@bindThis
 	public async leave(user: MiUser, roomId: string, identity?: CallsConnectionIdentity & { token?: string }): Promise<void> {
 		if (identity?.token != null) {
-			const publications = await this.callsLiveConnectionService.withRoomLock(roomId, async () => {
+			const disconnected = await this.callsLiveConnectionService.withRoomLock(roomId, async () => {
 				if (await this.callsLiveConnectionService.isReconnectTokenConsumed(identity.token!)) return;
 				const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
 				if (participant == null) return;
@@ -351,12 +355,12 @@ export class CallsRoomService {
 				await this.callsParticipantsRepository.update(participant.id, { state: 'left', leftAt: now, updatedAt: now });
 				const revision = await this.bumpRevision(roomId);
 				await this.callsEventService.publish(roomId, revision, 'participant', { participantId: participant.id, action: 'left' });
-				const publications = await this.callsMediaRevocationService.revokeDisconnectedGeneration(participant, connection, revision);
+				const disconnected = await this.callsMediaRevocationService.revokeDisconnectedGeneration(participant, connection, revision);
 				this.callsTelemetryService.lifecycle({ action: 'participant-left', roomId, participantId: participant.id, reason: 'reload' });
-				return publications;
+				return disconnected;
 			});
 			// Provider cleanup can exceed the join timeout; release the room lock first.
-			if (publications != null) await this.callsMediaRevocationService.closeProviderPublications(publications.publications, publications.subscriptions);
+			if (disconnected != null) await this.callsMediaRevocationService.closeGeneration(disconnected.participantId, disconnected.generation);
 			return;
 		}
 		if (identity != null) {

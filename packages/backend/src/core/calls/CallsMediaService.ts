@@ -10,7 +10,7 @@ import type { CallsParticipantsRepository, MiCallsParticipant, MiUser } from '@/
 import type { CloudflareRealtimeSessionDescription, CloudflareRealtimeTracksResponse } from './CloudflareRealtimeProviderContract.js';
 import { CallsLiveConnectionService, StaleCallsConnectionError, type CallsLiveConnection } from './CallsLiveConnectionService.js';
 import { CallsMediaBindingService, type CallsPublicationBinding } from './CallsMediaBindingService.js';
-import { CallsRoomError, CallsRoomService } from './CallsRoomService.js';
+import { CallsFeatureDisabledError, CallsRoomError, CallsRoomService } from './CallsRoomService.js';
 import { CloudflareRealtimeClient } from './CloudflareRealtimeClient.js';
 import { CallsEventService } from './CallsEventService.js';
 import { CallsMediaRevocationService } from './CallsMediaRevocationService.js';
@@ -233,7 +233,14 @@ export class CallsMediaService {
 
 	private async authorizeParticipant(user: MiUser, roomId: string): Promise<MiCallsParticipant> {
 		const room = await this.roomService.getRoom(roomId);
-		await this.roomService.assertCanAccess(user, room);
+		try { await this.roomService.assertCanAccess(user, room); } catch (error) {
+			if (error instanceof CallsFeatureDisabledError || (error instanceof CallsRoomError && error.code === 'access-denied')) {
+				await this.roomService.leave(user, roomId).catch(leaveError => {
+					if (!(leaveError instanceof CallsRoomError && leaveError.code === 'participant-not-found')) throw leaveError;
+				});
+			}
+			throw error;
+		}
 		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
 		const participant = await this.participantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
 		if (participant == null) throw new CallsRoomError('participant-not-found');

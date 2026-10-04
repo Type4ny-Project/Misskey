@@ -1059,7 +1059,7 @@ async function post(ev?: PointerEvent) {
 		localOnly: visibility.value === 'specified' ? false : localOnly.value,
 		visibility: visibility.value,
 		visibleUserIds: visibility.value === 'specified' ? visibleUsers.value.map(u => u.id) : undefined,
-		reactionAcceptance: effectiveReactionAcceptance.value,
+		reactionAcceptance: reactionAcceptance.value,
 	};
 
 	if (withHashtags.value && hashtags.value && hashtags.value.trim() !== '') {
@@ -1370,11 +1370,12 @@ async function openAccountMenu(ev: PointerEvent) {
 		withExtraOperation: false,
 		includeCurrentAccount: true,
 		active: postAccount.value != null ? postAccount.value.id : $i.id,
-		onChoose: (account) => {
+		onChoose: async (account) => {
 			if (account.id === $i.id) {
 				postAccount.value = null;
 			} else {
-				postAccount.value = account;
+				const storedAccount = (await getAccounts()).find(x => x.id === account.id);
+				postAccount.value = storedAccount?.token ? await misskeyApi('i', {}, storedAccount.token) : account;
 			}
 		},
 	});

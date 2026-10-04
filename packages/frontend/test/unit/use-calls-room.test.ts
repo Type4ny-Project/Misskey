@@ -32,7 +32,7 @@ vi.mock('@/stream.js', () => ({
 import { retainCallsRoomConnection, useCallsRoom } from '@/composables/use-calls-room.js';
 
 const snapshot = {
-	room: { id: 'room-a', state: 'open', revision: 1 },
+	room: { id: 'room-a', title: 'Original title', state: 'open', revision: 1 },
 	participants: [{ id: 'participant-a', userId: 'user-a', role: 'listener', isMuted: false, user: { id: 'user-a', username: 'Alice', avatarUrl: 'https://example.invalid/alice.png', isFollowing: true, isFollowed: false } }],
 };
 
@@ -85,6 +85,16 @@ describe('useCallsRoom streaming updates', () => {
 		fixture.channelHandlers.get('speakerRequest')?.({ sequence: 3, roomRevision: 4, occurredAt, participantId: 'participant-a', requested: false });
 		expect(calls.participants.value[0]?.speakerRequestedAt).toBeNull();
 		expect(fixture.api).toHaveBeenCalledTimes(1);
+	});
+
+	test('applies a title change to the room without regressing to an older snapshot', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		fixture.channelHandlers.get('title')?.({ sequence: 1, roomRevision: 2, title: 'New title' });
+		await vi.waitFor(() => expect(calls.room.value?.title).toBe('New title'));
+		expect(calls.room.value?.revision).toBe(2);
+		await calls.refresh();
+		expect(calls.room.value?.title).toBe('New title');
 	});
 
 	test('ignores duplicate events and applies later events without refetching', async () => {
@@ -162,14 +172,18 @@ describe('useCallsRoom streaming updates', () => {
 		expect(revoked).not.toHaveBeenCalled();
 	});
 
-	test('updates connection state without refetching and treats channel-wide revoke as local', async () => {
+	test('refreshes room and media state on reconnect and treats channel-wide revoke as local', async () => {
 		const calls = useCallsRoom('room-a');
 		await calls.refresh();
 		const revoked = vi.fn();
 		calls.onRevoked(revoked);
+		const tracksChanged = vi.fn();
+		calls.onTrackChange(tracksChanged);
 		fixture.streamHandlers.get('_connected_')?.();
 		expect(calls.connected.value).toBe(true);
-		expect(fixture.api).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(tracksChanged).toHaveBeenCalledOnce());
+		expect(fixture.api).toHaveBeenCalledTimes(2);
+		expect(fixture.api).toHaveBeenLastCalledWith('calls/rooms/show', { roomId: 'room-a' });
 
 		fixture.channelHandlers.get('revoked')?.({ sequence: 1, roomRevision: 2, reason: 'access' });
 		await vi.waitFor(() => expect(revoked).toHaveBeenCalledWith(expect.objectContaining({ reason: 'access' })));

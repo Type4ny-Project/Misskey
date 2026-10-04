@@ -132,6 +132,25 @@ const speakingParticipantIds = computed(() => connection.value?.speakingParticip
 const connected = computed(() => connection.value?.connected.value ?? false);
 const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? null);
 const isActive = computed(() => currentRoomId.value != null && myParticipant.value != null && room.value?.state === 'open');
+const elapsedTime = ref<string | null>(null);
+
+watch(() => isActive.value ? myParticipant.value?.joinedAt ?? null : null, (joinedAt, _, onCleanup) => {
+	if (joinedAt == null) {
+		elapsedTime.value = null;
+		return;
+	}
+	const startedAt = new Date(joinedAt).getTime();
+	const update = () => {
+		const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+		const hours = Math.floor(seconds / 3600);
+		const minutes = Math.floor(seconds / 60) % 60;
+		elapsedTime.value = [...(hours > 0 ? [hours] : []), minutes, seconds % 60].map(value => String(value).padStart(2, '0')).join(':');
+	};
+	update();
+	const timer = window.setInterval(update, 1000);
+	onCleanup(() => window.clearInterval(timer));
+}, { immediate: true });
+
 const isHost = computed(() => myParticipant.value?.role === 'host');
 const isSpeaker = computed(() => myParticipant.value?.role === 'host' || myParticipant.value?.role === 'speaker');
 const controls = computed(() => ({
@@ -661,6 +680,7 @@ export function useCallsSession() {
 		connected,
 		myParticipant,
 		isActive,
+		elapsedTime,
 		isHost,
 		isSpeaker,
 		joining,

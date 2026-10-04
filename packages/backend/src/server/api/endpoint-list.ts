@@ -402,6 +402,7 @@ export * as 'pages/unlike' from './endpoints/pages/unlike.js';
 export * as 'pages/update' from './endpoints/pages/update.js';
 export * as 'ping' from './endpoints/ping.js';
 export * as 'calls/rooms/create' from './endpoints/calls/rooms/create.js';
+export * as 'calls/rooms/update-title' from './endpoints/calls/rooms/update-title.js';
 export * as 'calls/capabilities' from './endpoints/calls/capabilities.js';
 export * as 'calls/rooms/show' from './endpoints/calls/rooms/show.js';
 export * as 'calls/rooms/list' from './endpoints/calls/rooms/list.js';

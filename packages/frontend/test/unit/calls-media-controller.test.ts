@@ -393,6 +393,73 @@ describe('CallsMediaController', () => {
 		await controller.close();
 	});
 
+	test('recovers after a network switch interrupts the first reconnection without recapturing the microphone', async () => {
+		const microphone = makeTrack('audio');
+		const getUserMedia = vi.fn().mockResolvedValue(stream(microphone));
+		installBrowserMedia(getUserMedia);
+		const controller = new CallsMediaController('room-a', 'speaker');
+		await controller.connect();
+		const identity = controller.connectionIdentity;
+		const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		try {
+			apiMock.mockRejectedValueOnce(new TypeError('Network unavailable'));
+			const peer = FakePeerConnection.instances[0]!;
+			peer.connectionState = 'failed';
+			peer.dispatchEvent(new Event('connectionstatechange'));
+			await controller.reconcile();
+			expect(controller.state).toBe('failed');
+
+			await controller.reconcile();
+			expect(FakePeerConnection.instances).toHaveLength(2);
+			expect(apiMock).toHaveBeenLastCalledWith('calls/media/reconcile', { roomId: 'room-a' });
+			expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/session/create')).toHaveLength(3);
+			expect(apiMock).toHaveBeenCalledWith('calls/media/session/create', expect.objectContaining({ connectionId: identity!.connectionId, expectedGeneration: identity!.generation }));
+			expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish')).toHaveLength(2);
+			expect(getUserMedia).toHaveBeenCalledOnce();
+			expect(microphone.stop).not.toHaveBeenCalled();
+			const recovered = FakePeerConnection.instances[1]!;
+			recovered.dispatchEvent(new Event('connectionstatechange'));
+			expect(controller.state).toBe('connected');
+		} finally {
+			await controller.close();
+			log.mockRestore();
+		}
+		const sessionCreates = apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/session/create').length;
+		await controller.reconcile();
+		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/session/create')).toHaveLength(sessionCreates);
+	});
+
+	test.each(['failed', 'disconnected'])('recovers a listener when a replacement peer becomes %s before connecting', async state => {
+		installBrowserMedia(vi.fn());
+		const respond = apiMock.getMockImplementation()!;
+		apiMock.mockImplementation(async (endpoint: string) => {
+			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: [{ id: 'publication-b', participantId: 'participant-b' }] };
+			if (endpoint === 'calls/media/tracks/subscribe') return { subscriptions: [{ publicationId: 'publication-b', mid: '1' }], requiresImmediateRenegotiation: false, sessionDescription: null, trackErrors: [] };
+			return respond(endpoint);
+		});
+		const controller = new CallsMediaController('room-a', 'listener');
+		try {
+			await controller.connect();
+			const peer = FakePeerConnection.instances[0]!;
+			peer.dispatchEvent(new Event('connectionstatechange'));
+			peer.connectionState = 'failed';
+			peer.dispatchEvent(new Event('connectionstatechange'));
+			await controller.reconcile();
+			expect(controller.state).toBe('reconnecting');
+
+			const replacement = FakePeerConnection.instances[1]!;
+			replacement.connectionState = state;
+			replacement.dispatchEvent(new Event('connectionstatechange'));
+			await controller.reconcile();
+			expect(FakePeerConnection.instances).toHaveLength(3);
+			expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/subscribe')).toHaveLength(3);
+			FakePeerConnection.instances[2]!.dispatchEvent(new Event('connectionstatechange'));
+			expect(controller.state).toBe('connected');
+		} finally {
+			await controller.close();
+		}
+	});
+
 	test('serializes concurrent connection operations and reports state transitions', async () => {
 		installBrowserMedia(vi.fn());
 		let activeSessionCreates = 0;

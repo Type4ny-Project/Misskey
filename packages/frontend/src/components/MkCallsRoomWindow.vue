@@ -9,7 +9,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<section class="_panel" :class="$style.space">
 		<header :class="$style.header">
 			<button type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.windowMinimize" :title="i18n.ts.windowMinimize" @click="closeWindow"><i class="ti ti-minus"></i></button>
-			<h1 :class="$style.title">{{ room?.title ?? i18n.ts._calls.title }}</h1>
+			<div :class="$style.heading">
+				<h1 :class="$style.title">{{ room?.title ?? i18n.ts._calls.title }}</h1>
+				<small v-if="sessionIsCurrent && session.elapsedTime.value != null" :class="$style.elapsedTime" :title="i18n.ts._calls.elapsedTime"><i class="ti ti-clock" aria-hidden="true"></i> {{ session.elapsedTime.value }}</small>
+			</div>
 			<button v-if="room != null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.copyLink" :title="i18n.ts.copyLink" @click="copyRoomLink"><i class="ti ti-link" aria-hidden="true"></i></button>
 			<button v-if="hasRoomMenu" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.details" :disabled="session.joining.value" aria-haspopup="menu" @click="openRoomMenu"><i class="ti ti-dots"></i></button>
 			<button v-if="popoutTarget == null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.popout" :title="i18n.ts.popout" @click="popout"><i class="ti ti-external-link"></i></button>
@@ -243,7 +246,11 @@ const videoGridStyle = computed(() => {
 });
 const failureText = computed(() => session.mediaFailure.value === 'unsupported' ? i18n.ts._calls.unsupportedBrowser : session.mediaFailure.value === 'permission-denied' ? i18n.ts._calls.permissionDenied : session.mediaFailure.value === 'device-not-found' ? i18n.ts._calls.deviceNotFound : session.mediaFailure.value === 'permission-pending' ? i18n.ts._calls.permissionPending : i18n.ts._calls.mediaFailed);
 
-const hasRoomMenu = computed(() => isHost.value && (room.value?.state === 'scheduled' || (room.value?.state === 'open' && !sessionIsCurrent.value && session.replacedRoomId.value !== props.roomId)));
+const hasRoomMenu = computed(() => isHost.value && (room.value?.state === 'scheduled' || room.value?.state === 'open'));
+
+watch(() => room.value?.title, title => {
+	if (popoutWindow != null) popoutWindow.document.title = title ?? i18n.ts._calls.title;
+});
 
 async function copyRoomLink(): Promise<void> {
 	if (popoutWindow != null) window.focus();
@@ -272,13 +279,36 @@ function toggleCamera(): void {
 function openRoomMenu(event: MouseEvent): void {
 	if (popoutWindow != null) window.focus();
 	if (session.joining.value || !hasRoomMenu.value) return;
-	os.popupMenu(room.value?.state === 'scheduled' ? [
-		{ text: i18n.ts._calls.cancelRoom, icon: 'ti ti-x', danger: true, action: cancelRoom },
-	] : [
-		{ text: i18n.ts._calls.endRoom, icon: 'ti ti-phone-off', danger: true, async action() {
-			if (!(await os.confirm({ type: 'warning', text: i18n.ts._calls.endRoom })).canceled) await endRoom();
-		} },
+	os.popupMenu([
+		{ text: i18n.ts._calls.changeTitle, icon: 'ti ti-pencil', action: changeTitle },
+		...(room.value?.state === 'scheduled' ? [
+			{ text: i18n.ts._calls.cancelRoom, icon: 'ti ti-x', danger: true, action: cancelRoom },
+		] : !sessionIsCurrent.value && session.replacedRoomId.value !== props.roomId ? [
+			{ text: i18n.ts._calls.endRoom, icon: 'ti ti-phone-off', danger: true, async action() {
+				if (!(await os.confirm({ type: 'warning', text: i18n.ts._calls.endRoom })).canceled) await endRoom();
+			} },
+		] : []),
 	], event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
+}
+
+async function changeTitle(): Promise<void> {
+	if (!hasRoomMenu.value || room.value == null) return;
+	const { canceled, result } = await os.inputText({
+		title: i18n.ts._calls.changeTitle,
+		default: room.value.title,
+		minLength: 1,
+		maxLength: 256,
+	});
+	if (canceled || !hasRoomMenu.value || room.value == null) return;
+	const title = result.trim();
+	if (title.length === 0 || title === room.value.title) return;
+	try {
+		await misskeyApi('calls/rooms/update-title', { roomId: props.roomId, title, expectedRevision: room.value.revision });
+		await refreshRoom();
+	} catch (error) {
+		console.error('[Calls] Title change failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
 }
 
 async function openParticipantMenu(participant: (typeof participants.value)[number], event: MouseEvent): Promise<void> {
@@ -463,7 +493,9 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 <style lang="scss" module>
 .space { display: flex; flex-direction: column; width: 100vw; height: 100dvh; overflow: hidden; border-radius: 0; }
 .header { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 12px 20px; border-bottom: 1px solid var(--MI_THEME-divider); }
-.title { flex: 1; min-width: 0; margin: 0; font-size: 1.2rem; line-height: 1.4; overflow-wrap: anywhere; }
+.heading { flex: 1; min-width: 0; }
+.title { margin: 0; font-size: 1.2rem; line-height: 1.4; overflow-wrap: anywhere; }
+.elapsedTime { font-variant-numeric: tabular-nums; color: var(--MI_THEME-fgTransparentWeak); }
 .menuButton { width: 36px; height: 36px; border-radius: 50%; font-size: 20px; }
 .body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 16px; padding: 16px; background: var(--MI_THEME-bg); }
 .callLayout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0; }

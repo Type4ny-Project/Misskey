@@ -30,8 +30,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="$style.callLayout">
 					<section ref="stage" :class="$style.stage" :aria-label="i18n.ts._calls.title">
 						<div ref="videoGrid" :class="$style.videoGrid" :style="videoGridStyle">
-							<CallsVideo v-for="video in roomVideos" :key="video.id" :stream="video.stream" screenWindow :screenWindowActive="session.screenWindows.has(video.stream)" :label="videoLabel(video.participantId)" :speaking="speakingParticipantIds.has(video.participantId)" :focused="focusedVideoId === video.id" :class="focusedVideoId === video.id && $style.focusedVideo" @select="focusVideo(video.id)" @screenWindow="showScreenWindow(video.stream, video.participantId)"/>
-							<div v-for="participant in audioOnlySpeakers" :key="participant.id" :class="[$style.voiceTile, speakingParticipantIds.has(participant.id) && $style.speaking]">
+							<CallsVideo v-for="video in roomVideos" :key="video.id" :stream="video.stream" screenWindow :screenWindowActive="session.screenWindows.has(video.stream)" :label="videoLabel(video.participantId)" :speaking="speakingParticipantIds.has(video.participantId)" :focused="focusedVideoId === video.id" :class="focusedVideoId === video.id && $style.focusedVideo" @contextmenu.capture.stop.prevent="openParticipantMenu(participants.find(participant => participant.id === video.participantId), $event)" @select="focusVideo(video.id)" @screenWindow="showScreenWindow(video.stream, video.participantId)"/>
+							<div v-for="participant in audioOnlySpeakers" :key="participant.id" :class="[$style.voiceTile, speakingParticipantIds.has(participant.id) && $style.speaking]" @contextmenu.capture.stop.prevent="openParticipantMenu(participant, $event)">
 								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.stageAvatar"/>
 								<i v-else class="ti ti-user" :class="$style.stageAvatarPlaceholder"></i>
 								<div :class="$style.tileName"><i :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></div>
@@ -42,7 +42,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<section v-if="speakers.length > 0" :aria-label="i18n.ts._calls.speaker">
 							<div v-if="room.mode === 'stage'" :class="$style.groupLabel">{{ i18n.ts._calls.speaker }}</div>
 							<TransitionGroup tag="div" :class="$style.people" :moveClass="$style.personMove">
-								<div v-for="participant in speakers" :key="participant.id" :class="$style.person">
+								<div v-for="participant in speakers" :key="participant.id" :class="$style.person" @contextmenu.capture.stop.prevent="openParticipantMenu(participant, $event)">
 									<MkA v-if="participantUser(participant.userId) != null" v-user-preview="participant.userId" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.personLink"/>
 									<div :class="[$style.avatarWrap, speakingParticipantIds.has(participant.id) && $style.speaking]">
 										<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.avatar"/>
@@ -65,7 +65,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<section v-if="listeners.length > 0" :aria-label="i18n.ts._calls.listener">
 							<div :class="$style.groupLabel">{{ i18n.ts._calls.listener }} · {{ listeners.length }}</div>
 							<TransitionGroup tag="div" :class="$style.people" :moveClass="$style.personMove">
-								<div v-for="participant in listeners" :key="participant.id" :class="$style.person">
+								<div v-for="participant in listeners" :key="participant.id" :class="$style.person" @contextmenu.capture.stop.prevent="openParticipantMenu(participant, $event)">
 									<MkA v-if="participantUser(participant.userId) != null" v-user-preview="participant.userId" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.personLink"/>
 									<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.listenerAvatar"/>
 									<div v-else :class="[$style.listenerAvatar, $style.avatarPlaceholder]"><i class="ti ti-user"></i></div>
@@ -119,6 +119,7 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import MkA from '@/components/global/MkA.vue';
 import { acct, userPage } from '@/filters/user.js';
+import type { MenuItem } from '@/types/menu.js';
 
 const props = defineProps<{
 	roomId: string;
@@ -311,9 +312,9 @@ async function changeTitle(): Promise<void> {
 	}
 }
 
-async function openParticipantMenu(participant: (typeof participants.value)[number], event: MouseEvent): Promise<void> {
+async function openParticipantMenu(participant: (typeof participants.value)[number] | undefined, event: PointerEvent): Promise<void> {
 	if (popoutWindow != null) window.focus();
-	if (!canModerateParticipants.value || room.value == null || participant.role === 'host' || participant.userId === $i?.id) return;
+	if (!canModerateParticipants.value || room.value == null || participant == null || participant.role === 'host' || participant.userId === $i?.id) return;
 	const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined;
 	let publications: Misskey.entities.CallsMediaReconcileResponse['publications'];
 	try {
@@ -324,7 +325,7 @@ async function openParticipantMenu(participant: (typeof participants.value)[numb
 		return;
 	}
 	if (disposed || !canModerateParticipants.value || room.value == null) return;
-	os.popupMenu([
+	const items: MenuItem[] = [
 		...(isHost.value && room.value.mode === 'stage' ? [
 			{ text: participant.role === 'listener' ? participant.speakerRequestedAt != null ? i18n.ts.approve : i18n.ts._calls.promoteSpeaker : i18n.ts._calls.demoteListener, icon: 'ti ti-microphone', action: () => setRole(participant.id, participant.role === 'listener' ? 'speaker' : 'listener') },
 			...(participant.speakerRequestedAt != null ? [{ text: i18n.ts.reject, icon: 'ti ti-x', action: () => setRole(participant.id, 'listener') }] : []),
@@ -334,7 +335,12 @@ async function openParticipantMenu(participant: (typeof participants.value)[numb
 		...(publications.some(publication => publication.participantId === participant.id && publication.mediaSource === 'camera') ? [{ text: i18n.ts._calls.stopCamera, icon: 'ti ti-camera-off', action: () => stopParticipantVideo(participant.id, 'camera') }] : []),
 		...(publications.some(publication => publication.participantId === participant.id && publication.mediaSource === 'screen') ? [{ text: i18n.ts._calls.stopScreenSharing, icon: 'ti ti-screen-share-off', action: () => stopParticipantVideo(participant.id, 'screen') }] : []),
 		{ text: i18n.ts._calls.removeParticipant, icon: 'ti ti-user-x', danger: true, action: () => removeParticipant(participant.id) },
-	], target);
+	];
+	if (event.type === 'contextmenu') {
+		os.contextMenu(items, event);
+	} else {
+		os.popupMenu(items, target);
+	}
 }
 
 async function showScreenWindow(stream: MediaStream, participantId: string): Promise<void> {

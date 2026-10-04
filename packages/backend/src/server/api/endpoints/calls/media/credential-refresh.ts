@@ -5,7 +5,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { CallsMediaCredentialService } from '@/core/calls/CallsMediaCredentialService.js';
-import { CallsMediaService } from '@/core/calls/CallsMediaService.js';
+import { CallsMediaAccessError, CallsMediaService } from '@/core/calls/CallsMediaService.js';
 import { CallsLiveConnectionService } from '@/core/calls/CallsLiveConnectionService.js';
 import { CallsOperationGuardService } from '@/core/calls/CallsOperationGuardService.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
@@ -19,10 +19,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			try {
 				return await executeCallsMediaOperation(guard, me, token, ps, 'credential-refresh', async () => {
 					const applicationId = callsApplicationId(token, me);
-					const claims = credentials.verify(ps.mediaCredential, { ...ps, userId: me.id, applicationId }, true);
-					await media.reconcile(me, ps.roomId);
+					credentials.verify(ps.mediaCredential, { ...ps, userId: me.id, applicationId }, true);
+					const participant = await media.authorizeParticipant(me, ps.roomId);
+					if (participant.id !== ps.participantId) throw new CallsMediaAccessError();
 					await connections.assertCurrent(ps.participantId, ps.connectionId, ps.generation);
-					const issued = credentials.issue({ userId: me.id, applicationId, roomId: ps.roomId, participantId: ps.participantId, connectionId: ps.connectionId, generation: ps.generation, canPublish: claims.canPublish });
+					const issued = credentials.issue({ userId: me.id, applicationId, roomId: ps.roomId, participantId: ps.participantId, connectionId: ps.connectionId, generation: ps.generation, canPublish: participant.role !== 'listener' });
 					return { mediaCredential: issued.credential, credentialExpiresAt: issued.expiresAt };
 				});
 			} catch (error) { callsMediaApiError(error); }

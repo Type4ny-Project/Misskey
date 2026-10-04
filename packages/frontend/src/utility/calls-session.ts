@@ -665,7 +665,11 @@ watch(() => myParticipant.value?.isMuted, value => {
 });
 
 watch(() => myParticipant.value?.role, (role, previousRole) => {
-	if (previousRole === 'listener' && (role === 'speaker' || role === 'host') && room.value?.state === 'open') void reconnectMedia();
+	if (previousRole === 'listener' && (role === 'speaker' || role === 'host') && room.value?.state === 'open') {
+		muted.value = true;
+		media.value?.setMuted(true);
+		media.value?.setRole(role);
+	}
 });
 
 watch(() => myParticipant.value?.speakerRequestedAt, (requestedAt, previousRequestedAt) => {

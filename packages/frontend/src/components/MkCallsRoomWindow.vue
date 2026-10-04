@@ -326,7 +326,7 @@ async function openParticipantMenu(participant: (typeof participants.value)[numb
 	}
 	if (disposed || !canModerateParticipants.value || room.value == null) return;
 	const items: MenuItem[] = [
-		...(isHost.value && room.value.mode === 'stage' ? [
+		...(room.value.mode === 'stage' ? [
 			{ text: participant.role === 'listener' ? participant.speakerRequestedAt != null ? i18n.ts.approve : i18n.ts._calls.promoteSpeaker : i18n.ts._calls.demoteListener, icon: 'ti ti-microphone', action: () => setRole(participant.id, participant.role === 'listener' ? 'speaker' : 'listener') },
 			...(participant.speakerRequestedAt != null ? [{ text: i18n.ts.reject, icon: 'ti ti-x', action: () => setRole(participant.id, 'listener') }] : []),
 		] : []),

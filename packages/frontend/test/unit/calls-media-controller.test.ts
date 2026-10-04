@@ -77,6 +77,7 @@ describe('CallsMediaController', () => {
 		apiMock.mockReset();
 		apiMock.mockImplementation(async (endpoint: string) => {
 			if (endpoint === 'calls/media/turn-credentials') return null;
+			if (endpoint === 'calls/media/credential/refresh') return { mediaCredential: 'speaker-credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
 			if (endpoint === 'calls/media/session/create') return { participantId: 'participant-a', generation: 1, canPublish: false, mediaCredential: 'credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
 			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: [] };
 			if (endpoint === 'calls/media/tracks/publish') return { publicationId: `publication-${apiMock.mock.calls.length}`, negotiation: { requiresImmediateRenegotiation: false, sessionDescription: null, trackErrors: [] } };
@@ -456,6 +457,7 @@ describe('CallsMediaController', () => {
 		installBrowserMedia(vi.fn());
 		apiMock.mockImplementation(async (endpoint: string) => {
 			if (endpoint === 'calls/media/turn-credentials') return null;
+			if (endpoint === 'calls/media/credential/refresh') return { mediaCredential: 'speaker-credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
 			if (endpoint === 'calls/media/session/create') return { participantId: 'participant-a', generation: 1, canPublish: false, mediaCredential: 'credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
 			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: [{ id: 'publication-b', participantId: 'participant-b' }] };
 			if (endpoint === 'calls/media/tracks/subscribe') return { subscriptions: [{ publicationId: 'publication-b', mid: '1' }], requiresImmediateRenegotiation: false, sessionDescription: null, trackErrors: [] };
@@ -573,6 +575,7 @@ describe('CallsMediaController', () => {
 		let sessionCreates = 0;
 		apiMock.mockImplementation(async (endpoint: string) => {
 			if (endpoint === 'calls/media/turn-credentials') return null;
+			if (endpoint === 'calls/media/credential/refresh') return { mediaCredential: 'speaker-credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
 			if (endpoint === 'calls/media/session/create') {
 				sessionCreates++;
 				activeSessionCreates++;
@@ -629,6 +632,27 @@ describe('CallsMediaController', () => {
 		await controller.close();
 	});
 
+	test('promotes a listener muted and publishes on the existing connection when enabling the microphone', async () => {
+		const microphone = makeTrack('audio');
+		const capture = vi.fn().mockResolvedValue(stream(microphone));
+		installBrowserMedia(capture);
+		const controller = new CallsMediaController('room-a', 'listener');
+		await controller.connect();
+		const identity = controller.connectionIdentity;
+		controller.setMuted(true);
+		controller.setRole('speaker');
+		expect(capture).not.toHaveBeenCalled();
+		await controller.switchMicrophone();
+		expect(microphone.enabled).toBe(false);
+		expect(FakePeerConnection.instances).toHaveLength(1);
+		expect(controller.connectionIdentity).toEqual(identity);
+		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/session/create')).toHaveLength(1);
+		expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/publish', expect.objectContaining({ mediaCredential: 'speaker-credential' }));
+		controller.setMuted(false);
+		expect(microphone.enabled).toBe(true);
+		await controller.close();
+	});
+
 	test('a host joins when the browser provides no capture API', async () => {
 		installBrowserMedia(vi.fn());
 		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined });
@@ -657,6 +681,7 @@ describe('CallsMediaController', () => {
 		let resolveSession!: (value: unknown) => void;
 		apiMock.mockImplementation(async (endpoint: string) => {
 			if (endpoint === 'calls/media/turn-credentials') return null;
+			if (endpoint === 'calls/media/credential/refresh') return { mediaCredential: 'speaker-credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
 			if (endpoint === 'calls/media/session/create') return new Promise(resolve => { resolveSession = resolve; });
 			throw new Error(`unexpected endpoint: ${endpoint}`);
 		});
@@ -680,6 +705,7 @@ describe('CallsMediaController', () => {
 		installBrowserMedia(getUserMedia);
 		apiMock.mockImplementation(async (endpoint: string) => {
 			if (endpoint === 'calls/media/turn-credentials') return null;
+			if (endpoint === 'calls/media/credential/refresh') return { mediaCredential: 'speaker-credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
 			if (endpoint === 'calls/media/session/create') return { participantId: 'participant-a', generation: 1, canPublish: true, mediaCredential: 'credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
 			if (endpoint === 'calls/media/tracks/publish') return { publicationId: 'publication-a', negotiation: { requiresImmediateRenegotiation: false, sessionDescription: null, trackErrors: [] } };
 			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: [] };
@@ -702,6 +728,7 @@ describe('CallsMediaController', () => {
 		installBrowserMedia(vi.fn().mockResolvedValue({ getAudioTracks: () => [track], getTracks: () => [track] }));
 		apiMock.mockImplementation(async (endpoint: string) => {
 			if (endpoint === 'calls/media/turn-credentials') return null;
+			if (endpoint === 'calls/media/credential/refresh') return { mediaCredential: 'speaker-credential', credentialExpiresAt: new Date(Date.now() + 600_000).toISOString() };
 			if (endpoint === 'calls/media/session/create') throw new Error('provider unavailable');
 			throw new Error(`unexpected endpoint: ${endpoint}`);
 		});

@@ -352,7 +352,7 @@ function loadReactionImage(reaction: string): Promise<HTMLImageElement | null> {
 		const image = new Image();
 		// 絵文字エンドポイントはメディアプロキシへリダイレクトするため、画像保存には CORS が必要。
 		image.crossOrigin = 'anonymous';
-		image.onload = () => resolve(image);
+		image.onload = () => resolve(image.naturalWidth > 0 && image.naturalHeight > 0 ? image : null);
 		image.onerror = () => resolve(null);
 		image.src = imageUrl;
 	});

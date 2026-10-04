@@ -107,6 +107,22 @@ test('keeps sharing available when an emoji image cannot load', async () => {
 	expect(ctx.fillText).toHaveBeenCalledWith(':blobcat_modoki_02:', 136, 430, 280);
 });
 
+test('falls back to text when loaded images have zero width, height, or both', async () => {
+	const view = await openStats();
+	await fireEvent.click(view.getByRole('button', { name: /ノートで共有/ }));
+	await waitFor(() => expect(images).toHaveLength(3));
+	const sizes = [[0, 64], [128, 0], [0, 0]];
+	for (const [index, image] of images.entries()) {
+		Object.assign(image, { naturalWidth: sizes[index][0], naturalHeight: sizes[index][1] });
+		image.onload?.(new Event('load'));
+	}
+	await waitFor(() => expect(fixture.post).toHaveBeenCalledOnce());
+	expect(ctx.drawImage).not.toHaveBeenCalled();
+	expect(ctx.fillText).toHaveBeenCalledWith(':blobcat_modoki_02:', 136, 430, 280);
+	expect(ctx.fillText).toHaveBeenCalledWith('❤', 136, 468, 280);
+	expect(ctx.fillText).toHaveBeenCalledWith(':blobcatyes@remote.example:', 644, 430, 280);
+});
+
 test('includes the channel only when shown and handles empty rankings', async () => {
 	fixture.api.mockResolvedValue({ ...stats, topReactions: [], topReceivedReactions: [] });
 	const view = await openStats();

@@ -30,6 +30,28 @@ describe('Endpoints', () => {
 		await api('admin/update-meta', { federation: 'all' }, alice as misskey.entities.SignupResponse);
 	}, 1000 * 60 * 2);
 
+	describe('i login bonus', () => {
+		test('同日のログイン後に有効化してもボーナスを一度だけ受け取れる', async () => {
+			const user = await signup({ username: 'loginbonus' });
+			const before = await api('i', {}, user);
+			expect(before.status).toBe(200);
+			assert.ok(before.body.points != null);
+			await api('admin/update-meta', { enableLoginBonus: true }, alice);
+			try {
+				const awarded = await api('i', {}, user);
+				expect(awarded.status).toBe(200);
+				expect(awarded.body.points).toBeGreaterThanOrEqual(before.body.points + 1);
+				expect(awarded.body.points).toBeLessThanOrEqual(before.body.points + 5);
+				expect(awarded.body.loggedInDays).toBe(before.body.loggedInDays);
+				const repeated = await api('i', {}, user);
+				expect(repeated.status).toBe(200);
+				expect(repeated.body.points).toBe(awarded.body.points);
+			} finally {
+				await api('admin/update-meta', { enableLoginBonus: false }, alice);
+			}
+		});
+	});
+
 	describe('signup', () => {
 		test('不正なユーザー名でアカウントが作成できない', async () => {
 			const res = await api('signup', {

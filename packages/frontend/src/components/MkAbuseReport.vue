@@ -45,6 +45,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template #label>{{ i18n.ts.details }}</template>
 			<div class="_gaps_s">
 				<Mfm :text="report.comment" :linkNavigationBehavior="'window'"/>
+				<div v-if="report.callsContext" class="_gaps_s">
+					<MkA :to="`/calls/${report.callsContext.roomId}`">{{ report.callsContext.roomTitle }}</MkA>
+					<MkTime :time="new Date(report.callsContext.reportedAt)"/>
+					<template v-if="report.callsContext.hasRecording">
+						<small>{{ i18n.ts._calls.recordingUnverified }}</small>
+						<MkButton v-if="!recordingUrl" :disabled="loadingRecording" @click="loadRecording">{{ i18n.ts._calls.loadRecording }}</MkButton>
+						<audio v-else :src="recordingUrl" controls :aria-label="i18n.ts._calls.recordingEvidence" style="width: 100%;"></audio>
+					</template>
+				</div>
 			</div>
 		</MkFolder>
 
@@ -78,7 +87,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { provide, ref, watch } from 'vue';
+import { onUnmounted, provide, ref, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
@@ -91,6 +100,7 @@ import RouterView from '@/components/global/RouterView.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { createRouter } from '@/router.js';
+import MkA from '@/components/global/MkA.vue';
 
 const props = defineProps<{
 	report: Misskey.entities.AdminAbuseUserReportsResponse[number];
@@ -114,6 +124,27 @@ watch(moderationNote, async () => {
 	}).then(() => {
 	});
 });
+
+const recordingUrl = ref<string | null>(null);
+const loadingRecording = ref(false);
+let disposed = false;
+onUnmounted(() => {
+	disposed = true;
+	if (recordingUrl.value != null) URL.revokeObjectURL(recordingUrl.value);
+});
+
+async function loadRecording(): Promise<void> {
+	if (loadingRecording.value || recordingUrl.value != null) return;
+	loadingRecording.value = true;
+	try {
+		const { recording } = await os.apiWithDialog('admin/abuse-user-report-recording', { reportId: props.report.id });
+		if (disposed || recording == null) return;
+		const bytes = Uint8Array.from(atob(recording), character => character.charCodeAt(0));
+		recordingUrl.value = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+	} finally {
+		loadingRecording.value = false;
+	}
+}
 
 function resolve(resolvedAs: 'accept' | 'reject' | null) {
 	os.apiWithDialog('admin/resolve-abuse-user-report', {

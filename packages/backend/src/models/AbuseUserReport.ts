@@ -9,6 +9,13 @@ import { MiUser } from './User.js';
 
 export type AbuseReportResolveType = 'accept' | 'reject';
 
+export type CallsReportContext = {
+	roomId: string;
+	roomTitle: string;
+	reportedAt: number;
+	hasRecording: boolean;
+};
+
 @Entity('abuse_user_report')
 export class MiAbuseUserReport {
 	@PrimaryColumn(id())
@@ -64,6 +71,13 @@ export class MiAbuseUserReport {
 		length: 2048,
 	})
 	public comment: string;
+
+	@Column('jsonb', { nullable: true })
+	public callsContext: CallsReportContext | null;
+
+	// Evidence is fetched separately by moderators; it must not enter report notifications.
+	@Column('bytea', { nullable: true, select: false })
+	public callsRecording: Buffer | null;
 
 	@Column('varchar', {
 		length: 8192, default: '',

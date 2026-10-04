@@ -15,6 +15,7 @@ export * as 'admin/abuse-report/notification-recipient/delete' from './endpoints
 export * as 'admin/abuse-report/notification-recipient/list' from './endpoints/admin/abuse-report/notification-recipient/list.js';
 export * as 'admin/abuse-report/notification-recipient/show' from './endpoints/admin/abuse-report/notification-recipient/show.js';
 export * as 'admin/abuse-report/notification-recipient/update' from './endpoints/admin/abuse-report/notification-recipient/update.js';
+export * as 'admin/abuse-user-report-recording' from './endpoints/admin/abuse-user-report-recording.js';
 export * as 'admin/abuse-user-reports' from './endpoints/admin/abuse-user-reports.js';
 export * as 'admin/accounts/create' from './endpoints/admin/accounts/create.js';
 export * as 'admin/accounts/delete' from './endpoints/admin/accounts/delete.js';
@@ -400,6 +401,7 @@ export * as 'pages/show' from './endpoints/pages/show.js';
 export * as 'pages/unlike' from './endpoints/pages/unlike.js';
 export * as 'pages/update' from './endpoints/pages/update.js';
 export * as 'ping' from './endpoints/ping.js';
+export * as 'calls/rooms/report-abuse' from './endpoints/calls/rooms/report-abuse.js';
 export * as 'calls/rooms/create' from './endpoints/calls/rooms/create.js';
 export * as 'calls/capabilities' from './endpoints/calls/capabilities.js';
 export * as 'calls/rooms/show' from './endpoints/calls/rooms/show.js';

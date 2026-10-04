@@ -39,6 +39,15 @@ export const meta = {
 					type: 'string',
 					nullable: false, optional: false,
 				},
+				callsContext: {
+					type: 'object', nullable: true, optional: false,
+					properties: {
+						roomId: { type: 'string', nullable: false, optional: false, format: 'id' },
+						roomTitle: { type: 'string', nullable: false, optional: false },
+						reportedAt: { type: 'integer', nullable: false, optional: false },
+						hasRecording: { type: 'boolean', nullable: false, optional: false },
+					},
+				},
 				resolved: {
 					type: 'boolean',
 					nullable: false, optional: false,

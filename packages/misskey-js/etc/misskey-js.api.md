@@ -71,6 +71,12 @@ type AdminAbuseReportNotificationRecipientUpdateRequest = operations['admin___ab
 type AdminAbuseReportNotificationRecipientUpdateResponse = operations['admin___abuse-report___notification-recipient___update']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminAbuseUserReportRecordingRequest = operations['admin___abuse-user-report-recording']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAbuseUserReportRecordingResponse = operations['admin___abuse-user-report-recording']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminAbuseUserReportsRequest = operations['admin___abuse-user-reports']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -851,6 +857,9 @@ type CallsRoomsOpenResponse = operations['calls___rooms___open']['responses']['2
 
 // @public (undocumented)
 type CallsRoomsRemoveParticipantRequest = operations['calls___rooms___remove-participant']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsReportAbuseRequest = operations['calls___rooms___report-abuse']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type CallsRoomsRequestSpeakerRequest = operations['calls___rooms___request-speaker']['requestBody']['content']['application/json'];
@@ -1969,6 +1978,8 @@ declare namespace entities {
         AdminAbuseReportNotificationRecipientShowResponse,
         AdminAbuseReportNotificationRecipientUpdateRequest,
         AdminAbuseReportNotificationRecipientUpdateResponse,
+        AdminAbuseUserReportRecordingRequest,
+        AdminAbuseUserReportRecordingResponse,
         AdminAbuseUserReportsRequest,
         AdminAbuseUserReportsResponse,
         AdminAccountsCreateRequest,
@@ -2197,6 +2208,7 @@ declare namespace entities {
         CallsRoomsOpenRequest,
         CallsRoomsOpenResponse,
         CallsRoomsRemoveParticipantRequest,
+        CallsRoomsReportAbuseRequest,
         CallsRoomsRequestSpeakerRequest,
         CallsRoomsSetModeratorRequest,
         CallsRoomsSetModeratorResponse,

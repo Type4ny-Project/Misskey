@@ -10,6 +10,8 @@ import type {
 	AdminAbuseReportNotificationRecipientShowResponse,
 	AdminAbuseReportNotificationRecipientUpdateRequest,
 	AdminAbuseReportNotificationRecipientUpdateResponse,
+	AdminAbuseUserReportRecordingRequest,
+	AdminAbuseUserReportRecordingResponse,
 	AdminAbuseUserReportsRequest,
 	AdminAbuseUserReportsResponse,
 	AdminAccountsCreateRequest,
@@ -238,6 +240,7 @@ import type {
 	CallsRoomsOpenRequest,
 	CallsRoomsOpenResponse,
 	CallsRoomsRemoveParticipantRequest,
+	CallsRoomsReportAbuseRequest,
 	CallsRoomsRequestSpeakerRequest,
 	CallsRoomsSetModeratorRequest,
 	CallsRoomsSetModeratorResponse,
@@ -796,6 +799,7 @@ export type Endpoints = {
 	'admin/abuse-report/notification-recipient/list': { req: AdminAbuseReportNotificationRecipientListRequest; res: AdminAbuseReportNotificationRecipientListResponse };
 	'admin/abuse-report/notification-recipient/show': { req: AdminAbuseReportNotificationRecipientShowRequest; res: AdminAbuseReportNotificationRecipientShowResponse };
 	'admin/abuse-report/notification-recipient/update': { req: AdminAbuseReportNotificationRecipientUpdateRequest; res: AdminAbuseReportNotificationRecipientUpdateResponse };
+	'admin/abuse-user-report-recording': { req: AdminAbuseUserReportRecordingRequest; res: AdminAbuseUserReportRecordingResponse };
 	'admin/abuse-user-reports': { req: AdminAbuseUserReportsRequest; res: AdminAbuseUserReportsResponse };
 	'admin/accounts/create': { req: AdminAccountsCreateRequest; res: AdminAccountsCreateResponse };
 	'admin/accounts/delete': { req: AdminAccountsDeleteRequest; res: EmptyResponse };
@@ -948,6 +952,7 @@ export type Endpoints = {
 	'calls/rooms/mute-participant': { req: CallsRoomsMuteParticipantRequest; res: EmptyResponse };
 	'calls/rooms/open': { req: CallsRoomsOpenRequest; res: CallsRoomsOpenResponse };
 	'calls/rooms/remove-participant': { req: CallsRoomsRemoveParticipantRequest; res: EmptyResponse };
+	'calls/rooms/report-abuse': { req: CallsRoomsReportAbuseRequest; res: EmptyResponse };
 	'calls/rooms/request-speaker': { req: CallsRoomsRequestSpeakerRequest; res: EmptyResponse };
 	'calls/rooms/set-moderator': { req: CallsRoomsSetModeratorRequest; res: CallsRoomsSetModeratorResponse };
 	'calls/rooms/set-role': { req: CallsRoomsSetRoleRequest; res: CallsRoomsSetRoleResponse };

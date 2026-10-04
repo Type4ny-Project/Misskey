@@ -11,7 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<button type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.windowMinimize" :title="i18n.ts.windowMinimize" @click="closeWindow"><i class="ti ti-minus"></i></button>
 			<h1 :class="$style.title">{{ room?.title ?? i18n.ts._calls.title }}</h1>
 			<button v-if="room != null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.copyLink" :title="i18n.ts.copyLink" @click="copyRoomLink"><i class="ti ti-link" aria-hidden="true"></i></button>
-			<button v-if="hasRoomMenu" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.details" :disabled="session.joining.value" aria-haspopup="menu" @click="openRoomMenu"><i class="ti ti-dots"></i></button>
+			<button v-if="hasRoomMenu || (sessionIsCurrent && !isHost)" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.details" :disabled="session.joining.value" aria-haspopup="menu" @click="openRoomMenu"><i class="ti ti-dots"></i></button>
 			<button v-if="popoutTarget == null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.popout" :title="i18n.ts.popout" @click="popout"><i class="ti ti-external-link"></i></button>
 		</header>
 		<MkLoading v-if="room == null && !loadFailed"/>
@@ -23,6 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkInfo v-if="sessionIsCurrent && session.mediaState.value === 'reconnecting'" warn>{{ i18n.ts._calls.reconnecting }}</MkInfo>
 				<MkInfo v-if="sessionIsCurrent && session.mediaFailure.value != null" warn>{{ failureText }}</MkInfo>
 				<MkInfo v-if="sessionIsCurrent && session.speakerRequestResult.value === 'rejected'" warn>{{ i18n.ts._calls.speakerRequestRejected }}</MkInfo>
+				<MkInfo>{{ i18n.ts._calls.recordingNotice }}</MkInfo>
 
 				<div :class="$style.callLayout">
 					<section ref="stage" :class="$style.stage" :aria-label="i18n.ts._calls.title">
@@ -48,7 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</div>
 									<div :class="$style.personName">
 										<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
-										<button v-if="canModerateParticipants && participant.role !== 'host' && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
+										<button v-if="(sessionIsCurrent || (canModerateParticipants && participant.role !== 'host')) && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
 									</div>
 									<small :class="speakingParticipantIds.has(participant.id) && $style.speakingLabel">{{ speakingParticipantIds.has(participant.id) ? i18n.ts._calls.speakingNow : participant.role === 'host' ? i18n.ts._calls.host : room.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.vcModerator : i18n.ts._calls.speaker }}</small>
 									<label v-if="sessionIsCurrent && participant.userId !== $i?.id" :class="$style.personVolume">
@@ -68,7 +69,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<div v-else :class="[$style.listenerAvatar, $style.avatarPlaceholder]"><i class="ti ti-user"></i></div>
 									<div :class="$style.personName">
 										<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
-										<button v-if="canModerateParticipants && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
+										<button v-if="(sessionIsCurrent || canModerateParticipants) && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
 									</div>
 									<small v-if="room.moderatorUserIds.includes(participant.userId)">{{ i18n.ts._calls.vcModerator }}</small>
 									<small v-if="participant.speakerRequestedAt != null" :class="$style.speakingLabel"><i class="ti ti-hand-stop"></i> {{ i18n.ts._calls.requestSpeaker }}</small>
@@ -102,6 +103,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, nextTick, onMounted, onUnmounted, shallowRef, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
 import { url } from '@@/js/config.js';
+import MkAbuseReportWindow from '@/components/MkAbuseReportWindow.vue';
 import CallsVideo from '@/components/MkCallsVideo.vue';
 import MkModal from '@/components/MkModal.vue';
 import MkCallsControls from '@/components/MkCallsControls.vue';
@@ -271,40 +273,62 @@ function toggleCamera(): void {
 
 function openRoomMenu(event: MouseEvent): void {
 	if (popoutWindow != null) window.focus();
-	if (session.joining.value || !hasRoomMenu.value) return;
-	os.popupMenu(room.value?.state === 'scheduled' ? [
-		{ text: i18n.ts._calls.cancelRoom, icon: 'ti ti-x', danger: true, action: cancelRoom },
-	] : [
-		{ text: i18n.ts._calls.endRoom, icon: 'ti ti-phone-off', danger: true, async action() {
-			if (!(await os.confirm({ type: 'warning', text: i18n.ts._calls.endRoom })).canceled) await endRoom();
-		} },
+	if (session.joining.value || (!hasRoomMenu.value && (!sessionIsCurrent.value || isHost.value))) return;
+	os.popupMenu([
+		...(sessionIsCurrent.value && !isHost.value ? [{ text: i18n.ts._calls.reportRoom, icon: 'ti ti-exclamation-circle', action: () => reportUser(room.value!.attachment.ownerUserId) }] : []),
+		...(hasRoomMenu.value ? room.value?.state === 'scheduled' ? [
+			{ text: i18n.ts._calls.cancelRoom, icon: 'ti ti-x', danger: true, action: cancelRoom },
+		] : [
+			{ text: i18n.ts._calls.endRoom, icon: 'ti ti-phone-off', danger: true, async action() {
+				if (!(await os.confirm({ type: 'warning', text: i18n.ts._calls.endRoom })).canceled) await endRoom();
+			} },
+		] : []),
 	], event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
 }
 
 async function openParticipantMenu(participant: (typeof participants.value)[number], event: MouseEvent): Promise<void> {
 	if (popoutWindow != null) window.focus();
-	if (!canModerateParticipants.value || room.value == null || participant.role === 'host' || participant.userId === $i?.id) return;
+	if (room.value == null || participant.userId === $i?.id) return;
+	const canModerate = canModerateParticipants.value && participant.role !== 'host';
+	if (!sessionIsCurrent.value && !canModerate) return;
 	const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined;
-	let publications: Misskey.entities.CallsMediaReconcileResponse['publications'];
-	try {
-		({ publications } = await misskeyApi('calls/media/reconcile', { roomId: props.roomId }));
-	} catch (error) {
-		console.error('[Calls] Participant menu failed', error);
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
-		return;
+	let publications: Misskey.entities.CallsMediaReconcileResponse['publications'] = [];
+	if (canModerate) {
+		try {
+			({ publications } = await misskeyApi('calls/media/reconcile', { roomId: props.roomId }));
+		} catch (error) {
+			console.error('[Calls] Participant menu failed', error);
+			await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+			return;
+		}
 	}
-	if (disposed || !canModerateParticipants.value || room.value == null) return;
+	if (disposed || room.value == null || (!sessionIsCurrent.value && !canModerateParticipants.value)) return;
 	os.popupMenu([
-		...(isHost.value && room.value.mode === 'stage' ? [
+		...(sessionIsCurrent.value ? [{ text: i18n.ts._calls.reportParticipant, icon: 'ti ti-exclamation-circle', action: () => reportUser(participant.userId) }] : []),
+		...(canModerate && isHost.value && room.value.mode === 'stage' ? [
 			{ text: participant.role === 'listener' ? participant.speakerRequestedAt != null ? i18n.ts.approve : i18n.ts._calls.promoteSpeaker : i18n.ts._calls.demoteListener, icon: 'ti ti-microphone', action: () => setRole(participant.id, participant.role === 'listener' ? 'speaker' : 'listener') },
 			...(participant.speakerRequestedAt != null ? [{ text: i18n.ts.reject, icon: 'ti ti-x', action: () => setRole(participant.id, 'listener') }] : []),
 		] : []),
-		...(isHost.value ? [{ text: room.value.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.removeVcModerator : i18n.ts._calls.assignVcModerator, icon: 'ti ti-shield', action: () => setModerator(participant.id, !room.value!.moderatorUserIds.includes(participant.userId)) }] : []),
-		...(participant.role === 'speaker' && !participant.isMuted ? [{ text: i18n.ts._calls.mute, icon: 'ti ti-microphone-off', action: () => muteParticipant(participant.id) }] : []),
-		...(publications.some(publication => publication.participantId === participant.id && publication.mediaSource === 'camera') ? [{ text: i18n.ts._calls.stopCamera, icon: 'ti ti-camera-off', action: () => stopParticipantVideo(participant.id, 'camera') }] : []),
-		...(publications.some(publication => publication.participantId === participant.id && publication.mediaSource === 'screen') ? [{ text: i18n.ts._calls.stopScreenSharing, icon: 'ti ti-screen-share-off', action: () => stopParticipantVideo(participant.id, 'screen') }] : []),
-		{ text: i18n.ts._calls.removeParticipant, icon: 'ti ti-user-x', danger: true, action: () => removeParticipant(participant.id) },
+		...(canModerate && isHost.value ? [{ text: room.value.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.removeVcModerator : i18n.ts._calls.assignVcModerator, icon: 'ti ti-shield', action: () => setModerator(participant.id, !room.value!.moderatorUserIds.includes(participant.userId)) }] : []),
+		...(canModerate && participant.role === 'speaker' && !participant.isMuted ? [{ text: i18n.ts._calls.mute, icon: 'ti ti-microphone-off', action: () => muteParticipant(participant.id) }] : []),
+		...(canModerate && publications.some(publication => publication.participantId === participant.id && publication.mediaSource === 'camera') ? [{ text: i18n.ts._calls.stopCamera, icon: 'ti ti-camera-off', action: () => stopParticipantVideo(participant.id, 'camera') }] : []),
+		...(canModerate && publications.some(publication => publication.participantId === participant.id && publication.mediaSource === 'screen') ? [{ text: i18n.ts._calls.stopScreenSharing, icon: 'ti ti-screen-share-off', action: () => stopParticipantVideo(participant.id, 'screen') }] : []),
+		...(canModerate ? [{ text: i18n.ts._calls.removeParticipant, icon: 'ti ti-user-x', danger: true, action: () => removeParticipant(participant.id) }] : []),
 	], target);
+}
+
+async function reportUser(userId: string): Promise<void> {
+	if (!sessionIsCurrent.value || room.value == null || userId === $i?.id) return;
+	const calls = { roomId: props.roomId, roomTitle: room.value.title, reportedAt: Date.now(), capture: session.captureReportRecording() };
+	try {
+		const user = participantUser(userId) ?? await misskeyApi('users/show', { userId });
+		if (user == null) throw new Error('Calls report target not found');
+		const { dispose } = os.popup(MkAbuseReportWindow, { user, calls }, { closed: () => dispose() });
+	} catch (error) {
+		calls.capture?.cancel();
+		console.error('[Calls] Report window failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
 }
 
 async function showScreenWindow(stream: MediaStream, participantId: string): Promise<void> {

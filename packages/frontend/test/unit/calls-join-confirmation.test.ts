@@ -13,12 +13,12 @@ import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import type { MenuButton } from '@/types/menu.js';
 
-const fixture = vi.hoisted(() => ({ confirm: vi.fn(), session: null as any, connection: null as any, policies: { canJoinCalls: true } }));
+const fixture = vi.hoisted(() => ({ confirm: vi.fn(), popup: vi.fn(), session: null as any, connection: null as any, policies: { canJoinCalls: true } }));
 vi.mock('@/i.js', () => ({ $i: { id: 'viewer', policies: fixture.policies } }));
 vi.mock('@/components/MkModal.vue', () => ({ default: { template: '<section><slot/></section>', methods: { close() {} } } }));
 vi.mock('@/components/MkButton.vue', () => ({ default: { template: '<button><slot/></button>' } }));
 vi.mock('@/components/global/MkA.vue', () => ({ default: { props: ['to'], template: '<a :href="to"><slot/></a>' } }));
-vi.mock('@/os.js', () => ({ confirm: fixture.confirm, toast: vi.fn(), alert: vi.fn(), popupMenu: vi.fn() }));
+vi.mock('@/os.js', () => ({ confirm: fixture.confirm, toast: vi.fn(), alert: vi.fn(), popupMenu: vi.fn(), popup: fixture.popup }));
 vi.mock('@/utility/calls-session.js', () => ({ useCallsSession: () => fixture.session }));
 vi.mock('@/composables/use-calls-room.js', () => ({ createCallsRoomConnection: () => fixture.connection }));
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: vi.fn().mockResolvedValue({ id: 'host', username: 'host', name: 'Host' }) }));
@@ -32,12 +32,13 @@ const stubs = {
 
 beforeEach(() => {
 	fixture.policies.canJoinCalls = true;
+	fixture.popup.mockReset().mockReturnValue({ dispose: vi.fn() });
 	fixture.confirm.mockReset().mockResolvedValue({ canceled: true });
 	vi.mocked(os.toast).mockClear();
 	vi.mocked(os.alert).mockClear();
 	vi.mocked(os.popupMenu).mockClear();
 	vi.mocked(misskeyApi).mockReset().mockResolvedValue({ roomRevision: 1, publications: [] } as never);
-	const room = { id: 'room', title: 'Another user’s room', state: 'open', mode: 'stage', revision: 1, moderatorUserIds: [] };
+	const room = { id: 'room', title: 'Another user’s room', state: 'open', mode: 'stage', revision: 1, moderatorUserIds: [], attachment: { type: 'personal', ownerUserId: 'host' } };
 	const participants = [{ id: 'host-participant', userId: 'host', role: 'host', isMuted: true, user: { id: 'host', username: 'host', name: 'Host' } }];
 	fixture.connection = { room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()), refresh: vi.fn().mockResolvedValue(undefined), dispose: vi.fn() };
 	fixture.session = {
@@ -45,7 +46,7 @@ beforeEach(() => {
 		isActive: ref(false), joining: ref(false), videos: ref([]), screenWindows: new Map(), mediaState: ref('idle'), mediaFailure: ref(null),
 		speakerRequestResult: ref(null), replacedRoomId: ref(null), needsAudioResume: ref(false), controls: ref({}),
 		refresh: vi.fn().mockResolvedValue(undefined), prepareMicrophones: vi.fn(), join: vi.fn().mockResolvedValue(undefined),
-		getParticipantVolume: vi.fn().mockReturnValue(100), setParticipantVolume: vi.fn(),
+		captureReportRecording: vi.fn().mockReturnValue(null), getParticipantVolume: vi.fn().mockReturnValue(100), setParticipantVolume: vi.fn(),
 	};
 });
 afterEach(cleanup);
@@ -74,18 +75,24 @@ describe('Calls room window', () => {
 		expect(vi.mocked(misskeyApi)).toHaveBeenCalledWith('calls/rooms/stop-participant-video', { roomId: 'room', participantId: 'speaker-participant', mediaSource: 'camera', expectedRevision: 1 });
 		await menu.find(item => item.text === i18n.ts._calls.stopScreenSharing)!.action(new PointerEvent('click'));
 		expect(vi.mocked(misskeyApi)).toHaveBeenCalledWith('calls/rooms/stop-participant-video', { roomId: 'room', participantId: 'speaker-participant', mediaSource: 'screen', expectedRevision: 1 });
-		if (actor === 'moderator') expect(menu.map(item => item.text)).toEqual([i18n.ts._calls.mute, i18n.ts._calls.stopCamera, i18n.ts._calls.stopScreenSharing, i18n.ts._calls.removeParticipant]);
+		if (actor === 'moderator') expect(menu.map(item => item.text)).toEqual([i18n.ts._calls.reportParticipant, i18n.ts._calls.mute, i18n.ts._calls.stopCamera, i18n.ts._calls.stopScreenSharing, i18n.ts._calls.removeParticipant]);
 	});
 
-	test('an ordinary participant has no moderation menu', () => {
+	test('an ordinary participant can report without moderation actions', async () => {
 		fixture.session.currentRoomId.value = 'room';
 		fixture.session.isActive.value = true;
 		fixture.session.participants.value = [
 			{ id: 'viewer-participant', userId: 'viewer', role: 'speaker', isMuted: false },
-			{ id: 'other-participant', userId: 'other', role: 'speaker', isMuted: false },
+			{ id: 'other-participant', userId: 'other', role: 'speaker', isMuted: false, user: { id: 'other', username: 'other' } },
 		];
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		expect(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')).toBeNull();
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
+		expect(menu.map(item => item.text)).toEqual([i18n.ts._calls.reportParticipant]);
+		await menu[0].action(new PointerEvent('click'));
+		expect(fixture.session.captureReportRecording).toHaveBeenCalledOnce();
+		expect(fixture.popup.mock.calls[0][1]).toMatchObject({ user: { id: 'other' }, calls: { roomId: 'room', capture: null } });
+		expect(misskeyApi).not.toHaveBeenCalled();
 	});
 
 	test.each([false, true])('hides video stop for absent sources with screen sharing %s', async hasScreen => {
@@ -98,9 +105,20 @@ describe('Calls room window', () => {
 		];
 		vi.mocked(misskeyApi).mockResolvedValue({ roomRevision: 1, publications: hasScreen ? [{ id: 'screen', participantId: 'speaker-participant', mediaKind: 'video', mediaSource: 'screen' }] : [] } as never);
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await fireEvent.click(view.getByRole('button', { name: i18n.ts.details }));
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
 		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
-		expect((vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[]).map(item => item.text)).toEqual([...(hasScreen ? [i18n.ts._calls.stopScreenSharing] : []), i18n.ts._calls.removeParticipant]);
+		expect((vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[]).map(item => item.text)).toEqual([i18n.ts._calls.reportParticipant, ...(hasScreen ? [i18n.ts._calls.stopScreenSharing] : []), i18n.ts._calls.removeParticipant]);
+	});
+
+	test('an ordinary participant can report the room owner from the room menu', async () => {
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await fireEvent.click(view.container.querySelector('header button[aria-haspopup="menu"]')!);
+		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
+		expect(menu.map(item => item.text)).toEqual([i18n.ts._calls.reportRoom]);
+		await menu[0].action(new PointerEvent('click'));
+		expect(fixture.popup.mock.calls[0][1]).toMatchObject({ user: { id: 'host' }, calls: { roomId: 'room' } });
 	});
 
 	test('does not prompt or offer to join when the role disallows participation', async () => {

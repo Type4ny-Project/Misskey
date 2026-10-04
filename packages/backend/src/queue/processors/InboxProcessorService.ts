@@ -37,6 +37,21 @@ type UpdateInstanceJob = {
 	shouldUnsuspend: boolean,
 };
 
+const JSON_LD_VALIDATION_ERROR_NAME = 'jsonld.ValidationError';
+const JSON_LD_VALIDATION_ERROR_MESSAGE = 'Safe mode validation error.';
+
+export function createUnrecoverableJsonLdError(error: unknown): Bull.UnrecoverableError | null {
+	if (error instanceof JsonLdError || (
+		error instanceof Error &&
+		error.name === JSON_LD_VALIDATION_ERROR_NAME &&
+		error.message === JSON_LD_VALIDATION_ERROR_MESSAGE
+	)) {
+		return new Bull.UnrecoverableError(`skip: encountered a JSON-LD error while verifying signature: ${error}`);
+	}
+
+	return null;
+}
+
 @Injectable()
 export class InboxProcessorService implements OnApplicationShutdown {
 	private logger: Logger;
@@ -193,11 +208,9 @@ export class InboxProcessorService implements OnApplicationShutdown {
 						throw new Bull.UnrecoverableError('skip: LD-Signatureの検証に失敗しました');
 					}
 				} catch (error) {
-					if (error instanceof JsonLdError) {
-						throw new Bull.UnrecoverableError(`skip: encountered a JSON-LD error while verifying signature: ${error}`);
-					} else {
-						throw error;
-					}
+					const unrecoverableError = createUnrecoverableJsonLdError(error);
+					if (unrecoverableError) throw unrecoverableError;
+					throw error;
 				}
 
 				// もう一度actorチェック

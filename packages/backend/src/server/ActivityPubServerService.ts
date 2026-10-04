@@ -31,6 +31,7 @@ import { IActivity } from '@/core/activitypub/type.js';
 import { isQuote, isRenote } from '@/misc/is-renote.js';
 import * as Acct from '@/misc/acct.js';
 import { FanoutTimelineEndpointService } from '@/core/FanoutTimelineEndpointService.js';
+import { FEATURED_COLLECTION_CACHE_TTL_SECONDS, FeaturedCollectionCacheService, type FeaturedCollection } from '@/core/FeaturedCollectionCacheService.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginOptions, FastifyBodyParser } from 'fastify';
 import type { FindOptionsWhere } from 'typeorm';
 
@@ -73,6 +74,7 @@ export class ActivityPubServerService {
 		private utilityService: UtilityService,
 		private userEntityService: UserEntityService,
 		private apRendererService: ApRendererService,
+		private featuredCollectionCacheService: FeaturedCollectionCacheService,
 		private queueService: QueueService,
 		private userKeypairService: UserKeypairService,
 		private queryService: QueryService,
@@ -402,28 +404,33 @@ export class ActivityPubServerService {
 			return;
 		}
 
-		const pinings = await this.userNotePiningsRepository.find({
-			where: { userId: user.id },
-			order: { id: 'DESC' },
+		const rendered = await this.featuredCollectionCacheService.fetch(user.id, async () => {
+			const pinings = await this.userNotePiningsRepository.createQueryBuilder('pin')
+				.innerJoinAndSelect('pin.note', 'note')
+				.where('pin.userId = :userId', { userId: user.id })
+				.andWhere('note.localOnly = FALSE')
+				.andWhere('note.visibility IN (:...visibilities)', { visibilities: ['public', 'home'] })
+				.orderBy('pin.id', 'DESC')
+				.getMany();
+
+			const pinnedNotes = pinings
+				.map(pining => pining.note)
+				.filter((note): note is NonNullable<typeof note> => note != null);
+			const renderedNotes = await Promise.all(pinnedNotes.map(note => this.apRendererService.renderNote(note)));
+
+			return this.apRendererService.addContext(this.apRendererService.renderOrderedCollection(
+				`${this.config.url}/users/${userId}/collections/featured`,
+				renderedNotes.length,
+				undefined,
+				undefined,
+				renderedNotes,
+			)) as FeaturedCollection;
 		});
 
-		const pinnedNotes = (await Promise.all(pinings.map(pining =>
-			this.notesRepository.findOneByOrFail({ id: pining.noteId }))))
-			.filter(note => !note.localOnly && ['public', 'home'].includes(note.visibility));
-
-		const renderedNotes = await Promise.all(pinnedNotes.map(note => this.apRendererService.renderNote(note)));
-
-		const rendered = this.apRendererService.renderOrderedCollection(
-			`${this.config.url}/users/${userId}/collections/featured`,
-			renderedNotes.length,
-			undefined,
-			undefined,
-			renderedNotes,
-		);
-
-		reply.header('Cache-Control', 'public, max-age=180');
+		reply.header('Cache-Control', `public, max-age=${FEATURED_COLLECTION_CACHE_TTL_SECONDS}`);
+		vary(reply.raw, 'Accept');
 		this.setResponseType(request, reply);
-		return (this.apRendererService.addContext(rendered));
+		return rendered;
 	}
 
 	@bindThis

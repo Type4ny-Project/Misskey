@@ -111,7 +111,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			let banner = undefined;
-			if (ps.bannerId != null) {
+			if (ps.bannerId != null && ps.bannerId !== channel.bannerId) {
 				banner = await this.driveFilesRepository.findOneBy({
 					id: ps.bannerId,
 					userId: me.id,

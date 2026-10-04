@@ -96,7 +96,7 @@ export class ApInboxService {
 	}
 
 	@bindThis
-	public async performActivity(actor: MiRemoteUser, activity: IObject, resolver?: Resolver): Promise<string | void> {
+	public async performActivity(actor: MiRemoteUser, activity: IObject, resolver?: Resolver, receipt?: { id: string; timestamp: number }): Promise<string | void> {
 		let result = undefined as string | void;
 		if (isCollectionOrOrderedCollection(activity)) {
 			const results = [] as [string, string | void][];
@@ -108,14 +108,14 @@ export class ApInboxService {
 				throw new Error(`skipping activity: collection would surpass recursion limit: ${this.utilityService.extractDbHost(actor.uri)}`);
 			}
 
-			for (const item of items) {
+			for (const [index, item] of items.entries()) {
 				const act = await resolver.resolve(item);
 				if (act.id == null || this.utilityService.extractDbHost(act.id) !== this.utilityService.extractDbHost(actor.uri)) {
 					this.logger.debug('skipping activity: activity id is null or mismatching');
 					continue;
 				}
 				try {
-					results.push([getApId(item), await this.performOneActivity(actor, act, resolver)]);
+					results.push([getApId(item), await this.performOneActivity(actor, act, resolver, receipt ? { ...receipt, id: `${receipt.id}:${index}` } : undefined)]);
 				} catch (err) {
 					if (err instanceof Error || typeof err === 'string') {
 						this.logger.error(err);
@@ -130,7 +130,7 @@ export class ApInboxService {
 				result = results.map(([id, reason]) => `${id}: ${reason}`).join('\n');
 			}
 		} else {
-			result = await this.performOneActivity(actor, activity, resolver);
+			result = await this.performOneActivity(actor, activity, resolver, receipt);
 		}
 
 		// ついでにリモートユーザーの情報が古かったら更新しておく
@@ -146,13 +146,20 @@ export class ApInboxService {
 	}
 
 	@bindThis
-	public async performOneActivity(actor: MiRemoteUser, activity: IObject, resolver?: Resolver): Promise<string | void> {
+	public async performOneActivity(actor: MiRemoteUser, activity: IObject, resolver?: Resolver, receipt?: { id: string; timestamp: number }): Promise<string | void> {
 		if (actor.isSuspended) return;
 
-		const followRequestCounts = isFollow(activity) ? await this.inboxRuleService.recordFollowRequest(actor) : undefined;
+		const followRequestCounts = isFollow(activity) ? await this.inboxRuleService.recordFollowRequest(actor, receipt?.id, receipt?.timestamp) : undefined;
 		const rules = await this.inboxRuleRepository.find();
+		// Share the resolved object between condition evaluation and import.
+		let resolvedObject: Promise<IObject> | undefined;
+		const resolveObject = (object: string | IObject) => resolvedObject ??= (async () => {
+			// eslint-disable-next-line no-param-reassign
+			resolver ??= await this.apResolverService.createResolver();
+			return await resolver.resolve(object);
+		})();
 		for (const rule of rules) {
-			const result = await this.inboxRuleService.evalCond(activity, actor, rule.condFormula, followRequestCounts);
+			const result = await this.inboxRuleService.evalCond(activity, actor, rule.condFormula, followRequestCounts, resolveObject);
 			if (result && rule.action.type === 'reject') {
 				await this.moderationLogService.log(actor, 'inboxRejected', {
 					activity,
@@ -163,7 +170,7 @@ export class ApInboxService {
 		}
 
 		if (isCreate(activity)) {
-			return await this.create(actor, activity, resolver);
+			return await this.create(actor, resolvedObject ? { ...activity, object: await resolvedObject } : activity, resolver);
 		} else if (isDelete(activity)) {
 			return await this.delete(actor, activity);
 		} else if (isUpdate(activity)) {

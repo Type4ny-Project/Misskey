@@ -17,7 +17,7 @@ const sender = { host: 'remote.example' } as MiRemoteUser;
 const follow = { type: 'Follow', object: 'https://local.example/users/alice' };
 const condition: InboxRuleCondFormulaValue = { id: 'follow', type: 'thisActivityIsFollow' };
 
-function createService(redisClient?: Redis.Redis, resolvedObject?: IObject) {
+function createService(redisClient?: Redis.Redis) {
 	const dependencies = [
 		redisClient ?? {},
 		{ findOneBy: vi.fn().mockResolvedValue({ host: sender.host }) },
@@ -26,7 +26,6 @@ function createService(redisClient?: Redis.Redis, resolvedObject?: IObject) {
 		{ toPuny: (host: string) => host },
 		{ pack: vi.fn().mockResolvedValue({ host: sender.host }) },
 		{},
-		{ createResolver: () => ({ resolve: vi.fn().mockResolvedValue(resolvedObject) }) },
 	] as unknown as ConstructorParameters<typeof InboxRuleService>;
 	return new InboxRuleService(...dependencies);
 }
@@ -137,7 +136,73 @@ test.each([
 	[{ type: 'Note', inReplyTo: 'https://local.example/notes/1' }, true],
 	[{ type: 'Note', inReplyTo: null }, false],
 	[{ type: 'Question', inReplyTo: 'https://local.example/notes/1' }, true],
-])('reply condition also resolves URL-referenced Create.object: %j', async (note, expected) => {
-	const service = createService(undefined, note as IObject);
-	expect(await service.evalCond({ type: 'Create', object: 'https://remote.example/notes/2' } as IObject, sender, { id: 'reply', type: 'thisActivityIsReply' })).toBe(expected);
+])('reply rules and import share a URL-referenced Create.object: %j', async (note, rejected) => {
+	const resolvedNote = { ...note, id: 'https://remote.example/notes/2' } as IObject;
+	const resolve = vi.fn(async (object: string | IObject) => typeof object === 'string' ? resolvedNote : object);
+	const resolver = { resolve };
+	const createNote = vi.fn().mockResolvedValue('created');
+	const dependencies = {
+		inboxRuleService: createService(),
+		inboxRuleRepository: { find: vi.fn().mockResolvedValue([{
+			id: 'reply-rule', action: { type: 'reject' },
+			condFormula: { id: 'or', type: 'or', values: [
+				{ id: 'reply-1', type: 'thisActivityIsReply' },
+				{ id: 'reply-2', type: 'thisActivityIsReply' },
+			] },
+		}]) },
+		moderationLogService: { log: vi.fn() },
+		apResolverService: { createResolver: vi.fn().mockResolvedValue(resolver) },
+		createNote,
+		logger: { info: vi.fn(), error: vi.fn() },
+	};
+	const inbox = Object.create(ApInboxService.prototype) as ApInboxService;
+	Object.defineProperties(inbox, Object.fromEntries(Object.entries(dependencies).map(([key, value]) => [key, { value }])));
+	const result = await inbox.performOneActivity(sender, { type: 'Create', id: 'https://remote.example/activities/2', object: 'https://remote.example/notes/2' } as IObject);
+	expect(resolve.mock.calls.filter(([object]) => typeof object === 'string')).toHaveLength(1);
+	if (rejected) {
+		expect(result).toContain('skip: rejected by rule');
+		expect(createNote).not.toHaveBeenCalled();
+	} else {
+		expect(createNote).toHaveBeenCalledWith(resolver, sender, resolvedNote, false, expect.objectContaining({ object: resolvedNote }));
+	}
+});
+
+test('queue retries do not add Follow receipts or extend their one-hour window', async () => {
+	const config = loadConfig();
+	const redis = new Redis.Redis(config.redis.port, config.redis.host);
+	const service = createService(redis);
+	const suffix = randomUUID();
+	const actor = { id: suffix, host: `${suffix}.example`, lastFetchedAt: new Date() } as MiRemoteUser;
+	const keys = [`inboxFollowRequests:user:${actor.id}`, `inboxFollowRequests:server:${actor.host}`];
+	const now = Date.now();
+	const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+	const followHandler = vi.fn().mockRejectedValueOnce(new Error('retry')).mockResolvedValue('ok');
+	const dependencies = {
+		inboxRuleService: service,
+		inboxRuleRepository: { find: vi.fn().mockResolvedValue([{
+			id: 'rate', action: { type: 'reject' },
+			condFormula: { id: 'count', type: 'userFollowRequestsLastHourMoreThanOrEq', value: 2 },
+		}]) },
+		moderationLogService: { log: vi.fn() },
+		follow: followHandler,
+	};
+	const inbox = Object.create(ApInboxService.prototype) as ApInboxService;
+	Object.defineProperties(inbox, Object.fromEntries(Object.entries(dependencies).map(([key, value]) => [key, { value }])));
+	const receipt = { id: `job-${suffix}`, timestamp: now };
+	try {
+		await expect(inbox.performActivity(actor, follow, undefined, receipt)).rejects.toThrow('retry');
+		clock.mockReturnValue(now + 1000);
+		expect(await inbox.performActivity(actor, follow, undefined, receipt)).toBe('ok');
+		expect(await redis.zscore(keys[0], receipt.id)).toBe(String(now));
+		expect(await inbox.performActivity(actor, follow, undefined, { ...receipt, id: `${receipt.id}-next` })).toContain('skip: rejected by rule');
+		expect(await redis.zcard(keys[0])).toBe(2);
+		expect(await redis.zcard(keys[1])).toBe(2);
+		clock.mockReturnValue(now + 60 * 60 * 1000);
+		expect(await inbox.performActivity(actor, follow, undefined, receipt)).toBe('ok');
+		expect(await redis.zcard(keys[0])).toBe(0);
+	} finally {
+		clock.mockRestore();
+		await redis.del(...keys);
+		await redis.quit();
+	}
 });

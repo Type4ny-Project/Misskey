@@ -16,7 +16,6 @@ import { UtilityService } from '@/core/UtilityService.js';
 import { InstanceEntityService } from '@/core/entities/InstanceEntityService.js';
 import type { InboxRuleCondFormulaValue } from '@/models/InboxRule.js';
 import { ApMentionService } from '@/core/activitypub/models/ApMentionService.js';
-import { ApResolverService } from '@/core/activitypub/ApResolverService.js';
 import type { MiMeta } from '@/models/Meta.js';
 
 type FollowRequestCounts = { user: number; server: number };
@@ -37,22 +36,20 @@ export class InboxRuleService {
 		private utilityService: UtilityService,
 		private instanceEntityService: InstanceEntityService,
 		private apMentionService: ApMentionService,
-		private apResolverService: ApResolverService,
 	) {
 	}
 
 	@bindThis
-	async recordFollowRequest(user: MiRemoteUser): Promise<FollowRequestCounts> {
+	async recordFollowRequest(user: MiRemoteUser, receiptId: string = randomUUID(), receivedAt = Date.now()): Promise<FollowRequestCounts> {
 		const now = Date.now();
-		const receiptId = randomUUID();
 		const keys = [
 			`inboxFollowRequests:user:${user.id}`,
 			`inboxFollowRequests:server:${this.utilityService.toPuny(user.host)}`,
 		];
 		const transaction = this.redisClient.multi();
 		for (const key of keys) {
+			transaction.zadd(key, 'NX', receivedAt, receiptId);
 			transaction.zremrangebyscore(key, '-inf', now - 60 * 60 * 1000);
-			transaction.zadd(key, now, receiptId);
 			transaction.zcard(key);
 			transaction.expire(key, 60 * 60);
 		}
@@ -64,7 +61,7 @@ export class InboxRuleService {
 	}
 
 	@bindThis
-	async evalCond(activity: IObject, user: MiRemoteUser, value: InboxRuleCondFormulaValue, followRequestCounts?: FollowRequestCounts): Promise<boolean> {
+	async evalCond(activity: IObject, user: MiRemoteUser, value: InboxRuleCondFormulaValue, followRequestCounts?: FollowRequestCounts, resolveObject?: (object: string | IObject) => Promise<IObject>): Promise<boolean> {
 		const object = isCreate(activity) && typeof activity.object !== 'string' ? activity.object : activity;
 		const instanceUnpack = await this.instancesRepository
 			.findOneBy({ host: this.utilityService.toPuny(user.host) });
@@ -75,15 +72,15 @@ export class InboxRuleService {
 		try {
 			switch (value.type) {
 				case 'and': {
-					const results = await Promise.all(value.values.map(v => this.evalCond(activity, user, v, followRequestCounts)));
+					const results = await Promise.all(value.values.map(v => this.evalCond(activity, user, v, followRequestCounts, resolveObject)));
 					return results.every(result => result);
 				}
 				case 'or': {
-					const results = await Promise.all(value.values.map(v => this.evalCond(activity, user, v, followRequestCounts)));
+					const results = await Promise.all(value.values.map(v => this.evalCond(activity, user, v, followRequestCounts, resolveObject)));
 					return results.some(result => result);
 				}
 				case 'not': {
-					return !(await this.evalCond(activity, user, value.value, followRequestCounts));
+					return !(await this.evalCond(activity, user, value.value, followRequestCounts, resolveObject));
 				}
 				// サスペンド済みユーザである
 				case 'isSuspended': {
@@ -165,8 +162,8 @@ export class InboxRuleService {
 					return isAnnounce(activity);
 				}
 				case 'thisActivityIsReply': {
-					const note = isCreate(activity) && typeof activity.object === 'string'
-						? await (await this.apResolverService.createResolver()).resolve(activity.object)
+					const note = isCreate(activity) && typeof activity.object === 'string' && resolveObject
+						? await resolveObject(activity.object)
 						: object;
 					return isPost(note) && note.inReplyTo != null;
 				}

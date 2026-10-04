@@ -1,0 +1,28 @@
+{
+	id: 'e6384ce8-bc35-45ef-bd2a-4fd4fdaf554d',
+
+	name: 'Material Teal Dark',
+	author: 'Type4ny Project',
+	desc: 'Material UI teal palette (dark)',
+
+	base: 'dark',
+
+	props: {
+		accent: '#80cbc4',
+		bg: '#121212',
+		fg: '#f5f5f5',
+		fgHighlighted: '#ffffff',
+		fgOnAccent: '#121212',
+		fgOnWhite: '#00796b',
+		divider: '#383838',
+		panel: '#1e1e1e',
+		navBg: '@panel',
+		link: '@accent',
+		hashtag: '@link',
+		mention: '@link',
+		renote: '#66bb6a',
+		love: '#f06292',
+		buttonGradateB: '@accent',
+		badge: '@accent',
+	},
+}

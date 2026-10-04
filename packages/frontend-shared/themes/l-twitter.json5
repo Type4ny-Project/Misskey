@@ -1,0 +1,28 @@
+{
+	id: '3568afdf-21c8-4a32-b4c9-156fcfe2579a',
+
+	name: 'Twitter Light',
+	author: 'Type4ny Project',
+	desc: 'Twitter-inspired blue accents and timeline surfaces (light)',
+
+	base: 'light',
+
+	props: {
+		accent: '#1d9bf0',
+		bg: '#f7f9f9',
+		fg: '#0f1419',
+		fgHighlighted: '#000000',
+		fgOnAccent: '#000000',
+		fgOnWhite: '#006fb9',
+		divider: '#eff3f4',
+		panel: '#ffffff',
+		navBg: '@panel',
+		link: '#006fb9',
+		hashtag: '@link',
+		mention: '@link',
+		renote: '#00875a',
+		love: '#f91880',
+		buttonGradateB: '@accent',
+		badge: '@accent',
+	},
+}

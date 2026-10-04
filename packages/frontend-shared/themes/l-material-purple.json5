@@ -1,0 +1,28 @@
+{
+	id: 'c154dc8c-1dee-4c6b-9049-0503d3b9e4c0',
+
+	name: 'Material Purple Light',
+	author: 'Type4ny Project',
+	desc: 'Material UI purple palette (light)',
+
+	base: 'light',
+
+	props: {
+		accent: '#7b1fa2',
+		bg: '#faf5fc',
+		fg: '#212121',
+		fgHighlighted: '#000000',
+		fgOnAccent: '#ffffff',
+		fgOnWhite: '#7b1fa2',
+		divider: '#e0e0e0',
+		panel: '#ffffff',
+		navBg: '@panel',
+		link: '@accent',
+		hashtag: '@link',
+		mention: '@link',
+		renote: '#2e7d32',
+		love: '#c2185b',
+		buttonGradateB: '@accent',
+		badge: '@accent',
+	},
+}

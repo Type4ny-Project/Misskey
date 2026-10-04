@@ -4,6 +4,8 @@
  */
 
 import { afterEach, assert, beforeEach, describe, test, vi } from 'vitest';
+import tinycolor from 'tinycolor2';
+import { getBuiltinThemes } from '@@/js/theme.js';
 import type { Theme } from '@@/js/theme.js';
 import lightTheme from '@@/themes/_light.json5';
 import darkTheme from '@@/themes/_dark.json5';
@@ -98,6 +100,37 @@ describe('ThemeManager', () => {
 
 	afterEach(() => {
 		window.localStorage.clear();
+	});
+
+	test('追加した組み込みテーマはライト・ダーク両方で選択でき、適用とプレビューができる', async () => {
+		const themes = await getBuiltinThemes();
+		const { themeManager } = await loadThemeModule();
+		assert.strictEqual(new Set(themes.map(theme => theme.id)).size, themes.length);
+
+		for (const name of ['Material Blue', 'Material Purple', 'Material Teal', 'Apple', 'Twitter']) {
+			for (const base of ['light', 'dark'] as const) {
+				const theme = themes.find(candidate => candidate.name === `${name} ${base === 'light' ? 'Light' : 'Dark'}`);
+				assert.ok(theme, `${name} ${base} is registered`);
+				assert.strictEqual(theme.base, base);
+
+				themeManager.updateTheme(theme);
+				assert.strictEqual(document.documentElement.dataset.colorScheme, base);
+				assert.strictEqual(document.documentElement.style.getPropertyValue('--MI_THEME-accent'), tinycolor(theme.props.accent).toRgbString());
+				assert.strictEqual(window.localStorage.getItem('themeId'), theme.id);
+
+				const compiled = themeManager.currentCompiledTheme;
+				assert.ok(compiled);
+				for (const surface of ['bg', 'panel']) {
+					assert.ok(tinycolor.isReadable(compiled[surface], compiled.fg, { level: 'AA', size: 'small' }), `${theme.name}: text on ${surface}`);
+				}
+				assert.ok(tinycolor.isReadable(compiled.accent, compiled.fgOnAccent, { level: 'AA', size: 'small' }), `${theme.name}: button text`);
+				assert.ok(tinycolor.isReadable(compiled.panel, compiled.link, { level: 'AA', size: 'small' }), `${theme.name}: links`);
+
+				themeManager.previewTheme(primaryTheme);
+				themeManager.clearPreview();
+				assert.strictEqual(themeManager.currentThemeId, theme.id);
+			}
+		}
 	});
 
 	test('通常テーマ適用後のプレビューは現在テーマのみを切り替え、キャッシュは保持する', async () => {

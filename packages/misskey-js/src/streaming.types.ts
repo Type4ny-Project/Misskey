@@ -324,7 +324,7 @@ export type Channels = {
 		params: null;
 		events: {
 			created: (payload: { action: 'created'; room: CallsRoom }) => void;
-			updated: (payload: { action: 'open' | 'ended' | 'cancelled'; room: CallsRoom }) => void;
+			updated: (payload: { action: 'open' | 'ended' | 'cancelled' | 'participants'; room: CallsRoom }) => void;
 		};
 		receives: null;
 	};

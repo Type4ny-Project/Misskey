@@ -10,8 +10,20 @@ import SessionCreate from '@/server/api/endpoints/calls/media/session-create.js'
 import CredentialRefresh from '@/server/api/endpoints/calls/media/credential-refresh.js';
 import { CallsMediaCredentialService } from '@/core/calls/CallsMediaCredentialService.js';
 import { StaleCallsConnectionError } from '@/core/calls/CallsLiveConnectionService.js';
+import { CallsFeatureDisabledError } from '@/core/calls/CallsRoomService.js';
+import RoomsList from '@/server/api/endpoints/calls/rooms/list.js';
+import ActiveRooms from '@/server/api/endpoints/calls/users/active-rooms.js';
 import type { Config } from '@/config.js';
 import type { MiLocalUser } from '@/models/User.js';
+
+test.each(['list', 'active'] as const)('maps disabled Calls for %s without an internal server error', async kind => {
+	const service = {
+		listDiscoverable: vi.fn().mockRejectedValue(new CallsFeatureDisabledError()),
+		listActiveRoomsForUsers: vi.fn().mockRejectedValue(new CallsFeatureDisabledError()),
+	};
+	const endpoint = kind === 'list' ? new RoomsList(service as never, {} as never) : new ActiveRooms(service as never);
+	await expect(endpoint.exec({ userIds: ['usera'] }, { id: 'usera' } as MiLocalUser, null)).rejects.toMatchObject({ code: 'CALLS_FEATURE_DISABLED' });
+});
 
 test.each([
 	['service', 'CALLS_CONNECTION_EXISTS'],

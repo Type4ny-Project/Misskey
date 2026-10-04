@@ -25,6 +25,8 @@ export type CallsPublicationBinding = {
 
 export class CallsMediaBindingNotFoundError extends Error {}
 
+export type CallsSubscriptionBinding = Pick<CallsPublicationBinding, 'providerSessionId' | 'providerMid'>;
+
 @Injectable()
 export class CallsMediaBindingService {
 	private static readonly ttlSeconds = 120;
@@ -55,6 +57,7 @@ export class CallsMediaBindingService {
 	}
 
 	public async heartbeat(roomId: string, participantId: string, generation: number): Promise<void> {
+		await this.redis.expire(this.subscriptionKey(participantId, generation), CallsMediaBindingService.ttlSeconds);
 		const key = this.generationKey(participantId, generation);
 		const ids = await this.redis.smembers(key);
 		if (ids.length === 0) return;
@@ -73,7 +76,11 @@ export class CallsMediaBindingService {
 	}
 
 	public async removePublication(publicationId: string): Promise<void> {
-		const binding = await this.getPublication(publicationId);
+		let binding: CallsPublicationBinding;
+		try { binding = await this.getPublication(publicationId); } catch (error) {
+			if (error instanceof CallsMediaBindingNotFoundError) return;
+			throw error;
+		}
 		const pipeline = this.redis.pipeline();
 		pipeline.del(this.publicationKey(publicationId));
 		pipeline.srem(this.generationKey(binding.participantId, binding.generation), publicationId);
@@ -96,7 +103,24 @@ export class CallsMediaBindingService {
 		return bindings.filter((binding): binding is CallsPublicationBinding => binding != null);
 	}
 
+	public async addSubscriptions(participantId: string, generation: number, providerSessionId: string, mids: string[]): Promise<void> {
+		if (mids.length === 0) return;
+		const key = this.subscriptionKey(participantId, generation);
+		const pipeline = this.redis.pipeline();
+		for (const providerMid of mids) pipeline.sadd(key, JSON.stringify({ providerSessionId, providerMid }));
+		pipeline.expire(key, CallsMediaBindingService.ttlSeconds);
+		await pipeline.exec();
+	}
+
+	public async clearSubscriptions(participantId: string, generation: number): Promise<CallsSubscriptionBinding[]> {
+		const key = this.subscriptionKey(participantId, generation);
+		const subscriptions = await this.redis.smembers(key);
+		await this.redis.del(key);
+		return subscriptions.map(value => JSON.parse(value) as CallsSubscriptionBinding);
+	}
+
 	private publicationKey(id: string): string { return `calls:publication:${id}`; }
 	private generationKey(participantId: string, generation: number): string { return `calls:publications:${participantId}:${generation}`; }
 	private roomKey(roomId: string): string { return `calls:room-publications:${roomId}`; }
+	private subscriptionKey(participantId: string, generation: number): string { return `calls:subscriptions:${participantId}:${generation}`; }
 }

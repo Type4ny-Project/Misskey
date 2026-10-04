@@ -50,7 +50,7 @@ export class MiCallsRoom {
 	@Column({ ...id(), nullable: true })
 	public chatRoomId: MiChatRoom['id'] | null;
 
-	@ManyToOne(() => MiChatRoom, { onDelete: 'RESTRICT' })
+	@ManyToOne(() => MiChatRoom, { onDelete: 'CASCADE' })
 	@JoinColumn({ name: 'chatRoomId' })
 	public chatRoom: MiChatRoom | null;
 

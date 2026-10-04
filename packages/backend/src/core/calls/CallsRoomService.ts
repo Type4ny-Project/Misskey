@@ -300,14 +300,15 @@ export class CallsRoomService {
 
 		const current = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id });
 		if (current?.state === 'active') return current;
-		const listeners = await this.callsParticipantsRepository.countBy({ roomId, state: 'active', role: 'listener' });
-		if (listeners >= CALLS_MAX_LISTENERS) throw new CallsRoomError('room-full');
+		const role = current?.role === 'host' ? 'host' : room.mode === 'open' ? 'speaker' : 'listener';
+		const count = await this.callsParticipantsRepository.countBy({ roomId, state: 'active', role: role === 'listener' ? 'listener' : In(['host', 'speaker']) });
+		if (count >= (role === 'listener' ? CALLS_MAX_LISTENERS : CALLS_MAX_SPEAKERS)) throw new CallsRoomError('room-full');
 
 		const now = new Date();
 		let joined: MiCallsParticipant;
 		if (current != null) {
 			await this.callsParticipantsRepository.update(current.id, {
-				role: current.role === 'host' ? 'host' : room.mode === 'open' ? 'speaker' : 'listener',
+				role,
 				state: 'active',
 				isMuted: room.mode === 'open',
 				joinedAt: now,
@@ -321,7 +322,7 @@ export class CallsRoomService {
 				id: this.idService.gen(),
 				roomId,
 				userId: user.id,
-				role: room.mode === 'open' ? 'speaker' : 'listener',
+				role,
 				state: 'active',
 				isMuted: room.mode === 'open',
 				joinedAt: now,
@@ -355,7 +356,7 @@ export class CallsRoomService {
 				return publications;
 			});
 			// Provider cleanup can exceed the join timeout; release the room lock first.
-			if (publications != null) await this.callsMediaRevocationService.closeProviderPublications(publications);
+			if (publications != null) await this.callsMediaRevocationService.closeProviderPublications(publications.publications, publications.subscriptions);
 			return;
 		}
 		if (identity != null) {

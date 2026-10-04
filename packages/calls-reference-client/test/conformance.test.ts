@@ -67,7 +67,7 @@ describe('third-party Calls protocol conformance', () => {
 			if (endpoint === 'calls/capabilities') return { enabled: true, protocolVersion: '1.0' };
 			if (endpoint === 'calls/rooms/join') return {};
 			if (endpoint === 'calls/media/turn-credentials') return { iceServers: [], expiresAt: new Date(Date.now() + 60_000).toISOString() };
-			if (endpoint === 'calls/media/session/create') return { participantId: 'participant-a', generation: 1, mediaCredential: 'credential' };
+			if (endpoint === 'calls/media/session/create') return { participantId: 'participant-a', generation: 1, mediaCredential: 'credential', credentialExpiresAt: new Date(Date.now() + 300_000).toISOString() };
 			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications: [] };
 			if (endpoint === 'calls/rooms/show') return { room: {}, participants: [] };
 			if (endpoint === 'calls/rooms/leave') return {};
@@ -103,6 +103,41 @@ describe('third-party Calls protocol conformance', () => {
 		await client.join('room-a');
 		fixture.handlers.get('revoked')?.({ sequence: 1, roomRevision: 1, participantId: 'participant-a', reason: 'stale-generation' });
 		await vi.waitFor(() => expect(fixture.request.mock.calls.filter(call => call[0] === 'calls/media/session/create')).toHaveLength(2));
+		await client.close('room-a');
+	});
+
+	test('keeps publishing the microphone after live-state loss', async () => {
+		const track = { stop: vi.fn() };
+		vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getAudioTracks: () => [track] }) } });
+		const fallback = fixture.request.getMockImplementation()!;
+		fixture.request.mockImplementation(async (endpoint: string) => endpoint === 'calls/media/tracks/publish' ? { negotiation: { sessionDescription: null } } : fallback(endpoint));
+		const client = new CallsReferenceClient('https://misskey.example', 'token');
+		await client.join('room-a', true);
+		fixture.handlers.get('revoked')?.({ sequence: 1, roomRevision: 1, participantId: 'participant-a', reason: 'stale-generation' });
+		await vi.waitFor(() => expect(fixture.request.mock.calls.filter(call => call[0] === 'calls/media/tracks/publish')).toHaveLength(2));
+		expect(track.stop).not.toHaveBeenCalled();
+		await client.close('room-a');
+		expect(track.stop).toHaveBeenCalledOnce();
+	});
+
+	test('renews expired media credentials and subscribes only new publications', async () => {
+		const fallback = fixture.request.getMockImplementation()!;
+		let publicationIds = ['audio-a'];
+		fixture.request.mockImplementation(async (endpoint: string, input: { publicationIds: string[] }) => {
+			if (endpoint === 'calls/media/session/create') return { participantId: 'participant-a', generation: 1, mediaCredential: 'expired', credentialExpiresAt: new Date(Date.now() - 1000).toISOString() };
+			if (endpoint === 'calls/media/credential/refresh') return { mediaCredential: 'refreshed', credentialExpiresAt: new Date(Date.now() + 300_000).toISOString() };
+			if (endpoint === 'calls/media/reconcile') return { publications: publicationIds.map(id => ({ id, participantId: 'other', mediaKind: 'audio' })) };
+			if (endpoint === 'calls/media/tracks/subscribe') return { sessionDescription: null, subscriptions: input.publicationIds.map(publicationId => ({ publicationId, mid: '1' })) };
+			return fallback(endpoint);
+		});
+		const client = new CallsReferenceClient('https://misskey.example', 'token');
+		await client.join('room-a');
+		expect(fixture.request).toHaveBeenCalledWith('calls/media/credential/refresh', expect.objectContaining({ mediaCredential: 'expired' }));
+		expect(fixture.request).toHaveBeenCalledWith('calls/media/tracks/subscribe', expect.objectContaining({ mediaCredential: 'refreshed', publicationIds: ['audio-a'] }));
+		publicationIds = ['audio-a', 'audio-b'];
+		fixture.handlers.get('track')?.({ sequence: 1, roomRevision: 1 });
+		await vi.waitFor(() => expect(fixture.request).toHaveBeenCalledWith('calls/media/tracks/subscribe', expect.objectContaining({ publicationIds: ['audio-b'] })));
+		expect(fixture.request.mock.calls.filter(call => call[0] === 'calls/media/tracks/subscribe')).toHaveLength(2);
 		await client.close('room-a');
 	});
 });

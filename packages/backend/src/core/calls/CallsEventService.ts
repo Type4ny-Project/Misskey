@@ -25,6 +25,7 @@ export class CallsEventService {
 			roomRevision,
 			occurredAt: new Date().toISOString(),
 		} as CallsRoomEventTypes[K]);
+		if (type === 'participant') this.publishRoomsList('updated', { roomId, action: 'participants' });
 	}
 
 	public async reportSpeaking(roomId: string, roomRevision: number, participantId: string, speaking: boolean): Promise<void> {

@@ -16,6 +16,8 @@ export class CallsReferenceClient {
 	private connectionId = crypto.randomUUID();
 	private generation = 0;
 	private mediaCredential = '';
+	private credentialExpiresAt = 0;
+	private subscriptions = new Set<string>();
 	private tracker = new calls.CallsEventSequenceTracker();
 	private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -48,7 +50,7 @@ export class CallsReferenceClient {
 			if (sequence === 'duplicate') return;
 			if (sequence === 'gap') void this.reconcileAuthoritativeState(roomId);
 			if (payload.participantId == null || payload.participantId === this.participantId) {
-				this.closeMedia();
+				this.closeMedia(payload.reason !== 'stale-generation');
 				if (payload.reason === 'stale-generation') void this.createMediaSession(roomId);
 			}
 		});
@@ -62,6 +64,7 @@ export class CallsReferenceClient {
 
 	private async createMediaSession(roomId: string): Promise<void> {
 		this.peer?.close();
+		this.subscriptions.clear();
 		const turn = await this.api.request('calls/media/turn-credentials', { roomId }).catch(() => null);
 		this.peer = new RTCPeerConnection({ iceServers: turn?.iceServers ?? [] });
 		const transceiver = this.peer.addTransceiver('audio', { direction: this.localTrack == null ? 'recvonly' : 'sendrecv' });
@@ -72,11 +75,13 @@ export class CallsReferenceClient {
 		this.participantId = session.participantId;
 		this.generation = session.generation;
 		this.mediaCredential = session.mediaCredential;
+		this.credentialExpiresAt = Date.parse(session.credentialExpiresAt);
 		if (this.heartbeatTimer != null) clearInterval(this.heartbeatTimer);
 		this.heartbeatTimer = setInterval(() => this.channel?.send('heartbeat', { connectionId: this.connectionId, generation: this.generation }), 30_000);
 		if (this.localTrack != null) {
 			const offer = await this.peer.createOffer();
 			await this.peer.setLocalDescription(offer);
+			await this.ensureCredential(roomId);
 			const published = await this.api.request('calls/media/tracks/publish', {
 				roomId, participantId: this.participantId, connectionId: this.connectionId, generation: this.generation,
 				operationId: crypto.randomUUID(),
@@ -90,14 +95,29 @@ export class CallsReferenceClient {
 	private async reconcile(roomId: string): Promise<void> {
 		if (this.peer == null || this.participantId == null) return;
 		const state = await this.api.request('calls/media/reconcile', { roomId });
-		const publicationIds = state.publications.filter(publication => publication.participantId !== this.participantId && publication.mediaKind === 'audio').map(publication => publication.id);
+		const remotePublications = state.publications.filter(publication => publication.participantId !== this.participantId && publication.mediaKind === 'audio');
+		const availableIds = new Set(remotePublications.map(publication => publication.id));
+		for (const id of this.subscriptions) if (!availableIds.has(id)) this.subscriptions.delete(id);
+		const publicationIds = remotePublications.filter(publication => !this.subscriptions.has(publication.id)).map(publication => publication.id);
 		if (publicationIds.length === 0) return;
+		await this.ensureCredential(roomId);
 		const negotiation = await this.api.request('calls/media/tracks/subscribe', {
 			roomId, participantId: this.participantId, connectionId: this.connectionId, generation: this.generation,
 			operationId: crypto.randomUUID(),
 			mediaCredential: this.mediaCredential, publicationIds,
 		});
 		await this.applyNegotiation(roomId, negotiation);
+		for (const subscription of negotiation.subscriptions) this.subscriptions.add(subscription.publicationId);
+	}
+
+	private async ensureCredential(roomId: string): Promise<void> {
+		if (Date.now() < this.credentialExpiresAt - 10_000 || this.participantId == null) return;
+		const refreshed = await this.api.request('calls/media/credential/refresh', {
+			roomId, participantId: this.participantId, connectionId: this.connectionId, generation: this.generation,
+			operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential,
+		});
+		this.mediaCredential = refreshed.mediaCredential;
+		this.credentialExpiresAt = Date.parse(refreshed.credentialExpiresAt);
 	}
 
 	private async reconcileAuthoritativeState(roomId: string): Promise<void> {
@@ -111,6 +131,7 @@ export class CallsReferenceClient {
 		if (negotiation.sessionDescription.type === 'offer' || negotiation.requiresImmediateRenegotiation) {
 			const answer = await this.peer.createAnswer();
 			await this.peer.setLocalDescription(answer);
+			await this.ensureCredential(roomId);
 			await this.api.request('calls/media/renegotiate', {
 				roomId, participantId: this.participantId, connectionId: this.connectionId, generation: this.generation,
 				operationId: crypto.randomUUID(),
@@ -127,10 +148,13 @@ export class CallsReferenceClient {
 		await this.api.request('calls/rooms/leave', { roomId });
 	}
 
-	private closeMedia(): void {
+	private closeMedia(stopMicrophone = true): void {
 		this.peer?.close();
 		this.peer = null;
-		this.localTrack?.stop();
-		this.localTrack = null;
+		this.subscriptions.clear();
+		if (stopMicrophone) {
+			this.localTrack?.stop();
+			this.localTrack = null;
+		}
 	}
 }

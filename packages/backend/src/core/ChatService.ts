@@ -625,6 +625,7 @@ export class ChatService {
 		}
 		await redisPipeline.exec();
 
+		await this.callsMediaRevocationService.revokeChatRoom(room.id);
 		await this.chatRoomsRepository.delete(room.id);
 
 		if (deleter) {

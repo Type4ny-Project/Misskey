@@ -121,7 +121,6 @@ import { useMutationObserver } from '@/composables/use-mutation-observer.js';
 import MkInfo from '@/components/MkInfo.vue';
 import MkCallsRoomCard from '@/components/MkCallsRoomCard.vue';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
-import { useCallsSession } from '@/utility/calls-session.js';
 import { openCallsRoom } from '@/utility/calls-window.js';
 
 const $i = ensureSignin();
@@ -150,7 +149,6 @@ const connection = ref<Misskey.IChannelConnection<Misskey.Channels['chatUser']> 
 const callsConnection = ref<Misskey.IChannelConnection<Misskey.Channels['callsRooms']> | null>(null);
 const attachedCall = shallowRef<Misskey.entities.CallsRoom | null>(null);
 const creatingCall = ref(false);
-const callsSession = useCallsSession();
 const showIndicator = ref(false);
 const timelineEl = useTemplateRef('timelineEl');
 const timeline = makeDateSeparatedTimelineComputedRef(messages);
@@ -252,7 +250,7 @@ async function initialize() {
 
 		room.value = r;
 		messages.value = m.map(x => normalizeMessage(x));
-		await reloadAttachedCall();
+		await reloadAttachedCall().catch(error => console.error('[Calls] Attached room loading failed', error));
 		callsConnection.value?.dispose();
 		callsConnection.value = useStream().useChannel('callsRooms');
 		callsConnection.value.on('created', onCallsRoomChanged);
@@ -412,7 +410,6 @@ async function startAttachedCall(): Promise<void> {
 		call = await misskeyApi('calls/rooms/open', { roomId: call.id, expectedRevision: call.revision });
 		attachedCall.value = call;
 		await openCallsRoom(call.id, true);
-		await callsSession.join(call.id, true);
 	} catch (error) {
 		console.error('[Calls] Chat room call creation failed', error);
 		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });

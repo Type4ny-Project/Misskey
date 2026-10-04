@@ -93,7 +93,7 @@ export class CloudflareRealtimeClient {
 		}
 
 		const responseBody = await this.readJson(response);
-		if (!response.ok) {
+		if (!response.ok || responseBody.errorCode != null) {
 			const detail = mapCloudflareRealtimeError(response.status, responseBody);
 			this.telemetry.providerOperation({ operation, status: response.status, durationMs: performance.now() - startedAt, outcome: 'failure', category: detail.kind, retryable: detail.retryable });
 			throw new CloudflareRealtimeClientError(detail);

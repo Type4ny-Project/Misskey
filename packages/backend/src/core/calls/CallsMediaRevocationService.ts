@@ -8,7 +8,7 @@ import { DI } from '@/di-symbols.js';
 import type { CallsParticipantsRepository, CallsRoomsRepository, MiCallsParticipant } from '@/models/_.js';
 import { CallsEventService } from './CallsEventService.js';
 import { CallsLiveConnectionService, type CallsLiveConnection } from './CallsLiveConnectionService.js';
-import { CallsMediaBindingService, type CallsPublicationBinding } from './CallsMediaBindingService.js';
+import { CallsMediaBindingService, type CallsPublicationBinding, type CallsSubscriptionBinding } from './CallsMediaBindingService.js';
 import { CloudflareRealtimeClient } from './CloudflareRealtimeClient.js';
 import { CallsTurnCredentialStoreService } from './CallsTurnCredentialStoreService.js';
 import { CallsApplicationQuotaService } from './CallsApplicationQuotaService.js';
@@ -33,9 +33,9 @@ export class CallsMediaRevocationService {
 	public async revokeParticipant(participant: MiCallsParticipant, roomRevision: number, reason: CallsRevocationReason): Promise<void> {
 		const connection = await this.liveConnections.get(participant.id);
 		if (connection != null) {
-			const publications = await this.bindings.clearGeneration(participant.id, connection.generation);
-			await this.closeProviderPublications(publications);
+			// Invalidate first so an in-flight media operation cannot retain new tracks.
 			await this.liveConnections.clear(participant.id, connection.connectionId, connection.generation);
+			await this.closeGeneration(participant.id, connection.generation);
 			await this.quota.release(connection.applicationId, participant.id);
 		}
 		await this.turnCredentials.revokeParticipant(participant.id);
@@ -44,12 +44,14 @@ export class CallsMediaRevocationService {
 
 	public async closeGeneration(participantId: string, generation: number): Promise<void> {
 		const publications = await this.bindings.clearGeneration(participantId, generation);
-		await this.closeProviderPublications(publications);
+		const subscriptions = await this.bindings.clearSubscriptions(participantId, generation);
+		await this.closeProviderPublications(publications, subscriptions);
 	}
 
 	public async revokeLostGeneration(participant: MiCallsParticipant, generation: number, roomRevision: number, connectionId: string): Promise<void> {
 		const publications = await this.bindings.clearGeneration(participant.id, generation);
-		await this.closeProviderPublications(publications);
+		const subscriptions = await this.bindings.clearSubscriptions(participant.id, generation);
+		await this.closeProviderPublications(publications, subscriptions);
 		for (const applicationId of new Set(publications.map(publication => publication.applicationId))) {
 			await this.quota.release(applicationId, participant.id);
 		}
@@ -57,12 +59,13 @@ export class CallsMediaRevocationService {
 		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason: 'stale-generation', connectionId, generation });
 	}
 
-	public async revokeDisconnectedGeneration(participant: MiCallsParticipant, connection: CallsLiveConnection, roomRevision: number): Promise<CallsPublicationBinding[]> {
+	public async revokeDisconnectedGeneration(participant: MiCallsParticipant, connection: CallsLiveConnection, roomRevision: number): Promise<{ publications: CallsPublicationBinding[]; subscriptions: CallsSubscriptionBinding[] }> {
 		const publications = await this.bindings.clearGeneration(participant.id, connection.generation);
+		const subscriptions = await this.bindings.clearSubscriptions(participant.id, connection.generation);
 		await this.quota.release(connection.applicationId, participant.id);
 		await this.turnCredentials.revokeParticipant(participant.id);
 		await this.events.publish(participant.roomId, roomRevision, 'revoked', { participantId: participant.id, reason: 'access', connectionId: connection.connectionId, generation: connection.generation });
-		return publications;
+		return { publications, subscriptions };
 	}
 
 	public async revokeRoom(roomId: string, roomRevision: number, reason: CallsRevocationReason): Promise<void> {
@@ -78,6 +81,14 @@ export class CallsMediaRevocationService {
 		}
 	}
 
+	public async revokeChatRoom(chatRoomId: string): Promise<void> {
+		const rooms = await this.roomsRepository.findBy({ chatRoomId, attachmentType: 'chatRoom', state: 'open' });
+		for (const room of rooms) {
+			await this.revokeRoom(room.id, room.revision, 'room-ended');
+			this.events.publishRoomsList('updated', { roomId: room.id, action: 'ended' });
+		}
+	}
+
 	public async revokeUser(userId: string, reason: CallsRevocationReason): Promise<void> {
 		const participants = await this.participantsRepository.findBy({ userId, state: 'active' });
 		for (const participant of participants) {
@@ -86,10 +97,10 @@ export class CallsMediaRevocationService {
 		}
 	}
 
-	public async closeProviderPublications(publications: CallsPublicationBinding[]): Promise<void> {
+	public async closeProviderPublications(publications: CallsPublicationBinding[], subscriptions: CallsSubscriptionBinding[] = []): Promise<void> {
 		await Promise.all(publications.map(publication => this.quota.releaseTrack(publication.applicationId, publication.providerTrackName)));
-		const bySession = Map.groupBy(publications, publication => publication.providerSessionId);
-		await Promise.allSettled([...bySession].map(([sessionId, sessionPublications]) => this.provider.closeTracks(
+		const bySession = Map.groupBy([...publications, ...subscriptions], publication => publication.providerSessionId);
+		await Promise.all([...bySession].map(([sessionId, sessionPublications]) => this.provider.closeTracks(
 			sessionId,
 			sessionPublications.map(publication => ({ mid: publication.providerMid ?? undefined })),
 			true,

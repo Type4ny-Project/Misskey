@@ -63,4 +63,9 @@ describe('CloudflareRealtimeClient', () => {
 			detail: { kind: 'provider-unavailable', providerCode: 'future-code', retryable: true },
 		});
 	});
+
+	test('rejects a top-level provider error even with HTTP 200', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ errorCode: 'session-not-found' }), { status: 200 })));
+		await expect(new CloudflareRealtimeClient(config, telemetry as never).addTracks('session-a', [])).rejects.toMatchObject({ detail: { providerCode: 'session-not-found' } });
+	});
 });

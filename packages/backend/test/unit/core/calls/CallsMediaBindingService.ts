@@ -19,6 +19,8 @@ class ExpiringRedis {
 	}
 	public async smembers(key: string) { return [...(this.read(key)?.value as Set<string> | undefined ?? [])]; }
 	public async mget(keys: string[]) { return keys.map(key => this.read(key)?.value ?? null); }
+	public async expire(key: string, ttl: number) { const entry = this.read(key); if (entry != null) entry.expiresAt = this.now + ttl; return entry == null ? 0 : 1; }
+	public async del(key: string) { return this.values.delete(key) ? 1 : 0; }
 	public pipeline() {
 		const commands: Array<() => void> = [];
 		return {
@@ -41,6 +43,19 @@ class ExpiringRedis {
 }
 
 describe('CallsMediaBindingService', () => {
+	test('keeps listener subscriptions alive with heartbeats and detaches them for revocation', async () => {
+		const redis = new ExpiringRedis();
+		const service = new CallsMediaBindingService(redis as never, {} as never);
+		await service.addSubscriptions('listener', 1, 'session', ['1', '2']);
+		for (const time of [60, 120, 180]) {
+			redis.now = time;
+			await service.heartbeat('room', 'listener', 1);
+		}
+		expect(await service.clearSubscriptions('listener', 1)).toEqual([
+			{ providerSessionId: 'session', providerMid: '1' }, { providerSessionId: 'session', providerMid: '2' },
+		]);
+		expect(await service.clearSubscriptions('listener', 1)).toEqual([]);
+	});
 	test('keeps a host discoverable past two minutes while heartbeats continue, then expires it', async () => {
 		const redis = new ExpiringRedis();
 		const service = new CallsMediaBindingService(redis as never, { gen: () => 'publication' } as never);

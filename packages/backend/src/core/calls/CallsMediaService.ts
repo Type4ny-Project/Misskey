@@ -9,7 +9,7 @@ import { DI } from '@/di-symbols.js';
 import type { CallsParticipantsRepository, MiCallsParticipant, MiUser } from '@/models/_.js';
 import type { CloudflareRealtimeSessionDescription, CloudflareRealtimeTracksResponse } from './CloudflareRealtimeProviderContract.js';
 import { CallsLiveConnectionService, StaleCallsConnectionError, type CallsLiveConnection } from './CallsLiveConnectionService.js';
-import { CallsMediaBindingService } from './CallsMediaBindingService.js';
+import { CallsMediaBindingService, type CallsPublicationBinding } from './CallsMediaBindingService.js';
 import { CallsRoomError, CallsRoomService } from './CallsRoomService.js';
 import { CloudflareRealtimeClient } from './CloudflareRealtimeClient.js';
 import { CallsEventService } from './CallsEventService.js';
@@ -105,11 +105,17 @@ export class CallsMediaService {
 		const mediaKind = mediaSource === 'microphone' ? 'audio' : 'video';
 		const trackName = `${mediaSource}-${participant.id}-${input.generation}-${input.mid}`;
 		await this.quotaService.reserveTrack(connection.applicationId, trackName);
+		let providerMid: string | null = null;
+		let publication: CallsPublicationBinding | null = null;
 		try {
 			const response = await this.provider.addTracks(connection.sessionId, [{ location: 'local', mid: input.mid, trackName, kind: mediaKind }], input.sessionDescription);
 			const track = response.tracks?.[0];
 			if (track?.errorCode != null) throw new CallsMediaAccessError();
-			const publication = await this.bindingService.createPublication({
+			providerMid = track?.mid ?? input.mid;
+			const currentParticipant = await this.authorizeParticipant(user, input.roomId);
+			if (currentParticipant.role === 'listener') throw new CallsMediaAccessError();
+			await this.liveConnectionService.assertCurrent(participant.id, input.connectionId, input.generation);
+			publication = await this.bindingService.createPublication({
 				roomId: input.roomId,
 				participantId: participant.id,
 				connectionId: input.connectionId,
@@ -120,12 +126,18 @@ export class CallsMediaService {
 				providerMid: track?.mid ?? input.mid,
 				mediaKind, mediaSource,
 			});
+			await this.liveConnectionService.assertCurrent(participant.id, input.connectionId, input.generation);
 			const room = await this.roomService.getRoom(input.roomId);
 			await this.eventService.publish(input.roomId, room.revision, 'track', { participantId: participant.id, publicationId: publication.id, available: true, mediaKind, mediaSource });
 			this.telemetry.lifecycle({ action: 'track-published', roomId: input.roomId, participantId: participant.id, generation: input.generation, applicationId: connection.applicationId });
 			return { publicationId: publication.id, negotiation: response };
 		} catch (error) {
-			await this.quotaService.releaseTrack(connection.applicationId, trackName);
+			try {
+				if (providerMid != null) await this.provider.closeTracks(connection.sessionId, [{ mid: providerMid }], true);
+				if (publication != null) await this.bindingService.removePublication(publication.id);
+			} finally {
+				await this.quotaService.releaseTrack(connection.applicationId, trackName);
+			}
 			throw error;
 		}
 	}
@@ -151,6 +163,16 @@ export class CallsMediaService {
 			trackName: binding.providerTrackName,
 			kind: binding.mediaKind,
 		})));
+		const mids = (response.tracks ?? []).flatMap(track => track.mid == null || track.errorCode != null ? [] : [track.mid]);
+		try {
+			await this.bindingService.addSubscriptions(participant.id, input.generation, connection.sessionId, mids);
+			await this.authorizeParticipant(user, input.roomId);
+			await this.liveConnectionService.assertCurrent(participant.id, input.connectionId, input.generation);
+		} catch (error) {
+			if (mids.length > 0) await this.provider.closeTracks(connection.sessionId, mids.map(mid => ({ mid })), true);
+			await this.bindingService.clearSubscriptions(participant.id, input.generation);
+			throw error;
+		}
 		const subscriptions = (response.tracks ?? []).flatMap(track => {
 			const publication = publications.find(binding => binding.providerTrackName === track.trackName && binding.providerSessionId === track.sessionId);
 			return publication == null || track.mid == null || track.errorCode != null ? [] : [{ publicationId: publication.id, mid: track.mid }];

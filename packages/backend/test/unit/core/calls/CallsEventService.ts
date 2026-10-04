@@ -21,6 +21,12 @@ class SharedFakeRedis {
 }
 
 describe('CallsEventService', () => {
+	test('notifies avatar observers when a participant joins or leaves', async () => {
+		const globalEvents = { publishCallsRoomStream: vi.fn(), publishCallsRoomsStream: vi.fn() };
+		const service = new CallsEventService(new SharedFakeRedis() as never, globalEvents as never);
+		await service.publish('room-a', 1, 'participant', { participantId: 'participant-a', action: 'joined' });
+		expect(globalEvents.publishCallsRoomsStream).toHaveBeenCalledWith('updated', { roomId: 'room-a', action: 'participants' });
+	});
 	test('uses a shared monotonic sequence across server instances', async () => {
 		const redis = new SharedFakeRedis();
 		const globalEvents = { publishCallsRoomStream: vi.fn() };

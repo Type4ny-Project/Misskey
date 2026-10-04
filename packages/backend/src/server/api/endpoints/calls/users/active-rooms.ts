@@ -4,12 +4,12 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import type { MiUser } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { CallsRoomService } from '@/core/calls/CallsRoomService.js';
+import { callsApiError, callsErrors } from '../_shared.js';
 
 export const meta = {
-	tags: ['calls'], stability: 'experimental', requireCredential: true, kind: 'read:calls',
+	tags: ['calls'], stability: 'experimental', requireCredential: true, kind: 'read:calls', errors: callsErrors,
 	res: { type: 'array', optional: false, nullable: false, items: { type: 'object', optional: false, nullable: false, properties: {
 		userId: { type: 'string', format: 'id', optional: false, nullable: false },
 		roomId: { type: 'string', format: 'id', optional: false, nullable: false },
@@ -23,6 +23,8 @@ export const paramDef = {
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(service: CallsRoomService) {
-		super(meta, paramDef, async (ps, me) => service.listActiveRoomsForUsers(me, ps.userIds));
+		super(meta, paramDef, async (ps, me) => {
+			try { return await service.listActiveRoomsForUsers(me, ps.userIds); } catch (error) { callsApiError(error); }
+		});
 	}
 }

@@ -45,7 +45,7 @@ export interface CallsRoomEventTypes {
 
 export interface CallsRoomsEventTypes {
 	created: { roomId: MiCallsRoom['id'] };
-	updated: { roomId: MiCallsRoom['id']; action: 'open' | 'ended' | 'cancelled' };
+	updated: { roomId: MiCallsRoom['id']; action: 'open' | 'ended' | 'cancelled' | 'participants' };
 }
 
 export interface BroadcastTypes {

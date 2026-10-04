@@ -1244,7 +1244,7 @@ export type Channels = {
                 room: CallsRoom;
             }) => void;
             updated: (payload: {
-                action: 'open' | 'ended' | 'cancelled';
+                action: 'open' | 'ended' | 'cancelled' | 'participants';
                 room: CallsRoom;
             }) => void;
         };

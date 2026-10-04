@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { CallsConnectionExistsError, CallsMediaAccessError, CallsMediaService } from '@/core/calls/CallsMediaService.js';
 import { StaleCallsConnectionError } from '@/core/calls/CallsLiveConnectionService.js';
+import { CallsRoomError } from '@/core/calls/CallsRoomService.js';
 import type { MiCallsParticipant, MiCallsRoom, MiUser } from '@/models/_.js';
 
 const user = { id: 'user-a', host: null } as MiUser;
@@ -27,7 +28,7 @@ function createFixture(role: MiCallsParticipant['role'] = 'speaker') {
 		clear: vi.fn().mockResolvedValue(true),
 		heartbeat: vi.fn(),
 	};
-	const bindings = { getPublication: vi.fn(), createPublication: vi.fn(), removePublication: vi.fn(), listRoomPublications: vi.fn().mockResolvedValue([]), heartbeat: vi.fn() };
+	const bindings = { getPublication: vi.fn(), createPublication: vi.fn(), removePublication: vi.fn(), listRoomPublications: vi.fn().mockResolvedValue([]), heartbeat: vi.fn(), addSubscriptions: vi.fn(), clearSubscriptions: vi.fn().mockResolvedValue([]) };
 	const provider = { createSession: vi.fn().mockResolvedValue({ sessionId: 'session-a' }), addTracks: vi.fn(), closeTracks: vi.fn(), renegotiate: vi.fn() };
 	const events = { publish: vi.fn() };
 	const revocation = { closeGeneration: vi.fn(), revokeLostGeneration: vi.fn() };
@@ -39,6 +40,48 @@ function createFixture(role: MiCallsParticipant['role'] = 'speaker') {
 
 describe('CallsMediaService authorization boundaries', () => {
 	beforeEach(() => vi.clearAllMocks());
+
+	test.each(['removed', 'demoted', 'replaced'] as const)('closes a pending publication when its participant is %s', async change => {
+		const fixture = createFixture();
+		let finishProvider!: (response: { tracks: Array<{ mid: string }> }) => void;
+		fixture.provider.addTracks.mockImplementation(() => new Promise(resolve => { finishProvider = resolve; }));
+		const publishing = fixture.service.publish(user, { roomId: room.id, connectionId: 'connection-a', generation: 2, mid: '0', sessionDescription: { type: 'offer', sdp: 'offer' } });
+		const rejected = expect(publishing).rejects.toBeInstanceOf(change === 'replaced' ? StaleCallsConnectionError : change === 'removed' ? CallsRoomError : CallsMediaAccessError);
+		await vi.waitFor(() => expect(fixture.provider.addTracks).toHaveBeenCalled());
+		if (change === 'removed') fixture.participants.findOneBy.mockResolvedValue(null as never);
+		if (change === 'demoted') fixture.participant.role = 'listener';
+		if (change === 'replaced') fixture.live.assertCurrent.mockRejectedValue(new StaleCallsConnectionError());
+		finishProvider({ tracks: [{ mid: '0' }] });
+		await rejected;
+		expect(fixture.provider.closeTracks).toHaveBeenCalledWith('session-a', [{ mid: '0' }], true);
+		expect(fixture.bindings.createPublication).not.toHaveBeenCalled();
+		expect(fixture.quota.releaseTrack).toHaveBeenCalled();
+	});
+
+	test('removes a publication registered while its generation is revoked', async () => {
+		const fixture = createFixture();
+		fixture.provider.addTracks.mockResolvedValue({ tracks: [{ mid: '0' }] });
+		fixture.bindings.createPublication.mockImplementation(async () => {
+			fixture.live.assertCurrent.mockRejectedValue(new StaleCallsConnectionError());
+			return { id: 'publication-a' };
+		});
+		await expect(fixture.service.publish(user, { roomId: room.id, connectionId: 'connection-a', generation: 2, mid: '0', sessionDescription: { type: 'offer', sdp: 'offer' } })).rejects.toBeInstanceOf(StaleCallsConnectionError);
+		expect(fixture.provider.closeTracks).toHaveBeenCalledWith('session-a', [{ mid: '0' }], true);
+		expect(fixture.bindings.removePublication).toHaveBeenCalledWith('publication-a');
+	});
+
+	test('closes a subscription completed after the listener was removed', async () => {
+		const fixture = createFixture('listener');
+		fixture.bindings.getPublication.mockResolvedValue({ id: 'publication-a', roomId: room.id, participantId: 'publisher', providerSessionId: 'publisher-session', providerTrackName: 'audio' });
+		fixture.participants.findBy.mockResolvedValue([{ id: 'publisher', state: 'active', role: 'speaker' }] as never);
+		fixture.provider.addTracks.mockImplementation(async () => {
+			fixture.participants.findOneBy.mockResolvedValue(null as never);
+			return { tracks: [{ mid: '1', sessionId: 'publisher-session', trackName: 'audio' }] };
+		});
+		await expect(fixture.service.subscribe(user, { roomId: room.id, connectionId: 'connection-a', generation: 2, publicationIds: ['publication-a'] })).rejects.toMatchObject({ code: 'participant-not-found' });
+		expect(fixture.provider.closeTracks).toHaveBeenCalledWith('session-a', [{ mid: '1' }], true);
+		expect(fixture.bindings.clearSubscriptions).toHaveBeenCalledWith(fixture.participant.id, 2);
+	});
 
 	test('listener cannot publish and never reaches the provider', async () => {
 		const fixture = createFixture('listener');

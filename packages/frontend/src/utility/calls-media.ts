@@ -246,21 +246,24 @@ export class CallsMediaController {
 		}
 		const remoteIds = [...authoritativeRemoteIds].filter(publicationId => !this.subscribedPublications.has(publicationId));
 		if (remoteIds.length === 0) return false;
-		const negotiation = await misskeyApi('calls/media/tracks/subscribe', {
-			roomId: this.roomId, connectionId: this.connectionId, generation: this.generation, publicationIds: remoteIds,
-			operationId: crypto.randomUUID(),
-			participantId: this.participantId!, mediaCredential: this.mediaCredential!,
-		});
-		for (const subscription of negotiation.subscriptions ?? []) {
-			const publication = authoritative.publications.find(item => item.id === subscription.publicationId);
-			if (publication != null) this.remotePublications.set(subscription.mid, publication);
+		// The subscribe API accepts at most 64 publications per request.
+		for (let offset = 0; offset < remoteIds.length; offset += 64) {
+			const negotiation = await misskeyApi('calls/media/tracks/subscribe', {
+				roomId: this.roomId, connectionId: this.connectionId, generation: this.generation, publicationIds: remoteIds.slice(offset, offset + 64),
+				operationId: crypto.randomUUID(),
+				participantId: this.participantId!, mediaCredential: this.mediaCredential!,
+			});
+			for (const subscription of negotiation.subscriptions ?? []) {
+				const publication = authoritative.publications.find(item => item.id === subscription.publicationId);
+				if (publication != null) this.remotePublications.set(subscription.mid, publication);
+			}
+			await this.applyNegotiation(negotiation);
+			// Publishing may already have fired the track event for a reused receiver.
+			for (const transceiver of this.peer?.getTransceivers() ?? []) {
+				this.deliverRemoteTrack(transceiver.mid, transceiver.receiver.track);
+			}
+			for (const subscription of negotiation.subscriptions) this.subscribedPublications.add(subscription.publicationId);
 		}
-		await this.applyNegotiation(negotiation);
-		// Publishing may already have fired the track event for a reused receiver.
-		for (const transceiver of this.peer?.getTransceivers() ?? []) {
-			this.deliverRemoteTrack(transceiver.mid, transceiver.receiver.track);
-		}
-		for (const subscription of negotiation.subscriptions) this.subscribedPublications.add(subscription.publicationId);
 		return true;
 	}
 

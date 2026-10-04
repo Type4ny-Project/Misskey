@@ -31,9 +31,6 @@ import { CallsMediaRevocationService } from './CallsMediaRevocationService.js';
 import { CallsTelemetryService } from './CallsTelemetryService.js';
 import type { Config } from '@/config.js';
 
-export const CALLS_MAX_SPEAKERS = 8;
-export const CALLS_MAX_LISTENERS = 100;
-
 export type CallsRoomErrorCode =
 	| 'access-denied'
 	| 'attachment-not-found'
@@ -41,7 +38,6 @@ export type CallsRoomErrorCode =
 	| 'invalid-state'
 	| 'invalid-metadata'
 	| 'participant-not-found'
-	| 'room-full'
 	| 'room-not-found'
 	| 'stale-revision';
 
@@ -368,12 +364,6 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		const current = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id });
 		if (current?.state === 'active') return current;
 		const role = current?.role === 'host' ? 'host' : room.mode === 'open' ? 'speaker' : 'listener';
-		const candidates = await this.callsParticipantsRepository.findBy({ roomId, state: 'active', role: role === 'listener' ? 'listener' : In(['host', 'speaker']) });
-		// Reserve a slot while the participant creates their initial media connection.
-		const joiningSince = Date.now() - CallsLiveConnectionService.ttlSeconds * 1000;
-		const connected = await Promise.all(candidates.map(async candidate => candidate.joinedAt.getTime() > joiningSince || await this.callsLiveConnectionService.get(candidate.id) != null));
-		const count = connected.filter(Boolean).length;
-		if (count >= (role === 'listener' ? CALLS_MAX_LISTENERS : CALLS_MAX_SPEAKERS)) throw new CallsRoomError('room-full');
 
 		const now = new Date();
 		let joined: MiCallsParticipant;
@@ -468,11 +458,6 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		if (room.state !== 'open' || room.mode !== 'stage') throw new CallsRoomError('invalid-state');
 		const participant = await this.callsParticipantsRepository.findOneBy({ id: participantId, roomId, state: 'active' });
 		if (participant == null || participant.role === 'host') throw new CallsRoomError('participant-not-found');
-
-		if (role === 'speaker') {
-			const speakers = await this.callsParticipantsRepository.countBy({ roomId, state: 'active', role: In(['host', 'speaker']) });
-			if (speakers >= CALLS_MAX_SPEAKERS) throw new CallsRoomError('room-full');
-		}
 
 		const revisionResult = await this.callsRoomsRepository.createQueryBuilder()
 			.update()

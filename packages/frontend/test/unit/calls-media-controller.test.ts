@@ -340,6 +340,34 @@ describe('CallsMediaController', () => {
 		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/subscribe')).toHaveLength(1);
 	});
 
+	test('subscribes to more than 64 remote publications in sequential API batches', async () => {
+		installBrowserMedia(vi.fn());
+		const publications = Array.from({ length: 65 }, (_, index) => ({ id: `publication-${index}`, participantId: `speaker-${index}`, mediaKind: 'audio', mediaSource: 'microphone' }));
+		const fallback = apiMock.getMockImplementation()!;
+		const operations: string[] = [];
+		apiMock.mockImplementation(async (endpoint, input) => {
+			if (endpoint === 'calls/media/reconcile') return { roomRevision: 1, publications };
+			if (endpoint === 'calls/media/tracks/subscribe') {
+				expect(input.publicationIds.length).toBeLessThanOrEqual(64);
+				operations.push('subscribe');
+				return { subscriptions: input.publicationIds.map((id: string) => ({ publicationId: id, mid: id })), sessionDescription: { type: 'offer', sdp: 'subscribe-offer' }, requiresImmediateRenegotiation: true, trackErrors: [] };
+			}
+			if (endpoint === 'calls/media/renegotiate') {
+				operations.push('renegotiate');
+				return { sessionDescription: null, requiresImmediateRenegotiation: false, trackErrors: [] };
+			}
+			return fallback(endpoint, input);
+		});
+		const controller = new CallsMediaController('room-a', 'listener');
+		await controller.connect();
+		await controller.reconcile();
+		const batches = apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/subscribe').map(([, input]) => input.publicationIds);
+		expect(batches.map(batch => batch.length)).toEqual([64, 1]);
+		expect(batches.flat()).toEqual(publications.map(publication => publication.id));
+		expect(operations).toEqual(['subscribe', 'renegotiate', 'subscribe', 'renegotiate']);
+		await controller.close();
+	});
+
 	test('serializes concurrent connection operations and reports state transitions', async () => {
 		installBrowserMedia(vi.fn());
 		let activeSessionCreates = 0;

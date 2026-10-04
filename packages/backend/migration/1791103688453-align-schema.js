@@ -74,6 +74,8 @@ export class AlignSchema1791103688453 {
 		await queryRunner.query(`CREATE INDEX "IDX_97cb763f7776150908f12c2edc" ON "hashtag_following"  ("followerId") `);
 		await queryRunner.query(`CREATE INDEX "IDX_94562fe1a6afd9bfeb1773f29a" ON "hashtag_following"  ("tag") `);
 		await queryRunner.query(`CREATE UNIQUE INDEX "IDX_3c2060ec73b2754f66a8f8f1e2" ON "hashtag_following"  ("followerId", "tag") `);
+		// Deleted accounts could leave requests behind before this foreign key existed.
+		await queryRunner.query(`DELETE FROM "emoji_request" WHERE NOT EXISTS (SELECT 1 FROM "user" WHERE "user"."id" = "emoji_request"."userId")`);
 		await queryRunner.query(`ALTER TABLE "emoji_request" ADD CONSTRAINT "FK_a4091f9755eb7d8f7a0f44ae284" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
 		await queryRunner.query(`ALTER TABLE "event" ADD CONSTRAINT "FK_1d5a6b5f38273d74f192ae552a6" FOREIGN KEY ("createdById") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
 		await queryRunner.query(`ALTER TABLE "event" ADD CONSTRAINT "FK_8cf65e2ee25ec8d492b4e860092" FOREIGN KEY ("approvedById") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);

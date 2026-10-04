@@ -17,7 +17,7 @@ const sender = { host: 'remote.example' } as MiRemoteUser;
 const follow = { type: 'Follow', object: 'https://local.example/users/alice' };
 const condition: InboxRuleCondFormulaValue = { id: 'follow', type: 'thisActivityIsFollow' };
 
-function createService(redisClient?: Redis.Redis) {
+function createService(redisClient?: Redis.Redis, resolvedObject?: IObject) {
 	const dependencies = [
 		redisClient ?? {},
 		{ findOneBy: vi.fn().mockResolvedValue({ host: sender.host }) },
@@ -26,7 +26,7 @@ function createService(redisClient?: Redis.Redis) {
 		{ toPuny: (host: string) => host },
 		{ pack: vi.fn().mockResolvedValue({ host: sender.host }) },
 		{},
-		{},
+		{ createResolver: () => ({ resolve: vi.fn().mockResolvedValue(resolvedObject) }) },
 	] as unknown as ConstructorParameters<typeof InboxRuleService>;
 	return new InboxRuleService(...dependencies);
 }
@@ -130,4 +130,12 @@ test('hourly counters include each receipt, share server counts, isolate account
 		await redis.del(...keys);
 		await redis.quit();
 	}
+});
+
+test.each([
+	[{ type: 'Note', inReplyTo: 'https://local.example/notes/1' }, true],
+	[{ type: 'Note', inReplyTo: null }, false],
+])('reply condition also resolves URL-referenced Create.object: %j', async (note, expected) => {
+	const service = createService(undefined, note as IObject);
+	expect(await service.evalCond({ type: 'Create', object: 'https://remote.example/notes/2' } as IObject, sender, { id: 'reply', type: 'thisActivityIsReply' })).toBe(expected);
 });

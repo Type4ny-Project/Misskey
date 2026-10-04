@@ -165,7 +165,10 @@ export class InboxRuleService {
 					return isAnnounce(activity);
 				}
 				case 'thisActivityIsReply': {
-					return isNote(object) && object.inReplyTo != null;
+					const note = isCreate(activity) && typeof activity.object === 'string'
+						? await (await this.apResolverService.createResolver()).resolve(activity.object)
+						: object;
+					return isNote(note) && note.inReplyTo != null;
 				}
 				case 'thisActivityIsNote': {
 					return isNote(object);

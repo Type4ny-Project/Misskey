@@ -8781,9 +8781,37 @@ export interface Locale extends ILocale {
          */
         "sender": string;
         /**
+         * このアカウントからの直近1時間のフォローリクエスト数が指定件数以上
+         */
+        "userFollowRequestsLastHourMoreThanOrEq": string;
+        /**
+         * このサーバーからの直近1時間のフォローリクエスト数が指定件数以上
+         */
+        "serverFollowRequestsLastHourMoreThanOrEq": string;
+        /**
+         * 件数
+         */
+        "followRequestCount": string;
+        /**
+         * 選択した送信元から、このサーバーが直近1時間に受信したフォローリクエストを数えます。今回のリクエストと拒否したリクエストも含み、指定件数に達したフォローリクエストから条件が成立します。
+         */
+        "followRequestsLastHourDescription": string;
+        /**
          * フォローリクエストか
          */
         "thisActivityIsFollow": string;
+        /**
+         * リアクションか
+         */
+        "thisActivityIsReaction": string;
+        /**
+         * リノートか
+         */
+        "thisActivityIsRenote": string;
+        /**
+         * 返信か
+         */
+        "thisActivityIsReply": string;
         /**
          * このアクティビティがノート
          */

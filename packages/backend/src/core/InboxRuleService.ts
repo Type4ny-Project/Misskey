@@ -2,11 +2,13 @@
  * SPDX-FileCopyrightText: Type4ny-project
  * SPDX-License-Identifier: AGPL-3.0-only
  */
+import { randomUUID } from 'node:crypto';
+import * as Redis from 'ioredis';
 import { Inject, Injectable } from '@nestjs/common';
 import { bindThis } from '@/decorators.js';
 import type { MiRemoteUser } from '@/models/User.js';
 import { IdService } from '@/core/IdService.js';
-import { isCreate, isFollow, isNote } from '@/core/activitypub/type.js';
+import { isAnnounce, isCreate, isFollow, isLike, isNote } from '@/core/activitypub/type.js';
 import type { IObject, IPost } from '@/core/activitypub/type.js';
 import type { InstancesRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
@@ -17,9 +19,14 @@ import { ApMentionService } from '@/core/activitypub/models/ApMentionService.js'
 import { ApResolverService } from '@/core/activitypub/ApResolverService.js';
 import type { MiMeta } from '@/models/Meta.js';
 
+type FollowRequestCounts = { user: number; server: number };
+
 @Injectable()
 export class InboxRuleService {
 	constructor(
+		@Inject(DI.redis)
+		private redisClient: Redis.Redis,
+
 		@Inject(DI.instancesRepository)
 		private instancesRepository: InstancesRepository,
 
@@ -35,7 +42,29 @@ export class InboxRuleService {
 	}
 
 	@bindThis
-	async evalCond(activity: IObject, user: MiRemoteUser, value: InboxRuleCondFormulaValue): Promise<boolean> {
+	async recordFollowRequest(user: MiRemoteUser): Promise<FollowRequestCounts> {
+		const now = Date.now();
+		const receiptId = randomUUID();
+		const keys = [
+			`inboxFollowRequests:user:${user.id}`,
+			`inboxFollowRequests:server:${this.utilityService.toPuny(user.host)}`,
+		];
+		const transaction = this.redisClient.multi();
+		for (const key of keys) {
+			transaction.zremrangebyscore(key, '-inf', now - 60 * 60 * 1000);
+			transaction.zadd(key, now, receiptId);
+			transaction.zcard(key);
+			transaction.expire(key, 60 * 60);
+		}
+		const results = (await transaction.exec())!;
+		for (const [error] of results) {
+			if (error) throw error;
+		}
+		return { user: results[2][1] as number, server: results[6][1] as number };
+	}
+
+	@bindThis
+	async evalCond(activity: IObject, user: MiRemoteUser, value: InboxRuleCondFormulaValue, followRequestCounts?: FollowRequestCounts): Promise<boolean> {
 		const object = isCreate(activity) && typeof activity.object !== 'string' ? activity.object : activity;
 		const instanceUnpack = await this.instancesRepository
 			.findOneBy({ host: this.utilityService.toPuny(user.host) });
@@ -46,15 +75,15 @@ export class InboxRuleService {
 		try {
 			switch (value.type) {
 				case 'and': {
-					const results = await Promise.all(value.values.map(v => this.evalCond(activity, user, v)));
+					const results = await Promise.all(value.values.map(v => this.evalCond(activity, user, v, followRequestCounts)));
 					return results.every(result => result);
 				}
 				case 'or': {
-					const results = await Promise.all(value.values.map(v => this.evalCond(activity, user, v)));
+					const results = await Promise.all(value.values.map(v => this.evalCond(activity, user, v, followRequestCounts)));
 					return results.some(result => result);
 				}
 				case 'not': {
-					return !(await this.evalCond(activity, user, value.value));
+					return !(await this.evalCond(activity, user, value.value, followRequestCounts));
 				}
 				// サスペンド済みユーザである
 				case 'isSuspended': {
@@ -120,8 +149,23 @@ export class InboxRuleService {
 					}
 					return false;
 				}
+				case 'userFollowRequestsLastHourMoreThanOrEq': {
+					return isFollow(activity) && followRequestCounts != null && followRequestCounts.user >= value.value;
+				}
+				case 'serverFollowRequestsLastHourMoreThanOrEq': {
+					return isFollow(activity) && followRequestCounts != null && followRequestCounts.server >= value.value;
+				}
 				case 'thisActivityIsFollow': {
 					return isFollow(activity);
+				}
+				case 'thisActivityIsReaction': {
+					return isLike(activity);
+				}
+				case 'thisActivityIsRenote': {
+					return isAnnounce(activity);
+				}
+				case 'thisActivityIsReply': {
+					return isNote(object) && object.inReplyTo != null;
 				}
 				case 'thisActivityIsNote': {
 					return isNote(object);

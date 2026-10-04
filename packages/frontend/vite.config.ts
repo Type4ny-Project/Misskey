@@ -1,6 +1,7 @@
 import path from 'path';
 import pluginVue from '@vitejs/plugin-vue';
 import pluginGlsl from 'vite-plugin-glsl';
+import { visualizer } from 'rollup-plugin-visualizer';
 import { replacePlugin } from 'rolldown/plugins';
 import type { UserConfig } from 'vite';
 import { defineConfig } from 'vite';
@@ -139,6 +140,20 @@ export function getConfig(): UserConfig {
 		},
 
 		plugins: [
+			...(process.env.FRONTEND_BUNDLE_VISUALIZER === 'true' ? [
+				visualizer({
+					filename: process.env.FRONTEND_BUNDLE_VISUALIZER_FILE ?? 'stats.json',
+					template: 'raw-data',
+					gzipSize: true,
+					brotliSize: true,
+				}),
+				...(process.env.FRONTEND_BUNDLE_VISUALIZER_HTML_FILE ? [visualizer({
+					filename: process.env.FRONTEND_BUNDLE_VISUALIZER_HTML_FILE,
+					template: 'treemap',
+					gzipSize: true,
+					brotliSize: true,
+				})] : []),
+			] : []),
 			pluginWatchLocales(),
 			...searchIndexes.map(options => pluginCreateSearchIndex(options)),
 			pluginVue(),

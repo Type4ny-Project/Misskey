@@ -24,15 +24,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:large="true"
 			:class="$style.file"
 		/>
-		<Transition name="fade">
-			<div :class="$style.sensitive">
-				<div>
-					<div v-if="file.isSensitive"><i class="ti ti-eye-exclamation"></i> {{ i18n.ts.sensitive }}{{ prefer.s.dataSaver.media && file.size ? ` (${bytes(file.size)})` : '' }}</div>
-					<div v-else><i class="ti ti-photo"></i> {{ prefer.s.dataSaver.media && file.size ? bytes(file.size) : i18n.ts.image }}</div>
-					<div>{{ i18n.ts.clickToShow }}</div>
-				</div>
+		<div :class="$style.sensitive">
+			<div>
+				<div v-if="file.isSensitive"><i class="ti ti-eye-exclamation"></i> {{ i18n.ts.sensitive }}{{ prefer.s.dataSaver.media && file.size ? ` (${bytes(file.size)})` : '' }}</div>
+				<div v-else><i class="ti ti-photo"></i> {{ prefer.s.dataSaver.media && file.size ? bytes(file.size) : i18n.ts.image }}</div>
+				<div>{{ i18n.ts.clickToShow }}</div>
 			</div>
-		</Transition>
+		</div>
 	</div>
 	<MkA
 		v-else

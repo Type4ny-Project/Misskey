@@ -149,9 +149,10 @@ export class ApInboxService {
 	public async performOneActivity(actor: MiRemoteUser, activity: IObject, resolver?: Resolver): Promise<string | void> {
 		if (actor.isSuspended) return;
 
+		const followRequestCounts = isFollow(activity) ? await this.inboxRuleService.recordFollowRequest(actor) : undefined;
 		const rules = await this.inboxRuleRepository.find();
 		for (const rule of rules) {
-			const result = await this.inboxRuleService.evalCond(activity, actor, rule.condFormula);
+			const result = await this.inboxRuleService.evalCond(activity, actor, rule.condFormula, followRequestCounts);
 			if (result && rule.action.type === 'reject') {
 				await this.moderationLogService.log(actor, 'inboxRejected', {
 					activity,

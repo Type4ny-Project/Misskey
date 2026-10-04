@@ -13863,6 +13863,10 @@ export interface Locale extends ILocale {
          */
         "eventDetail": string;
         /**
+         * 存在しないイベントです
+         */
+        "eventNotFound": string;
+        /**
          * 自分の投稿
          */
         "mySubmissions": string;
@@ -13882,6 +13886,10 @@ export interface Locale extends ILocale {
          * 終了日時
          */
         "endAt": string;
+        /**
+         * 終了日時は開始日時以降にしてください
+         */
+        "endBeforeStart": string;
         /**
          * 説明
          */

@@ -126,6 +126,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</MkButton>
 		</div>
 	</div>
+	<div v-else-if="loadError" :class="$style.root">
+		<p role="status">{{ loadError }}</p>
+		<MkButton @click="router.push('/events')">
+			<i class="ti ti-arrow-left" aria-hidden="true"></i>
+			{{ i18n.ts.goBack }}
+		</MkButton>
+	</div>
 	<div v-else :class="$style.loading">
 		<MkLoading/>
 	</div>
@@ -153,6 +160,7 @@ const props = defineProps<{
 const router = useRouter();
 const eventId = toRef(props, 'eventId');
 const event = ref<Misskey.entities.Event | null>(null);
+const loadError = ref<string | null>(null);
 const canManagePendingEvent = ref(false);
 
 const isOwner = computed(() => {
@@ -161,7 +169,16 @@ const isOwner = computed(() => {
 });
 
 async function fetchEvent() {
-	event.value = await misskeyApi('events/show', { eventId: eventId.value });
+	loadError.value = null;
+	try {
+		event.value = await misskeyApi('events/show', { eventId: eventId.value });
+	} catch (error) {
+		event.value = null;
+		loadError.value = (error as { code?: string }).code === 'NO_SUCH_EVENT'
+			? i18n.ts._events.eventNotFound
+			: i18n.ts._events.unknownError;
+		return;
+	}
 	await updateManagePermission();
 }
 

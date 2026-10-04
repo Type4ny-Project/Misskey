@@ -69,6 +69,7 @@ export type RolePolicies = {
 	canImportMuting: boolean;
 	canImportUserLists: boolean;
 	chatAvailability: 'available' | 'readonly' | 'unavailable';
+	canJoinCalls: boolean;
 	uploadableFileTypes: string[];
 	noteDraftLimit: number;
 	scheduledNoteLimit: number;
@@ -115,6 +116,7 @@ export const DEFAULT_POLICIES: RolePolicies = {
 	canImportMuting: false,
 	canImportUserLists: false,
 	chatAvailability: 'available',
+	canJoinCalls: true,
 	uploadableFileTypes: [
 		'text/*',
 		'application/json',
@@ -445,6 +447,7 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 			canImportMuting: calc('canImportMuting', vs => vs.some(v => v === true)),
 			canImportUserLists: calc('canImportUserLists', vs => vs.some(v => v === true)),
 			chatAvailability: calc('chatAvailability', aggregateChatAvailability),
+			canJoinCalls: calc('canJoinCalls', vs => vs.some(v => v === true)),
 			uploadableFileTypes: calc('uploadableFileTypes', vs => {
 				const set = new Set<string>();
 				for (const v of vs) {

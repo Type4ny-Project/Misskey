@@ -36,6 +36,7 @@ export class CallsTurnService {
 		if (turn == null) throw new CallsTurnNotConfiguredError();
 		const room = await this.roomService.getRoom(roomId);
 		await this.roomService.assertCanAccess(user, room);
+		await this.roomService.assertCanJoin(user);
 		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
 		const participant = await this.participantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
 		if (participant == null) throw new CallsRoomError('participant-not-found');

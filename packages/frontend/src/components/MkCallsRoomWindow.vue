@@ -85,11 +85,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="toggleCamera" @screen="session.toggleVideo('screen')" @microphoneSettings="openDeviceMenu('microphone', $event)" @cameraSettings="openDeviceMenu('camera', $event)" @screenSettings="openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveCurrentRoom"/>
 				</template>
 				<template v-else-if="room.state === 'open'">
-					<MkButton primary large rounded :wait="session.joining.value" :class="$style.joinButton" @click="joinRoom(room.mode === 'open')"><i class="ti ti-headphones"></i> {{ session.joining.value ? i18n.ts._calls.roomConnectedMediaConnecting : i18n.ts._calls.joinRoom }}</MkButton>
+					<MkInfo v-if="!canJoinCalls" warn>{{ i18n.ts._calls.participationNotAllowed }}</MkInfo>
+					<MkButton v-else primary large rounded :wait="session.joining.value" :class="$style.joinButton" @click="joinRoom(room.mode === 'open')"><i class="ti ti-headphones"></i> {{ session.joining.value ? i18n.ts._calls.roomConnectedMediaConnecting : i18n.ts._calls.joinRoom }}</MkButton>
 				</template>
 				<template v-else-if="room.state === 'scheduled'">
 					<small v-if="room.scheduledAt != null">{{ new Date(room.scheduledAt).toLocaleString() }}</small>
-					<MkButton v-if="isHost" primary large rounded @click="openRoom">{{ i18n.ts._calls.openRoom }}</MkButton>
+					<MkButton v-if="isHost" primary large rounded :disabled="!canJoinCalls" @click="openRoom">{{ i18n.ts._calls.openRoom }}</MkButton>
 				</template>
 			</footer>
 		</template>
@@ -202,6 +203,7 @@ async function focusVideo(id: string): Promise<void> {
 }
 
 const session = useCallsSession();
+const canJoinCalls = computed(() => $i?.policies.canJoinCalls !== false);
 const isSessionRoom = computed(() => session.currentRoomId.value === props.roomId);
 const pageConnection = shallowRef<ReturnType<typeof createCallsRoomConnection> | null>(isSessionRoom.value ? null : createCallsRoomConnection(props.roomId));
 const room = computed(() => isSessionRoom.value ? session.room.value : pageConnection.value?.room.value ?? null);
@@ -316,6 +318,7 @@ async function cancelRoom(): Promise<void> { if (room.value != null) { await mis
 async function endRoom(): Promise<void> { if (room.value != null) { await misskeyApi('calls/rooms/end', { roomId: props.roomId, expectedRevision: room.value.revision }); await refreshRoom(); } }
 
 async function joinRoom(startMuted = false, requestConfirmation = false): Promise<void> {
+	if (!canJoinCalls.value) return;
 	if (session.currentRoomId.value != null && session.currentRoomId.value !== props.roomId) {
 		const { canceled } = await os.confirm({ type: 'warning', text: i18n.ts._calls.switchRoomConfirm });
 		if (canceled) return;
@@ -323,7 +326,7 @@ async function joinRoom(startMuted = false, requestConfirmation = false): Promis
 		const { canceled } = await os.confirm({ type: 'question', title: room.value?.title, text: i18n.ts._calls.joinRoomConfirm });
 		if (canceled) return;
 	}
-	if (disposed || room.value?.state !== 'open' || sessionIsCurrent.value || session.joining.value) return;
+	if (disposed || !canJoinCalls.value || room.value?.state !== 'open' || sessionIsCurrent.value || session.joining.value) return;
 
 	try {
 		await session.join(props.roomId, myParticipant.value != null, undefined, startMuted);

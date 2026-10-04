@@ -87,7 +87,7 @@ describe('Calls session device handoff', () => {
 	beforeEach(async () => {
 		vi.resetModules();
 		vi.useFakeTimers();
-		fixture.api.mockReset().mockResolvedValue({});
+		fixture.api.mockReset().mockImplementation(async (endpoint: string) => endpoint === 'users/show' ? [] : {});
 		fixture.toast.mockClear();
 		fixture.alert.mockClear();
 		fixture.popupMenu.mockClear();
@@ -132,11 +132,11 @@ describe('Calls session device handoff', () => {
 	});
 
 	test('fetches each participant once while requests are pending and displays completed users immediately', async () => {
-		let resolveUser!: (user: { id: string; username: string }) => void;
-		fixture.api.mockImplementation((endpoint: string, { userId }: { userId?: string }) => {
+		let resolveUsers!: (users: { id: string; username: string }[]) => void;
+		fixture.api.mockImplementation((endpoint: string, { userIds }: { userIds?: string[] }) => {
 			if (endpoint !== 'users/show') return Promise.resolve({});
-			if (userId === 'user-a') return new Promise(resolve => { resolveUser = resolve; });
-			return Promise.resolve({ id: userId, username: userId });
+			if (userIds?.includes('user-a')) return new Promise(resolve => { resolveUsers = resolve; });
+			return Promise.resolve(userIds?.map(id => ({ id, username: id })));
 		});
 		await session.join('room-a', false);
 		const connection = fixture.connections[0];
@@ -145,9 +145,9 @@ describe('Calls session device handoff', () => {
 		connection.participants.value.push({ id: 'participant-b', userId: 'user-b', role: 'listener', isMuted: true });
 		await nextTick();
 		await nextTick();
-		expect(fixture.api.mock.calls.filter(([endpoint, params]) => endpoint === 'users/show' && params.userId === 'user-a')).toHaveLength(1);
-		expect(session.usersById.value.get('user-b')?.username).toBe('user-b');
-		resolveUser({ id: 'user-a', username: 'Alice' });
+		expect(fixture.api.mock.calls.filter(([endpoint, params]) => endpoint === 'users/show' && params.userIds.includes('user-a'))).toHaveLength(1);
+		await vi.waitFor(() => expect(session.usersById.value.get('user-b')?.username).toBe('user-b'));
+		resolveUsers([{ id: 'user-a', username: 'Alice' }]);
 		await vi.waitFor(() => expect(session.usersById.value.get('user-a')?.username).toBe('Alice'));
 	});
 

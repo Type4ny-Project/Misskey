@@ -24,7 +24,7 @@ export const Default = {
 		layout: 'fullscreen',
 		msw: { handlers: [
 			http.post('/api/calls/rooms/show', () => HttpResponse.json({ room, participants: [{ id: 'calls-host-story', roomId: room.id, userId: host.id, role: 'host', state: 'active', isMuted: true, joinedAt: room.startedAt, leftAt: null, speakerRequestedAt: null }] })),
-			http.post('/api/users/show', () => HttpResponse.json(host)),
+			http.post('/api/users/show', () => HttpResponse.json([host])),
 		] },
 	},
 } satisfies StoryObj<typeof MkCallsRoomWindow>;

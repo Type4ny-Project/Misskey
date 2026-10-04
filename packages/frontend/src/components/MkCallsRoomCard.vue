@@ -50,14 +50,14 @@ import type * as Misskey from 'misskey-js';
 import { i18n } from '@/i18n.js';
 import { openCallsRoom } from '@/utility/calls-window.js';
 import { callsUsersById as participantUsers, loadCallsUsers } from '@/utility/calls-users.js';
-import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
+import { retainCallsRoomConnection } from '@/composables/use-calls-room.js';
 
 const props = defineProps<{
 	room: Misskey.entities.CallsRoom;
 	compact?: boolean;
 }>();
 
-const connection = shallowRef<ReturnType<typeof createCallsRoomConnection> | null>(null);
+const connection = shallowRef<ReturnType<typeof retainCallsRoomConnection> | null>(null);
 const room = computed(() => connection.value?.room.value ?? props.room);
 const participants = computed(() => room.value.state === 'open' ? (connection.value?.participants.value ?? []).filter(participant => participant.state === 'active') : []);
 const hostUser = computed(() => {
@@ -74,8 +74,8 @@ const followedParticipants = computed(() => sortedParticipants.value.filter(item
 
 async function connectRoom(roomId: string): Promise<void> {
 	connection.value?.dispose();
-	connection.value = createCallsRoomConnection(roomId);
-	await connection.value.refresh().catch(() => undefined);
+	connection.value = retainCallsRoomConnection(roomId);
+	await connection.value.load().catch(() => undefined);
 }
 
 watch(() => props.room.id, roomId => void connectRoom(roomId), { immediate: true });

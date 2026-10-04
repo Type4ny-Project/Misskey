@@ -17,7 +17,7 @@ import type * as Misskey from 'misskey-js';
 import { url } from '@@/js/config.js';
 import MkCallsRoomCard from '@/components/MkCallsRoomCard.vue';
 import { i18n } from '@/i18n.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
+import { retainCallsRoomConnection } from '@/composables/use-calls-room.js';
 
 const props = defineProps<{ roomId: string }>();
 const room = shallowRef<Misskey.entities.CallsRoom | null>(null);
@@ -25,12 +25,13 @@ const loading = ref(true);
 
 watch(() => props.roomId, async (roomId, _, onCleanup) => {
 	let disposed = false;
-	onCleanup(() => { disposed = true; });
+	const connection = retainCallsRoomConnection(roomId);
+	onCleanup(() => { disposed = true; connection.dispose(); });
 	room.value = null;
 	loading.value = true;
 	try {
-		const snapshot = await misskeyApi('calls/rooms/show', { roomId });
-		if (!disposed) room.value = snapshot.room;
+		await connection.load();
+		if (!disposed) room.value = connection.room.value;
 	} catch {
 		// Deleted rooms and rooms the viewer cannot access share the same unavailable card.
 	} finally {

@@ -18,7 +18,7 @@ vi.mock('@/stream.js', () => ({ useStream: () => ({
 	useChannel: () => ({ on: (event: string, callback: () => void) => fixture.handlers.set(event, callback), dispose: fixture.dispose }),
 	on: vi.fn(), off: vi.fn(),
 }) }));
-vi.mock('@/composables/use-calls-room.js', () => ({ createCallsRoomConnection: () => fixture.snapshot }));
+vi.mock('@/composables/use-calls-room.js', () => ({ retainCallsRoomConnection: () => fixture.snapshot }));
 vi.mock('@/utility/calls-window.js', () => ({ openCallsRoom: fixture.open }));
 
 const room = { id: 'room', title: 'Compact call', state: 'open', mode: 'stage', visibility: 'public' };
@@ -29,9 +29,9 @@ beforeEach(() => {
 	fixture.open.mockClear();
 	fixture.snapshot = {
 		room: ref(room), participants: ref([{ id: 'host-p', userId: 'host', role: 'host', state: 'active' }, { id: 'friend-p', userId: 'friend', role: 'listener', state: 'active' }]),
-		speakingParticipantIds: ref(new Set()), refresh: vi.fn().mockResolvedValue(undefined), dispose: vi.fn(),
+		speakingParticipantIds: ref(new Set()), load: vi.fn().mockResolvedValue(undefined), dispose: vi.fn(),
 	};
-	fixture.api.mockImplementation(async (endpoint, params) => endpoint === 'calls/rooms/list' ? [room] : { id: params.userId, name: params.userId, isFollowing: params.userId === 'friend' });
+	fixture.api.mockImplementation(async (endpoint, params) => endpoint === 'calls/rooms/list' ? [room] : params.userIds.map((id: string) => ({ id, name: id, isFollowing: id === 'friend' })));
 });
 afterEach(cleanup);
 

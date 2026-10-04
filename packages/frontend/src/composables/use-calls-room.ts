@@ -114,6 +114,41 @@ export function createCallsRoomConnection(roomId: string) {
 	};
 }
 
+// Display cards share a subscription without changing media session lifetimes.
+const sharedCallsRooms = new Map<string, {
+	connection: ReturnType<typeof createCallsRoomConnection>;
+	referenceCount: number;
+	loading: Promise<void> | null;
+}>();
+
+export function retainCallsRoomConnection(roomId: string) {
+	let shared = sharedCallsRooms.get(roomId);
+	if (shared == null) {
+		shared = { connection: createCallsRoomConnection(roomId), referenceCount: 0, loading: null };
+		sharedCallsRooms.set(roomId, shared);
+	}
+	const entry = shared;
+	entry.referenceCount++;
+	let disposed = false;
+	return {
+		room: entry.connection.room,
+		participants: entry.connection.participants,
+		speakingParticipantIds: entry.connection.speakingParticipantIds,
+		load() {
+			if (entry.connection.room.value != null) return Promise.resolve();
+			return entry.loading ??= entry.connection.refresh().finally(() => { entry.loading = null; });
+		},
+		dispose() {
+			if (disposed) return;
+			disposed = true;
+			if (--entry.referenceCount === 0) {
+				entry.connection.dispose();
+				sharedCallsRooms.delete(roomId);
+			}
+		},
+	};
+}
+
 export function useCallsRoom(roomId: string) {
 	const connection = createCallsRoomConnection(roomId);
 	onUnmounted(connection.dispose);

@@ -25,8 +25,8 @@ export const Default = {
 				{ id: 'widget-friend-p', roomId: room.id, userId: friend.id, role: 'listener', state: 'active', isMuted: true },
 			] })),
 			http.post('/api/users/show', async ({ request }) => {
-				const { userId } = await request.json() as { userId: string };
-				return HttpResponse.json(userId === friend.id ? friend : host);
+				const { userIds } = await request.json() as { userIds: string[] };
+				return HttpResponse.json([host, friend].filter(user => userIds.includes(user.id)));
 			}),
 		] },
 	},

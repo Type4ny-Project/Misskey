@@ -11,23 +11,25 @@ const fixture = vi.hoisted(() => ({
 	channelHandlers: new Map<string, (event: Record<string, unknown>) => void>(),
 	streamHandlers: new Map<string, () => void>(),
 	send: vi.fn(),
+	useChannel: vi.fn(),
+	dispose: vi.fn(),
 }));
 
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: fixture.api }));
 vi.mock('@/i.js', () => ({ $i: { id: 'user-a' } }));
 vi.mock('@/stream.js', () => ({
 	useStream: () => ({
-		useChannel: () => ({
+		useChannel: fixture.useChannel.mockImplementation(() => ({
 			on: (type: string, handler: (event: Record<string, unknown>) => void) => fixture.channelHandlers.set(type, handler),
 			send: fixture.send,
-			dispose: vi.fn(),
-		}),
+			dispose: fixture.dispose,
+		})),
 		on: (type: string, handler: () => void) => fixture.streamHandlers.set(type, handler),
 		off: vi.fn(),
 	}),
 }));
 
-import { useCallsRoom } from '@/composables/use-calls-room.js';
+import { retainCallsRoomConnection, useCallsRoom } from '@/composables/use-calls-room.js';
 
 const snapshot = {
 	room: { id: 'room-a', state: 'open', revision: 1 },
@@ -40,7 +42,35 @@ describe('useCallsRoom streaming reconciliation', () => {
 		fixture.channelHandlers.clear();
 		fixture.streamHandlers.clear();
 		fixture.send.mockReset();
+		fixture.useChannel.mockClear();
+		fixture.dispose.mockClear();
 		fixture.api.mockImplementation(async (endpoint: string) => endpoint === 'calls/rooms/show' ? structuredClone(snapshot) : { roomRevision: 1, publications: [] });
+	});
+
+	test('shares room loading and updates across five cards until the last card is disposed', async () => {
+		const cards = Array.from({ length: 5 }, () => retainCallsRoomConnection('shared-room'));
+		await Promise.all(cards.map(card => card.load()));
+		expect(fixture.useChannel).toHaveBeenCalledTimes(1);
+		expect(fixture.api).toHaveBeenCalledTimes(1);
+		const lateCard = retainCallsRoomConnection('shared-room');
+		await lateCard.load();
+		expect(fixture.api).toHaveBeenCalledTimes(1);
+		cards[0].dispose();
+		expect(fixture.dispose).not.toHaveBeenCalled();
+		fixture.channelHandlers.get('role')?.({ sequence: 1, roomRevision: 2, participantId: 'participant-a', role: 'speaker' });
+		await vi.waitFor(() => expect(lateCard.participants.value[0]?.role).toBe('speaker'));
+		for (const card of cards.slice(1)) {
+			expect(card.participants.value[0]?.role).toBe('speaker');
+			card.dispose();
+		}
+		expect(fixture.dispose).not.toHaveBeenCalled();
+		lateCard.dispose();
+		expect(fixture.dispose).toHaveBeenCalledTimes(1);
+		const reopened = retainCallsRoomConnection('shared-room');
+		await reopened.load();
+		expect(fixture.useChannel).toHaveBeenCalledTimes(2);
+		expect(fixture.api).toHaveBeenCalledTimes(2);
+		reopened.dispose();
 	});
 
 	test('ignores duplicate events and reconciles a sequence gap before applying the next event', async () => {

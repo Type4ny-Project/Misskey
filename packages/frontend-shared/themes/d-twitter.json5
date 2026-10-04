@@ -1,0 +1,28 @@
+{
+	id: 'b60f201a-907a-4757-b8d5-87ffe9fcfa91',
+
+	name: 'Twitter Dark',
+	author: 'Type4ny Project',
+	desc: 'Twitter-inspired blue accents and timeline surfaces (dark)',
+
+	base: 'dark',
+
+	props: {
+		accent: '#1d9bf0',
+		bg: '#15202b',
+		fg: '#e7e9ea',
+		fgHighlighted: '#ffffff',
+		fgOnAccent: '#000000',
+		fgOnWhite: '#006fb9',
+		divider: '#38444d',
+		panel: '#192734',
+		navBg: '@panel',
+		link: '@accent',
+		hashtag: '@link',
+		mention: '@link',
+		renote: '#00ba7c',
+		love: '#f91880',
+		buttonGradateB: '@accent',
+		badge: '@accent',
+	},
+}

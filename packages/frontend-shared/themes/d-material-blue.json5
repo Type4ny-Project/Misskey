@@ -1,0 +1,28 @@
+{
+	id: '103a3eda-c344-4fcf-9a97-d58da2c35d84',
+
+	name: 'Material Blue Dark',
+	author: 'Type4ny Project',
+	desc: 'Material UI blue palette (dark)',
+
+	base: 'dark',
+
+	props: {
+		accent: '#90caf9',
+		bg: '#121212',
+		fg: '#f5f5f5',
+		fgHighlighted: '#ffffff',
+		fgOnAccent: '#121212',
+		fgOnWhite: '#1976d2',
+		divider: '#383838',
+		panel: '#1e1e1e',
+		navBg: '@panel',
+		link: '@accent',
+		hashtag: '@link',
+		mention: '@link',
+		renote: '#66bb6a',
+		love: '#f06292',
+		buttonGradateB: '@accent',
+		badge: '@accent',
+	},
+}

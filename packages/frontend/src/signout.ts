@@ -20,6 +20,15 @@ export async function signout() {
 		await cloudBackup();
 	}
 
+	// Best effort: revoke active Calls media and TURN credentials before the
+	// browser discards the account token. Logout must still succeed offline.
+	await window.fetch(`${apiUrl}/i/logout`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ i: $i.token }),
+		signal: AbortSignal.timeout(3000),
+	}).catch(() => undefined);
+
 	localStorage.clear();
 
 	const idbAbortController = new AbortController();

@@ -511,13 +511,13 @@ const federationForm = useForm({
 });
 
 const loginBonusForm = useForm({
-  	enableLoginBonus: meta.enableLoginBonus,
-  	}, async (state) => {
-  		await os.apiWithDialog('admin/update-meta', {
-  			enableLoginBonus: state.enableLoginBonus,
-  		});
-  		fetchInstance(true);
-  	});
+	enableLoginBonus: meta.enableLoginBonus,
+}, async (state) => {
+	await os.apiWithDialog('admin/update-meta', {
+		enableLoginBonus: state.enableLoginBonus,
+	});
+	fetchInstance(true);
+});
 const proxyAccountForm = useForm({
 	description: proxyAccount.description,
 }, async (state) => {

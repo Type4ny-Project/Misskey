@@ -7,6 +7,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { AccessTokensRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
+import { CallsMediaRevocationService } from '@/core/calls/CallsMediaRevocationService.js';
 
 export const meta = {
 	requireCredential: true,
@@ -38,6 +39,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	constructor(
 		@Inject(DI.accessTokensRepository)
 		private accessTokensRepository: AccessTokensRepository,
+		private callsMediaRevocationService: CallsMediaRevocationService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			if ('tokenId' in ps) {
@@ -48,6 +50,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						id: ps.tokenId,
 						userId: me.id,
 					});
+					await this.callsMediaRevocationService.revokeUser(me.id, 'logout');
 				}
 			} else if (ps.token) {
 				const tokenExist = await this.accessTokensRepository.exists({ where: { token: ps.token } });
@@ -57,6 +60,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						token: ps.token,
 						userId: me.id,
 					});
+					await this.callsMediaRevocationService.revokeUser(me.id, 'logout');
 				}
 			}
 		});

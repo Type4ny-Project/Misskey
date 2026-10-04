@@ -1,0 +1,28 @@
+{
+	id: 'a55134ce-0498-4120-8d57-4ea7ee5be90d',
+
+	name: 'Material Blue Light',
+	author: 'Type4ny Project',
+	desc: 'Material UI blue palette (light)',
+
+	base: 'light',
+
+	props: {
+		accent: '#1976d2',
+		bg: '#f5f7fb',
+		fg: '#212121',
+		fgHighlighted: '#000000',
+		fgOnAccent: '#ffffff',
+		fgOnWhite: '#1976d2',
+		divider: '#e0e0e0',
+		panel: '#ffffff',
+		navBg: '@panel',
+		link: '@accent',
+		hashtag: '@link',
+		mention: '@link',
+		renote: '#2e7d32',
+		love: '#c2185b',
+		buttonGradateB: '@accent',
+		badge: '@accent',
+	},
+}

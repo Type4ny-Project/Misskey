@@ -20,6 +20,7 @@ export class EventService {
 	public static NoSuchChannelError = class extends Error {};
 	public static AccessDeniedError = class extends Error {};
 	public static TooManyEventsError = class extends Error {};
+	public static InvalidEventTimeRangeError = class extends Error {};
 
 	constructor(
 		@Inject(DI.eventsRepository)
@@ -89,6 +90,10 @@ export class EventService {
 		tags?: string[];
 		channelId?: string | null;
 	}): Promise<MiEvent> {
+		if (params.endAt != null && params.endAt < params.startAt) {
+			throw new EventService.InvalidEventTimeRangeError();
+		}
+
 		// Rate limit: count user's events created today
 		const now = new Date();
 		const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -147,6 +152,12 @@ export class EventService {
 		const isModerator = await this.roleService.isModerator(me);
 		if (event.createdById !== me.id && !isModerator) {
 			throw new EventService.AccessDeniedError();
+		}
+
+		const startAt = params.startAt ?? event.startAt;
+		const endAt = params.endAt !== undefined ? params.endAt : event.endAt;
+		if (endAt != null && endAt < startAt) {
+			throw new EventService.InvalidEventTimeRangeError();
 		}
 
 		// Validate channel if provided

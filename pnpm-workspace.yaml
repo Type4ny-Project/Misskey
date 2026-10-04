@@ -12,6 +12,7 @@ packages:
   - packages/misskey-js/generator
   - packages/misskey-reversi
   - packages/misskey-bubble-game
+  - packages/calls-reference-client
   - packages-private/*
 allowBuilds:
   '@nestjs/core': true

@@ -1374,8 +1374,12 @@ async function openAccountMenu(ev: PointerEvent) {
 			if (account.id === $i.id) {
 				postAccount.value = null;
 			} else {
+				postAccount.value = account;
 				const storedAccount = (await getAccounts()).find(x => x.id === account.id);
-				postAccount.value = storedAccount?.token ? await misskeyApi('i', {}, storedAccount.token) : account;
+				if (storedAccount?.token) {
+					const refreshedAccount = await misskeyApi('i', {}, storedAccount.token);
+					if (postAccount.value?.id === account.id) postAccount.value = refreshedAccount;
+				}
 			}
 		},
 	});

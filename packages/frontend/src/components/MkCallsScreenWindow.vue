@@ -5,17 +5,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <MkWindow :initialWidth="480" :initialHeight="320" canResize front @closed="emit('closed')">
-	<template #header><i class="ti ti-app-window"></i> {{ callsScreenWindowLabel }}</template>
-	<video ref="video" autoplay muted playsinline :aria-label="callsScreenWindowLabel" :class="$style.video" @canplay="play"></video>
+	<template #header><i class="ti ti-app-window"></i> {{ label }}</template>
+	<video ref="video" autoplay muted playsinline :aria-label="label" :class="$style.video" @canplay="play"></video>
 </MkWindow>
 </template>
 
 <script setup lang="ts">
 import { onUnmounted, shallowRef, watch } from 'vue';
 import MkWindow from '@/components/MkWindow.vue';
-import { callsScreenWindowLabel, callsScreenWindowStream } from '@/utility/calls-screen-window.js';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
+
+const props = defineProps<{
+	stream: MediaStream;
+	label: string;
+}>();
 
 const emit = defineEmits<{ (ev: 'closed'): void }>();
 const video = shallowRef<HTMLVideoElement | null>(null);
@@ -28,7 +32,7 @@ function play(): void {
 	});
 }
 
-watch([video, callsScreenWindowStream], ([element, stream]) => {
+watch([video, () => props.stream], ([element, stream]) => {
 	if (element == null) return;
 	element.srcObject = stream;
 	play();

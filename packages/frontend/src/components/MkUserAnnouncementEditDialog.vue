@@ -50,6 +50,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div>{{ i18n.ts.reactions }}</div>
 					<MkAnnouncementReactions :announcement="{ ...announcement, reactionsEnabled: true, reactions: announcement.reactions ?? {}, myReaction: null }"/>
 					<div v-if="Object.keys(announcement.reactions ?? {}).length === 0">{{ i18n.ts.nothing }}</div>
+					<MkAnnouncementReactionUsers :announcementId="announcement.id"/>
 				</div>
 				<MkSwitch v-model="needConfirmationToRead">
 					{{ i18n.ts._announcement.needConfirmationToRead }}
@@ -76,6 +77,7 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkAnnouncementReactions from '@/components/MkAnnouncementReactions.vue';
+import MkAnnouncementReactionUsers from '@/components/MkAnnouncementReactionUsers.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
 import MkRadios from '@/components/MkRadios.vue';
 

@@ -69,6 +69,14 @@ export type RolePolicies = {
 	canImportMuting: boolean;
 	canImportUserLists: boolean;
 	chatAvailability: 'available' | 'readonly' | 'unavailable';
+	canJoinCalls: boolean;
+	canSpeakInCalls: boolean;
+	canPublishCallsVideo: boolean;
+	canShareCallsScreen: boolean;
+	callsRoomSpeakerLimit: number;
+	callsRoomListenerLimit: number;
+	canSendPoints: boolean;
+	eventCreationDailyLimit: number;
 	uploadableFileTypes: string[];
 	noteDraftLimit: number;
 	scheduledNoteLimit: number;
@@ -115,6 +123,14 @@ export const DEFAULT_POLICIES: RolePolicies = {
 	canImportMuting: false,
 	canImportUserLists: false,
 	chatAvailability: 'available',
+	canJoinCalls: true,
+	canSpeakInCalls: true,
+	canPublishCallsVideo: true,
+	canShareCallsScreen: true,
+	callsRoomSpeakerLimit: 0,
+	callsRoomListenerLimit: 0,
+	canSendPoints: true,
+	eventCreationDailyLimit: 5,
 	uploadableFileTypes: [
 		'text/*',
 		'application/json',
@@ -445,6 +461,14 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 			canImportMuting: calc('canImportMuting', vs => vs.some(v => v === true)),
 			canImportUserLists: calc('canImportUserLists', vs => vs.some(v => v === true)),
 			chatAvailability: calc('chatAvailability', aggregateChatAvailability),
+			canJoinCalls: calc('canJoinCalls', vs => vs.some(v => v === true)),
+			canSpeakInCalls: calc('canSpeakInCalls', vs => vs.some(v => v === true)),
+			canPublishCallsVideo: calc('canPublishCallsVideo', vs => vs.some(v => v === true)),
+			canShareCallsScreen: calc('canShareCallsScreen', vs => vs.some(v => v === true)),
+			callsRoomSpeakerLimit: calc('callsRoomSpeakerLimit', vs => vs.includes(0) ? 0 : Math.max(...vs)),
+			callsRoomListenerLimit: calc('callsRoomListenerLimit', vs => vs.includes(0) ? 0 : Math.max(...vs)),
+			canSendPoints: calc('canSendPoints', vs => vs.some(v => v === true)),
+			eventCreationDailyLimit: calc('eventCreationDailyLimit', vs => Math.max(...vs)),
 			uploadableFileTypes: calc('uploadableFileTypes', vs => {
 				const set = new Set<string>();
 				for (const v of vs) {

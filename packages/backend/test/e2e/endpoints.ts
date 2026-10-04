@@ -109,6 +109,47 @@ describe('Endpoints', () => {
 			expect((await api('admin/announcements/list', { sinceId: empty }, alice)).body).toEqual([]);
 		});
 
+		test('管理者は反応者と現在の絵文字をページ分けで取得でき、一般ユーザーには公開しない', async () => {
+			const announcementId = await createAnnouncement();
+			const otherId = await createAnnouncement();
+			await api('announcements/react', { announcementId, reaction: '👍' }, bob);
+			await api('announcements/react', { announcementId, reaction: '🎉' }, carol);
+			await api('announcements/react', { announcementId, reaction: '❤' }, bob);
+			await api('announcements/react', { announcementId: otherId, reaction: '👍' }, dave);
+			await api('admin/announcements/update', { id: announcementId, reactionsEnabled: false }, alice);
+
+			const first = await api('admin/announcements/reactions', { announcementId, limit: 1 }, alice);
+			expect(first.status).toBe(200);
+			expect(first.body).toHaveLength(1);
+			const second = await api('admin/announcements/reactions', { announcementId, untilId: first.body[0].id, limit: 1 }, alice);
+			expect(second.status).toBe(200);
+			expect(second.body).toHaveLength(1);
+			expect([...first.body, ...second.body].map(r => ({ userId: r.user.id, reaction: r.reaction })))
+				.toEqual(expect.arrayContaining([{ userId: bob.id, reaction: '❤' }, { userId: carol.id, reaction: '🎉' }]));
+			expect((await api('admin/announcements/reactions', { announcementId, untilId: second.body[0].id }, alice)).body).toEqual([]);
+			for (const user of [bob, undefined]) {
+				const res = await api('admin/announcements/reactions', { announcementId }, user);
+				expect(res.status).toBe(user ? 403 : 401);
+			}
+			const missing = await api('admin/announcements/reactions', { announcementId: '0000000000' }, alice);
+			expect(castAsError(missing.body as any).error.code).toBe('NO_SUCH_ANNOUNCEMENT');
+		});
+
+		test('モデレーターは個人向け・アーカイブ済みのお知らせの反応者も確認できる', async () => {
+			const moderator = await signup({ username: 'annmoderator' });
+			expect(moderator.token).toBeDefined();
+			const moderatorRole = await role(alice, { name: 'Announcement moderator', isModerator: true });
+			await api('admin/roles/assign', { roleId: moderatorRole.id, userId: moderator.id }, alice);
+			const announcementId = await createAnnouncement({ userId: bob.id });
+			await api('announcements/react', { announcementId, reaction: '👍' }, bob);
+			const res = await api('admin/announcements/reactions', { announcementId }, moderator);
+			expect(res.status).toBe(200);
+			expect(res.body).toHaveLength(1);
+			expect(res.body[0]).toMatchObject({ reaction: '👍', user: { id: bob.id, username: bob.username } });
+			await api('announcements/react', { announcementId, reaction: null }, bob);
+			expect((await api('admin/announcements/reactions', { announcementId }, moderator)).body).toEqual([]);
+		});
+
 		test('未設定は無効で、APIによる追加・取消も拒否する', async () => {
 			const announcementId = await createAnnouncement({ reactionsEnabled: undefined });
 			for (const reaction of ['👍', null]) {

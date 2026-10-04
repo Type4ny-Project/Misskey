@@ -9,7 +9,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<section class="_panel" :class="$style.space">
 		<header :class="$style.header">
 			<button type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.windowMinimize" :title="i18n.ts.windowMinimize" @click="closeWindow"><i class="ti ti-minus"></i></button>
-			<h1 :class="$style.title">{{ room?.title ?? i18n.ts._calls.title }}</h1>
+			<div :class="$style.heading">
+				<h1 :class="$style.title">{{ room?.title ?? i18n.ts._calls.title }}</h1>
+				<small v-if="sessionIsCurrent && session.elapsedTime.value != null" :class="$style.elapsedTime" :title="i18n.ts._calls.elapsedTime"><i class="ti ti-clock" aria-hidden="true"></i> {{ session.elapsedTime.value }}</small>
+			</div>
 			<button v-if="room != null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.copyLink" :title="i18n.ts.copyLink" @click="copyRoomLink"><i class="ti ti-link" aria-hidden="true"></i></button>
 			<button v-if="hasRoomMenu" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.details" :disabled="session.joining.value" aria-haspopup="menu" @click="openRoomMenu"><i class="ti ti-dots"></i></button>
 			<button v-if="popoutTarget == null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.popout" :title="i18n.ts.popout" @click="popout"><i class="ti ti-external-link"></i></button>
@@ -27,7 +30,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="$style.callLayout">
 					<section ref="stage" :class="$style.stage" :aria-label="i18n.ts._calls.title">
 						<div ref="videoGrid" :class="$style.videoGrid" :style="videoGridStyle">
-							<CallsVideo v-for="video in roomVideos" :key="video.id" :stream="video.stream" screenWindow :screenWindowActive="session.screenWindowStream.value === video.stream" :label="videoLabel(video.participantId)" :speaking="speakingParticipantIds.has(video.participantId)" :focused="focusedVideoId === video.id" :class="focusedVideoId === video.id && $style.focusedVideo" @select="focusVideo(video.id)" @screenWindow="showScreenWindow(video.stream, video.participantId)"/>
+							<CallsVideo v-for="video in roomVideos" :key="video.id" :stream="video.stream" screenWindow :screenWindowActive="session.screenWindows.has(video.stream)" :label="videoLabel(video.participantId)" :speaking="speakingParticipantIds.has(video.participantId)" :focused="focusedVideoId === video.id" :class="focusedVideoId === video.id && $style.focusedVideo" @select="focusVideo(video.id)" @screenWindow="showScreenWindow(video.stream, video.participantId)"/>
 							<div v-for="participant in audioOnlySpeakers" :key="participant.id" :class="[$style.voiceTile, speakingParticipantIds.has(participant.id) && $style.speaking]">
 								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.stageAvatar"/>
 								<i v-else class="ti ti-user" :class="$style.stageAvatarPlaceholder"></i>
@@ -48,7 +51,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</div>
 									<div :class="$style.personName">
 										<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
-										<button v-if="canKick && participant.role !== 'host' && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
+										<button v-if="canModerateParticipants && participant.role !== 'host' && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
 									</div>
 									<small :class="speakingParticipantIds.has(participant.id) && $style.speakingLabel">{{ speakingParticipantIds.has(participant.id) ? i18n.ts._calls.speakingNow : participant.role === 'host' ? i18n.ts._calls.host : room.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.vcModerator : i18n.ts._calls.speaker }}</small>
 									<label v-if="sessionIsCurrent && participant.userId !== $i?.id" :class="$style.personVolume">
@@ -68,7 +71,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<div v-else :class="[$style.listenerAvatar, $style.avatarPlaceholder]"><i class="ti ti-user"></i></div>
 									<div :class="$style.personName">
 										<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
-										<button v-if="canKick && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
+										<button v-if="canModerateParticipants && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
 									</div>
 									<small v-if="room.moderatorUserIds.includes(participant.userId)">{{ i18n.ts._calls.vcModerator }}</small>
 									<small v-if="participant.speakerRequestedAt != null" :class="$style.speakingLabel"><i class="ti ti-hand-stop"></i> {{ i18n.ts._calls.requestSpeaker }}</small>
@@ -85,11 +88,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="toggleCamera" @screen="session.toggleVideo('screen')" @microphoneSettings="openDeviceMenu('microphone', $event)" @cameraSettings="openDeviceMenu('camera', $event)" @screenSettings="openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveCurrentRoom"/>
 				</template>
 				<template v-else-if="room.state === 'open'">
-					<MkButton primary large rounded :wait="session.joining.value" :class="$style.joinButton" @click="joinRoom(room.mode === 'open')"><i class="ti ti-headphones"></i> {{ session.joining.value ? i18n.ts._calls.roomConnectedMediaConnecting : i18n.ts._calls.joinRoom }}</MkButton>
+					<MkInfo v-if="!canJoinCalls" warn>{{ i18n.ts._calls.participationNotAllowed }}</MkInfo>
+					<MkButton v-else primary large rounded :wait="session.joining.value" :class="$style.joinButton" @click="joinRoom(room.mode === 'open')"><i class="ti ti-headphones"></i> {{ session.joining.value ? i18n.ts._calls.roomConnectedMediaConnecting : i18n.ts._calls.joinRoom }}</MkButton>
 				</template>
 				<template v-else-if="room.state === 'scheduled'">
 					<small v-if="room.scheduledAt != null">{{ new Date(room.scheduledAt).toLocaleString() }}</small>
-					<MkButton v-if="isHost" primary large rounded @click="openRoom">{{ i18n.ts._calls.openRoom }}</MkButton>
+					<MkButton v-if="isHost" primary large rounded :disabled="!canJoinCalls" @click="openRoom">{{ i18n.ts._calls.openRoom }}</MkButton>
 				</template>
 			</footer>
 		</template>
@@ -202,6 +206,7 @@ async function focusVideo(id: string): Promise<void> {
 }
 
 const session = useCallsSession();
+const canJoinCalls = computed(() => $i?.policies.canJoinCalls !== false);
 const isSessionRoom = computed(() => session.currentRoomId.value === props.roomId);
 const pageConnection = shallowRef<ReturnType<typeof createCallsRoomConnection> | null>(isSessionRoom.value ? null : createCallsRoomConnection(props.roomId));
 const room = computed(() => isSessionRoom.value ? session.room.value : pageConnection.value?.room.value ?? null);
@@ -210,10 +215,9 @@ const connected = computed(() => isSessionRoom.value ? session.connected.value :
 const speakingParticipantIds = computed(() => isSessionRoom.value ? session.speakingParticipantIds.value : pageConnection.value?.speakingParticipantIds.value ?? new Set<string>());
 const loadFailed = shallowRef(false);
 let disposed = false;
-const usersById = shallowRef(new Map<string, Misskey.entities.UserLite>());
 const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? null);
 const isHost = computed(() => myParticipant.value?.role === 'host');
-const canKick = computed(() => isHost.value || (myParticipant.value != null && room.value?.moderatorUserIds.includes(myParticipant.value.userId) === true));
+const canModerateParticipants = computed(() => isHost.value || (myParticipant.value != null && room.value?.moderatorUserIds.includes(myParticipant.value.userId) === true));
 const speakers = computed(() => participants.value.filter(participant => participant.role !== 'listener'));
 const listeners = computed(() => participants.value.filter(participant => participant.role === 'listener'));
 const sessionIsCurrent = computed(() => isSessionRoom.value && session.isActive.value);
@@ -242,7 +246,11 @@ const videoGridStyle = computed(() => {
 });
 const failureText = computed(() => session.mediaFailure.value === 'unsupported' ? i18n.ts._calls.unsupportedBrowser : session.mediaFailure.value === 'permission-denied' ? i18n.ts._calls.permissionDenied : session.mediaFailure.value === 'device-not-found' ? i18n.ts._calls.deviceNotFound : session.mediaFailure.value === 'permission-pending' ? i18n.ts._calls.permissionPending : i18n.ts._calls.mediaFailed);
 
-const hasRoomMenu = computed(() => isHost.value && (room.value?.state === 'scheduled' || (room.value?.state === 'open' && !sessionIsCurrent.value && session.replacedRoomId.value !== props.roomId)));
+const hasRoomMenu = computed(() => isHost.value && (room.value?.state === 'scheduled' || room.value?.state === 'open'));
+
+watch(() => room.value?.title, title => {
+	if (popoutWindow != null) popoutWindow.document.title = title ?? i18n.ts._calls.title;
+});
 
 async function copyRoomLink(): Promise<void> {
 	if (popoutWindow != null) window.focus();
@@ -271,32 +279,69 @@ function toggleCamera(): void {
 function openRoomMenu(event: MouseEvent): void {
 	if (popoutWindow != null) window.focus();
 	if (session.joining.value || !hasRoomMenu.value) return;
-	os.popupMenu(room.value?.state === 'scheduled' ? [
-		{ text: i18n.ts._calls.cancelRoom, icon: 'ti ti-x', danger: true, action: cancelRoom },
-	] : [
-		{ text: i18n.ts._calls.endRoom, icon: 'ti ti-phone-off', danger: true, async action() {
-			if (!(await os.confirm({ type: 'warning', text: i18n.ts._calls.endRoom })).canceled) await endRoom();
-		} },
+	os.popupMenu([
+		{ text: i18n.ts._calls.changeTitle, icon: 'ti ti-pencil', action: changeTitle },
+		...(room.value?.state === 'scheduled' ? [
+			{ text: i18n.ts._calls.cancelRoom, icon: 'ti ti-x', danger: true, action: cancelRoom },
+		] : !sessionIsCurrent.value && session.replacedRoomId.value !== props.roomId ? [
+			{ text: i18n.ts._calls.endRoom, icon: 'ti ti-phone-off', danger: true, async action() {
+				if (!(await os.confirm({ type: 'warning', text: i18n.ts._calls.endRoom })).canceled) await endRoom();
+			} },
+		] : []),
 	], event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
 }
 
-function openParticipantMenu(participant: (typeof participants.value)[number], event: MouseEvent): void {
+async function changeTitle(): Promise<void> {
+	if (!hasRoomMenu.value || room.value == null) return;
+	const { canceled, result } = await os.inputText({
+		title: i18n.ts._calls.changeTitle,
+		default: room.value.title,
+		minLength: 1,
+		maxLength: 256,
+	});
+	if (canceled || !hasRoomMenu.value || room.value == null) return;
+	const title = result.trim();
+	if (title.length === 0 || title === room.value.title) return;
+	try {
+		await misskeyApi('calls/rooms/update-title', { roomId: props.roomId, title, expectedRevision: room.value.revision });
+		await refreshRoom();
+	} catch (error) {
+		console.error('[Calls] Title change failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
+}
+
+async function openParticipantMenu(participant: (typeof participants.value)[number], event: MouseEvent): Promise<void> {
 	if (popoutWindow != null) window.focus();
-	if (!canKick.value || room.value == null || participant.role === 'host' || participant.userId === $i?.id) return;
+	if (!canModerateParticipants.value || room.value == null || participant.role === 'host' || participant.userId === $i?.id) return;
+	const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined;
+	let publications: Misskey.entities.CallsMediaReconcileResponse['publications'];
+	try {
+		({ publications } = await misskeyApi('calls/media/reconcile', { roomId: props.roomId }));
+	} catch (error) {
+		console.error('[Calls] Participant menu failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		return;
+	}
+	if (disposed || !canModerateParticipants.value || room.value == null) return;
 	os.popupMenu([
 		...(isHost.value && room.value.mode === 'stage' ? [
 			{ text: participant.role === 'listener' ? participant.speakerRequestedAt != null ? i18n.ts.approve : i18n.ts._calls.promoteSpeaker : i18n.ts._calls.demoteListener, icon: 'ti ti-microphone', action: () => setRole(participant.id, participant.role === 'listener' ? 'speaker' : 'listener') },
 			...(participant.speakerRequestedAt != null ? [{ text: i18n.ts.reject, icon: 'ti ti-x', action: () => setRole(participant.id, 'listener') }] : []),
 		] : []),
+		...(isHost.value ? [{ text: i18n.ts._calls.transferHost, icon: 'ti ti-crown', action: () => transferHost(participant.id) }] : []),
 		...(isHost.value ? [{ text: room.value.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.removeVcModerator : i18n.ts._calls.assignVcModerator, icon: 'ti ti-shield', action: () => setModerator(participant.id, !room.value!.moderatorUserIds.includes(participant.userId)) }] : []),
+		...(participant.role === 'speaker' && !participant.isMuted ? [{ text: i18n.ts._calls.mute, icon: 'ti ti-microphone-off', action: () => muteParticipant(participant.id) }] : []),
+		...(publications.some(publication => publication.participantId === participant.id && publication.mediaSource === 'camera') ? [{ text: i18n.ts._calls.stopCamera, icon: 'ti ti-camera-off', action: () => stopParticipantVideo(participant.id, 'camera') }] : []),
+		...(publications.some(publication => publication.participantId === participant.id && publication.mediaSource === 'screen') ? [{ text: i18n.ts._calls.stopScreenSharing, icon: 'ti ti-screen-share-off', action: () => stopParticipantVideo(participant.id, 'screen') }] : []),
 		{ text: i18n.ts._calls.removeParticipant, icon: 'ti ti-user-x', danger: true, action: () => removeParticipant(participant.id) },
-	], event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
+	], target);
 }
 
 async function showScreenWindow(stream: MediaStream, participantId: string): Promise<void> {
 	try {
 		await session.showScreenWindow(stream, videoLabel(participantId));
-		if (session.screenWindowStream.value != null) closeWindow();
+		if (session.screenWindows.has(stream)) closeWindow();
 	} catch (error) {
 		console.error('[Calls] Room operation failed', error);
 		if (popoutWindow != null) window.focus();
@@ -317,6 +362,7 @@ async function cancelRoom(): Promise<void> { if (room.value != null) { await mis
 async function endRoom(): Promise<void> { if (room.value != null) { await misskeyApi('calls/rooms/end', { roomId: props.roomId, expectedRevision: room.value.revision }); await refreshRoom(); } }
 
 async function joinRoom(startMuted = false, requestConfirmation = false): Promise<void> {
+	if (!canJoinCalls.value) return;
 	if (session.currentRoomId.value != null && session.currentRoomId.value !== props.roomId) {
 		const { canceled } = await os.confirm({ type: 'warning', text: i18n.ts._calls.switchRoomConfirm });
 		if (canceled) return;
@@ -324,7 +370,7 @@ async function joinRoom(startMuted = false, requestConfirmation = false): Promis
 		const { canceled } = await os.confirm({ type: 'question', title: room.value?.title, text: i18n.ts._calls.joinRoomConfirm });
 		if (canceled) return;
 	}
-	if (disposed || room.value?.state !== 'open' || sessionIsCurrent.value || session.joining.value) return;
+	if (disposed || !canJoinCalls.value || room.value?.state !== 'open' || sessionIsCurrent.value || session.joining.value) return;
 
 	try {
 		await session.join(props.roomId, myParticipant.value != null, undefined, startMuted);
@@ -357,6 +403,26 @@ async function setRole(participantId: string, role: 'speaker' | 'listener'): Pro
 	await refreshRoom();
 }
 
+async function transferHost(participantId: string): Promise<void> {
+	if (!isHost.value || room.value == null) return;
+	const { canceled } = await os.confirm({ type: 'warning', title: videoLabel(participantId), text: i18n.ts._calls.transferHostConfirm });
+	if (canceled || !isHost.value || room.value == null) return;
+	const params = { roomId: props.roomId, participantId, expectedRevision: room.value.revision };
+	try {
+		try {
+			await misskeyApi('calls/rooms/transfer-host', params);
+		} catch (error) {
+			await refreshRoom();
+			if (participants.value.find(item => item.id === participantId)?.role !== 'host') throw error;
+			await misskeyApi('calls/rooms/transfer-host', params);
+		}
+		await refreshRoom();
+	} catch (error) {
+		console.error('[Calls] Host transfer failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
+}
+
 async function setModerator(participantId: string, isModerator: boolean): Promise<void> {
 	if (room.value == null) return;
 	try {
@@ -368,10 +434,36 @@ async function setModerator(participantId: string, isModerator: boolean): Promis
 	}
 }
 
+async function muteParticipant(participantId: string): Promise<void> {
+	if (room.value == null) return;
+	const { canceled } = await os.confirm({ type: 'warning', title: videoLabel(participantId), text: i18n.ts._calls.muteParticipantConfirm });
+	if (canceled || room.value == null) return;
+	try {
+		await misskeyApi('calls/rooms/mute-participant', { roomId: props.roomId, participantId, expectedRevision: room.value.revision });
+		await refreshRoom();
+	} catch (error) {
+		console.error('[Calls] Participant mute failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
+}
+
+async function stopParticipantVideo(participantId: string, mediaSource: 'camera' | 'screen'): Promise<void> {
+	if (room.value == null) return;
+	const { canceled } = await os.confirm({ type: 'warning', title: videoLabel(participantId), text: mediaSource === 'camera' ? i18n.ts._calls.stopParticipantCameraConfirm : i18n.ts._calls.stopParticipantScreenSharingConfirm });
+	if (canceled || room.value == null) return;
+	try {
+		await misskeyApi('calls/rooms/stop-participant-video', { roomId: props.roomId, participantId, mediaSource, expectedRevision: room.value.revision });
+		await refreshRoom();
+	} catch (error) {
+		console.error('[Calls] Participant video stop failed', error);
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	}
+}
+
 async function removeParticipant(participantId: string): Promise<void> {
 	if (room.value == null) return;
-	const { canceled } = await os.confirm({ type: 'warning', text: i18n.ts._calls.removeParticipant });
-	if (canceled) return;
+	const { canceled } = await os.confirm({ type: 'warning', title: videoLabel(participantId), text: i18n.ts._calls.removeParticipantConfirm });
+	if (canceled || room.value == null) return;
 	try {
 		await misskeyApi('calls/rooms/remove-participant', { roomId: props.roomId, participantId, expectedRevision: room.value.revision });
 		await refreshRoom();
@@ -386,18 +478,8 @@ async function refreshRoom(): Promise<void> {
 	else await pageConnection.value?.refresh();
 }
 
-function participantUser(userId: string): Misskey.entities.UserLite | null { return usersById.value.get(userId) ?? null; }
+function participantUser(userId: string): Misskey.entities.UserLite | null { return participants.value.find(participant => participant.userId === userId)?.user ?? null; }
 
-async function loadParticipantUsers(userIds: string[]): Promise<void> {
-	const missingIds = [...new Set(userIds)].filter(userId => !usersById.value.has(userId));
-	if (missingIds.length === 0) return;
-	const fetched = await Promise.all(missingIds.map(userId => misskeyApi('users/show', { userId }).catch(() => null)));
-	const next = new Map(usersById.value);
-	for (const user of fetched) if (user != null) next.set(user.id, user);
-	usersById.value = next;
-}
-
-watch(() => participants.value.map(participant => participant.userId), userIds => { void loadParticipantUsers(userIds); }, { immediate: true });
 watch(isSessionRoom, active => {
 	if (active) {
 		pageConnection.value?.dispose();
@@ -436,7 +518,9 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 <style lang="scss" module>
 .space { display: flex; flex-direction: column; width: 100vw; height: 100dvh; overflow: hidden; border-radius: 0; }
 .header { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding: 12px 20px; border-bottom: 1px solid var(--MI_THEME-divider); }
-.title { flex: 1; min-width: 0; margin: 0; font-size: 1.2rem; line-height: 1.4; overflow-wrap: anywhere; }
+.heading { flex: 1; min-width: 0; }
+.title { margin: 0; font-size: 1.2rem; line-height: 1.4; overflow-wrap: anywhere; }
+.elapsedTime { font-variant-numeric: tabular-nums; color: var(--MI_THEME-fgTransparentWeak); }
 .menuButton { width: 36px; height: 36px; border-radius: 50%; font-size: 20px; }
 .body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 16px; padding: 16px; background: var(--MI_THEME-bg); }
 .callLayout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0; }

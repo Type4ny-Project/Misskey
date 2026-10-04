@@ -49,20 +49,21 @@ import { computed, onUnmounted, shallowRef, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
 import { i18n } from '@/i18n.js';
 import { openCallsRoom } from '@/utility/calls-window.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
-import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
+import { retainCallsRoomConnection } from '@/composables/use-calls-room.js';
 
 const props = defineProps<{
 	room: Misskey.entities.CallsRoom;
 	compact?: boolean;
 }>();
 
-const connection = shallowRef<ReturnType<typeof createCallsRoomConnection> | null>(null);
+const connection = shallowRef<ReturnType<typeof retainCallsRoomConnection> | null>(null);
 const room = computed(() => connection.value?.room.value ?? props.room);
 const participants = computed(() => room.value.state === 'open' ? (connection.value?.participants.value ?? []).filter(participant => participant.state === 'active') : []);
-const hostUser = shallowRef<Misskey.entities.UserLite | null>(null);
-const participantUsers = shallowRef(new Map<string, Misskey.entities.UserDetailed>());
-const sortedParticipants = computed(() => participants.value.map(participant => ({ participant, user: participantUsers.value.get(participant.userId) ?? null })).sort((a, b) => {
+const hostUser = computed(() => {
+	const host = participants.value.find(participant => participant.role === 'host');
+	return host?.user ?? null;
+});
+const sortedParticipants = computed(() => participants.value.map(participant => ({ participant, user: participant.user })).sort((a, b) => {
 	const priority = (item: typeof a) => item.participant.role === 'host' ? 0 : item.user?.isFollowing && item.user?.isFollowed ? 1 : 2;
 	return priority(a) - priority(b);
 }));
@@ -72,18 +73,11 @@ const followedParticipants = computed(() => sortedParticipants.value.filter(item
 
 async function connectRoom(roomId: string): Promise<void> {
 	connection.value?.dispose();
-	connection.value = createCallsRoomConnection(roomId);
-	await connection.value.refresh().catch(() => undefined);
+	connection.value = retainCallsRoomConnection(roomId);
+	await connection.value.load().catch(() => undefined);
 }
 
 watch(() => props.room.id, roomId => void connectRoom(roomId), { immediate: true });
-watch(() => participants.value.find(participant => participant.role === 'host')?.userId, async userId => {
-	hostUser.value = userId == null ? null : await misskeyApi('users/show', { userId }).catch(() => null);
-}, { immediate: true });
-watch(() => participants.value.map(participant => participant.userId), async userIds => {
-	const users = await Promise.all(userIds.map(userId => misskeyApi('users/show', { userId }).catch(() => null)));
-	participantUsers.value = new Map(users.filter(user => user != null).map(user => [user.id, user]));
-}, { immediate: true });
 onUnmounted(() => connection.value?.dispose());
 </script>
 

@@ -10,7 +10,7 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { $i } from '@/i.js';
 
 type Snapshot = Misskey.entities.CallsRoomsShowResponse;
-type EventBase = { sequence: number; roomRevision: number; reason?: string };
+type EventBase = { sequence: number; roomRevision: number };
 export type CallsRevokedEvent = Parameters<Misskey.Channels['callsRoom']['events']['revoked']>[0];
 
 export function createCallsRoomConnection(roomId: string) {
@@ -26,7 +26,6 @@ export function createCallsRoomConnection(roomId: string) {
 	const trackListeners = new Set<() => void>();
 	const revocationListeners = new Set<(event: CallsRevokedEvent) => void>();
 	let ownParticipantId: string | null = null;
-	let eventQueue = Promise.resolve();
 
 	async function refresh() {
 		const snapshot = await misskeyApi('calls/rooms/show', { roomId });
@@ -38,57 +37,57 @@ export function createCallsRoomConnection(roomId: string) {
 		ownParticipantId ??= snapshot.participants.find(participant => participant.userId === $i?.id)?.id ?? null;
 	}
 
-	async function accept(event: EventBase, apply: () => void | Promise<void>) {
-		if (event.sequence <= lastSequence.value && event.roomRevision <= lastRoomRevision.value) return;
-		// A gap refresh can end the room before the lifecycle callback runs.
-		if (event.roomRevision >= lastRoomRevision.value && event.reason === 'host-timeout') endReason.value = event.reason;
-		if (event.sequence <= lastSequence.value) {
-			await refresh();
-			if (room.value?.state === 'open') await misskeyApi('calls/media/reconcile', { roomId });
-			lastSequence.value = event.sequence;
-			if (event.roomRevision < lastRoomRevision.value) return;
-			lastRoomRevision.value = event.roomRevision;
-			if (room.value != null) room.value = { ...room.value, revision: event.roomRevision };
-			await apply();
-			return;
-		}
-		if (lastSequence.value !== 0 && event.sequence !== lastSequence.value + 1) {
-			await refresh();
-			if (room.value?.state === 'open') await misskeyApi('calls/media/reconcile', { roomId });
-		}
-		lastSequence.value = event.sequence;
+	function accept(event: EventBase, apply: () => void) {
 		if (event.roomRevision < lastRoomRevision.value) return;
-		lastRoomRevision.value = Math.max(lastRoomRevision.value, event.roomRevision);
+		if (event.sequence <= lastSequence.value && event.roomRevision <= lastRoomRevision.value) return;
+		lastSequence.value = event.sequence;
+		lastRoomRevision.value = event.roomRevision;
 		if (room.value != null) room.value = { ...room.value, revision: event.roomRevision };
-		await apply();
-	}
-
-	function enqueue(event: EventBase, apply: () => void | Promise<void>) {
-		eventQueue = eventQueue.then(() => accept(event, apply)).catch(() => refresh());
+		apply();
 	}
 
 	function onStreamDisconnected() { connected.value = false; }
 
 	function onStreamConnected() {
 		connected.value = true;
-		void refresh().then(() => misskeyApi('calls/media/reconcile', { roomId })).catch(() => undefined);
+		void refresh().then(() => {
+			if (room.value?.state !== 'open') return;
+			for (const listener of trackListeners) listener();
+		}).catch(() => undefined);
 	}
 
-	channel.on('lifecycle', event => enqueue(event, () => {
+	channel.on('title', event => accept(event, () => {
+		if (room.value != null) room.value = { ...room.value, title: event.title };
+	}));
+	channel.on('lifecycle', event => accept(event, () => {
 		endReason.value = event.reason ?? null;
 		if (room.value != null) room.value = { ...room.value, state: event.state, revision: event.roomRevision };
 	}));
-	channel.on('participant', event => enqueue(event, () => { void refresh(); }));
-	channel.on('role', event => enqueue(event, () => {
+	channel.on('participant', event => accept(event, () => {
+		if (room.value != null && event.moderatorUserIds != null) room.value = { ...room.value, moderatorUserIds: event.moderatorUserIds };
+		if (event.action === 'left' || event.action === 'removed') {
+			participants.value = participants.value.filter(participant => participant.id !== event.participantId);
+		} else if (event.participant != null) {
+			const next = event.participant;
+			participants.value = participants.value.some(participant => participant.id === next.id)
+				? participants.value.map(participant => participant.id === next.id ? next : participant)
+				: [...participants.value, next];
+			if (next.userId === $i?.id) ownParticipantId = next.id;
+			if (event.action === 'updated' && next.role === 'host') void refresh().catch(() => undefined);
+		}
+	}));
+	channel.on('role', event => accept(event, () => {
 		participants.value = participants.value.map(participant => participant.id === event.participantId ? { ...participant, role: event.role } : participant);
 		if (room.value != null) room.value = { ...room.value, revision: event.roomRevision };
 	}));
-	channel.on('speakerRequest', event => enqueue(event, () => { void refresh(); }));
-	channel.on('mute', event => enqueue(event, () => { participants.value = participants.value.map(participant => participant.id === event.participantId ? { ...participant, isMuted: event.isMuted } : participant); }));
-	channel.on('track', event => enqueue(event, () => { for (const listener of trackListeners) listener(); }));
-	channel.on('speaking', event => enqueue(event, () => { speakingParticipantIds.value = new Set(event.participantIds); }));
-	channel.on('revoked', event => enqueue(event, async () => {
-		if (event.participantId != null && ownParticipantId == null) await refresh();
+	channel.on('speakerRequest', event => accept(event, () => {
+		participants.value = participants.value.map(participant => participant.id === event.participantId ? { ...participant, speakerRequestedAt: event.requested ? event.occurredAt : null } : participant);
+	}));
+	channel.on('mute', event => accept(event, () => { participants.value = participants.value.map(participant => participant.id === event.participantId ? { ...participant, isMuted: event.isMuted } : participant); }));
+	channel.on('track', event => accept(event, () => { for (const listener of trackListeners) listener(); }));
+	channel.on('videoStopped', event => accept(event, () => { for (const listener of trackListeners) listener(); }));
+	channel.on('speaking', event => accept(event, () => { speakingParticipantIds.value = new Set(event.participantIds); }));
+	channel.on('revoked', event => accept(event, () => {
 		if (event.participantId != null && event.participantId !== ownParticipantId) return;
 		if (event.participantId == null) connected.value = false;
 		for (const listener of revocationListeners) listener(event);
@@ -111,6 +110,41 @@ export function createCallsRoomConnection(roomId: string) {
 		onTrackChange(listener: () => void) { trackListeners.add(listener); return () => trackListeners.delete(listener); },
 		onRevoked(listener: (event: CallsRevokedEvent) => void) { revocationListeners.add(listener); return () => revocationListeners.delete(listener); },
 		dispose,
+	};
+}
+
+// Display cards share a subscription without changing media session lifetimes.
+const sharedCallsRooms = new Map<string, {
+	connection: ReturnType<typeof createCallsRoomConnection>;
+	referenceCount: number;
+	loading: Promise<void> | null;
+}>();
+
+export function retainCallsRoomConnection(roomId: string) {
+	let shared = sharedCallsRooms.get(roomId);
+	if (shared == null) {
+		shared = { connection: createCallsRoomConnection(roomId), referenceCount: 0, loading: null };
+		sharedCallsRooms.set(roomId, shared);
+	}
+	const entry = shared;
+	entry.referenceCount++;
+	let disposed = false;
+	return {
+		room: entry.connection.room,
+		participants: entry.connection.participants,
+		speakingParticipantIds: entry.connection.speakingParticipantIds,
+		load() {
+			if (entry.connection.room.value != null) return Promise.resolve();
+			return entry.loading ??= entry.connection.refresh().finally(() => { entry.loading = null; });
+		},
+		dispose() {
+			if (disposed) return;
+			disposed = true;
+			if (--entry.referenceCount === 0) {
+				entry.connection.dispose();
+				sharedCallsRooms.delete(roomId);
+			}
+		},
 	};
 }
 

@@ -227,11 +227,11 @@ if ($i) {
 }
 .transition_notification_enterFrom {
 	opacity: 0;
-	transform: translateX(250px);
+	transform: translateX(var(--notificationSlideOffset, 250px));
 }
 .transition_notification_leaveTo {
 	opacity: 0;
-	transform: translateX(-250px);
+	transform: translateX(calc(-1 * var(--notificationSlideOffset, 250px)));
 }
 
 .menuDrawerBg {
@@ -283,6 +283,16 @@ if ($i) {
 	pointer-events: none;
 	display: flex;
 
+	&.notificationsPosition_rightTop,
+	&.notificationsPosition_rightBottom {
+		--notificationSlideOffset: 250px;
+	}
+
+	&.notificationsPosition_leftTop,
+	&.notificationsPosition_leftBottom {
+		--notificationSlideOffset: -250px;
+	}
+
 	&.notificationsPosition_leftTop {
 		top: var(--MI-margin);
 		left: 0;
@@ -294,12 +304,12 @@ if ($i) {
 	}
 
 	&.notificationsPosition_leftBottom {
-		bottom: calc(var(--MI-minBottomSpacing) + var(--MI-margin));
+		bottom: calc(var(--MI-minBottomSpacing) + var(--MI-margin) + var(--MI-callsDockSpacing, 0px));
 		left: 0;
 	}
 
 	&.notificationsPosition_rightBottom {
-		bottom: calc(var(--MI-minBottomSpacing) + var(--MI-margin));
+		bottom: calc(var(--MI-minBottomSpacing) + var(--MI-margin) + var(--MI-callsDockSpacing, 0px));
 		right: 0;
 	}
 

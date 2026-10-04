@@ -13,7 +13,7 @@ export const callsErrors = {
 	invalidState: { message: 'The Calls room is not in the required state.', code: 'CALLS_INVALID_STATE', id: '27bbe09b-c516-4c8a-a9fc-4b5c8de79cbb' },
 	invalidMetadata: { message: 'The Calls room metadata is invalid.', code: 'CALLS_INVALID_METADATA', id: '7fc75953-7ec9-4e2f-aee2-af12a8101971' },
 	participantNotFound: { message: 'The Calls participant does not exist.', code: 'CALLS_PARTICIPANT_NOT_FOUND', id: '17e679a9-0ad9-4fe0-a09f-92dae12e445a' },
-	roomFull: { message: 'The Calls room has reached its participant limit.', code: 'CALLS_ROOM_FULL', id: '0a9fe42c-7fc8-428c-8e80-cbf2063e8747' },
+	roomFull: { message: 'The Calls room participant limit has been reached.', code: 'CALLS_ROOM_FULL', id: '0b5e0eea-8c21-433c-94f9-e2359c57096e' },
 	roomNotFound: { message: 'The Calls room does not exist.', code: 'CALLS_ROOM_NOT_FOUND', id: '09fd2742-0fc7-4222-ad41-1c395427a7d1' },
 	staleRevision: { message: 'The Calls room revision is stale.', code: 'CALLS_STALE_REVISION', id: 'fde2c128-2b65-4784-a0de-59f20eb901c1' },
 	featureDisabled: { message: 'Misskey Calls is disabled on this instance.', code: 'CALLS_FEATURE_DISABLED', id: 'bc70cfca-3247-4cd5-a9b7-a88b381195af' },
@@ -29,7 +29,7 @@ export function callsApiError(error: unknown): never {
 				: error.code === 'invalid-metadata' ? 'invalidMetadata'
 				: error.code === 'participant-not-found' ? 'participantNotFound'
 					: error.code === 'room-full' ? 'roomFull'
-						: error.code === 'room-not-found' ? 'roomNotFound'
-							: 'staleRevision';
+					: error.code === 'room-not-found' ? 'roomNotFound'
+						: 'staleRevision';
 	throw new ApiError(callsErrors[key]);
 }

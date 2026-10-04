@@ -104,6 +104,7 @@ export class CallsMediaService {
 		const connection = await this.liveConnectionService.assertCurrent(participant.id, input.connectionId, input.generation);
 		if (connection.sessionId == null) throw new CallsMediaAccessError();
 		const mediaSource = input.mediaSource ?? 'microphone';
+		await this.roomService.assertCanPublish(user, mediaSource);
 		const mediaKind = mediaSource === 'microphone' ? 'audio' : 'video';
 		const trackName = `${mediaSource}-${participant.id}-${input.generation}-${input.mid}`;
 		await this.quotaService.reserveTrack(connection.applicationId, trackName);
@@ -116,6 +117,7 @@ export class CallsMediaService {
 			providerMid = track?.mid ?? input.mid;
 			const currentParticipant = await this.authorizeParticipant(user, input.roomId);
 			if (currentParticipant.role === 'listener') throw new CallsMediaAccessError();
+			await this.roomService.assertCanPublish(user, mediaSource);
 			await this.liveConnectionService.assertCurrent(participant.id, input.connectionId, input.generation);
 			publication = await this.bindingService.createPublication({
 				roomId: input.roomId,
@@ -238,7 +240,10 @@ export class CallsMediaService {
 
 	private async authorizeParticipant(user: MiUser, roomId: string): Promise<MiCallsParticipant> {
 		const room = await this.roomService.getRoom(roomId);
-		try { await this.roomService.assertCanAccess(user, room); } catch (error) {
+		try {
+			await this.roomService.assertCanAccess(user, room);
+			await this.roomService.assertCanJoin(user);
+		} catch (error) {
 			if (error instanceof CallsFeatureDisabledError || (error instanceof CallsRoomError && error.code === 'access-denied')) {
 				await this.roomService.leave(user, roomId).catch(leaveError => {
 					if (!(leaveError instanceof CallsRoomError && leaveError.code === 'participant-not-found')) throw leaveError;

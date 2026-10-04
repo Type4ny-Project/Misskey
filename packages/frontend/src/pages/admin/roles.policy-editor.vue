@@ -161,6 +161,86 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</template>
 		</XFolder>
 
+		<XFolder v-if="matchQuery([i18n.ts._role._options.canJoinCalls, 'canJoinCalls'])" v-model:policyMeta="policyMetaModel.canJoinCalls" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.canJoinCalls }}</template>
+			<template #valueText>{{ valuesModel.canJoinCalls ? i18n.ts.yes : i18n.ts.no }}</template>
+			<template #default="{ disabled }">
+				<MkSwitch v-model="valuesModel.canJoinCalls" :disabled="disabled">
+					<template #label>{{ i18n.ts.enable }}</template>
+				</MkSwitch>
+			</template>
+		</XFolder>
+
+		<XFolder v-if="matchQuery([i18n.ts._role._options.canSpeakInCalls, 'canSpeakInCalls'])" v-model:policyMeta="policyMetaModel.canSpeakInCalls" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.canSpeakInCalls }}</template>
+			<template #valueText>{{ valuesModel.canSpeakInCalls ? i18n.ts.yes : i18n.ts.no }}</template>
+			<template #default="{ disabled }">
+				<MkSwitch v-model="valuesModel.canSpeakInCalls" :disabled="disabled">
+					<template #label>{{ i18n.ts.enable }}</template>
+				</MkSwitch>
+			</template>
+		</XFolder>
+
+		<XFolder v-if="matchQuery([i18n.ts._role._options.canPublishCallsVideo, 'canPublishCallsVideo'])" v-model:policyMeta="policyMetaModel.canPublishCallsVideo" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.canPublishCallsVideo }}</template>
+			<template #valueText>{{ valuesModel.canPublishCallsVideo ? i18n.ts.yes : i18n.ts.no }}</template>
+			<template #default="{ disabled }">
+				<MkSwitch v-model="valuesModel.canPublishCallsVideo" :disabled="disabled">
+					<template #label>{{ i18n.ts.enable }}</template>
+				</MkSwitch>
+			</template>
+		</XFolder>
+
+		<XFolder v-if="matchQuery([i18n.ts._role._options.canShareCallsScreen, 'canShareCallsScreen'])" v-model:policyMeta="policyMetaModel.canShareCallsScreen" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.canShareCallsScreen }}</template>
+			<template #valueText>{{ valuesModel.canShareCallsScreen ? i18n.ts.yes : i18n.ts.no }}</template>
+			<template #default="{ disabled }">
+				<MkSwitch v-model="valuesModel.canShareCallsScreen" :disabled="disabled">
+					<template #label>{{ i18n.ts.enable }}</template>
+				</MkSwitch>
+			</template>
+		</XFolder>
+
+		<XFolder v-if="matchQuery([i18n.ts._role._options.callsRoomSpeakerLimit, 'callsRoomSpeakerLimit'])" v-model:policyMeta="policyMetaModel.callsRoomSpeakerLimit" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.callsRoomSpeakerLimit }}</template>
+			<template #valueText>{{ valuesModel.callsRoomSpeakerLimit }}</template>
+			<template #default="{ disabled }">
+				<MkInput v-model="valuesModel.callsRoomSpeakerLimit" type="number" :disabled="disabled" :min="0">
+					<template #caption>{{ i18n.ts._role._options.callsRoomSpeakerLimitDescription }}</template>
+				</MkInput>
+			</template>
+		</XFolder>
+
+		<XFolder v-if="matchQuery([i18n.ts._role._options.callsRoomListenerLimit, 'callsRoomListenerLimit'])" v-model:policyMeta="policyMetaModel.callsRoomListenerLimit" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.callsRoomListenerLimit }}</template>
+			<template #valueText>{{ valuesModel.callsRoomListenerLimit }}</template>
+			<template #default="{ disabled }">
+				<MkInput v-model="valuesModel.callsRoomListenerLimit" type="number" :disabled="disabled" :min="0">
+					<template #caption>{{ i18n.ts._role._options.callsRoomListenerLimitDescription }}</template>
+				</MkInput>
+			</template>
+		</XFolder>
+
+		<XFolder v-if="matchQuery([i18n.ts._role._options.canSendPoints, 'canSendPoints'])" v-model:policyMeta="policyMetaModel.canSendPoints" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.canSendPoints }}</template>
+			<template #valueText>{{ valuesModel.canSendPoints ? i18n.ts.yes : i18n.ts.no }}</template>
+			<template #default="{ disabled }">
+				<MkSwitch v-model="valuesModel.canSendPoints" :disabled="disabled">
+					<template #label>{{ i18n.ts.enable }}</template>
+				</MkSwitch>
+			</template>
+		</XFolder>
+
+		<XFolder v-if="matchQuery([i18n.ts._role._options.eventCreationDailyLimit, 'eventCreationDailyLimit'])" v-model:policyMeta="policyMetaModel.eventCreationDailyLimit" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.eventCreationDailyLimit }}</template>
+			<template #valueText>{{ valuesModel.eventCreationDailyLimit }}</template>
+			<template #default="{ disabled }">
+				<MkInput v-model="valuesModel.eventCreationDailyLimit" type="number" :disabled="disabled" :min="0">
+					<template #caption>{{ i18n.ts._role._options.eventCreationDailyLimitDescription }}</template>
+				</MkInput>
+			</template>
+		</XFolder>
+
 		<XFolder v-if="matchQuery([i18n.ts._role._options.canCreateChannel, 'canCreateChannel'])" v-model:policyMeta="policyMetaModel.canCreateChannel" :isBaseRole="isBaseRole" :readonly="readonly">
 			<template #label>{{ i18n.ts._role._options.canCreateChannel }}</template>
 			<template #valueText>{{ valuesModel.canCreateChannel ? i18n.ts.yes : i18n.ts.no }}</template>
@@ -367,6 +447,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkSwitch v-model="valuesModel.canImportUserLists" :disabled="disabled">
 					<template #label>{{ i18n.ts.enable }}</template>
 				</MkSwitch>
+			</template>
+		</XFolder>
+
+		<XFolder v-if="matchQuery([i18n.ts._role._options.reactionLimit, 'reactionLimit'])" v-model:policyMeta="policyMetaModel.reactionLimit" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.reactionLimit }}</template>
+			<template #valueText>{{ valuesModel.reactionLimit }}</template>
+			<template #default="{ disabled }">
+				<MkInput v-model="valuesModel.reactionLimit" type="number" :disabled="disabled" :min="0">
+				</MkInput>
 			</template>
 		</XFolder>
 

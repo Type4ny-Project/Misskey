@@ -67,6 +67,7 @@ function releaseFocusTrap(el: HTMLElement): void {
 				highestZIndexElement != null &&
 				siblingEl !== highestZIndexElement.el &&
 				!siblingEl.contains(highestZIndexElement.el) &&
+				getZIndex(siblingEl) <= highestZIndexElement.zIndex &&
 				!ignoreElements.includes(siblingEl.tagName.toLowerCase())
 			) {
 				siblingEl.inert = true;
@@ -81,6 +82,10 @@ function releaseFocusTrap(el: HTMLElement): void {
 export function focusTrap(el: HTMLElement, hasInteractionWithOtherFocusTrappedEls: boolean, parent: true): void;
 export function focusTrap(el: HTMLElement, hasInteractionWithOtherFocusTrappedEls?: boolean, parent?: false): { release: () => void; };
 export function focusTrap(el: HTMLElement, hasInteractionWithOtherFocusTrappedEls = false, parent = false): { release: () => void; } | void {
+	if (!parent) {
+		focusTrapElements.add(el);
+	}
+
 	const highestZIndexElement = getHighestZIndexElement();
 
 	const highestZIndex = highestZIndexElement == null ? -Infinity : highestZIndexElement.zIndex;
@@ -89,7 +94,6 @@ export function focusTrap(el: HTMLElement, hasInteractionWithOtherFocusTrappedEl
 	// If the element has a lower z-index than the highest z-index element, focus trap the highest z-index element instead
 	// Focus trapping for this element will be done in the release function
 	if (!parent && zIndex < highestZIndex) {
-		focusTrapElements.add(el);
 		if (highestZIndexElement) {
 			focusTrap(highestZIndexElement.el, hasInteractionWithOtherFocusTrappedEls);
 		}
@@ -108,6 +112,11 @@ export function focusTrap(el: HTMLElement, hasInteractionWithOtherFocusTrappedEl
 		el.parentElement.childNodes.forEach((siblingNode) => {
 			const siblingEl = getHTMLElementOrNull(siblingNode);
 			if (!siblingEl) return;
+			// Windows above the modal must remain interactive, even if an earlier modal made them inert.
+			if (siblingEl !== el && getZIndex(siblingEl) > highestZIndex) {
+				siblingEl.inert = false;
+				return;
+			}
 			if (
 				siblingEl !== el &&
 				(
@@ -123,8 +132,6 @@ export function focusTrap(el: HTMLElement, hasInteractionWithOtherFocusTrappedEl
 	}
 
 	if (!parent) {
-		focusTrapElements.add(el);
-
 		return {
 			release: () => {
 				releaseFocusTrap(el);

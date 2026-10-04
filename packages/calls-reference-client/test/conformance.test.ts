@@ -78,6 +78,9 @@ describe('third-party Calls protocol conformance', () => {
 	test('negotiates capability, joins, creates media, heartbeats, reconciles a sequence gap, and honors revoke', async () => {
 		const client = new CallsReferenceClient('https://misskey.example', 'token');
 		await client.join('room-a');
+		expect(fixture.send).not.toHaveBeenCalledWith('ready', expect.anything());
+		client.confirmReady();
+		expect(fixture.send).toHaveBeenCalledWith('ready', { connectionId: expect.any(String), generation: 1 });
 
 		expect(fixture.request.mock.calls.map(call => call[0])).toEqual(expect.arrayContaining([
 			'calls/capabilities', 'calls/rooms/join', 'calls/media/session/create', 'calls/media/reconcile',

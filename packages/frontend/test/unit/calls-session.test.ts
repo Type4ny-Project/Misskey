@@ -19,10 +19,14 @@ const fixture = vi.hoisted(() => ({
 	captureCamera: vi.fn(),
 	keepalive: vi.fn(),
 	connectionExists: false,
+	connectingParticipant: false,
+	connectMedia: vi.fn(),
 	participantMuted: true,
 	microphoneAvailable: true,
 	setMuted: vi.fn(),
 	heartbeat: vi.fn(),
+	ready: vi.fn(),
+	identifyParticipant: vi.fn(),
 	role: 'listener' as 'listener' | 'host',
 	revoked: [] as Array<(event: { reason: string; connectionId?: string; generation?: number }) => void>,
 	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null }; participants: { value: Array<{ id: string; userId: string; role: string; isMuted: boolean; joinedAt?: string }> }; refresh: ReturnType<typeof vi.fn> }>,
@@ -47,10 +51,10 @@ vi.mock('@/composables/use-calls-room.js', async () => {
 			const connection = {
 				room: ref({ id: roomId, title: 'Room', state: 'open', revision: 1 }),
 				endReason: ref<'host-timeout' | null>(null),
-				participants: ref([{ id: 'participant-a', userId: 'user-a', role: fixture.role, isMuted: fixture.participantMuted, joinedAt: new Date().toISOString() }]),
+				participants: ref(fixture.connectingParticipant ? [] : [{ id: 'participant-a', userId: 'user-a', role: fixture.role, isMuted: fixture.participantMuted, joinedAt: new Date().toISOString() }]),
 				speakingParticipantIds: ref(new Set()),
 				connected: ref(true),
-				refresh: vi.fn(), dispose: vi.fn(), setMuted: fixture.setMuted, setSpeaking: vi.fn(), heartbeat: fixture.heartbeat,
+				refresh: vi.fn(), dispose: vi.fn(), setMuted: fixture.setMuted, setSpeaking: vi.fn(), heartbeat: fixture.heartbeat, ready: fixture.ready, identifyParticipant: fixture.identifyParticipant,
 				onTrackChange: () => vi.fn(),
 				onRevoked: (callback: typeof fixture.revoked[number]) => { fixture.revoked.push(callback); return vi.fn(); },
 			};
@@ -74,10 +78,12 @@ vi.mock('@/utility/calls-media.js', () => ({
 		public reconcile = vi.fn().mockResolvedValue(undefined);
 		public connect = vi.fn(async () => {
 			if (fixture.connectionExists && !this.replaceExisting) throw Object.assign(new Error('Connection exists'), { code: 'CALLS_CONNECTION_EXISTS' });
+			await fixture.connectMedia();
 			this.onState('connected');
+			this.callbacks?.ready?.();
 		});
 		public setMuted = vi.fn();
-		constructor(_roomId: string, _role: string, private onState: (state: string) => void, onRemoteTrack: typeof fixture.remoteTrackCallbacks[number], _onStats: unknown, previousConnection?: { connectionId: string; generation: number }, public replaceExisting = false) {
+		constructor(_roomId: string, _role: string, private onState: (state: string) => void, onRemoteTrack: typeof fixture.remoteTrackCallbacks[number], _onStats: unknown, previousConnection?: { connectionId: string; generation: number }, public replaceExisting = false, private callbacks?: { ready?: () => void }) {
 			this.connectionIdentity = previousConnection ?? { connectionId: `device-${fixture.controllers.length}`, generation: 1 };
 			fixture.controllers.push(this);
 			fixture.remoteTrackCallbacks.push(onRemoteTrack);
@@ -91,7 +97,9 @@ describe('Calls session device handoff', () => {
 	beforeEach(async () => {
 		vi.resetModules();
 		vi.useFakeTimers();
-		fixture.api.mockReset().mockResolvedValue({});
+		fixture.api.mockReset().mockImplementation(async (endpoint: string) => endpoint === 'calls/rooms/join' ? { id: 'participant-a', roomId: 'room-a', userId: 'user-a', role: fixture.role, isMuted: fixture.participantMuted } : {});
+		fixture.ready.mockClear();
+		fixture.identifyParticipant.mockClear();
 		fixture.toast.mockClear();
 		fixture.playSound.mockClear();
 		fixture.alert.mockClear();
@@ -101,6 +109,8 @@ describe('Calls session device handoff', () => {
 		fixture.keepalive.mockClear();
 		fixture.confirm.mockReset().mockResolvedValue({ canceled: true });
 		fixture.connectionExists = false;
+		fixture.connectingParticipant = false;
+		fixture.connectMedia.mockReset();
 		fixture.participantMuted = true;
 		fixture.microphoneAvailable = true;
 		fixture.setMuted.mockClear();
@@ -123,6 +133,50 @@ describe('Calls session device handoff', () => {
 			const joinIndex = fixture.api.mock.calls.findIndex(([endpoint]) => endpoint === 'calls/rooms/join');
 			expect(joinIndex).toBeGreaterThanOrEqual(0);
 			expect(refresh.mock.invocationCallOrder[0]).toBeGreaterThan(fixture.api.mock.invocationCallOrder[joinIndex]);
+		}
+	});
+
+	test('keeps provisional membership out of the participant list until media is ready', async () => {
+		fixture.connectingParticipant = true;
+		let complete!: () => void;
+		fixture.connectMedia.mockImplementationOnce(() => new Promise<void>(resolve => { complete = resolve; }));
+		const joining = session.join('room-a', false);
+		await vi.waitFor(() => expect(fixture.connectMedia).toHaveBeenCalled());
+		expect(session.participants.value).toEqual([]);
+		expect(session.myParticipant.value?.id).toBe('participant-a');
+		expect(fixture.identifyParticipant).toHaveBeenCalledWith('participant-a');
+		expect(fixture.ready).not.toHaveBeenCalled();
+		complete();
+		await joining;
+		await vi.waitFor(() => expect(fixture.ready).toHaveBeenCalledWith('device-0', 1));
+		expect(session.participants.value).toEqual([]);
+	});
+
+	test.each([false, true])('waits for remote playback before announcing readiness (autoplay blocked: %s)', async blocked => {
+		let startPlayback!: () => void;
+		const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementationOnce(() => blocked
+			? Promise.reject(new DOMException('Autoplay blocked', 'NotAllowedError'))
+			: new Promise<void>(resolve => { startPlayback = resolve; }));
+		const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+		fixture.connectMedia.mockImplementationOnce(() => {
+			fixture.remoteTrackCallbacks[0](Object.assign(new EventTarget(), { kind: 'audio' }) as MediaStreamTrack,
+				{ id: 'remote-audio', participantId: 'participant-b', mediaKind: 'audio', mediaSource: 'microphone' });
+		});
+		try {
+			await session.join('room-a', false);
+			expect(fixture.ready).not.toHaveBeenCalled();
+			if (blocked) {
+				expect(session.needsAudioResume.value).toBe(true);
+				play.mockResolvedValue();
+				await session.resumeAudio();
+			} else {
+				startPlayback();
+			}
+			await vi.waitFor(() => expect(fixture.ready).toHaveBeenCalledWith('device-0', 1));
+			await session.leave();
+		} finally {
+			play.mockRestore();
+			pause.mockRestore();
 		}
 	});
 
@@ -589,6 +643,9 @@ describe('Calls session device handoff', () => {
 		fixture.revoked[0]({ reason: 'stale-generation', ...identity });
 		await vi.waitFor(() => expect(fixture.controllers).toHaveLength(2));
 		expect(fixture.controllers[1].connectionIdentity).toEqual(identity);
+		fixture.connections[0].participants.value = [];
+		await nextTick();
+		expect(session.myParticipant.value?.id).toBe('participant-a');
 		expect(fixture.playSound.mock.calls).toEqual([['callsJoin']]);
 		expect(session.isActive.value).toBe(true);
 		expect(session.replacedRoomId.value).toBeNull();

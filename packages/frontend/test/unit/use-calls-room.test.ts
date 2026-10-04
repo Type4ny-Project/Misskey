@@ -47,6 +47,21 @@ describe('useCallsRoom streaming updates', () => {
 		fixture.api.mockImplementation(async (endpoint: string) => endpoint === 'calls/rooms/show' ? structuredClone(snapshot) : { roomRevision: 1, publications: [] });
 	});
 
+	test('recognizes a provisional participant for revocation without displaying it', async () => {
+		fixture.api.mockResolvedValueOnce({ ...snapshot, participants: [] });
+		const calls = useCallsRoom('room-a');
+		calls.identifyParticipant('participant-a');
+		await calls.refresh();
+		const revoked = vi.fn();
+		calls.onRevoked(revoked);
+		fixture.channelHandlers.get('revoked')?.({ sequence: 1, roomRevision: 2, participantId: 'participant-a', reason: 'access' });
+		expect(revoked).toHaveBeenCalledOnce();
+		expect(calls.participants.value).toEqual([]);
+		calls.ready('device-a', 1);
+		expect(fixture.send).toHaveBeenCalledWith('ready', { connectionId: 'device-a', generation: 1 });
+		calls.dispose();
+	});
+
 	test('shares room loading and updates across five cards until the last card is disposed', async () => {
 		const cards = Array.from({ length: 5 }, () => retainCallsRoomConnection('shared-room'));
 		await Promise.all(cards.map(card => card.load()));

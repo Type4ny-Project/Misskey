@@ -207,7 +207,8 @@ export class CallsMediaService {
 	}
 
 	public async reconcile(user: MiUser, roomId: string): Promise<{ roomRevision: number; publications: Array<{ id: string; participantId: string; mediaKind: 'audio' | 'video'; mediaSource: 'microphone' | 'camera' | 'screen' }> }> {
-		const snapshot = await this.roomService.snapshot(user, roomId);
+		// Reserved participants still need publications to finish their media connection.
+		const snapshot = await this.roomService.snapshot(user, roomId, true);
 		const activeSpeakers = new Set(snapshot.participants.filter(p => p.role !== 'listener').map(p => p.id));
 		const publications = (await this.bindingService.listRoomPublications(roomId)).filter(binding => activeSpeakers.has(binding.participantId));
 		return { roomRevision: snapshot.room.revision, publications: publications.map(binding => ({ id: binding.id, participantId: binding.participantId, mediaKind: binding.mediaKind, mediaSource: binding.mediaSource ?? 'microphone' })) };

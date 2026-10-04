@@ -104,6 +104,8 @@ export function createCallsRoomConnection(roomId: string) {
 
 	return {
 		room, endReason, participants, connected, speakingParticipantIds, refresh,
+		identifyParticipant(participantId: string) { ownParticipantId = participantId; },
+		ready(connectionId: string, generation: number) { channel.send('ready', { connectionId, generation }); },
 		setMuted(isMuted: boolean) { channel.send('mute', isMuted); },
 		setSpeaking(speaking: boolean) { channel.send('speaking', speaking); },
 		heartbeat(connectionId: string, generation: number) { channel.send('heartbeat', { connectionId, generation }); },

@@ -13,12 +13,13 @@ Call `calls/capabilities` before joining. A 1.x client requires protocol major 1
 
 ## Command and event flow
 
-1. Join with `calls/rooms/join`, fetch `calls/rooms/show`, then subscribe to `callsRoom` using `{ "roomId": "..." }`.
+1. Join with `calls/rooms/join`, retain the returned provisional participant, fetch `calls/rooms/show`, then subscribe to `callsRoom` using `{ "roomId": "..." }`. Public snapshots and user Calls presence exclude participants whose media connection is not ready.
 2. Treat WebSocket events as the normal state path. Each event body contains a monotonically increasing `sequence`, authoritative `roomRevision`, and `occurredAt` timestamp. The subscribed channel identifies the room.
 3. Ignore an event whose sequence and room revision were already applied. On a forward gap, or when a lower sequence arrives with a newer room revision after Redis-state loss, fetch a snapshot and `calls/media/reconcile` before applying later events.
 4. Create a media session and retain its short-lived media credential. The credential is bound to instance, user, application, room, participant, connection generation, capability, expiry, and nonce.
 5. Publish, subscribe, or renegotiate over HTTPS. Apply an answer directly; when an offer or `requiresImmediateRenegotiation` is returned, create an answer and send it to `calls/media/renegotiate`.
-6. Close media and leave. A terminal room event or `revoked` event requires immediate local track stop and peer-connection teardown.
+6. After initial negotiation, wait for the peer connection to connect and remote audio playback to start. Send `ready` on `callsRoom` with `{ "connectionId": "...", "generation": 1 }`. An empty listening room needs no transport or remote playback. If autoplay is blocked, wait for successful user-initiated playback before sending `ready`. The server validates the current bound media session, then emits the participant `joined` event and includes the participant in public snapshots and presence. Each new media generation must send `ready`; repeated commands for the same generation are idempotent.
+7. Close media and leave. A terminal room event or `revoked` event requires immediate local track stop and peer-connection teardown.
 
 If a heartbeat detects lost live state, the server emits `revoked` with reason `stale-generation`. Tear down the old peer connection and create a new media session/generation before republishing or resubscribing. Other revoke reasons are terminal for the current access decision and must not be retried without rejoining or refreshing authorization.
 
@@ -49,7 +50,9 @@ Retry network failures, HTTP 429, and provider 5xx responses with bounded expone
 
 Canonical error categories are `invalid-request`, `authentication-required`, `access-denied`, `not-found`, `conflict`, `stale-revision`, `stale-generation`, `rate-limited`, `provider-unavailable`, and `terminal-room`. Error details must not contain secrets, raw SDP, ICE candidate addresses, or provider identifiers.
 
-The independent browser example is in `packages/calls-reference-client`; it imports only the public `misskey-js` package.
+Clients must implement the `ready` command to appear as participants. Reload existing clients after deploying this change.
+
+The independent browser example is in `packages/calls-reference-client`; it imports only the public `misskey-js` package. Its browser integration must call `confirmReady()` after completing transport and audio playback setup, including after recovery.
 
 ## Instance operation
 

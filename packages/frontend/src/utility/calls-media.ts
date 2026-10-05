@@ -486,6 +486,9 @@ export class CallsMediaController {
 		this.muted = muted;
 		if (this.localTrack != null) this.localTrack.enabled = !muted;
 		if (this.microphone != null) this.microphone.track.enabled = !muted;
+		this.microphone?.processing?.setMuted(muted);
+		if (muted) this.stopStats();
+		else if (this.peer?.connectionState === 'connected') this.startStats();
 	}
 
 	public setNoiseSuppression(enabled: boolean): void {
@@ -603,15 +606,24 @@ export class CallsMediaController {
 	}
 
 	private startStats(): void {
-		if (this.statsTimer != null) return;
+		// Only the local microphone needs speaking detection; listening needs no polling.
+		if (this.statsTimer != null || this.muted || this.localTrack == null || this.onStats == null) return;
+		this.lastStatsBytes = 0;
 		this.lastStatsAt = performance.now();
 		this.statsTimer = window.setInterval(() => void this.sampleStats(), 500);
 	}
 
+	private stopStats(): void {
+		if (this.statsTimer != null) window.clearInterval(this.statsTimer);
+		this.statsTimer = null;
+		this.speaking = false;
+	}
+
 	private async sampleStats(): Promise<void> {
-		if (this.peer == null) return;
+		if (this.peer == null || this.muted || this.localTrack == null) return;
 		const now = performance.now();
 		const report = await this.peer.getStats();
+		if (this.muted || this.isClosed()) return;
 		const normalized = normalizeCallsStats(report, this.lastStatsBytes, Math.max((now - this.lastStatsAt) / 1000, 0.001), { reason: this.reconnectReason, recoveryTimeMs: this.recoveryTimeMs });
 		this.lastStatsAt = now;
 		let bytes = 0;
@@ -633,11 +645,9 @@ export class CallsMediaController {
 	private cleanupPeer(stopTrack: boolean): void {
 		if (this.reconnectTimer != null) window.clearTimeout(this.reconnectTimer);
 		if (this.turnRefreshTimer != null) window.clearTimeout(this.turnRefreshTimer);
-		if (this.statsTimer != null) window.clearInterval(this.statsTimer);
+		this.stopStats();
 		this.reconnectTimer = null;
 		this.turnRefreshTimer = null;
-		this.statsTimer = null;
-		this.speaking = false;
 		this.cancelMicrophoneRequest();
 		this.peer?.close();
 		this.peer = null;

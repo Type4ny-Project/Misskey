@@ -38,9 +38,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div ref="videoGrid" :class="$style.videoGrid" :style="videoGridStyle">
 							<CallsVideo v-for="video in roomVideos" :key="video.id" :stream="video.stream" screenWindow :screenWindowActive="session.screenWindows.has(video.stream)" :label="videoLabel(video.participantId)" :speaking="speakingParticipantIds.has(video.participantId)" :focused="focusedVideoId === video.id" :class="focusedVideoId === video.id && $style.focusedVideo" @contextmenu.capture.stop.prevent="openParticipantMenu(participants.find(participant => participant.id === video.participantId), $event)" @select="focusVideo(video.id)" @screenWindow="showScreenWindow(video.stream, video.participantId)"/>
 							<div v-for="participant in audioOnlySpeakers" :key="participant.id" :class="[$style.voiceTile, speakingParticipantIds.has(participant.id) && $style.speaking]" @contextmenu.capture.stop.prevent="openParticipantMenu(participant, $event)">
-								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.stageAvatar"/>
+								<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.stageAvatar"/>
 								<i v-else class="ti ti-user" :class="$style.stageAvatarPlaceholder"></i>
-								<div :class="$style.tileName"><i :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></div>
+								<div :class="$style.tileName"><i :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></div>
 							</div>
 						</div>
 					</section>
@@ -49,14 +49,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div v-if="room.mode === 'stage'" :class="$style.groupLabel">{{ i18n.ts._calls.speaker }}</div>
 							<TransitionGroup tag="div" :class="$style.people" :moveClass="$style.personMove">
 								<div v-for="participant in speakers" :key="participant.id" :class="$style.person" @contextmenu.capture.stop.prevent="openParticipantMenu(participant, $event)">
-									<MkA v-if="participantUser(participant.userId) != null" v-user-preview="participant.userId" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.personLink"/>
+									<MkA v-if="participant.user != null" v-user-preview="participant.userId" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.personLink"/>
 									<div :class="[$style.avatarWrap, speakingParticipantIds.has(participant.id) && $style.speaking]">
-										<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.avatar"/>
+										<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.avatar"/>
 										<div v-else :class="[$style.avatar, $style.avatarPlaceholder]"><i class="ti ti-user"></i></div>
 										<span :class="$style.microphoneBadge" :title="participant.isMuted ? i18n.ts._calls.mutedStatus : i18n.ts._calls.microphoneOn"><i :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i></span>
 									</div>
 									<div :class="$style.personName">
-										<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
+										<strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong>
 										<button v-if="canModerateParticipants && participant.role !== 'host' && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
 									</div>
 									<small :class="speakingParticipantIds.has(participant.id) && $style.speakingLabel">{{ speakingParticipantIds.has(participant.id) ? i18n.ts._calls.speakingNow : participant.role === 'host' ? i18n.ts._calls.host : room.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.vcModerator : i18n.ts._calls.speaker }}</small>
@@ -72,11 +72,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div :class="$style.groupLabel">{{ i18n.ts._calls.listener }} · {{ listeners.length }}</div>
 							<TransitionGroup tag="div" :class="$style.people" :moveClass="$style.personMove">
 								<div v-for="participant in listeners" :key="participant.id" :class="$style.person" @contextmenu.capture.stop.prevent="openParticipantMenu(participant, $event)">
-									<MkA v-if="participantUser(participant.userId) != null" v-user-preview="participant.userId" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.personLink"/>
-									<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.listenerAvatar"/>
+									<MkA v-if="participant.user != null" v-user-preview="participant.userId" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.personLink"/>
+									<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.listenerAvatar"/>
 									<div v-else :class="[$style.listenerAvatar, $style.avatarPlaceholder]"><i class="ti ti-user"></i></div>
 									<div :class="$style.personName">
-										<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
+										<strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong>
 										<button v-if="canModerateParticipants && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
 									</div>
 									<small v-if="room.moderatorUserIds.includes(participant.userId)">{{ i18n.ts._calls.vcModerator }}</small>
@@ -365,7 +365,7 @@ async function showScreenWindow(stream: MediaStream, participantId: string): Pro
 
 function videoLabel(participantId: string): string {
 	const participant = participants.value.find(item => item.id === participantId);
-	const user = participant == null ? null : participantUser(participant.userId);
+	const user = participant?.user;
 	return user?.name || user?.username || participant?.userId || '';
 }
 
@@ -492,8 +492,6 @@ async function refreshRoom(): Promise<void> {
 	if (isSessionRoom.value) await session.refresh();
 	else await pageConnection.value?.refresh();
 }
-
-function participantUser(userId: string): Misskey.entities.UserLite | null { return participants.value.find(participant => participant.userId === userId)?.user ?? null; }
 
 watch(isSessionRoom, active => {
 	if (active) {

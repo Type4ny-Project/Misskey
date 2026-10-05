@@ -79,6 +79,38 @@ describe('useCallsRoom streaming updates', () => {
 		reopened.dispose();
 	});
 
+	test('keeps a shared connection alive while a card and session reference overlap', async () => {
+		const card = retainCallsRoomConnection('shared-room');
+		const session = retainCallsRoomConnection('shared-room');
+		await Promise.all([card.load(), session.load()]);
+		expect(fixture.useChannel).toHaveBeenCalledTimes(1);
+		expect(fixture.api).toHaveBeenCalledTimes(1);
+
+		session.dispose();
+		expect(fixture.dispose).not.toHaveBeenCalled();
+		fixture.channelHandlers.get('role')?.({ sequence: 1, roomRevision: 2, participantId: 'participant-a', role: 'speaker' });
+		await vi.waitFor(() => expect(card.participants.value[0]?.role).toBe('speaker'));
+
+		card.dispose();
+		expect(fixture.dispose).toHaveBeenCalledTimes(1);
+	});
+
+	test('refreshes the local participant identity when a shared connection is reused', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		calls.setSpeaking(true);
+
+		fixture.api.mockResolvedValueOnce({
+			room: snapshot.room,
+			participants: [{ ...snapshot.participants[0], id: 'participant-b' }],
+		});
+		await calls.refresh();
+		calls.setSpeaking(true);
+
+		expect(fixture.send.mock.calls.filter(([type]) => type === 'speaking')).toHaveLength(2);
+		calls.dispose();
+	});
+
 	test('refreshes ownership and both roles when a new host is announced', async () => {
 		const calls = useCallsRoom('room-a');
 		await calls.refresh();
@@ -277,6 +309,80 @@ describe('useCallsRoom streaming updates', () => {
 		expect(calls.participants.value[0]?.isMuted).toBe(true);
 	});
 
+	test('clears a muted speaker and ignores stale speaking lists until they unmute', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		const speaking = fixture.channelHandlers.get('speaking')!;
+		const mute = fixture.channelHandlers.get('mute')!;
+		speaking({ sequence: 1, roomRevision: 1, participantIds: ['participant-a', 'participant-b'] });
+		mute({ sequence: 2, roomRevision: 2, participantId: 'participant-a', isMuted: true });
+		expect([...calls.speakingParticipantIds.value]).toEqual(['participant-b']);
+		expect(calls.participants.value[0]?.isMuted).toBe(true);
+		const mutedSpeaking = calls.speakingParticipantIds.value;
+		speaking({ sequence: 3, roomRevision: 2, participantIds: ['participant-a', 'participant-b'] });
+		expect(calls.speakingParticipantIds.value).toBe(mutedSpeaking);
+		mute({ sequence: 4, roomRevision: 3, participantId: 'participant-a', isMuted: false });
+		expect(calls.speakingParticipantIds.value).toBe(mutedSpeaking);
+		speaking({ sequence: 5, roomRevision: 3, participantIds: ['participant-a', 'participant-b'] });
+		expect([...calls.speakingParticipantIds.value]).toEqual(['participant-a', 'participant-b']);
+	});
+
+	test('throttles repeated speaking notifications while refreshing active speakers', () => {
+		const calls = useCallsRoom('room-a');
+		let now = 10_000;
+		const performanceNow = vi.spyOn(performance, 'now').mockImplementation(() => now);
+		const speakingSends = () => fixture.send.mock.calls.filter(([type]) => type === 'speaking');
+
+		try {
+			calls.setSpeaking(true);
+			now += 500;
+			calls.setSpeaking(true);
+			now += 499;
+			calls.setSpeaking(true);
+			now += 500;
+			calls.setSpeaking(false);
+			now += 500;
+			calls.setSpeaking(false);
+			now += 499;
+			calls.setSpeaking(false);
+			calls.setSpeaking(true);
+
+			expect(speakingSends().map(([, speaking]) => speaking)).toEqual([true, true, false, false, true]);
+		} finally {
+			performanceNow.mockRestore();
+			calls.dispose();
+		}
+	});
+
+	test('resets the speaking notification gate for own mute and stream reconnect', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		let now = 10_000;
+		const performanceNow = vi.spyOn(performance, 'now').mockImplementation(() => now);
+		const speakingSends = () => fixture.send.mock.calls.filter(([type]) => type === 'speaking');
+
+		try {
+			calls.setSpeaking(true);
+			now += 100;
+			fixture.channelHandlers.get('mute')?.({ sequence: 1, roomRevision: 2, participantId: 'participant-b', isMuted: true });
+			calls.setSpeaking(true);
+			expect(speakingSends()).toHaveLength(1);
+			fixture.channelHandlers.get('mute')?.({ sequence: 2, roomRevision: 3, participantId: 'participant-a', isMuted: false });
+			calls.setSpeaking(true);
+			calls.setMuted(false);
+			calls.setSpeaking(true);
+			fixture.streamHandlers.get('_disconnected_')?.();
+			calls.setSpeaking(true);
+			fixture.streamHandlers.get('_connected_')?.();
+			calls.setSpeaking(true);
+
+			expect(speakingSends().map(([, speaking]) => speaking)).toEqual([true, true, true, true, true]);
+		} finally {
+			performanceNow.mockRestore();
+			calls.dispose();
+		}
+	});
+
 	test('video stop events trigger media reconciliation without revoking the participant', async () => {
 		const calls = useCallsRoom('room-a');
 		await calls.refresh();
@@ -306,5 +412,41 @@ describe('useCallsRoom streaming updates', () => {
 		fixture.channelHandlers.get('revoked')?.({ sequence: 1, roomRevision: 2, reason: 'access' });
 		await vi.waitFor(() => expect(revoked).toHaveBeenCalledWith(expect.objectContaining({ reason: 'access' })));
 		expect(calls.connected.value).toBe(false);
+	});
+
+	test('preserves reactive references for repeated and reordered speaking events', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		let roomInvalidations = 0;
+		let speakingInvalidations = 0;
+		const stopRoom = watch(calls.room, () => roomInvalidations++, { flush: 'sync' });
+		const stopSpeaking = watch(calls.speakingParticipantIds, () => speakingInvalidations++, { flush: 'sync' });
+		const speaking = fixture.channelHandlers.get('speaking')!;
+		speaking({ sequence: 1, roomRevision: 1, participantIds: ['participant-a', 'participant-b'] });
+		await vi.waitFor(() => expect([...calls.speakingParticipantIds.value]).toEqual(['participant-a', 'participant-b']));
+		roomInvalidations = 0;
+		speakingInvalidations = 0;
+		const initialRoom = calls.room.value;
+		const initialSpeaking = calls.speakingParticipantIds.value;
+		for (let sequence = 2; sequence <= 101; sequence++) {
+			speaking({ sequence, roomRevision: 1, participantIds: ['participant-a', 'participant-b'] });
+		}
+		speaking({ sequence: 102, roomRevision: 1, participantIds: ['participant-b', 'participant-a'] });
+		expect(roomInvalidations).toBe(0);
+		expect(speakingInvalidations).toBe(0);
+		expect(calls.room.value).toBe(initialRoom);
+		expect(calls.speakingParticipantIds.value).toBe(initialSpeaking);
+
+		speaking({ sequence: 104, roomRevision: 1, participantIds: ['participant-a', 'participant-c'] });
+		await vi.waitFor(() => expect([...calls.speakingParticipantIds.value].sort()).toEqual(['participant-a', 'participant-c']));
+		expect(roomInvalidations).toBe(0);
+		expect(speakingInvalidations).toBe(1);
+
+		speaking({ sequence: 104, roomRevision: 1, participantIds: ['participant-a', 'participant-b'] });
+		await new Promise(resolve => setTimeout(resolve, 0));
+		expect([...calls.speakingParticipantIds.value].sort()).toEqual(['participant-a', 'participant-c']);
+		expect(speakingInvalidations).toBe(1);
+		stopRoom();
+		stopSpeaking();
 	});
 });

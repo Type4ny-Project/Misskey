@@ -534,8 +534,10 @@ describe('Calls session device handoff', () => {
 
 	test.each(['host', 'listener'] as const)('warns before reloading while participating as %s without disconnecting', async role => {
 		fixture.role = role;
-		const addListener = vi.spyOn(window as Window, 'addEventListener');
-		const removeListener = vi.spyOn(window as Window, 'removeEventListener');
+		// Use the DOM target signature rather than the combined window/worker overloads.
+		const eventTarget: EventTarget = window;
+		const addListener = vi.spyOn(eventTarget, 'addEventListener');
+		const removeListener = vi.spyOn(eventTarget, 'removeEventListener');
 		expect(addListener.mock.calls.some(([type]) => type === 'beforeunload')).toBe(false);
 		await session.join('room-a', true);
 		const listener = addListener.mock.calls.find(([type]) => type === 'beforeunload')![1] as EventListener;

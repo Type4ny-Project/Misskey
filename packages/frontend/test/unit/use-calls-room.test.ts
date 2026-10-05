@@ -32,8 +32,13 @@ vi.mock('@/stream.js', () => ({
 import { retainCallsRoomConnection, useCallsRoom } from '@/composables/use-calls-room.js';
 
 const snapshot = {
-	room: { id: 'room-a', title: 'Original title', state: 'open', revision: 1 },
+	room: { id: 'room-a', title: 'Original title', state: 'open', revision: 1, startedAt: '2026-10-04T00:00:00.000Z', endedAt: null as string | null },
 	participants: [{ id: 'participant-a', userId: 'user-a', role: 'listener', isMuted: false, user: { id: 'user-a', username: 'Alice', avatarUrl: 'https://example.invalid/alice.png', isFollowing: true, isFollowed: false } }],
+};
+
+const endedSnapshot = {
+	room: { ...snapshot.room, state: 'ended', revision: 2, endedAt: '2026-10-04T00:12:34.000Z' },
+	participants: [],
 };
 
 describe('useCallsRoom streaming updates', () => {
@@ -172,6 +177,108 @@ describe('useCallsRoom streaming updates', () => {
 		await vi.waitFor(() => expect(ended).toHaveBeenCalledWith('host-timeout'));
 		expect(fixture.api).not.toHaveBeenCalledWith('calls/media/reconcile', { roomId: 'room-a' });
 		stop();
+	});
+
+	test('ends immediately and loads authoritative timestamps from the room snapshot', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		const pending = Promise.withResolvers<typeof endedSnapshot>();
+		fixture.api.mockReturnValueOnce(pending.promise);
+		fixture.channelHandlers.get('lifecycle')?.({ sequence: 1, roomRevision: 2, state: 'ended' });
+
+		expect(calls.room.value).toMatchObject({ state: 'ended', revision: 2, endedAt: null });
+		expect(fixture.api).toHaveBeenLastCalledWith('calls/rooms/show', { roomId: 'room-a' });
+		expect(fixture.api).toHaveBeenCalledTimes(2);
+		pending.resolve(endedSnapshot);
+		await vi.waitFor(() => expect(calls.room.value).toEqual(endedSnapshot.room));
+		expect(calls.participants.value).toEqual([]);
+	});
+
+	test('rejects an older snapshot while the initial load races with the end event', async () => {
+		const calls = useCallsRoom('room-a');
+		const initial = Promise.withResolvers<typeof snapshot>();
+		const ended = Promise.withResolvers<typeof endedSnapshot>();
+		fixture.api.mockReturnValueOnce(initial.promise).mockReturnValueOnce(ended.promise);
+		const loading = calls.refresh();
+		fixture.channelHandlers.get('lifecycle')?.({ sequence: 1, roomRevision: 2, state: 'ended', reason: 'host-timeout' });
+		initial.resolve(snapshot);
+		await loading;
+
+		expect(calls.room.value).toBeNull();
+		expect(calls.participants.value).toEqual([]);
+		ended.resolve(endedSnapshot);
+		await vi.waitFor(() => expect(calls.room.value).toEqual(endedSnapshot.room));
+		expect(calls.endReason.value).toBe('host-timeout');
+	});
+
+	test('does not let an in-flight open snapshot undo the immediate ended state', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		const stale = Promise.withResolvers<typeof snapshot>();
+		const ended = Promise.withResolvers<typeof endedSnapshot>();
+		fixture.api.mockReturnValueOnce(stale.promise).mockReturnValueOnce(ended.promise);
+		const loading = calls.refresh();
+		fixture.channelHandlers.get('lifecycle')?.({ sequence: 1, roomRevision: 2, state: 'ended' });
+		stale.resolve(snapshot);
+		await loading;
+		expect(calls.room.value).toMatchObject({ state: 'ended', revision: 2, endedAt: null });
+		ended.resolve(endedSnapshot);
+		await vi.waitFor(() => expect(calls.room.value).toEqual(endedSnapshot.room));
+	});
+
+	test('ignores duplicate and older lifecycle events without refetching or clearing the end reason', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		fixture.api.mockResolvedValueOnce(endedSnapshot);
+		fixture.channelHandlers.get('lifecycle')?.({ sequence: 2, roomRevision: 2, state: 'ended', reason: 'host-timeout' });
+		await vi.waitFor(() => expect(calls.room.value).toEqual(endedSnapshot.room));
+		fixture.channelHandlers.get('lifecycle')?.({ sequence: 2, roomRevision: 2, state: 'ended' });
+		fixture.channelHandlers.get('lifecycle')?.({ sequence: 3, roomRevision: 1, state: 'open' });
+		fixture.channelHandlers.get('lifecycle')?.({ sequence: 1, roomRevision: 2, state: 'ended' });
+		expect(calls.room.value).toEqual(endedSnapshot.room);
+		expect(calls.endReason.value).toBe('host-timeout');
+		expect(fixture.api).toHaveBeenCalledTimes(2);
+	});
+
+	test('loads an already ended room with its timestamps and rejects an older open event', async () => {
+		fixture.api.mockResolvedValueOnce(endedSnapshot);
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		fixture.channelHandlers.get('lifecycle')?.({ sequence: 1, roomRevision: 1, state: 'open' });
+		expect(calls.room.value).toEqual(endedSnapshot.room);
+		expect(fixture.api).toHaveBeenCalledTimes(1);
+	});
+
+	test('keeps the ended state after a failed timestamp fetch and recovers on reconnect', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		const tracksChanged = vi.fn();
+		calls.onTrackChange(tracksChanged);
+		fixture.api.mockRejectedValueOnce(new Error('Temporary network failure'));
+		fixture.channelHandlers.get('lifecycle')?.({ sequence: 1, roomRevision: 2, state: 'ended', reason: 'host-timeout' });
+		// Let the background rejection settle before reconnecting.
+		await new Promise(resolve => window.setTimeout(resolve, 0));
+		expect(calls.room.value).toMatchObject({ state: 'ended', revision: 2, endedAt: null });
+		expect(calls.endReason.value).toBe('host-timeout');
+
+		fixture.api.mockResolvedValueOnce(endedSnapshot);
+		fixture.streamHandlers.get('_connected_')?.();
+		await vi.waitFor(() => expect(calls.room.value).toEqual(endedSnapshot.room));
+		expect(calls.endReason.value).toBe('host-timeout');
+		expect(tracksChanged).not.toHaveBeenCalled();
+		expect(fixture.api).toHaveBeenCalledTimes(3);
+	});
+
+	test('loads end timestamps when a room ended while disconnected', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		const tracksChanged = vi.fn();
+		calls.onTrackChange(tracksChanged);
+		fixture.streamHandlers.get('_disconnected_')?.();
+		fixture.api.mockResolvedValueOnce(endedSnapshot);
+		fixture.streamHandlers.get('_connected_')?.();
+		await vi.waitFor(() => expect(calls.room.value).toEqual(endedSnapshot.room));
+		expect(tracksChanged).not.toHaveBeenCalled();
 	});
 
 	test('keeps the room revision current after mute changes for subsequent moderation', async () => {

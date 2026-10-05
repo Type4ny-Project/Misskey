@@ -13,6 +13,8 @@ type Snapshot = Misskey.entities.CallsRoomsShowResponse;
 type EventBase = { sequence: number; roomRevision: number };
 export type CallsRevokedEvent = Parameters<Misskey.Channels['callsRoom']['events']['revoked']>[0];
 
+const SPEAKING_REFRESH_INTERVAL_MS = 750;
+
 export function createCallsRoomConnection(roomId: string) {
 	const room = shallowRef<Snapshot['room'] | null>(null);
 	const endReason = ref<'host-timeout' | null>(null);
@@ -27,6 +29,8 @@ export function createCallsRoomConnection(roomId: string) {
 	const trackListeners = new Set<() => void>();
 	const revocationListeners = new Set<(event: CallsRevokedEvent) => void>();
 	let ownParticipantId: string | null = null;
+	let lastSentSpeaking: boolean | null = null;
+	let lastSpeakingSentAt = 0;
 
 	async function refresh() {
 		const snapshot = await misskeyApi('calls/rooms/show', { roomId });
@@ -47,9 +51,30 @@ export function createCallsRoomConnection(roomId: string) {
 		apply();
 	}
 
-	function onStreamDisconnected() { connected.value = false; }
+	function resetSpeakingSendGate(): void {
+		lastSentSpeaking = null;
+		lastSpeakingSentAt = 0;
+	}
+
+	function setSpeaking(speaking: boolean): void {
+		const now = performance.now();
+		const changed = lastSentSpeaking !== speaking;
+		// Stats arrive every 500ms; leave margin before the server's 1.5s speaking expiry.
+		// Refresh silence too so the server clears stale speakers and retries locked broadcasts.
+		const refresh = now - lastSpeakingSentAt >= SPEAKING_REFRESH_INTERVAL_MS;
+		if (!changed && !refresh) return;
+		channel.send('speaking', speaking);
+		lastSentSpeaking = speaking;
+		lastSpeakingSentAt = now;
+	}
+
+	function onStreamDisconnected() {
+		resetSpeakingSendGate();
+		connected.value = false;
+	}
 
 	function onStreamConnected() {
+		resetSpeakingSendGate();
 		connected.value = true;
 		void refresh().then(() => {
 			if (room.value?.state !== 'open') return;
@@ -85,6 +110,7 @@ export function createCallsRoomConnection(roomId: string) {
 		participants.value = participants.value.map(participant => participant.id === event.participantId ? { ...participant, speakerRequestedAt: event.requested ? event.occurredAt : null } : participant);
 	}));
 	channel.on('mute', event => accept(event, () => {
+		if (event.participantId === ownParticipantId) resetSpeakingSendGate();
 		participants.value = participants.value.map(participant => participant.id === event.participantId ? { ...participant, isMuted: event.isMuted } : participant);
 		if (event.isMuted && speakingParticipantIds.value.has(event.participantId)) {
 			const nextParticipantIds = new Set(speakingParticipantIds.value);
@@ -118,8 +144,8 @@ export function createCallsRoomConnection(roomId: string) {
 
 	return {
 		room, endReason, participants, connected, speakingParticipantIds, refresh,
-		setMuted(isMuted: boolean) { channel.send('mute', isMuted); },
-		setSpeaking(speaking: boolean) { channel.send('speaking', speaking); },
+		setMuted(isMuted: boolean) { resetSpeakingSendGate(); channel.send('mute', isMuted); },
+		setSpeaking,
 		heartbeat(connectionId: string, generation: number) { channel.send('heartbeat', { connectionId, generation }); },
 		onTrackChange(listener: () => void) { trackListeners.add(listener); return () => trackListeners.delete(listener); },
 		onRevoked(listener: (event: CallsRevokedEvent) => void) { revocationListeners.add(listener); return () => revocationListeners.delete(listener); },

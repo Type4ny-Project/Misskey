@@ -188,6 +188,62 @@ describe('useCallsRoom streaming updates', () => {
 		expect([...calls.speakingParticipantIds.value]).toEqual(['participant-a', 'participant-b']);
 	});
 
+	test('throttles repeated speaking notifications while refreshing active speakers', () => {
+		const calls = useCallsRoom('room-a');
+		let now = 10_000;
+		const performanceNow = vi.spyOn(performance, 'now').mockImplementation(() => now);
+		const speakingSends = () => fixture.send.mock.calls.filter(([type]) => type === 'speaking');
+
+		try {
+			calls.setSpeaking(true);
+			now += 500;
+			calls.setSpeaking(true);
+			now += 499;
+			calls.setSpeaking(true);
+			now += 500;
+			calls.setSpeaking(false);
+			now += 500;
+			calls.setSpeaking(false);
+			now += 499;
+			calls.setSpeaking(false);
+			calls.setSpeaking(true);
+
+			expect(speakingSends().map(([, speaking]) => speaking)).toEqual([true, true, false, false, true]);
+		} finally {
+			performanceNow.mockRestore();
+			calls.dispose();
+		}
+	});
+
+	test('resets the speaking notification gate for own mute and stream reconnect', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		let now = 10_000;
+		const performanceNow = vi.spyOn(performance, 'now').mockImplementation(() => now);
+		const speakingSends = () => fixture.send.mock.calls.filter(([type]) => type === 'speaking');
+
+		try {
+			calls.setSpeaking(true);
+			now += 100;
+			fixture.channelHandlers.get('mute')?.({ sequence: 1, roomRevision: 2, participantId: 'participant-b', isMuted: true });
+			calls.setSpeaking(true);
+			expect(speakingSends()).toHaveLength(1);
+			fixture.channelHandlers.get('mute')?.({ sequence: 2, roomRevision: 3, participantId: 'participant-a', isMuted: false });
+			calls.setSpeaking(true);
+			calls.setMuted(false);
+			calls.setSpeaking(true);
+			fixture.streamHandlers.get('_disconnected_')?.();
+			calls.setSpeaking(true);
+			fixture.streamHandlers.get('_connected_')?.();
+			calls.setSpeaking(true);
+
+			expect(speakingSends().map(([, speaking]) => speaking)).toEqual([true, true, true, true, true]);
+		} finally {
+			performanceNow.mockRestore();
+			calls.dispose();
+		}
+	});
+
 	test('video stop events trigger media reconciliation without revoking the participant', async () => {
 		const calls = useCallsRoom('room-a');
 		await calls.refresh();
@@ -254,5 +310,4 @@ describe('useCallsRoom streaming updates', () => {
 		stopRoom();
 		stopSpeaking();
 	});
-
 });

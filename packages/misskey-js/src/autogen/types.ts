@@ -16946,6 +16946,8 @@ export interface operations {
                             participantId: string;
                             /** @enum {string} */
                             mediaSource: 'microphone' | 'camera' | 'screen';
+                            /** Format: id */
+                            screenPublicationId?: string;
                             /** @enum {string} */
                             mediaKind: 'audio' | 'video';
                         }[];
@@ -17306,6 +17308,8 @@ export interface operations {
                      * @enum {string}
                      */
                     mediaSource?: 'microphone' | 'camera' | 'screen';
+                    /** Format: misskey:id */
+                    screenPublicationId?: string;
                     mid: string;
                     sessionDescription: {
                         /** @enum {string} */

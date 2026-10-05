@@ -11,7 +11,9 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 
 export type CallsVideoSource = 'camera' | 'screen';
 export type CallsVideoQuality = { height: 480 | 720 | 1080 | 1440 | 2160 | 'source'; frameRate: 15 | 30 | 60 | 90 | 120 | 144 };
-export type CallsRemotePublication = { id: string; participantId: string; mediaKind: 'audio' | 'video'; mediaSource: 'microphone' | CallsVideoSource };
+export type CallsRemotePublication = { id: string; participantId: string; mediaKind: 'audio' | 'video'; mediaSource: 'microphone' | CallsVideoSource; screenPublicationId?: string };
+type CallsLocalTrack = { track: MediaStreamTrack; publicationId?: string; transceiver?: RTCRtpTransceiver };
+type CallsLocalVideo = CallsLocalTrack & { source: CallsVideoSource; audio?: CallsLocalTrack };
 type CallsMicrophone = { track: MediaStreamTrack; processing: CallsNoiseSuppression | null };
 
 function videoConstraints(quality: CallsVideoQuality): MediaTrackConstraints {
@@ -35,7 +37,7 @@ export class CallsMediaController {
 	public localTrack: MediaStreamTrack | null = null;
 	private microphone: CallsMicrophone | null = null;
 	private peer: RTCPeerConnection | null = null;
-	private localVideos = new Map<CallsVideoSource, { track: MediaStreamTrack; publicationId?: string; transceiver?: RTCRtpTransceiver }>();
+	private localVideos = new Map<string, CallsLocalVideo>();
 	private remotePublications = new Map<string, CallsRemotePublication>();
 	private receivedRemoteTracks = new Map<string, MediaStreamTrack>();
 	private connectionId: string = crypto.randomUUID();
@@ -72,7 +74,7 @@ export class CallsMediaController {
 		private replaceExisting = false,
 		private videoCallbacks?: {
 			ready?: () => void;
-			localTrack: (source: CallsVideoSource, track: MediaStreamTrack | null) => void;
+			localTrack: (source: CallsVideoSource, track: MediaStreamTrack | null, id: string) => void;
 			microphoneTrack?: (track: MediaStreamTrack | null) => void;
 			noiseSuppressionChanged?: (enabled: boolean) => void;
 			remoteRemoved: (publicationId: string) => void;
@@ -250,10 +252,14 @@ export class CallsMediaController {
 			this.publications.add(result.publicationId);
 			await this.applyNegotiation(result.negotiation);
 		}
-		for (const [source, video] of this.localVideos) {
+		for (const video of this.localVideos.values()) {
 			if (video.track.readyState === 'ended') continue;
 			video.publicationId = undefined;
-			await this.publishVideo(source, video);
+			await this.publishTrack(video.source, video);
+			if (video.audio != null && video.audio.track.readyState !== 'ended') {
+				video.audio.publicationId = undefined;
+				await this.publishTrack('screen', video.audio, video.publicationId);
+			}
 		}
 		const subscribed = await this.reconcileNow();
 		// SDP exchanges stay serialized, but receiving need not wait for the sender's transport.
@@ -285,13 +291,24 @@ export class CallsMediaController {
 		await this.ensureCredential();
 		const authoritative = await misskeyApi('calls/media/reconcile', { roomId: this.roomId });
 		const authoritativeOwnIds = new Set(authoritative.publications.filter(publication => publication.participantId === this.participantId).map(publication => publication.id));
-		for (const [source, video] of this.localVideos) {
+		for (const [id, video] of this.localVideos) {
+			if (video.audio?.publicationId != null && !authoritativeOwnIds.has(video.audio.publicationId)) {
+				video.audio.track.stop();
+				await video.audio.transceiver?.sender.replaceTrack(null);
+				this.publications.delete(video.audio.publicationId);
+				video.audio = undefined;
+			}
 			if (video.publicationId == null || authoritativeOwnIds.has(video.publicationId)) continue;
 			video.track.stop();
-			this.localVideos.delete(source);
+			video.audio?.track.stop();
+			this.localVideos.delete(id);
 			this.publications.delete(video.publicationId);
-			this.videoCallbacks?.localTrack(source, null);
+			this.videoCallbacks?.localTrack(video.source, null, id);
 			await video.transceiver?.sender.replaceTrack(null);
+			if (video.audio != null) {
+				await video.audio.transceiver?.sender.replaceTrack(null);
+				if (video.audio.publicationId != null) this.publications.delete(video.audio.publicationId);
+			}
 		}
 		const authoritativeRemoteIds = new Set(authoritative.publications.filter(publication => publication.participantId !== this.participantId).map(publication => publication.id));
 		for (const publicationId of this.subscribedPublications) {
@@ -376,34 +393,46 @@ export class CallsMediaController {
 	}
 
 	public async startVideo(source: CallsVideoSource, deviceId?: string, quality: CallsVideoQuality = { height: 720, frameRate: 30 }, previewStream?: MediaStream): Promise<void> {
-		if (this.role === 'listener' || this.isClosed() || this.peer == null || this.localVideos.has(source)) {
+		if (this.role === 'listener' || this.isClosed() || this.peer == null || (source === 'camera' && this.localVideos.has('camera'))) {
 			previewStream?.getTracks().forEach(track => track.stop());
 			return;
 		}
 		// Call directly from the click handler so screen capture retains user activation.
 		const stream = source === 'camera'
 			? previewStream ?? await captureCallsCamera(deviceId, quality)
-			: await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints(quality), audio: false });
+			: await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints(quality), audio: true });
 		const track = stream.getVideoTracks()[0];
-		for (const extra of stream.getTracks()) if (extra !== track) extra.stop();
-		if (this.isClosed() || this.peer == null) { track?.stop(); return; }
-		if (track == null) throw new DOMException('No video track', 'NotFoundError');
+		const audio = source === 'screen' ? stream.getAudioTracks()[0] : undefined;
+		for (const extra of stream.getTracks()) if (extra !== track && extra !== audio) extra.stop();
+		if (this.isClosed() || this.peer == null) { track?.stop(); audio?.stop(); return; }
+		if (track == null) { audio?.stop(); throw new DOMException('No video track', 'NotFoundError'); }
 		track.contentHint = source === 'screen' ? 'detail' : 'motion';
-		const video = { track };
-		this.localVideos.set(source, video);
-		this.videoCallbacks?.localTrack(source, track);
+		const id = source === 'camera' ? 'camera' : crypto.randomUUID();
+		const video: CallsLocalVideo = { source, track, audio: audio == null ? undefined : { track: audio } };
+		this.localVideos.set(id, video);
+		audio?.addEventListener('ended', () => {
+			const media = video.audio;
+			if (this.localVideos.get(id) !== video || media == null || media.track !== audio) return;
+			video.audio = undefined;
+			media.track.stop();
+			void this.enqueue(() => this.closePublishedTrack(media)).catch(error => this.videoCallbacks?.error(error));
+		}, { once: true });
+		this.videoCallbacks?.localTrack(source, track, id);
 		track.addEventListener('ended', () => {
-			if (this.localVideos.get(source)?.track === track) void this.stopVideo(source).catch(error => this.videoCallbacks?.error(error));
+			if (this.localVideos.get(id)?.track === track) void this.stopVideo(source, id).catch(error => this.videoCallbacks?.error(error));
 		}, { once: true });
 		try {
-			await this.enqueue(() => this.publishVideo(source, video));
+			await this.enqueue(async () => {
+				await this.publishTrack(source, video);
+				if (video.audio != null && this.localVideos.get(id) === video) await this.publishTrack('screen', video.audio, video.publicationId);
+			});
 		} catch (error) {
-			await this.stopVideo(source).catch(() => undefined);
+			await this.stopVideo(source, id).catch(() => undefined);
 			throw error;
 		}
 	}
 
-	private async publishVideo(source: CallsVideoSource, video: { track: MediaStreamTrack; publicationId?: string; transceiver?: RTCRtpTransceiver }): Promise<void> {
+	private async publishTrack(source: CallsVideoSource, video: CallsLocalTrack, screenPublicationId?: string): Promise<void> {
 		const peer = this.peer;
 		if (peer == null || this.isClosed() || video.track.readyState === 'ended') return;
 		await this.ensureCredential();
@@ -411,8 +440,8 @@ export class CallsMediaController {
 		video.transceiver = transceiver;
 		try {
 			// Keep screen/camera encoding consistent across browser and SFU renegotiations.
-			const codecs = RTCRtpSender.getCapabilities('video')?.codecs.filter(codec => ['video/vp8', 'video/rtx'].includes(codec.mimeType.toLowerCase()));
-			if (codecs?.some(codec => codec.mimeType.toLowerCase() === 'video/vp8') && typeof transceiver.setCodecPreferences === 'function') transceiver.setCodecPreferences(codecs);
+			const codecs = RTCRtpSender.getCapabilities(video.track.kind)?.codecs.filter(codec => (video.track.kind === 'audio' ? ['audio/opus'] : ['video/vp8', 'video/rtx']).includes(codec.mimeType.toLowerCase()));
+			if (codecs?.some(codec => codec.mimeType.toLowerCase() === (video.track.kind === 'audio' ? 'audio/opus' : 'video/vp8')) && typeof transceiver.setCodecPreferences === 'function') transceiver.setCodecPreferences(codecs);
 			const offer = await peer.createOffer();
 			await peer.setLocalDescription(offer);
 			await this.waitForIceGathering(peer);
@@ -420,7 +449,7 @@ export class CallsMediaController {
 			const result = await misskeyApi('calls/media/tracks/publish', {
 				roomId: this.roomId, participantId: this.participantId!, connectionId: this.connectionId,
 				generation: this.generation, operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential!,
-				mediaSource: source, mid: transceiver.mid!, sessionDescription: { type: 'offer', sdp: peer.localDescription?.sdp ?? offer.sdp ?? '' },
+				mediaSource: source, screenPublicationId, mid: transceiver.mid!, sessionDescription: { type: 'offer', sdp: peer.localDescription?.sdp ?? offer.sdp ?? '' },
 			});
 			video.publicationId = result.publicationId;
 			this.publications.add(result.publicationId);
@@ -433,11 +462,12 @@ export class CallsMediaController {
 	}
 
 	public async setVideoQuality(source: CallsVideoSource, quality: CallsVideoQuality): Promise<void> {
-		const video = this.localVideos.get(source);
-		if (video == null || this.isClosed()) return;
+		if (this.isClosed()) return;
 		await this.enqueue(async () => {
-			if (this.isClosed() || this.localVideos.get(source) !== video) return;
-			await video.track.applyConstraints(videoConstraints(quality));
+			if (this.isClosed()) return;
+			for (const video of this.localVideos.values()) {
+				if (video.source === source) await video.track.applyConstraints(videoConstraints(quality));
+			}
 		});
 	}
 
@@ -456,7 +486,7 @@ export class CallsMediaController {
 				video.track.stop();
 				video.track = track;
 				track.contentHint = 'motion';
-				this.videoCallbacks?.localTrack('camera', track);
+				this.videoCallbacks?.localTrack('camera', track, 'camera');
 				track.addEventListener('ended', () => {
 					if (video.track === track) void this.stopVideo('camera').catch(error => this.videoCallbacks?.error(error));
 				}, { once: true });
@@ -464,22 +494,33 @@ export class CallsMediaController {
 		} catch (error) { track.stop(); throw error; }
 	}
 
-	public async stopVideo(source: CallsVideoSource): Promise<void> {
-		const video = this.localVideos.get(source);
-		if (video == null) return;
-		video.track.stop();
-		this.localVideos.delete(source);
-		this.videoCallbacks?.localTrack(source, null);
+	public async stopVideo(source: CallsVideoSource, videoId?: string): Promise<void> {
+		const videos = [...this.localVideos].filter(([id, video]) => video.source === source && (videoId == null || id === videoId));
+		for (const [id, video] of videos) {
+			video.track.stop();
+			video.audio?.track.stop();
+			this.localVideos.delete(id);
+			this.videoCallbacks?.localTrack(source, null, id);
+		}
 		await this.enqueue(async () => {
-			await video.transceiver?.sender.replaceTrack(null);
-			if (video.publicationId == null || this.isClosed()) return;
-			await this.ensureCredential();
-			await misskeyApi('calls/media/tracks/close', {
-				roomId: this.roomId, participantId: this.participantId!, connectionId: this.connectionId,
-				generation: this.generation, operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential!, publicationId: video.publicationId,
-			});
-			this.publications.delete(video.publicationId);
+			for (const [, video] of videos) {
+				for (const media of [video.audio, video]) {
+					if (media == null) continue;
+					await this.closePublishedTrack(media);
+				}
+			}
 		});
+	}
+
+	private async closePublishedTrack(media: CallsLocalTrack): Promise<void> {
+		await media.transceiver?.sender.replaceTrack(null);
+		if (media.publicationId == null || this.isClosed()) return;
+		await this.ensureCredential();
+		await misskeyApi('calls/media/tracks/close', {
+			roomId: this.roomId, participantId: this.participantId!, connectionId: this.connectionId,
+			generation: this.generation, operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential!, publicationId: media.publicationId,
+		});
+		this.publications.delete(media.publicationId);
 	}
 
 	public setMuted(muted: boolean): void {
@@ -656,9 +697,10 @@ export class CallsMediaController {
 		this.remotePublications.clear();
 		this.receivedRemoteTracks.clear();
 		if (stopTrack) {
-			for (const [source, video] of this.localVideos) {
+			for (const [id, video] of this.localVideos) {
 				video.track.stop();
-				this.videoCallbacks?.localTrack(source, null);
+				video.audio?.track.stop();
+				this.videoCallbacks?.localTrack(video.source, null, id);
 			}
 			this.localVideos.clear();
 		}

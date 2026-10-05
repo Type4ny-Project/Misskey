@@ -280,12 +280,48 @@ describe('CallsMediaController', () => {
 		expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/publish', expect.objectContaining({ mediaSource: 'screen', mid: '2' }));
 		screen.dispatchEvent(new Event('ended'));
 		await vi.waitFor(() => expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/close', expect.anything()));
-		expect(localTrack).toHaveBeenCalledWith('screen', null);
+		expect(localTrack).toHaveBeenCalledWith('screen', null, expect.any(String));
 		expect(camera.stop).not.toHaveBeenCalled();
 		expect(audio.stop).not.toHaveBeenCalled();
 		await controller.close();
 		expect(camera.stop).toHaveBeenCalled();
 		expect(audio.stop).toHaveBeenCalled();
+	});
+
+	test('publishes two screen shares with independent audio and stops only the selected share', async () => {
+		const microphone = makeTrack('audio');
+		const screens = [makeTrack('video'), makeTrack('video')];
+		const audios = [makeTrack('audio'), makeTrack('audio')];
+		const getDisplayMedia = vi.fn();
+		for (let index = 0; index < screens.length; index++) {
+			getDisplayMedia.mockResolvedValueOnce({ getVideoTracks: () => [screens[index]], getAudioTracks: () => [audios[index]], getTracks: () => [screens[index], audios[index]] });
+		}
+		installBrowserMedia(vi.fn().mockResolvedValue(stream(microphone)), getDisplayMedia);
+		const localTrack = vi.fn();
+		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, undefined, undefined, false, { localTrack, remoteRemoved: vi.fn(), error: vi.fn() });
+		await controller.connect();
+		await controller.startVideo('screen');
+		await controller.startVideo('screen');
+		expect(getDisplayMedia).toHaveBeenCalledTimes(2);
+		expect(getDisplayMedia).toHaveBeenCalledWith(expect.objectContaining({ audio: true }));
+		const publications = apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish');
+		expect(publications.slice(1).map(([, input]) => input.mid)).toEqual(['1', '2', '3', '4']);
+		expect(publications[2][1].screenPublicationId).toBeDefined();
+		expect(publications[4][1].screenPublicationId).toBeDefined();
+		expect(publications[2][1].screenPublicationId).not.toBe(publications[4][1].screenPublicationId);
+		await controller.setVideoQuality('screen', { height: 1080, frameRate: 60 });
+		for (const screen of screens) expect(screen.applyConstraints).toHaveBeenCalledOnce();
+		screens[0].dispatchEvent(new Event('ended'));
+		await vi.waitFor(() => expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/close')).toHaveLength(2));
+		expect(audios[0].stop).toHaveBeenCalledOnce();
+		expect(screens[1].stop).not.toHaveBeenCalled();
+		expect(audios[1].stop).not.toHaveBeenCalled();
+		expect(microphone.stop).not.toHaveBeenCalled();
+		audios[1].dispatchEvent(new Event('ended'));
+		await vi.waitFor(() => expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/close')).toHaveLength(3));
+		expect(screens[1].stop).not.toHaveBeenCalled();
+		await controller.close();
+		expect(audios[1].stop).toHaveBeenCalledOnce();
 	});
 
 	test.each(['camera', 'screen'] as const)('stops local %s capture when moderation removes its publication', async source => {
@@ -308,7 +344,7 @@ describe('CallsMediaController', () => {
 		expect((source === 'camera' ? camera : screen).stop).toHaveBeenCalledOnce();
 		expect((source === 'camera' ? screen : camera).stop).not.toHaveBeenCalled();
 		expect(audio.stop).not.toHaveBeenCalled();
-		expect(localTrack).toHaveBeenCalledWith(source, null);
+		expect(localTrack).toHaveBeenCalledWith(source, null, expect.any(String));
 		expect(apiMock).not.toHaveBeenCalledWith('calls/media/tracks/close', expect.anything());
 		await controller.close();
 	});
@@ -486,7 +522,7 @@ describe('CallsMediaController', () => {
 		expect(FakePeerConnection.instances[0].transceivers[1].sender.track).toBe(replacement);
 		expect(camera.stop).toHaveBeenCalled();
 		expect(audio.stop).not.toHaveBeenCalled();
-		expect(localTrack).toHaveBeenLastCalledWith('camera', replacement);
+		expect(localTrack).toHaveBeenLastCalledWith('camera', replacement, 'camera');
 		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish')).toHaveLength(2);
 		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ video: expect.objectContaining({ deviceId: { exact: 'camera-b' } }), audio: false }));
 		await controller.close();

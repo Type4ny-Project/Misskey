@@ -67,15 +67,17 @@ const reconnectCandidate = ref<CallsReconnectCandidate | null>(null);
 const reconnectRoomState = ref<'checking' | 'open' | 'unavailable'>('checking');
 const reconnectSecondsRemaining = ref(0);
 const speakerRequestResult = ref<'rejected' | null>(null);
-const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement; playback: Promise<void> }>();
+const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement; playback: Promise<void>; screenPublicationId?: string }>();
 const participantVolumes = shallowRef(new Map<string, number>());
-const localVideos = shallowRef(new Map<CallsVideoSource, MediaStream>());
+const localVideos = shallowRef(new Map<string, MediaStream>());
+const screenVolumes = shallowRef(new Map<string, number>());
+const screenAudioIds = shallowRef(new Set<string>());
 const remoteVideos = shallowRef(new Map<string, { participantId: string; source: CallsVideoSource; stream: MediaStream }>());
 const videoBusy = ref(false);
 const videoQuality = ref<Record<CallsVideoSource, CallsVideoQuality>>({ camera: { height: 720, frameRate: 30 }, screen: { height: 1080, frameRate: 30 } });
 const canShareScreen = typeof navigator.mediaDevices?.getDisplayMedia === 'function';
 const videos = computed(() => [
-	...[...localVideos.value].map(([source, stream]) => ({ id: `local-${source}`, participantId: myParticipant.value?.id ?? '', source, stream, local: true })),
+	...[...localVideos.value].map(([id, stream]) => ({ id: `local-${id}`, participantId: myParticipant.value?.id ?? '', source: id === 'camera' ? 'camera' as const : 'screen' as const, stream, local: true })),
 	...[...remoteVideos.value].map(([id, video]) => ({ id, ...video, local: false })),
 ]);
 
@@ -180,7 +182,7 @@ const canShareScreenMedia = computed(() => isSpeaker.value && $i?.policies.canJo
 const controls = computed(() => ({
 	role: myParticipant.value?.role ?? 'listener',
 	canSpeak: isSpeaker.value && canSpeak.value, canPublishVideo: canPublishVideo.value, canShareScreen: canShareScreenMedia.value,
-	muted: muted.value, cameraOn: localVideos.value.has('camera'), screenOn: localVideos.value.has('screen'),
+	muted: muted.value, cameraOn: localVideos.value.has('camera'), screenOn: [...localVideos.value.keys()].some(id => id !== 'camera'),
 	status: mediaState.value, busy: videoBusy.value, joining: joining.value, screenSupported: canShareScreen,
 	speakerRequestEnabled: canSpeak.value && room.value?.mode === 'stage',
 	speakerRequested: myParticipant.value?.speakerRequestedAt != null,
@@ -199,6 +201,7 @@ function removeRemoteTrack(publicationId: string): void {
 	const audio = remoteAudio.get(publicationId)?.element;
 	if (audio != null) { audio.pause(); audio.srcObject = null; audio.remove(); }
 	remoteAudio.delete(publicationId);
+	screenAudioIds.value = new Set([...remoteAudio.values()].flatMap(item => item.screenPublicationId == null ? [] : [item.screenPublicationId]));
 	const next = new Map(remoteVideos.value);
 	next.delete(publicationId);
 	remoteVideos.value = next;
@@ -209,10 +212,19 @@ function getParticipantVolume(userId: string): number {
 }
 
 function applyParticipantVolumes(): void {
-	for (const { participantId, element } of remoteAudio.values()) {
+	for (const { participantId, element, screenPublicationId } of remoteAudio.values()) {
 		const participant = participants.value.find(item => item.id === participantId);
-		element.volume = participant == null ? 1 : getParticipantVolume(participant.userId) / 100;
+		element.volume = screenPublicationId != null ? getScreenVolume(screenPublicationId) / 100 : participant == null ? 1 : getParticipantVolume(participant.userId) / 100;
 	}
+}
+
+function getScreenVolume(publicationId: string): number {
+	return screenVolumes.value.get(publicationId) ?? 100;
+}
+
+function setScreenVolume(publicationId: string, volume: number): void {
+	screenVolumes.value = new Map(screenVolumes.value).set(publicationId, Math.max(0, Math.min(100, volume)));
+	applyParticipantVolumes();
 }
 
 function setParticipantVolume(userId: string, volume: number): void {
@@ -233,7 +245,8 @@ function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublica
 	audio.hidden = true;
 	audio.srcObject = new MediaStream([track]);
 	const playback = audio.play().catch(() => { needsAudioResume.value = true; });
-	remoteAudio.set(publication.id, { participantId: publication.participantId, element: audio, playback });
+	remoteAudio.set(publication.id, { participantId: publication.participantId, element: audio, playback, screenPublicationId: publication.screenPublicationId });
+	if (publication.screenPublicationId != null) screenAudioIds.value = new Set(screenAudioIds.value).add(publication.screenPublicationId);
 	applyParticipantVolumes();
 	window.document.body.append(audio);
 	track.addEventListener('ended', () => {
@@ -287,11 +300,11 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 			noiseSuppressionChanged(enabled) {
 				if (generation === sessionGeneration && media.value === controller) noiseSuppression.value = enabled;
 			},
-			localTrack(source, track) {
+			localTrack(_source, track, id) {
 				if (generation !== sessionGeneration || media.value !== controller) return;
 				const next = new Map(localVideos.value);
-				if (track == null) next.delete(source);
-				else next.set(source, new MediaStream([track]));
+				if (track == null) next.delete(id);
+				else next.set(id, new MediaStream([track]));
 				localVideos.value = next;
 			},
 			remoteRemoved: removeRemoteTrack,
@@ -324,6 +337,8 @@ async function clearSession(): Promise<void> {
 	cancelCameraPreview?.();
 	clearCallsScreenWindows();
 	sessionGeneration += 1;
+	screenVolumes.value = new Map();
+	screenAudioIds.value = new Set();
 	const controller = media.value;
 	media.value = null;
 	mediaReady.value = false;
@@ -541,13 +556,14 @@ async function switchMicrophone(deviceId: string): Promise<void> {
 	await media.value?.switchMicrophone(deviceId);
 }
 
-async function toggleVideo(source: CallsVideoSource): Promise<void> {
+async function toggleVideo(source: CallsVideoSource, addScreen = false, videoId?: string): Promise<void> {
 	const controller = media.value;
 	if (!isSpeaker.value || joining.value || videoBusy.value || mediaState.value !== 'connected' || controller == null) return;
-	if (!localVideos.value.has(source) && !(source === 'camera' ? canPublishVideo.value : canShareScreenMedia.value)) return;
+	const active = source === 'camera' ? localVideos.value.has('camera') : [...localVideos.value.keys()].some(id => id !== 'camera');
+	if ((addScreen || !active) && !(source === 'camera' ? canPublishVideo.value : canShareScreenMedia.value)) return;
 	videoBusy.value = true;
 	try {
-		if (localVideos.value.has(source)) await controller.stopVideo(source);
+		if (!addScreen && active) await controller.stopVideo(source, videoId);
 		else if (source === 'camera') {
 			const stream = await captureCallsCamera(selectedCamera.value || undefined, videoQuality.value.camera);
 			let published = false;
@@ -656,7 +672,15 @@ function videoQualityMenu(source: CallsVideoSource): MenuItem[] {
 
 function openScreenSettings(event: MouseEvent): void {
 	if (joining.value || videoBusy.value || !canShareScreenMedia.value) return;
-	popupMenu(videoQualityMenu('screen'), event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
+	popupMenu([
+		...videoQualityMenu('screen'),
+		{ type: 'divider' },
+		{ text: i18n.ts._calls.addScreenSharing, icon: 'ti ti-plus', action: () => toggleVideo('screen', true) },
+		...[...localVideos.value].filter(([id]) => id !== 'camera').map(([id, stream], index) => ({
+			text: `${i18n.ts._calls.stopScreenSharing} · ${stream.getVideoTracks()[0]?.label || index + 1}`,
+			icon: 'ti ti-screen-share-off', action: () => toggleVideo('screen', false, id),
+		})),
+	], event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
 }
 
 async function resumeAudio(): Promise<void> {
@@ -764,6 +788,9 @@ export function useCallsSession() {
 		toggleVideo,
 		selectedMicrophone,
 		microphones,
+		screenAudioIds,
+		getScreenVolume,
+		setScreenVolume,
 		needsAudioResume,
 		reconnectCandidate,
 		reconnectRoomState,

@@ -33,7 +33,7 @@ const fixture = vi.hoisted(() => ({
 	revocationListenerRemovals: [] as Array<ReturnType<typeof vi.fn>>,
 	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null }; participants: { value: Array<{ id: string; userId: string; role: string; isMuted: boolean; joinedAt?: string }> }; refresh: ReturnType<typeof vi.fn> }>,
 	remoteTrackCallbacks: [] as Array<(track: MediaStreamTrack, publication: CallsRemotePublication) => void>,
-	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
+	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; stopVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
 }));
 
 vi.mock('@/utility/sound.js', () => ({ playMisskeySfx: fixture.playSound }));
@@ -74,6 +74,7 @@ vi.mock('@/utility/calls-media.js', () => ({
 		public localTrack = fixture.microphoneAvailable ? { enabled: true } : null;
 		public switchMicrophone = vi.fn(async () => { this.localTrack = { enabled: false }; });
 		public startVideo = vi.fn().mockResolvedValue(undefined);
+		public stopVideo = vi.fn().mockResolvedValue(undefined);
 		public close = vi.fn().mockResolvedValue(undefined);
 		public setVideoQuality = vi.fn().mockResolvedValue(undefined);
 		public setNoiseSuppression = vi.fn();
@@ -393,6 +394,57 @@ describe('Calls session device handoff', () => {
 			play.mockRestore();
 			pause.mockRestore();
 		}
+	});
+
+	test('sets each screen audio volume independently from the microphone and cleans up on leave', async () => {
+		const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+		const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+		try {
+			await session.join('room-a', false);
+			session.participants.value.push({ ...session.participants.value[0], id: 'participant-b', userId: 'user-b' });
+			const receive = (id: string, screenPublicationId?: string) => {
+				const track = Object.assign(new EventTarget(), { kind: 'audio' }) as MediaStreamTrack;
+				fixture.remoteTrackCallbacks[0](track, { id, participantId: 'participant-b', mediaKind: 'audio', mediaSource: screenPublicationId == null ? 'microphone' : 'screen', screenPublicationId });
+				return { track, audio: document.querySelectorAll('audio')[document.querySelectorAll('audio').length - 1] };
+			};
+			const microphone = receive('microphone');
+			const first = receive('audio-a', 'screen-a');
+			const second = receive('audio-b', 'screen-b');
+			expect(session.screenAudioIds.value).toEqual(new Set(['screen-a', 'screen-b']));
+			session.setScreenVolume('screen-a', 25);
+			session.setScreenVolume('screen-b', 75);
+			session.setParticipantVolume('user-b', 50);
+			expect(first.audio.volume).toBe(0.25);
+			expect(second.audio.volume).toBe(0.75);
+			expect(microphone.audio.volume).toBe(0.5);
+			const replacement = receive('audio-a', 'screen-a');
+			expect(replacement.audio.volume).toBe(0.25);
+			replacement.track.dispatchEvent(new Event('ended'));
+			expect(session.screenAudioIds.value).toEqual(new Set(['screen-b']));
+			expect(second.audio.isConnected).toBe(true);
+			await session.leave();
+			expect(document.querySelector('audio')).toBeNull();
+			expect(session.getScreenVolume('screen-a')).toBe(100);
+			expect(session.screenAudioIds.value.size).toBe(0);
+		} finally {
+			play.mockRestore();
+			pause.mockRestore();
+		}
+	});
+
+	test('adds and stops individual screen shares from settings while other shares remain active', async () => {
+		fixture.role = 'host';
+		await session.join('room-a', true);
+		const stream = { getVideoTracks: () => [{ label: 'Window A' }] } as MediaStream;
+		session.localVideos.value = new Map([['screen-a', stream], ['screen-b', stream]]);
+		expect(session.controls.value.screenOn).toBe(true);
+		session.openScreenSettings(new MouseEvent('click'));
+		const menu = fixture.popupMenu.mock.calls[0][0];
+		await menu[3].action();
+		expect(fixture.controllers[0].startVideo).toHaveBeenCalledWith('screen', undefined, { height: 1080, frameRate: 30 });
+		expect(fixture.controllers[0].stopVideo).not.toHaveBeenCalled();
+		await menu[4].action();
+		expect(fixture.controllers[0].stopVideo).toHaveBeenCalledWith('screen', 'screen-a');
 	});
 
 	test('sends a heartbeat with the current connection every 30 seconds and stops after leaving', async () => {

@@ -97,6 +97,7 @@ export class CallsMediaService {
 		generation: number;
 		mid: string;
 		mediaSource?: 'microphone' | 'camera' | 'screen';
+		screenPublicationId?: string;
 		sessionDescription: CloudflareRealtimeSessionDescription;
 	}): Promise<{ publicationId: string; negotiation: CloudflareRealtimeTracksResponse }> {
 		const participant = await this.authorizeParticipant(user, input.roomId);
@@ -105,7 +106,11 @@ export class CallsMediaService {
 		if (connection.sessionId == null) throw new CallsMediaAccessError();
 		const mediaSource = input.mediaSource ?? 'microphone';
 		await this.roomService.assertCanPublish(user, mediaSource);
-		const mediaKind = mediaSource === 'microphone' ? 'audio' : 'video';
+		if (input.screenPublicationId != null) {
+			const screen = await this.bindingService.getPublication(input.screenPublicationId);
+			if (mediaSource !== 'screen' || screen.roomId !== input.roomId || screen.participantId !== participant.id || screen.connectionId !== input.connectionId || screen.generation !== input.generation || screen.mediaKind !== 'video' || screen.mediaSource !== 'screen') throw new CallsMediaAccessError();
+		}
+		const mediaKind = mediaSource === 'microphone' || input.screenPublicationId != null ? 'audio' : 'video';
 		const trackName = `${mediaSource}-${participant.id}-${input.generation}-${input.mid}`;
 		await this.quotaService.reserveTrack(connection.applicationId, trackName);
 		let providerMid: string | null = null;
@@ -128,7 +133,7 @@ export class CallsMediaService {
 				providerSessionId: connection.sessionId,
 				providerTrackName: track?.trackName ?? trackName,
 				providerMid: track?.mid ?? input.mid,
-				mediaKind, mediaSource,
+				mediaKind, mediaSource, screenPublicationId: input.screenPublicationId,
 			});
 			await this.liveConnectionService.assertCurrent(participant.id, input.connectionId, input.generation);
 			const room = await this.roomService.getRoom(input.roomId);
@@ -206,12 +211,12 @@ export class CallsMediaService {
 		return response;
 	}
 
-	public async reconcile(user: MiUser, roomId: string): Promise<{ roomRevision: number; publications: Array<{ id: string; participantId: string; mediaKind: 'audio' | 'video'; mediaSource: 'microphone' | 'camera' | 'screen' }> }> {
+	public async reconcile(user: MiUser, roomId: string): Promise<{ roomRevision: number; publications: Array<{ id: string; participantId: string; mediaKind: 'audio' | 'video'; mediaSource: 'microphone' | 'camera' | 'screen'; screenPublicationId?: string }> }> {
 		// Reserved participants still need publications to finish their media connection.
 		const snapshot = await this.roomService.snapshot(user, roomId, true);
 		const activeSpeakers = new Set(snapshot.participants.filter(p => p.role !== 'listener').map(p => p.id));
 		const publications = (await this.bindingService.listRoomPublications(roomId)).filter(binding => activeSpeakers.has(binding.participantId));
-		return { roomRevision: snapshot.room.revision, publications: publications.map(binding => ({ id: binding.id, participantId: binding.participantId, mediaKind: binding.mediaKind, mediaSource: binding.mediaSource ?? 'microphone' })) };
+		return { roomRevision: snapshot.room.revision, publications: publications.map(binding => ({ id: binding.id, participantId: binding.participantId, mediaKind: binding.mediaKind, mediaSource: binding.mediaSource ?? 'microphone', ...(binding.screenPublicationId == null ? {} : { screenPublicationId: binding.screenPublicationId }) })) };
 	}
 
 	public async heartbeat(user: MiUser, roomId: string, connectionId: string, generation: number): Promise<void> {

@@ -1279,6 +1279,10 @@ export type Channels = {
                 connectionId: string;
                 generation: number;
             };
+            ready: {
+                connectionId: string;
+                generation: number;
+            };
         };
     };
     callsRooms: {

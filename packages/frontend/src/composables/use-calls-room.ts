@@ -40,7 +40,11 @@ export function createCallsRoomConnection(roomId: string) {
 			participants.value = snapshot.participants;
 		}
 		lastRoomRevision.value = Math.max(lastRoomRevision.value, snapshot.room.revision);
-		ownParticipantId ??= snapshot.participants.find(participant => participant.userId === $i?.id)?.id ?? null;
+		const nextOwnParticipantId = snapshot.participants.find(participant => participant.userId === $i?.id)?.id ?? null;
+		if (ownParticipantId !== nextOwnParticipantId) {
+			ownParticipantId = nextOwnParticipantId;
+			resetSpeakingSendGate();
+		}
 	}
 
 	function accept(event: EventBase, apply: () => void) {
@@ -101,7 +105,10 @@ export function createCallsRoomConnection(roomId: string) {
 			participants.value = participants.value.some(participant => participant.id === next.id)
 				? participants.value.map(participant => participant.id === next.id ? next : participant)
 				: [...participants.value, next];
-			if (next.userId === $i?.id) ownParticipantId = next.id;
+			if (next.userId === $i?.id && ownParticipantId !== next.id) {
+				ownParticipantId = next.id;
+				resetSpeakingSendGate();
+			}
 			if (event.action === 'updated' && next.role === 'host') void refresh().catch(() => undefined);
 		}
 	}));
@@ -156,7 +163,7 @@ export function createCallsRoomConnection(roomId: string) {
 	};
 }
 
-// Display cards share a subscription without changing media session lifetimes.
+// Cards and media sessions share a subscription without changing media session lifetimes.
 const sharedCallsRooms = new Map<string, {
 	connection: ReturnType<typeof createCallsRoomConnection>;
 	referenceCount: number;
@@ -173,9 +180,7 @@ export function retainCallsRoomConnection(roomId: string) {
 	entry.referenceCount++;
 	let disposed = false;
 	return {
-		room: entry.connection.room,
-		participants: entry.connection.participants,
-		speakingParticipantIds: entry.connection.speakingParticipantIds,
+		...entry.connection,
 		load() {
 			if (entry.connection.room.value != null) return Promise.resolve();
 			return entry.loading ??= entry.connection.refresh().finally(() => { entry.loading = null; });

@@ -79,6 +79,38 @@ describe('useCallsRoom streaming updates', () => {
 		reopened.dispose();
 	});
 
+	test('keeps a shared connection alive while a card and session reference overlap', async () => {
+		const card = retainCallsRoomConnection('shared-room');
+		const session = retainCallsRoomConnection('shared-room');
+		await Promise.all([card.load(), session.load()]);
+		expect(fixture.useChannel).toHaveBeenCalledTimes(1);
+		expect(fixture.api).toHaveBeenCalledTimes(1);
+
+		session.dispose();
+		expect(fixture.dispose).not.toHaveBeenCalled();
+		fixture.channelHandlers.get('role')?.({ sequence: 1, roomRevision: 2, participantId: 'participant-a', role: 'speaker' });
+		await vi.waitFor(() => expect(card.participants.value[0]?.role).toBe('speaker'));
+
+		card.dispose();
+		expect(fixture.dispose).toHaveBeenCalledTimes(1);
+	});
+
+	test('refreshes the local participant identity when a shared connection is reused', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		calls.setSpeaking(true);
+
+		fixture.api.mockResolvedValueOnce({
+			room: snapshot.room,
+			participants: [{ ...snapshot.participants[0], id: 'participant-b' }],
+		});
+		await calls.refresh();
+		calls.setSpeaking(true);
+
+		expect(fixture.send.mock.calls.filter(([type]) => type === 'speaking')).toHaveLength(2);
+		calls.dispose();
+	});
+
 	test('refreshes ownership and both roles when a new host is announced', async () => {
 		const calls = useCallsRoom('room-a');
 		await calls.refresh();

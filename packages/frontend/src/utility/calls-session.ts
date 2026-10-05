@@ -6,7 +6,7 @@
 import { computed, ref, shallowRef, watch } from 'vue';
 import type { CallsMediaFailure, CallsMediaState, CallsRemotePublication, CallsVideoQuality, CallsVideoSource } from '@/utility/calls-media.js';
 import type { MenuItem } from '@/types/menu.js';
-import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
+import { retainCallsRoomConnection } from '@/composables/use-calls-room.js';
 import { $i } from '@/i.js';
 import { CallsMediaController, captureCallsCamera } from '@/utility/calls-media.js';
 import { detectCallsMediaCapabilities, normalizeCallsMediaError } from '@/utility/calls-media-core.js';
@@ -17,7 +17,7 @@ import { misskeyApi, misskeyApiKeepalive } from '@/utility/misskey-api.js';
 import { playMisskeySfx } from '@/utility/sound.js';
 import { callsScreenWindows, clearCallsScreenWindow, clearCallsScreenWindows, showCallsScreenWindow } from '@/utility/calls-screen-window.js';
 
-type CallsRoomConnection = ReturnType<typeof createCallsRoomConnection>;
+type CallsRoomConnection = ReturnType<typeof retainCallsRoomConnection>;
 type CallsReconnectCandidate = { roomId: string; title: string; userId: string; reconnectToken: string; expiresAt: number };
 const reconnectStorageKey = 'miux:calls-reconnect' as const;
 
@@ -110,7 +110,7 @@ function setReconnectCandidate(candidate: CallsReconnectCandidate | null): void 
 	updateReconnectCountdown(candidate);
 	reconnectExpiryTimer = window.setTimeout(() => dismissReconnectCandidate(), Math.max(0, candidate.expiresAt - Date.now()));
 	reconnectCountdownTimer = window.setInterval(() => updateReconnectCountdown(candidate), 1000);
-	reconnectConnection = createCallsRoomConnection(candidate.roomId);
+	reconnectConnection = retainCallsRoomConnection(candidate.roomId);
 	stopReconnectRoomWatch = watch(reconnectConnection.room, room => {
 		if (room == null) return;
 		if (room.state !== 'open') {
@@ -332,7 +332,7 @@ async function clearSession(): Promise<void> {
 
 function attachConnection(roomId: string): CallsRoomConnection {
 	disposeConnection();
-	const next = createCallsRoomConnection(roomId);
+	const next = retainCallsRoomConnection(roomId);
 	connection.value = next;
 	removeTrackListener = next.onTrackChange(() => { void media.value?.reconcile(); });
 	removeRevokedListener = next.onRevoked(event => {

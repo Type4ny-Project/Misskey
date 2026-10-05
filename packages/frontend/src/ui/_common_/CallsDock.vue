@@ -36,9 +36,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.sectionLabel">{{ i18n.ts._calls.requestSpeaker }}</strong>
 						<div :class="$style.userList">
 							<div v-for="participant in pendingRequests" :key="participant.id" :class="$style.userRow">
-								<MkA v-if="participantUser(participant.userId) != null" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.userLink"/>
-								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.userAvatar"/>
-								<div :class="$style.userBody"><strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong></div>
+								<MkA v-if="participant.user != null" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.userLink"/>
+								<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.userAvatar"/>
+								<div :class="$style.userBody"><strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong></div>
 								<button type="button" class="_button" :class="$style.inlineAction" @click="setRole(participant.id, 'speaker')">{{ i18n.ts.approve }}</button>
 								<button type="button" class="_button" :class="$style.inlineAction" @click="setRole(participant.id, 'listener')">{{ i18n.ts.reject }}</button>
 							</div>
@@ -49,11 +49,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.sectionLabel">{{ room?.mode === 'open' ? i18n.ts.users : i18n.ts._calls.speaker }}</strong>
 						<div :class="$style.userList">
 							<div v-for="participant in speakers" :key="participant.id" :class="$style.userRow">
-								<MkA v-if="participantUser(participant.userId) != null" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.userLink"/>
-								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="[$style.userAvatar, session.speakingParticipantIds.value.has(participant.id) && $style.userAvatarLive]"/>
+								<MkA v-if="participant.user != null" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.userLink"/>
+								<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="[$style.userAvatar, session.speakingParticipantIds.value.has(participant.id) && $style.userAvatarLive]"/>
 								<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
 								<div :class="$style.userBody">
-									<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
+									<strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong>
 									<small>{{ participant.role === 'host' ? i18n.ts._calls.host : participant.isMuted ? i18n.ts._calls.mutedStatus : session.speakingParticipantIds.value.has(participant.id) ? i18n.ts._calls.speakingNow : i18n.ts._calls.microphoneOn }}</small>
 								</div>
 								<button v-if="room?.mode === 'stage' && session.isHost.value && participant.role !== 'host'" type="button" class="_button" :class="$style.inlineAction" :aria-label="i18n.ts._calls.demoteListener" :title="i18n.ts._calls.demoteListener" @click="setRole(participant.id, 'listener')"><i class="ti ti-microphone-off"></i></button>
@@ -65,11 +65,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.sectionLabel">{{ i18n.ts._calls.listener }}</strong>
 						<div :class="$style.userList">
 							<div v-for="participant in listeners" :key="participant.id" :class="$style.userRow">
-								<MkA v-if="participantUser(participant.userId) != null" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.userLink"/>
-								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.userAvatar"/>
+								<MkA v-if="participant.user != null" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.userLink"/>
+								<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.userAvatar"/>
 								<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
 								<div :class="$style.userBody">
-									<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
+									<strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong>
 									<small><i class="ti ti-headphones"></i> {{ i18n.ts.online }}</small>
 								</div>
 							</div>
@@ -116,7 +116,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type * as Misskey from 'misskey-js';
 import MkCallsControls from '@/components/MkCallsControls.vue';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
@@ -135,7 +134,7 @@ const speakers = computed(() => participants.value.filter(participant => partici
 const listeners = computed(() => participants.value.filter(participant => participant.role === 'listener'));
 const pendingRequests = computed(() => listeners.value.filter(participant => participant.speakerRequestedAt != null));
 const hostParticipant = computed(() => participants.value.find(participant => participant.role === 'host') ?? null);
-const hostUser = computed(() => hostParticipant.value == null ? null : participantUser(hostParticipant.value.userId));
+const hostUser = computed(() => hostParticipant.value?.user ?? null);
 const isLiveSpeaking = computed(() => session.myParticipant.value != null && session.speakingParticipantIds.value.has(session.myParticipant.value.id));
 const microphoneOnCount = computed(() => speakers.value.filter(participant => !participant.isMuted).length);
 
@@ -152,10 +151,6 @@ watch(rootEl, (element, _, onCleanup) => {
 		window.document.body.style.removeProperty('--MI-callsDockSpacing');
 	});
 }, { flush: 'post' });
-
-function participantUser(userId: string): Misskey.entities.UserLite | null {
-	return participants.value.find(participant => participant.userId === userId)?.user ?? null;
-}
 
 function openRoom(): void {
 	if (session.currentRoomId.value == null) return;

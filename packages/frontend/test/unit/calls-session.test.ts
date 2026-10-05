@@ -25,6 +25,8 @@ const fixture = vi.hoisted(() => ({
 	heartbeat: vi.fn(),
 	role: 'listener' as 'listener' | 'host',
 	revoked: [] as Array<(event: { reason: string; connectionId?: string; generation?: number }) => void>,
+	trackListenerRemovals: [] as Array<ReturnType<typeof vi.fn>>,
+	revocationListenerRemovals: [] as Array<ReturnType<typeof vi.fn>>,
 	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null }; participants: { value: Array<{ id: string; userId: string; role: string; isMuted: boolean; joinedAt?: string }> }; refresh: ReturnType<typeof vi.fn> }>,
 	remoteTrackCallbacks: [] as Array<(track: MediaStreamTrack, publication: CallsRemotePublication) => void>,
 	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
@@ -43,7 +45,7 @@ vi.mock('@/utility/calls-media-core.js', () => ({ detectCallsMediaCapabilities: 
 vi.mock('@/composables/use-calls-room.js', async () => {
 	const { ref } = await import('vue');
 	return {
-		createCallsRoomConnection: (roomId: string) => {
+		retainCallsRoomConnection: (roomId: string) => {
 			const connection = {
 				room: ref({ id: roomId, title: 'Room', state: 'open', revision: 1 }),
 				endReason: ref<'host-timeout' | null>(null),
@@ -51,8 +53,8 @@ vi.mock('@/composables/use-calls-room.js', async () => {
 				speakingParticipantIds: ref(new Set()),
 				connected: ref(true),
 				refresh: vi.fn(), dispose: vi.fn(), setMuted: fixture.setMuted, setSpeaking: vi.fn(), heartbeat: fixture.heartbeat,
-				onTrackChange: () => vi.fn(),
-				onRevoked: (callback: typeof fixture.revoked[number]) => { fixture.revoked.push(callback); return vi.fn(); },
+				onTrackChange: () => { const remove = vi.fn(); fixture.trackListenerRemovals.push(remove); return remove; },
+				onRevoked: (callback: typeof fixture.revoked[number]) => { fixture.revoked.push(callback); const remove = vi.fn(); fixture.revocationListenerRemovals.push(remove); return remove; },
 			};
 			fixture.connections.push(connection);
 			return connection;
@@ -108,6 +110,8 @@ describe('Calls session device handoff', () => {
 		fixture.role = 'listener';
 		Object.assign(fixture.policies, { canJoinCalls: true, canSpeakInCalls: true, canPublishCallsVideo: true, canShareCallsScreen: true });
 		fixture.revoked.length = 0;
+		fixture.trackListenerRemovals.length = 0;
+		fixture.revocationListenerRemovals.length = 0;
 		fixture.controllers.length = 0;
 		fixture.connections.length = 0;
 		fixture.remoteTrackCallbacks.length = 0;
@@ -527,6 +531,15 @@ describe('Calls session device handoff', () => {
 		expect(fixture.controllers[0].close).toHaveBeenCalledOnce();
 		finishServer({});
 		finishCleanup();
+	});
+
+	test('removes session listeners and closes media on leave', async () => {
+		await session.join('room-a', true);
+		await session.leave();
+
+		expect(fixture.controllers[0].close).toHaveBeenCalledOnce();
+		expect(fixture.trackListenerRemovals[0]).toHaveBeenCalledOnce();
+		expect(fixture.revocationListenerRemovals[0]).toHaveBeenCalledOnce();
 	});
 
 	test.each([true, false])('only replaces the existing device when confirmation is accepted (canceled: %s)', async canceled => {

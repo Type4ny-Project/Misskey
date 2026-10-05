@@ -22,6 +22,7 @@ const context = {
 	state: 'running',
 	audioWorklet: { addModule: vi.fn() },
 	resume: vi.fn(),
+	suspend: vi.fn(),
 	close: vi.fn(),
 	createMediaStreamSource: vi.fn(() => source),
 	createMediaStreamDestination: vi.fn(() => destination),
@@ -35,6 +36,7 @@ beforeEach(() => {
 	context.state = 'running';
 	context.audioWorklet.addModule.mockReset().mockResolvedValue(undefined);
 	context.resume.mockResolvedValue(undefined);
+	context.suspend.mockResolvedValue(undefined);
 	context.close.mockImplementation(async () => { context.state = 'closed'; });
 	vi.stubGlobal('AudioContext', vi.fn(class {
 		constructor() { return context; }
@@ -61,11 +63,18 @@ describe('Calls RNNoise audio graph', () => {
 		processing.setEnabled(true);
 		expect(processing.track).toBe(track);
 		expect(track.stop).not.toHaveBeenCalled();
+		expect(fixture.processor.connect).toHaveBeenCalledTimes(2);
+		processing.setMuted(true);
+		expect(context.suspend).toHaveBeenCalledOnce();
+		processing.setMuted(true);
+		expect(context.suspend).toHaveBeenCalledOnce();
+		processing.setMuted(false);
+		expect(context.resume).toHaveBeenCalledTimes(2);
 		processing.close();
 		processing.close();
 		expect(track.stop).toHaveBeenCalledOnce();
 		expect(fixture.processor.destroy).toHaveBeenCalledOnce();
-		expect(fixture.processor.disconnect).toHaveBeenCalledOnce();
+		expect(fixture.processor.disconnect).toHaveBeenCalledTimes(2);
 		expect(context.close).toHaveBeenCalledOnce();
 	});
 

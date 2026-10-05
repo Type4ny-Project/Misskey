@@ -200,4 +200,43 @@ describe('useCallsRoom streaming updates', () => {
 		await vi.waitFor(() => expect(revoked).toHaveBeenCalledWith(expect.objectContaining({ reason: 'access' })));
 		expect(calls.connected.value).toBe(false);
 	});
+
+	test('preserves reactive references for repeated and reordered speaking events', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		let roomInvalidations = 0;
+		let speakingInvalidations = 0;
+		const stopRoom = watch(calls.room, () => roomInvalidations++, { flush: 'sync' });
+		const stopSpeaking = watch(calls.speakingParticipantIds, () => speakingInvalidations++, { flush: 'sync' });
+		const speaking = fixture.channelHandlers.get('speaking')!;
+		speaking({ sequence: 1, roomRevision: 1, participantIds: ['participant-a', 'participant-b'] });
+		await vi.waitFor(() => expect([...calls.speakingParticipantIds.value]).toEqual(['participant-a', 'participant-b']));
+		roomInvalidations = 0;
+		speakingInvalidations = 0;
+		const initialRoom = calls.room.value;
+		const initialSpeaking = calls.speakingParticipantIds.value;
+		for (let sequence = 2; sequence <= 101; sequence++) {
+			speaking({ sequence, roomRevision: 1, participantIds: ['participant-a', 'participant-b'] });
+		}
+		speaking({ sequence: 102, roomRevision: 1, participantIds: ['participant-b', 'participant-a'] });
+		fixture.channelHandlers.get('mute')?.({ sequence: 103, roomRevision: 1, participantId: 'participant-a', isMuted: true });
+		await vi.waitFor(() => expect(calls.participants.value[0]?.isMuted).toBe(true));
+		expect(roomInvalidations).toBe(0);
+		expect(speakingInvalidations).toBe(0);
+		expect(calls.room.value).toBe(initialRoom);
+		expect(calls.speakingParticipantIds.value).toBe(initialSpeaking);
+
+		speaking({ sequence: 104, roomRevision: 1, participantIds: ['participant-a', 'participant-c'] });
+		await vi.waitFor(() => expect([...calls.speakingParticipantIds.value].sort()).toEqual(['participant-a', 'participant-c']));
+		expect(roomInvalidations).toBe(0);
+		expect(speakingInvalidations).toBe(1);
+
+		speaking({ sequence: 104, roomRevision: 1, participantIds: ['participant-a', 'participant-b'] });
+		await new Promise(resolve => setTimeout(resolve, 0));
+		expect([...calls.speakingParticipantIds.value].sort()).toEqual(['participant-a', 'participant-c']);
+		expect(speakingInvalidations).toBe(1);
+		stopRoom();
+		stopSpeaking();
+	});
+
 });

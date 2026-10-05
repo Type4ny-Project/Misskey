@@ -231,9 +231,8 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .resumeMain:disabled { cursor: wait; opacity: 0.72; }
 .avatarRing { position: relative; z-index: 0; display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; border-radius: 50%; isolation: isolate; }
 .avatarRingActive::before, .avatarRingActive::after { position: absolute; z-index: -1; inset: -4px; border: 2px solid var(--MI_THEME-accent); border-radius: 44% 56% 48% 52% / 52% 43% 57% 48%; content: ''; opacity: 0.62; pointer-events: none; transition: opacity 0.4s ease, scale 0.4s ease; }
-.avatarRingActive::before { animation: organicRing 3.2s ease-in-out infinite; }
 .avatarRingActive::after { inset: -7px; border-color: color-mix(in srgb, var(--MI_THEME-accent) 42%, transparent); opacity: 0; scale: 0.88; }
-.avatarRingLive::before { opacity: 1; }
+.avatarRingLive::before { opacity: 1; animation: organicRing 3.2s ease-in-out infinite; }
 .avatarRingLive::after { opacity: 0.72; scale: 1; animation: organicRing 1.25s -0.72s ease-in-out infinite reverse; }
 .avatar { width: 38px; height: 38px; }
 .body { min-width: 0; flex: 1; }
@@ -267,9 +266,9 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 }
 
 @keyframes organicRing {
-	0%, 100% { transform: scale(0.96) rotate(0deg); border-radius: 44% 56% 48% 52% / 52% 43% 57% 48%; }
-	35% { transform: scale(1.06) rotate(7deg); border-radius: 58% 42% 55% 45% / 42% 57% 43% 58%; }
-	68% { transform: scale(1.01) rotate(-5deg); border-radius: 49% 51% 39% 61% / 60% 44% 56% 40%; }
+	0%, 100% { transform: scale(0.96) rotate(0deg); }
+	35% { transform: scale(1.06) rotate(7deg); }
+	68% { transform: scale(1.01) rotate(-5deg); }
 }
 
 @keyframes avatarPulse {

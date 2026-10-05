@@ -42,7 +42,7 @@ export function createCallsRoomConnection(roomId: string) {
 		if (event.sequence <= lastSequence.value && event.roomRevision <= lastRoomRevision.value) return;
 		lastSequence.value = event.sequence;
 		lastRoomRevision.value = event.roomRevision;
-		if (room.value != null) room.value = { ...room.value, revision: event.roomRevision };
+		if (room.value != null && room.value.revision !== event.roomRevision) room.value = { ...room.value, revision: event.roomRevision };
 		apply();
 	}
 
@@ -86,7 +86,11 @@ export function createCallsRoomConnection(roomId: string) {
 	channel.on('mute', event => accept(event, () => { participants.value = participants.value.map(participant => participant.id === event.participantId ? { ...participant, isMuted: event.isMuted } : participant); }));
 	channel.on('track', event => accept(event, () => { for (const listener of trackListeners) listener(); }));
 	channel.on('videoStopped', event => accept(event, () => { for (const listener of trackListeners) listener(); }));
-	channel.on('speaking', event => accept(event, () => { speakingParticipantIds.value = new Set(event.participantIds); }));
+	channel.on('speaking', event => accept(event, () => {
+		const currentParticipantIds = speakingParticipantIds.value;
+		if (currentParticipantIds.size === event.participantIds.length && event.participantIds.every(participantId => currentParticipantIds.has(participantId))) return;
+		speakingParticipantIds.value = new Set(event.participantIds);
+	}));
 	channel.on('revoked', event => accept(event, () => {
 		if (event.participantId != null && event.participantId !== ownParticipantId) return;
 		if (event.participantId == null) connected.value = false;

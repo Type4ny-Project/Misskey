@@ -29,6 +29,7 @@ export function createCallsRoomConnection(roomId: string) {
 
 	async function refresh() {
 		const snapshot = await misskeyApi('calls/rooms/show', { roomId });
+		if (snapshot.room.revision < lastRoomRevision.value) return;
 		if (room.value == null || snapshot.room.revision >= room.value.revision) {
 			room.value = snapshot.room;
 			participants.value = snapshot.participants;
@@ -62,6 +63,8 @@ export function createCallsRoomConnection(roomId: string) {
 	channel.on('lifecycle', event => accept(event, () => {
 		endReason.value = event.reason ?? null;
 		if (room.value != null) room.value = { ...room.value, state: event.state, revision: event.roomRevision };
+		// Lifecycle events omit timestamps; fetch the server's final start/end times.
+		if (event.state === 'ended') void refresh().catch(() => undefined);
 	}));
 	channel.on('participant', event => accept(event, () => {
 		if (room.value != null && event.moderatorUserIds != null) room.value = { ...room.value, moderatorUserIds: event.moderatorUserIds };

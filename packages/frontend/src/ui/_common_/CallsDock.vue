@@ -164,9 +164,9 @@ function openRoom(): void {
 }
 
 async function leaveRoom(): Promise<void> {
+	expanded.value = false;
 	const { canceled } = await os.confirm({ type: 'warning', text: session.isHost.value ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom });
 	if (canceled) return;
-	expanded.value = false;
 	try {
 		await session.leave();
 		os.toast(i18n.ts._calls.leftCall);

@@ -32,6 +32,20 @@ class FakeRedis {
 }
 
 describe('CallsLiveConnectionService', () => {
+	test('keeps a bound session hidden until ready and rejects readiness from an old generation', async () => {
+		const service = new CallsLiveConnectionService(new FakeRedis() as unknown as Redis.Redis);
+		await service.replace('participant', 'connection-1');
+		await service.bindSession('participant', 'connection-1', 1, 'session-1');
+		expect(await service.isReady('participant')).toBe(false);
+		expect(await service.markReady('participant', 'connection-1', 1)).toBe(true);
+		expect(await service.markReady('participant', 'connection-1', 1)).toBe(false);
+		await service.heartbeat('participant', 'connection-1', 1);
+		expect(await service.isReady('participant')).toBe(true);
+		await service.replace('participant', 'connection-2');
+		await expect(service.markReady('participant', 'connection-1', 1)).rejects.toBeInstanceOf(StaleCallsConnectionError);
+		expect(await service.isReady('participant')).toBe(false);
+	});
+
 	test('expires a host after 90 seconds and extends the deadline when they return', async () => {
 		vi.useFakeTimers();
 		try {

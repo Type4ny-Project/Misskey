@@ -73,6 +73,7 @@ export class CallsMediaController {
 		previousConnection?: { connectionId: string; generation: number },
 		private replaceExisting = false,
 		private videoCallbacks?: {
+			ready?: () => void;
 			localTrack: (source: CallsVideoSource, track: MediaStreamTrack | null, id: string) => void;
 			microphoneTrack?: (track: MediaStreamTrack | null) => void;
 			noiseSuppressionChanged?: (enabled: boolean) => void;
@@ -262,11 +263,12 @@ export class CallsMediaController {
 		}
 		const subscribed = await this.reconcileNow();
 		// SDP exchanges stay serialized, but receiving need not wait for the sender's transport.
-		if (this.localTrack != null) {
+		if (this.localTrack != null || subscribed) {
 			await this.waitUntilConnected(peer);
 			this.setState('connected');
 		}
 		if (this.localTrack == null && !subscribed && this.peer === peer) this.setState('connected');
+		if (this.peer === peer) this.videoCallbacks?.ready?.();
 	}
 
 	public reconcile(): Promise<boolean> {

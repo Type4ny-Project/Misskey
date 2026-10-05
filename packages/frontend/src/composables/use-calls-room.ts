@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { onUnmounted, ref, shallowRef } from 'vue';
+import { computed, onUnmounted, ref, shallowRef } from 'vue';
 import type * as Misskey from 'misskey-js';
 import { useStream } from '@/stream.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -17,6 +17,7 @@ export function createCallsRoomConnection(roomId: string) {
 	const room = shallowRef<Snapshot['room'] | null>(null);
 	const endReason = ref<'host-timeout' | null>(null);
 	const participants = ref<Snapshot['participants']>([]);
+	const mutedParticipantIds = computed(() => new Set(participants.value.filter(participant => participant.isMuted).map(participant => participant.id)));
 	const connected = ref(false);
 	const speakingParticipantIds = ref<Set<string>>(new Set());
 	const lastSequence = ref(0);
@@ -83,13 +84,22 @@ export function createCallsRoomConnection(roomId: string) {
 	channel.on('speakerRequest', event => accept(event, () => {
 		participants.value = participants.value.map(participant => participant.id === event.participantId ? { ...participant, speakerRequestedAt: event.requested ? event.occurredAt : null } : participant);
 	}));
-	channel.on('mute', event => accept(event, () => { participants.value = participants.value.map(participant => participant.id === event.participantId ? { ...participant, isMuted: event.isMuted } : participant); }));
+	channel.on('mute', event => accept(event, () => {
+		participants.value = participants.value.map(participant => participant.id === event.participantId ? { ...participant, isMuted: event.isMuted } : participant);
+		if (event.isMuted && speakingParticipantIds.value.has(event.participantId)) {
+			const nextParticipantIds = new Set(speakingParticipantIds.value);
+			nextParticipantIds.delete(event.participantId);
+			speakingParticipantIds.value = nextParticipantIds;
+		}
+	}));
 	channel.on('track', event => accept(event, () => { for (const listener of trackListeners) listener(); }));
 	channel.on('videoStopped', event => accept(event, () => { for (const listener of trackListeners) listener(); }));
 	channel.on('speaking', event => accept(event, () => {
+		// A speaking aggregate can still contain an ID briefly after its mute event.
+		const participantIds = mutedParticipantIds.value.size === 0 ? event.participantIds : event.participantIds.filter(participantId => !mutedParticipantIds.value.has(participantId));
 		const currentParticipantIds = speakingParticipantIds.value;
-		if (currentParticipantIds.size === event.participantIds.length && event.participantIds.every(participantId => currentParticipantIds.has(participantId))) return;
-		speakingParticipantIds.value = new Set(event.participantIds);
+		if (currentParticipantIds.size === participantIds.length && participantIds.every(participantId => currentParticipantIds.has(participantId))) return;
+		speakingParticipantIds.value = new Set(participantIds);
 	}));
 	channel.on('revoked', event => accept(event, () => {
 		if (event.participantId != null && event.participantId !== ownParticipantId) return;

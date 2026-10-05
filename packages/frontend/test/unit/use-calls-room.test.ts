@@ -170,6 +170,24 @@ describe('useCallsRoom streaming updates', () => {
 		expect(calls.participants.value[0]?.isMuted).toBe(true);
 	});
 
+	test('clears a muted speaker and ignores stale speaking lists until they unmute', async () => {
+		const calls = useCallsRoom('room-a');
+		await calls.refresh();
+		const speaking = fixture.channelHandlers.get('speaking')!;
+		const mute = fixture.channelHandlers.get('mute')!;
+		speaking({ sequence: 1, roomRevision: 1, participantIds: ['participant-a', 'participant-b'] });
+		mute({ sequence: 2, roomRevision: 2, participantId: 'participant-a', isMuted: true });
+		expect([...calls.speakingParticipantIds.value]).toEqual(['participant-b']);
+		expect(calls.participants.value[0]?.isMuted).toBe(true);
+		const mutedSpeaking = calls.speakingParticipantIds.value;
+		speaking({ sequence: 3, roomRevision: 2, participantIds: ['participant-a', 'participant-b'] });
+		expect(calls.speakingParticipantIds.value).toBe(mutedSpeaking);
+		mute({ sequence: 4, roomRevision: 3, participantId: 'participant-a', isMuted: false });
+		expect(calls.speakingParticipantIds.value).toBe(mutedSpeaking);
+		speaking({ sequence: 5, roomRevision: 3, participantIds: ['participant-a', 'participant-b'] });
+		expect([...calls.speakingParticipantIds.value]).toEqual(['participant-a', 'participant-b']);
+	});
+
 	test('video stop events trigger media reconciliation without revoking the participant', async () => {
 		const calls = useCallsRoom('room-a');
 		await calls.refresh();
@@ -219,8 +237,6 @@ describe('useCallsRoom streaming updates', () => {
 			speaking({ sequence, roomRevision: 1, participantIds: ['participant-a', 'participant-b'] });
 		}
 		speaking({ sequence: 102, roomRevision: 1, participantIds: ['participant-b', 'participant-a'] });
-		fixture.channelHandlers.get('mute')?.({ sequence: 103, roomRevision: 1, participantId: 'participant-a', isMuted: true });
-		await vi.waitFor(() => expect(calls.participants.value[0]?.isMuted).toBe(true));
 		expect(roomInvalidations).toBe(0);
 		expect(speakingInvalidations).toBe(0);
 		expect(calls.room.value).toBe(initialRoom);

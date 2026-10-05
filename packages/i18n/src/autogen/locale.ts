@@ -10561,6 +10561,18 @@ export interface Locale extends ILocale {
          */
         "elapsedTime": string;
         /**
+         * 開始日時
+         */
+        "startedAt": string;
+        /**
+         * 終了日時
+         */
+        "endedAt": string;
+        /**
+         * ルーム全体の通話時間
+         */
+        "totalDuration": string;
+        /**
          * 新しい通話
          */
         "newCall": string;

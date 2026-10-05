@@ -20,7 +20,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkLoading v-if="room == null && !loadFailed"/>
 		<div v-else-if="room == null" :class="$style.notFound"><i class="ti ti-alert-circle"></i><strong>{{ i18n.ts.notFound }}</strong></div>
 		<template v-else>
-			<div :class="$style.body">
+			<div v-if="room.state === 'ended'" :class="[$style.body, $style.endedBody]">
+				<section :class="$style.summary">
+					<h2 :class="$style.summaryTitle"><i class="ti ti-phone-off" aria-hidden="true"></i> {{ i18n.ts._calls.ended }}</h2>
+					<MkCallsRoomSummary :room="room"/>
+				</section>
+			</div>
+			<div v-else :class="$style.body">
 				<MkInfo v-if="session.replacedRoomId.value === props.roomId">{{ i18n.ts._calls.connectedOnAnotherDevice }}</MkInfo>
 				<MkInfo v-if="!connected && !session.joining.value" warn>{{ i18n.ts._calls.websocketDisconnected }}</MkInfo>
 				<MkInfo v-if="sessionIsCurrent && session.mediaState.value === 'reconnecting'" warn>{{ i18n.ts._calls.reconnecting }}</MkInfo>
@@ -83,7 +89,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 
 			<footer :class="$style.footer">
-				<template v-if="sessionIsCurrent">
+				<MkButton v-if="room.state === 'ended'" rounded @click="closeWindow">{{ i18n.ts.close }}</MkButton>
+				<template v-else-if="sessionIsCurrent">
 					<MkButton v-if="session.needsAudioResume.value" rounded @click="session.resumeAudio()">{{ i18n.ts._calls.resumeAudio }}</MkButton>
 					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="toggleCamera" @screen="session.toggleVideo('screen')" @microphoneSettings="openDeviceMenu('microphone', $event)" @cameraSettings="openDeviceMenu('camera', $event)" @screenSettings="openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveCurrentRoom"/>
 				</template>
@@ -108,6 +115,7 @@ import { url } from '@@/js/config.js';
 import CallsVideo from '@/components/MkCallsVideo.vue';
 import MkModal from '@/components/MkModal.vue';
 import MkCallsControls from '@/components/MkCallsControls.vue';
+import MkCallsRoomSummary from '@/components/MkCallsRoomSummary.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
@@ -391,12 +399,13 @@ async function joinRoom(startMuted = false, requestConfirmation = false): Promis
 
 async function leaveCurrentRoom(): Promise<void> {
 	if (popoutWindow != null) window.focus();
-	const { canceled } = await os.confirm({ type: 'warning', text: isHost.value ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom });
+	const endingRoom = isHost.value;
+	const { canceled } = await os.confirm({ type: 'warning', text: endingRoom ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom });
 	if (canceled) return;
 	try {
 		await session.leave();
 		os.toast(i18n.ts._calls.leftCall);
-		closeWindow();
+		if (!endingRoom) closeWindow();
 	} catch (error) {
 		console.error('[Calls] Room operation failed', error);
 		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
@@ -499,12 +508,12 @@ watch(isSessionRoom, active => {
 	}
 }, { immediate: true });
 watch(() => room.value?.state, state => {
-	if (state === 'ended' || state === 'cancelled') closeWindow();
+	if (state === 'cancelled') closeWindow();
 });
 onMounted(() => {
 	window.addEventListener('pagehide', cleanupPopout);
 	void refreshRoom().then(() => {
-		if (myParticipant.value != null && myParticipant.value.role !== 'listener') void session.prepareMicrophones();
+		if (room.value?.state === 'open' && myParticipant.value != null && myParticipant.value.role !== 'listener') void session.prepareMicrophones();
 		if (!disposed && room.value?.state === 'open' && !sessionIsCurrent.value && !session.joining.value) void joinRoom(isHost.value || room.value.mode === 'open', true);
 	}).catch(error => {
 		console.error('[Calls] Room loading failed', error);
@@ -529,6 +538,9 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 .elapsedTime { font-variant-numeric: tabular-nums; color: var(--MI_THEME-fgTransparentWeak); }
 .menuButton { width: 36px; height: 36px; border-radius: 50%; font-size: 20px; }
 .body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 16px; padding: 16px; background: var(--MI_THEME-bg); }
+.endedBody { overflow: auto; }
+.summary { width: min(100%, 560px); box-sizing: border-box; margin: auto; padding: 24px; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
+.summaryTitle { display: flex; align-items: center; gap: 8px; margin: 0 0 24px; font-size: 1.1rem; }
 .callLayout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0; }
 .stage { grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; overflow: auto; }
 .participantArea { grid-column: 1; grid-row: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 24px; padding: 16px; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }

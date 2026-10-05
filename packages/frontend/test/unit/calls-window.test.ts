@@ -50,3 +50,17 @@ test('shows creation when the available room belongs to someone else', async () 
 	await (await import('@/utility/calls-window.js')).openCallsCreation();
 	expect(fixture.popup).toHaveBeenCalledWith('CreateDialog', {}, expect.anything());
 });
+
+test('dismisses and reopens the same room from its link without creating or joining a room', async () => {
+	const { openCallsRoom, callsWindowRoomId } = await import('@/utility/calls-window.js');
+	await openCallsRoom('ended-room');
+	expect(callsWindowRoomId.value).toBe('ended-room');
+	await openCallsRoom('ended-room');
+	expect(fixture.popup).toHaveBeenCalledOnce();
+	fixture.popup.mock.calls[0][2].closed();
+	expect(callsWindowRoomId.value).toBeNull();
+	await openCallsRoom('ended-room');
+	expect(fixture.popup).toHaveBeenCalledTimes(2);
+	expect(fixture.popup).toHaveBeenLastCalledWith('RoomWindow', { roomId: 'ended-room' }, expect.anything());
+	expect(fixture.api).not.toHaveBeenCalled();
+});

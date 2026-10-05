@@ -4,12 +4,14 @@
  */
 
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { cleanup, render, waitFor } from '@testing-library/vue';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/vue';
 import { defineComponent, h } from 'vue';
 import { url as local } from '@@/js/config.js';
 import { getLocalCallsRoomId } from '@/utility/url-preview.js';
 import MkUrlCallsCard from '@/components/MkUrlCallsCard.vue';
 import MkAvatar from '@/components/global/MkAvatar.vue';
+import { i18n } from '@/i18n.js';
+import { openCallsRoom } from '@/utility/calls-window.js';
 
 const fixture = vi.hoisted(() => ({ api: vi.fn(), handlers: new Map<string, (event: any) => void>(), useChannel: vi.fn(), dispose: vi.fn() }));
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: fixture.api }));
@@ -43,6 +45,44 @@ describe('Calls URL cards', () => {
 		await waitFor(() => expect(view.getByText('Calls room')).toBeTruthy());
 		expect(fixture.api).toHaveBeenCalledWith('calls/rooms/show', { roomId: 'room-a' });
 		expect(fixture.api).toHaveBeenCalledTimes(1);
+	});
+
+	test('shows final room timestamps instead of current participants on an initially ended card', async () => {
+		const room = { id: 'ended-room', title: 'Ended call', state: 'ended', revision: 2, startedAt: '2026-10-02T23:58:30.000Z', endedAt: '2026-10-03T00:03:45.000Z' };
+		fixture.api.mockResolvedValue({ room, participants: [] });
+		const view = render(MkUrlCallsCard, { props: { roomId: room.id }, global: { stubs } });
+		await waitFor(() => expect(view.getByText('05:15')).toBeTruthy());
+		expect(view.getByText(i18n.ts._calls.startedAt)).toBeTruthy();
+		expect(view.getByText(i18n.ts._calls.endedAt)).toBeTruthy();
+		expect(view.getByText(i18n.ts._calls.totalDuration)).toBeTruthy();
+		expect(view.queryByText(i18n.tsx._calls.peopleInRoom({ count: 0 }))).toBeNull();
+		expect(Array.from(view.container.querySelectorAll('time'), time => time.getAttribute('datetime'))).toEqual([room.startedAt, room.endedAt]);
+		expect(view.getByText(i18n.ts._calls.viewRoom)).toBeTruthy();
+		await fireEvent.click(view.getByRole('button'));
+		expect(openCallsRoom).toHaveBeenCalledWith(room.id);
+		expect(fixture.api).toHaveBeenCalledTimes(1);
+	});
+
+	test('replaces a live card with the final fetched timestamps after the call ends', async () => {
+		const room = { id: 'live-to-ended-room', title: 'Live call', state: 'open', revision: 1, startedAt: '2026-10-02T23:58:30.000Z', endedAt: null };
+		const finalRoom = { ...room, state: 'ended', revision: 2, startedAt: '2026-10-02T23:55:00.000Z', endedAt: '2026-10-03T00:04:00.000Z' };
+		const finalSnapshot = { room: finalRoom, participants: [] };
+		let resolveFinal!: (snapshot: typeof finalSnapshot) => void;
+		fixture.api.mockResolvedValueOnce({ room, participants: [{ id: 'host', userId: 'host', role: 'host', state: 'active', joinedAt: '2026-10-02T23:59:00.000Z', user: { username: 'Host', avatarUrl: 'https://example.invalid/host.png' } }] });
+		fixture.api.mockReturnValueOnce(new Promise(resolve => { resolveFinal = resolve; }));
+		const view = render(MkUrlCallsCard, { props: { roomId: room.id }, global: { stubs } });
+		await waitFor(() => expect(view.getByText(i18n.tsx._calls.peopleInRoom({ count: 1 }))).toBeTruthy());
+		expect(view.queryByText(i18n.ts._calls.totalDuration)).toBeNull();
+		fixture.handlers.get('lifecycle')?.({ sequence: 1, roomRevision: 2, state: 'ended' });
+		await waitFor(() => expect(view.getByText(i18n.ts._calls.totalDuration)).toBeTruthy());
+		expect(view.getAllByText(i18n.ts.unknown)).toHaveLength(2);
+		expect(view.queryByText(i18n.tsx._calls.peopleInRoom({ count: 0 }))).toBeNull();
+		resolveFinal(finalSnapshot);
+		await waitFor(() => expect(view.getByText('09:00')).toBeTruthy());
+		expect(view.queryByText(i18n.ts.unknown)).toBeNull();
+		expect(Array.from(view.container.querySelectorAll('time'), time => time.getAttribute('datetime'))).toEqual([finalRoom.startedAt, finalRoom.endedAt]);
+		expect(view.getByText(i18n.ts._calls.viewRoom)).toBeTruthy();
+		expect(fixture.api).toHaveBeenCalledTimes(2);
 	});
 
 	test('loads users with the room for five identical URL cards and shares participant updates', async () => {

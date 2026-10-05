@@ -137,6 +137,23 @@ describe('CallsMediaService authorization boundaries', () => {
 		expect(fixture.quota.reserveTrack).toHaveBeenCalledWith('app-a', `${mediaSource}-participant-a-2-1`);
 	});
 
+	test('publishes screen audio linked to the current owned screen video', async () => {
+		const fixture = createFixture();
+		fixture.bindings.getPublication.mockResolvedValue({ id: 'screen-a', roomId: room.id, participantId: 'participant-a', connectionId: 'connection-a', generation: 2, mediaKind: 'video', mediaSource: 'screen' });
+		fixture.provider.addTracks.mockResolvedValue({ tracks: [{ mid: '2' }] });
+		fixture.bindings.createPublication.mockResolvedValue({ id: 'screen-audio' });
+		await fixture.service.publish(user, { roomId: room.id, connectionId: 'connection-a', generation: 2, mid: '2', mediaSource: 'screen', screenPublicationId: 'screen-a', sessionDescription: { type: 'offer', sdp: 'sdp' } });
+		expect(fixture.provider.addTracks).toHaveBeenCalledWith('session-a', [expect.objectContaining({ kind: 'audio' })], expect.anything());
+		expect(fixture.bindings.createPublication).toHaveBeenCalledWith(expect.objectContaining({ mediaKind: 'audio', mediaSource: 'screen', screenPublicationId: 'screen-a' }));
+	});
+
+	test.each([{ participantId: 'participant-b' }, { roomId: 'room-b' }, { generation: 1 }, { mediaSource: 'camera' }])('rejects attaching screen audio to a foreign or stale publication: %s', async invalid => {
+		const fixture = createFixture();
+		fixture.bindings.getPublication.mockResolvedValue({ roomId: room.id, participantId: 'participant-a', connectionId: 'connection-a', generation: 2, mediaKind: 'video', mediaSource: 'screen', ...invalid });
+		await expect(fixture.service.publish(user, { roomId: room.id, connectionId: 'connection-a', generation: 2, mid: '2', mediaSource: 'screen', screenPublicationId: 'screen-a', sessionDescription: { type: 'offer', sdp: 'sdp' } })).rejects.toBeInstanceOf(CallsMediaAccessError);
+		expect(fixture.provider.addTracks).not.toHaveBeenCalled();
+	});
+
 	test('maps subscription mids to public IDs even when provider results are reordered', async () => {
 		const fixture = createFixture('listener');
 		const publications = [

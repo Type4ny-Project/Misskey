@@ -10481,6 +10481,14 @@ export interface Locale extends ILocale {
          */
         "startScreenSharing": string;
         /**
+         * 画面共有を追加
+         */
+        "addScreenSharing": string;
+        /**
+         * 画面共有の音量
+         */
+        "screenAudioVolume": string;
+        /**
          * 共有を停止
          */
         "stopScreenSharing": string;

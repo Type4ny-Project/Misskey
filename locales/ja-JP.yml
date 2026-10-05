@@ -2747,6 +2747,8 @@ _calls:
   stopCamera: "カメラをオフ"
   screenSharing: "画面共有"
   startScreenSharing: "画面を共有"
+  addScreenSharing: "画面共有を追加"
+  screenAudioVolume: "画面共有の音量"
   stopScreenSharing: "共有を停止"
   videoPermissionDenied: "カメラへのアクセスを許可してください。"
   cameraNotFound: "カメラが見つかりません。"

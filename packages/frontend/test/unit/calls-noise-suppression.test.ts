@@ -78,6 +78,22 @@ describe('Calls RNNoise audio graph', () => {
 		expect(context.close).toHaveBeenCalledOnce();
 	});
 
+	test.each([true, false])('retries the same mute state %s after its context transition fails', async nextMuted => {
+		const onError = vi.fn();
+		const processing = await createCallsNoiseSuppression(input, onError, new AbortController().signal);
+		processing.setMuted(!nextMuted);
+		const transition = nextMuted ? context.suspend : context.resume;
+		const previousCalls = transition.mock.calls.length;
+		const error = new Error('Audio device transition failed');
+		transition.mockRejectedValueOnce(error);
+		processing.setMuted(nextMuted);
+		await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(error));
+		processing.setMuted(nextMuted);
+		expect(transition).toHaveBeenCalledTimes(previousCalls + 2);
+		expect(processing.track).toBe(track);
+		processing.close();
+	});
+
 	test('a processor error bypasses RNNoise without replacing the output or interrupting the call', async () => {
 		const onError = vi.fn();
 		const processing = await createCallsNoiseSuppression(input, onError, new AbortController().signal);

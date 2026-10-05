@@ -42,7 +42,7 @@ export async function createCallsNoiseSuppression(stream: MediaStream, onError: 
 		track.contentHint = 'speech';
 		let failed = false;
 		let closed = false;
-		let muted = false;
+		let muted: boolean | null = false;
 		let processorConnected = true;
 		processor.connect(destination);
 		source.connect(destination);
@@ -75,7 +75,10 @@ export async function createCallsNoiseSuppression(stream: MediaStream, onError: 
 			if (closed || muted === nextMuted) return;
 			muted = nextMuted;
 			void (nextMuted ? context.suspend() : context.resume()).catch(error => {
-				if (!closed) onError(error);
+				if (closed) return;
+				// A failed transition must not suppress a retry of the same request.
+				if (muted === nextMuted) muted = null;
+				onError(error);
 			});
 		};
 		return {

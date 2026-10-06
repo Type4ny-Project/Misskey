@@ -4,6 +4,7 @@
  */
 
 import { computed, ref, shallowRef, watch } from 'vue';
+import type * as Misskey from 'misskey-js';
 import type { CallsNoiseSuppressionMode } from '@/utility/calls-noise-suppression.js';
 import type { CallsMediaFailure, CallsMediaState, CallsRemotePublication, CallsVideoQuality, CallsVideoSource } from '@/utility/calls-media.js';
 import type { MenuItem } from '@/types/menu.js';
@@ -53,6 +54,8 @@ const connection = shallowRef<CallsRoomConnection | null>(null);
 const media = shallowRef<CallsMediaController | null>(null);
 const mediaState = ref<CallsMediaState>('idle');
 const mediaFailure = ref<CallsMediaFailure | null>(null);
+const mediaReady = ref(false);
+const sessionParticipant = shallowRef<Misskey.entities.CallsParticipant | null>(null);
 const muted = ref(false);
 const joining = ref(false);
 const replacedRoomId = ref<string | null>(null);
@@ -75,7 +78,7 @@ const reconnectCandidate = ref<CallsReconnectCandidate | null>(null);
 const reconnectRoomState = ref<'checking' | 'open' | 'unavailable'>('checking');
 const reconnectSecondsRemaining = ref(0);
 const speakerRequestResult = ref<'rejected' | null>(null);
-const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement; screenPublicationId?: string }>();
+const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement; playback: Promise<void>; screenPublicationId?: string }>();
 const participantVolumes = shallowRef(new Map<string, number>());
 const localVideos = shallowRef(new Map<string, MediaStream>());
 const screenVolumes = shallowRef(new Map<string, number>());
@@ -145,7 +148,12 @@ const room = computed(() => connection.value?.room.value ?? null);
 const participants = computed(() => connection.value?.participants.value ?? []);
 const speakingParticipantIds = computed(() => connection.value?.speakingParticipantIds.value ?? new Set<string>());
 const connected = computed(() => connection.value?.connected.value ?? false);
-const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? null);
+const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? sessionParticipant.value);
+
+watch(participants, current => {
+	const own = current.find(participant => participant.userId === $i?.id);
+	if (own != null) sessionParticipant.value = own;
+});
 const isActive = computed(() => currentRoomId.value != null && myParticipant.value != null && room.value?.state === 'open');
 
 watch(isActive, (active, _, onCleanup) => {
@@ -246,14 +254,14 @@ function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublica
 	const audio = new Audio();
 	audio.hidden = true;
 	audio.srcObject = new MediaStream([track]);
-	remoteAudio.set(publication.id, { participantId: publication.participantId, element: audio, screenPublicationId: publication.screenPublicationId });
-	if (publication.screenPublicationId != null) screenAudioIds.value = new Set(screenAudioIds.value).add(publication.screenPublicationId);
-	applyParticipantVolumes();
-	window.document.body.append(audio);
-	void (async () => {
+	const playback = (async () => {
 		if (supportsOutputDevice) await audio.setSinkId(selectedOutputDevice.value);
 		await audio.play();
 	})().catch(error => { console.warn('[Calls] Audio playback failed', error); needsAudioResume.value = true; });
+	remoteAudio.set(publication.id, { participantId: publication.participantId, element: audio, playback, screenPublicationId: publication.screenPublicationId });
+	if (publication.screenPublicationId != null) screenAudioIds.value = new Set(screenAudioIds.value).add(publication.screenPublicationId);
+	applyParticipantVolumes();
+	window.document.body.append(audio);
 	track.addEventListener('ended', () => {
 		removeRemoteTrack(publication.id);
 	}, { once: true });
@@ -280,6 +288,7 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 	if (participant == null || targetRoomId == null) return;
 	await media.value?.close().catch(() => undefined);
 	if (generation !== sessionGeneration) return;
+	mediaReady.value = false;
 	const controller = new CallsMediaController(
 		targetRoomId,
 		participant.role,
@@ -287,12 +296,18 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 			if (generation !== sessionGeneration || media.value !== controller) return;
 			mediaState.value = state;
 			mediaFailure.value = failure;
+			if (state !== 'connected') mediaReady.value = false;
 		},
 		(track, publication) => { if (generation === sessionGeneration && media.value === controller) addRemoteTrack(track, publication); },
 		(_stats, speaking) => connection.value?.setSpeaking(speaking),
 		previousConnection,
 		replaceExisting,
 		{
+			ready() {
+				if (generation !== sessionGeneration || media.value !== controller) return;
+				mediaReady.value = true;
+				void announceMediaReady(controller, generation);
+			},
 			noiseSuppressionChanged(mode) {
 				if (generation === sessionGeneration && media.value === controller) noiseSuppression.value = mode;
 			},
@@ -342,6 +357,8 @@ async function clearSession(): Promise<void> {
 	screenAudioIds.value = new Set();
 	const controller = media.value;
 	media.value = null;
+	mediaReady.value = false;
+	sessionParticipant.value = null;
 	disposeConnection();
 	currentRoomId.value = null;
 	mediaState.value = 'idle';
@@ -400,10 +417,10 @@ async function join(roomId: string, alreadyParticipant: boolean, reconnectToken?
 		generation = ++sessionGeneration;
 		currentRoomId.value = roomId;
 		const next = attachConnection(roomId);
-		if (!alreadyParticipant) {
-			await misskeyApi('calls/rooms/join', { roomId, reconnectToken });
-			joinedNow = true;
-		}
+		const participant = await misskeyApi('calls/rooms/join', { roomId, reconnectToken });
+		joinedNow = !alreadyParticipant;
+		sessionParticipant.value = participant;
+		next.identifyParticipant(participant.id);
 		await next.refresh();
 		if (myParticipant.value == null) throw new Error('Calls participant state was not created');
 		muted.value = myParticipant.value.isMuted;
@@ -775,6 +792,15 @@ function openScreenSettings(event: MouseEvent): void {
 async function resumeAudio(): Promise<void> {
 	await Promise.all([...remoteAudio.values()].map(({ element }) => element.play()));
 	needsAudioResume.value = false;
+	if (media.value != null) await announceMediaReady(media.value, sessionGeneration);
+}
+
+async function announceMediaReady(controller: CallsMediaController, generation: number): Promise<void> {
+	const identity = controller.connectionIdentity;
+	await Promise.all([...remoteAudio.values()].map(({ playback }) => playback));
+	if (generation !== sessionGeneration || media.value !== controller || !mediaReady.value || needsAudioResume.value || identity == null) return;
+	if (controller.connectionIdentity?.generation !== identity.generation) return;
+	connection.value?.ready(identity.connectionId, identity.generation);
 }
 
 watch(videos, current => {

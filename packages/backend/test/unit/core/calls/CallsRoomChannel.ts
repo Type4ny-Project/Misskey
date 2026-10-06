@@ -14,7 +14,7 @@ test('leaves the room and revokes media when a stream event detects lost access'
 	const rooms = { getRoom: vi.fn().mockResolvedValue({ revision: 1 }), assertCanAccess: vi.fn().mockResolvedValue(undefined), leave: vi.fn().mockResolvedValue(undefined) };
 	const participants = { findOneBy: vi.fn() };
 	const entity = { packParticipants: vi.fn() };
-	const channel = new CallsRoomChannel({ id: 'channel-a', connection } as never, rooms as never, {} as never, participants as never, entity as never);
+	const channel = new CallsRoomChannel({ id: 'channel-a', connection } as never, rooms as never, {} as never, participants as never, entity as never, { isReady: async () => true } as never);
 	expect(await channel.init({ roomId: 'room-a' })).toBe(true);
 	rooms.assertCanAccess.mockRejectedValue(new CallsRoomError('access-denied'));
 	const handler = subscriber.on.mock.calls[0][1];
@@ -35,7 +35,7 @@ test.each(['joined', 'updated'] as const)('includes user data when a participant
 	const packedParticipant = { id: 'participant-a', user: { id: 'user-b', avatarUrl: 'avatar' } };
 	const participants = { findOneBy: vi.fn().mockResolvedValue(participant) };
 	const entity = { packParticipants: vi.fn().mockResolvedValue([packedParticipant]) };
-	const channel = new CallsRoomChannel({ id: 'channel-a', connection } as never, rooms as never, {} as never, participants as never, entity as never);
+	const channel = new CallsRoomChannel({ id: 'channel-a', connection } as never, rooms as never, {} as never, participants as never, entity as never, { isReady: async () => true } as never);
 	expect(await channel.init({ roomId: 'room-a' })).toBe(true);
 	const handler = subscriber.on.mock.calls[0][1];
 	const body = { sequence: 1, roomRevision: 1, occurredAt: new Date().toISOString(), participantId: 'participant-a', action };
@@ -53,7 +53,7 @@ test.each(['left', 'removed'] as const)('does not load user data when a particip
 	const rooms = { getRoom: vi.fn().mockResolvedValue({ revision: 1 }), assertCanAccess: vi.fn().mockResolvedValue(undefined) };
 	const participants = { findOneBy: vi.fn() };
 	const entity = { packParticipants: vi.fn() };
-	const channel = new CallsRoomChannel({ id: 'channel-a', connection } as never, rooms as never, {} as never, participants as never, entity as never);
+	const channel = new CallsRoomChannel({ id: 'channel-a', connection } as never, rooms as never, {} as never, participants as never, entity as never, { isReady: async () => true } as never);
 	expect(await channel.init({ roomId: 'room-a' })).toBe(true);
 	const handler = subscriber.on.mock.calls[0][1];
 	const body = { sequence: 1, roomRevision: 1, occurredAt: new Date().toISOString(), participantId: 'participant-a', action };
@@ -61,4 +61,30 @@ test.each(['left', 'removed'] as const)('does not load user data when a particip
 	expect(participants.findOneBy).not.toHaveBeenCalled();
 	expect(entity.packParticipants).not.toHaveBeenCalled();
 	expect(connection.sendMessageToWs).toHaveBeenCalledWith('channel', expect.objectContaining({ type: 'participant', body }));
+});
+
+test.each(['joined', 'updated'] as const)('does not expose a connecting participant on %s', async action => {
+	const subscriber = { on: vi.fn(), off: vi.fn() };
+	const connection = { user: { id: 'user-a' }, subscriber, sendMessageToWs: vi.fn() };
+	const rooms = { getRoom: vi.fn().mockResolvedValue({ revision: 1 }), assertCanAccess: vi.fn().mockResolvedValue(undefined) };
+	const participants = { findOneBy: vi.fn().mockResolvedValue({ id: 'participant-a' }) };
+	const entity = { packParticipants: vi.fn() };
+	const channel = new CallsRoomChannel({ id: 'channel-a', connection } as never, rooms as never, {} as never, participants as never, entity as never, { isReady: async () => false } as never);
+	await channel.init({ roomId: 'room-a' });
+	const body = { sequence: 1, roomRevision: 1, participantId: 'participant-a', action };
+	await subscriber.on.mock.calls[0][1]({ type: 'participant', body });
+	expect(entity.packParticipants).not.toHaveBeenCalled();
+	expect(connection.sendMessageToWs).toHaveBeenCalledWith('channel', expect.objectContaining({ type: 'participant', body }));
+});
+
+test.each([false, true])('ready requires Calls write permission (permitted: %s)', async permitted => {
+	const user = { id: 'user-a' };
+	const connection = { user, subscriber: { on: vi.fn() }, token: { permission: permitted ? ['read:calls', 'write:calls'] : ['read:calls'] } };
+	const rooms = { getRoom: vi.fn().mockResolvedValue({ revision: 1 }), assertCanAccess: vi.fn().mockResolvedValue(undefined), confirmReady: vi.fn().mockResolvedValue(undefined) };
+	const channel = new CallsRoomChannel({ id: 'channel-a', connection } as never, rooms as never, {} as never, {} as never, {} as never, {} as never);
+	await channel.init({ roomId: 'room-a' });
+	const identity = { connectionId: 'device-a', generation: 1 };
+	channel.onMessage('ready', identity);
+	if (permitted) expect(rooms.confirmReady).toHaveBeenCalledWith(user, 'room-a', identity);
+	else expect(rooms.confirmReady).not.toHaveBeenCalled();
 });

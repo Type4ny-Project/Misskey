@@ -117,6 +117,37 @@ describe('CallsMediaController', () => {
 		}
 	});
 
+	test('a listener announces readiness after subscription negotiation and transport connection', async () => {
+		installBrowserMedia(vi.fn());
+		const respond = apiMock.getMockImplementation()!;
+		let finishNegotiation!: (value: unknown) => void;
+		apiMock.mockImplementation(async (endpoint: string) => {
+			if (endpoint === 'calls/media/reconcile') {
+				FakePeerConnection.instances[0].connectionState = 'connecting';
+				return { roomRevision: 1, publications: [{ id: 'remote-audio', participantId: 'participant-b', mediaKind: 'audio', mediaSource: 'microphone' }] };
+			}
+			if (endpoint === 'calls/media/tracks/subscribe') return { subscriptions: [{ publicationId: 'remote-audio', mid: '1' }], requiresImmediateRenegotiation: false, sessionDescription: { type: 'offer', sdp: 'subscribe-offer' } };
+			if (endpoint === 'calls/media/renegotiate') return new Promise(resolve => { finishNegotiation = resolve; });
+			return respond(endpoint);
+		});
+		const ready = vi.fn();
+		const controller = new CallsMediaController('room-a', 'listener', undefined, undefined, undefined, undefined, false, { ready, localTrack: vi.fn(), remoteRemoved: vi.fn(), error: vi.fn() });
+		const connecting = controller.connect();
+		try {
+			await vi.waitFor(() => expect(finishNegotiation).toBeDefined());
+			expect(ready).not.toHaveBeenCalled();
+			finishNegotiation({ requiresImmediateRenegotiation: false, sessionDescription: null });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			expect(ready).not.toHaveBeenCalled();
+			FakePeerConnection.instances[0].connectionState = 'connected';
+			FakePeerConnection.instances[0].dispatchEvent(new Event('connectionstatechange'));
+			await connecting;
+			expect(ready).toHaveBeenCalledOnce();
+		} finally {
+			await controller.close();
+		}
+	});
+
 	test('a muted host connects and listens without polling, then resumes speaking detection on unmute', async () => {
 		vi.useFakeTimers();
 		installBrowserMedia(vi.fn().mockResolvedValue(stream(makeTrack('audio'))));
@@ -708,7 +739,7 @@ describe('CallsMediaController', () => {
 		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/session/create')).toHaveLength(sessionCreates);
 	});
 
-	test.each(['failed', 'disconnected'])('recovers a listener when a replacement peer becomes %s before connecting', async state => {
+	test.each(['failed', 'disconnected'])('recovers a listener when a replacement peer becomes %s', async state => {
 		installBrowserMedia(vi.fn());
 		const respond = apiMock.getMockImplementation()!;
 		apiMock.mockImplementation(async (endpoint: string) => {
@@ -724,7 +755,7 @@ describe('CallsMediaController', () => {
 			peer.connectionState = 'failed';
 			peer.dispatchEvent(new Event('connectionstatechange'));
 			await controller.reconcile();
-			expect(controller.state).toBe('reconnecting');
+			expect(controller.state).toBe('connected');
 
 			const replacement = FakePeerConnection.instances[1]!;
 			replacement.connectionState = state;

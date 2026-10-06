@@ -47,7 +47,7 @@ beforeEach(() => {
 	fixture.connection = { room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()), refresh: vi.fn().mockResolvedValue(undefined), dispose: vi.fn() };
 	fixture.session = {
 		currentRoomId: ref(null), room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()),
-		elapsedTime: ref(null), isActive: ref(false), joining: ref(false), videos: ref([]), screenAudioIds: ref(new Set()), screenWindows: new Map(), mediaState: ref('idle'), mediaFailure: ref(null),
+		elapsedTime: ref(null), isActive: ref(false), joining: ref(false), videos: ref([]), screenWindows: new Map(), mediaState: ref('idle'), mediaFailure: ref(null),
 		speakerRequestResult: ref(null), replacedRoomId: ref(null), needsAudioResume: ref(false), controls: ref({}),
 		leave: vi.fn().mockResolvedValue(undefined), refresh: vi.fn().mockResolvedValue(undefined), prepareMicrophones: vi.fn(), join: vi.fn().mockResolvedValue(undefined),
 		getParticipantVolume: vi.fn().mockReturnValue(100), setParticipantVolume: vi.fn(),
@@ -62,6 +62,7 @@ describe('Calls room window', () => {
 		fixture.connection.room.value = { ...fixture.connection.room.value, channelId: channel.id };
 		vi.mocked(misskeyApi).mockImplementation(async endpoint => endpoint === 'channels/show' ? channel : { id: 'host', username: 'host' });
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs: { ...stubs, MkStreamingNotesTimeline: false } } });
+		expect(view.queryByTestId('calls-chat-timeline')).toBeNull();
 		await fireEvent.click(view.getByRole('button', { name: i18n.ts.chat }));
 		expect(view.getByTestId('calls-chat-timeline').getAttribute('data-channel')).toBe(channel.id);
 		await waitFor(() => expect(view.getByTestId('calls-chat-composer').getAttribute('data-channel')).toBe(channel.id));
@@ -81,12 +82,13 @@ describe('Calls room window', () => {
 	test('keeps an initially ended room open with its final timing and no join prompt', async () => {
 		fixture.connection.room.value = null;
 		fixture.connection.refresh.mockImplementation(async () => {
-			fixture.connection.room.value = { id: 'room', title: 'Ended call', state: 'ended', moderatorUserIds: [], startedAt: '2026-10-04T23:30:00.000Z', endedAt: '2026-10-05T00:32:03.000Z' };
+			fixture.connection.room.value = { id: 'room', title: 'Ended call', state: 'ended', channelId: 'calls-channel', moderatorUserIds: [], startedAt: '2026-10-04T23:30:00.000Z', endedAt: '2026-10-05T00:32:03.000Z' };
 		});
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
 		await waitFor(() => expect(view.getByText('01:02:03')).toBeTruthy());
 		expect(view.getByRole('heading', { name: i18n.ts._calls.ended })).toBeTruthy();
 		expect(view.container.querySelectorAll('time')).toHaveLength(2);
+		expect(view.queryByRole('button', { name: i18n.ts.chat })).toBeNull();
 		expect(view.queryByRole('button', { name: i18n.ts._calls.joinRoom })).toBeNull();
 		expect(view.queryByRole('complementary')).toBeNull();
 		expect(fixture.close).not.toHaveBeenCalled();

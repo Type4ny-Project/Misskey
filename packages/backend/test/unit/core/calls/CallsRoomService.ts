@@ -53,6 +53,43 @@ function createConnectionFixture(role: 'host' | 'listener') {
 }
 
 describe('CallsRoomService lifecycle', () => {
+	test('removes a newly created room and channel if following fails', async () => {
+		const service = createAccessFixture();
+		const deleteRoom = vi.fn();
+		const deleteChannel = vi.fn();
+		const publishRoomsList = vi.fn();
+		Object.assign(service, {
+			callsRoomsRepository: { target: 'rooms', findOneBy: async () => null, manager: {
+				transaction: async (callback: (manager: unknown) => Promise<unknown>) => callback({ getRepository: (target: unknown) => ({
+					save: async (value: unknown) => value,
+					delete: target === MiChannel ? deleteChannel : deleteRoom,
+				}) }),
+			} },
+			channelsRepository: { findOneByOrFail: async () => ({ id: 'created' }) },
+			channelFollowingService: { followOrRequest: vi.fn().mockRejectedValue(new Error('follow failed')) },
+			idService: { gen: () => 'created' },
+			callsEventService: { publishRoomsList },
+		});
+		await expect(service.create(viewer, { attachmentType: 'personal', title: 'Call chat', visibility: 'public' })).rejects.toThrow('follow failed');
+		expect(deleteRoom).toHaveBeenCalledWith('created');
+		expect(deleteChannel).toHaveBeenCalledWith('created');
+		expect(publishRoomsList).not.toHaveBeenCalled();
+	});
+
+	test('does not save a joining participant when following fails', async () => {
+		const service = createAccessFixture();
+		const insertOne = vi.fn();
+		Object.assign(service, {
+			callsRoomsRepository: { findOneBy: async () => ({ ...baseRoom, state: 'open', mode: 'stage', visibility: 'public', channelId: 'channel-a' }) },
+			callsParticipantsRepository: { findOneBy: async () => null, findBy: async () => [], insertOne },
+			channelsRepository: { findOneByOrFail: async () => ({ id: 'channel-a' }) },
+			channelFollowingService: { followOrRequest: vi.fn().mockRejectedValue(new Error('follow failed')) },
+			callsLiveConnectionService: { withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() },
+		});
+		await expect(service.join(viewer, baseRoom.id)).rejects.toThrow('follow failed');
+		expect(insertOne).not.toHaveBeenCalled();
+	});
+
 	test.each(['public', 'followers', 'specified'] as const)('creates a hidden chat channel only for public Calls (visibility: %s)', async visibility => {
 		const service = createAccessFixture();
 		const saveChannel = vi.fn(async (channel: object) => channel);
@@ -464,16 +501,28 @@ function createModerationFixture() {
 		{ withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback() } as never, { publish, publishRoomsList } as never, { revokeParticipant, stopParticipantVideo } as never, { lifecycle: vi.fn() } as never,
 		{} as never, {} as never,
 	);
-	return { service, config, isModerator, room, participant, existsBy, update, set, execute, revokeParticipant, stopParticipantVideo, insertLog, publish, publishRoomsList };
+	const updateChannel = vi.fn();
+	const rooms = (service as any).callsRoomsRepository;
+	Object.assign(rooms, { target: 'rooms', manager: { transaction: async (callback: (manager: unknown) => Promise<unknown>) => callback({ getRepository: (target: unknown) => target === MiChannel ? { update: updateChannel } : rooms }) } });
+	return { service, config, isModerator, room, participant, existsBy, update, set, execute, revokeParticipant, stopParticipantVideo, insertLog, publish, publishRoomsList, updateChannel };
 }
 
 describe('Calls room titles', () => {
+	test('does not announce a rename when its transactional channel update fails', async () => {
+		const fixture = createModerationFixture();
+		fixture.room.channelId = 'channel-a';
+		fixture.execute.mockResolvedValue({ affected: 1, raw: [{ ...fixture.room, title: 'New title', revision: 2 }] });
+		fixture.updateChannel.mockRejectedValue(new Error('channel update failed'));
+		await expect(fixture.service.updateTitle({ id: 'owner-a' } as MiUser, fixture.room.id, 'New title', 1)).rejects.toThrow('channel update failed');
+		expect(fixture.publish).not.toHaveBeenCalled();
+		expect(fixture.publishRoomsList).not.toHaveBeenCalled();
+	});
+
 	test.each(['scheduled', 'open'] as const)('the host can rename a %s room and notify viewers', async state => {
 		const fixture = createModerationFixture();
 		fixture.room.state = state;
 		fixture.room.channelId = 'channel-a';
-		const updateChannel = vi.fn();
-		Object.assign(fixture.service, { channelsRepository: { update: updateChannel } });
+		const updateChannel = fixture.updateChannel;
 		fixture.execute.mockResolvedValue({ affected: 1, raw: [{ ...fixture.room, title: 'New title', revision: 2 }] });
 		await expect(fixture.service.updateTitle({ id: 'owner-a' } as MiUser, fixture.room.id, ' \u0000New title ', 1)).resolves.toMatchObject({ title: 'New title', revision: 2 });
 		expect(updateChannel).toHaveBeenCalledWith('channel-a', { name: 'New title' });
@@ -679,7 +728,9 @@ function createHostTransferFixture(role: 'speaker' | 'listener' = 'speaker') {
 	// The room builder's set method must continue with this transaction's builder.
 	fixture.set.mockImplementation(() => builder);
 	fixture.execute.mockImplementation(async () => ({ affected: 1, raw: [Object.assign(fixture.room, fixture.set.mock.calls[0][0], { revision: 2 })] }));
-	const transaction = vi.fn(async (callback: (manager: unknown) => Promise<unknown>) => callback({ getRepository: (target: string) => target === 'rooms' ? rooms : target === 'participants' ? participants : logs }));
+	const channel = { id: 'channel-a', userId: 'owner-a', collaboratorIds: [] as string[] };
+	const channels = { findOneByOrFail: vi.fn(async () => channel), update: vi.fn() };
+	const transaction = vi.fn(async (callback: (manager: unknown) => Promise<unknown>) => callback({ getRepository: (target: unknown) => target === MiChannel ? channels : target === 'rooms' ? rooms : target === 'participants' ? participants : logs }));
 	const touchHost = vi.fn();
 	Object.assign(fixture.service, {
 		callsRoomsRepository: { target: 'rooms', manager: { transaction } },
@@ -687,10 +738,26 @@ function createHostTransferFixture(role: 'speaker' | 'listener' = 'speaker') {
 		callsModerationLogsRepository: { target: 'logs' },
 		callsLiveConnectionService: { withRoomLock: async (_roomId: string, callback: () => Promise<unknown>) => callback(), touchHost },
 	});
-	return { ...fixture, participants, transaction, touchHost, where };
+	return { ...fixture, participants, transaction, touchHost, where, channel, channels };
 }
 
 describe('Calls host transfer', () => {
+	test('transfers the Calls channel to the new host and retains the former owner as a collaborator', async () => {
+		const fixture = createHostTransferFixture();
+		Object.assign(fixture.room, { channelId: fixture.channel.id });
+		fixture.channel.collaboratorIds = [fixture.participant.userId, 'collaborator-a', fixture.channel.userId];
+		const actor = { id: 'owner-a' } as MiUser;
+		await fixture.service.transferHost(actor, fixture.room.id, fixture.participant.id, 1);
+		expect(fixture.channels.findOneByOrFail).toHaveBeenCalledWith({ id: fixture.channel.id });
+		expect(fixture.channels.update).toHaveBeenCalledExactlyOnceWith(fixture.channel.id, {
+			userId: fixture.participant.userId,
+			collaboratorIds: ['collaborator-a', 'owner-a'],
+		});
+		fixture.participant.role = 'host';
+		await fixture.service.transferHost(actor, fixture.room.id, fixture.participant.id, 1);
+		expect(fixture.channels.update).toHaveBeenCalledTimes(1);
+	});
+
 	test('rejects a target whose Calls participation permission was revoked', async () => {
 		const fixture = createHostTransferFixture();
 		Object.assign(fixture.service, { roleService: { getUserPolicies: async () => ({ ...DEFAULT_POLICIES, canJoinCalls: false }) } });

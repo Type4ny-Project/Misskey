@@ -14,7 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<small v-if="sessionIsCurrent && session.elapsedTime.value != null" :class="$style.elapsedTime" :title="i18n.ts._calls.elapsedTime"><i class="ti ti-clock" aria-hidden="true"></i> {{ session.elapsedTime.value }}</small>
 			</div>
 			<button v-if="room != null && room.state !== 'ended'" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.users" :title="i18n.ts.users" :aria-pressed="showParticipants" @click="showParticipants = !showParticipants"><i class="ti ti-users" aria-hidden="true"></i></button>
-			<button v-if="room?.channelId != null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.chat" :title="i18n.ts.chat" :aria-pressed="showChat" @click="showChat = !showChat"><i class="ti ti-messages" aria-hidden="true"></i></button>
+			<button v-if="room?.channelId != null && room.state !== 'ended'" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.chat" :title="i18n.ts.chat" :aria-pressed="showChat" @click="showChat = !showChat"><i class="ti ti-messages" aria-hidden="true"></i></button>
 			<button v-if="room != null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.copyLink" :title="i18n.ts.copyLink" @click="copyRoomLink"><i class="ti ti-link" aria-hidden="true"></i></button>
 			<button v-if="hasRoomMenu" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.details" :disabled="session.joining.value" aria-haspopup="menu" @click="openRoomMenu"><i class="ti ti-dots"></i></button>
 			<button v-if="popoutTarget == null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.popout" :title="i18n.ts.popout" @click="popout"><i class="ti ti-external-link"></i></button>
@@ -38,7 +38,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="$style.callLayout">
 					<div v-if="room.channelId != null" :class="[$style.chatSidebar, showChat && $style.chatOpen]">
 						<Transition :enterActiveClass="$style.sidebarTransition" :leaveActiveClass="$style.sidebarTransition" :enterFromClass="$style.chatHidden" :leaveToClass="$style.chatHidden">
-							<aside v-show="showChat" :class="$style.chat" :aria-label="i18n.ts.chat">
+							<aside v-if="chatHasOpened" v-show="showChat" :class="$style.chat" :aria-label="i18n.ts.chat">
 								<header :class="$style.chatHeader">
 									<strong>{{ i18n.ts.chat }}</strong>
 									<button type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.close" @click="showChat = false"><i class="ti ti-x" aria-hidden="true"></i></button>
@@ -250,6 +250,8 @@ const pageConnection = shallowRef<ReturnType<typeof createCallsRoomConnection> |
 const room = computed(() => isSessionRoom.value ? session.room.value : pageConnection.value?.room.value ?? null);
 const showParticipants = shallowRef(true);
 const showChat = shallowRef(false);
+const chatHasOpened = shallowRef(false);
+watch(showChat, value => { if (value) chatHasOpened.value = true; });
 const chatChannel = shallowRef<Misskey.entities.Channel | null>(null);
 const chatLoadFailed = shallowRef(false);
 watch(() => room.value?.channelId, async (channelId, _, onCleanup) => {

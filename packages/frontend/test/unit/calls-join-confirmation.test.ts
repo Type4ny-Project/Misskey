@@ -459,7 +459,6 @@ describe('Calls room window', () => {
 		let finishCopy!: () => void;
 		const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockImplementation(() => new Promise<void>(resolve => { finishCopy = resolve; }));
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await waitFor(() => expect(fixture.confirm).toHaveBeenCalled());
 		await fireEvent.click(view.getByRole('button', { name: i18n.ts.copyLink }));
 		expect(writeText).toHaveBeenCalledWith(`${url}/calls/room`);
 		expect(os.toast).not.toHaveBeenCalled();
@@ -493,18 +492,16 @@ describe('Calls room window', () => {
 		expect(view.getAllByRole('slider')).toHaveLength(1);
 	});
 
-	test.each([true, false])('opening another user’s room joins only after consent (cancelled: %s)', async canceled => {
-		let respond!: (result: { canceled: boolean }) => void;
-		fixture.confirm.mockImplementation(() => new Promise(resolve => { respond = resolve; }));
-		render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await waitFor(() => expect(fixture.confirm).toHaveBeenCalledWith(expect.objectContaining({ type: 'question', title: 'Another user’s room' })));
+	test.each(['stage', 'open'])('opening a %s room waits for the bottom join button without prompting', async mode => {
+		fixture.connection.room.value.mode = mode;
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await waitFor(() => expect(fixture.connection.refresh).toHaveBeenCalled());
+		expect(fixture.confirm).not.toHaveBeenCalled();
 		expect(fixture.session.join).not.toHaveBeenCalled();
 		expect(fixture.session.prepareMicrophones).not.toHaveBeenCalled();
-		respond({ canceled });
-		if (canceled) {
-			await Promise.resolve();
-			expect(fixture.session.join).not.toHaveBeenCalled();
-		} else await waitFor(() => expect(fixture.session.join).toHaveBeenCalledWith('room', false, undefined, false));
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts._calls.joinRoom }));
+		await waitFor(() => expect(fixture.session.join).toHaveBeenCalledWith('room', false, undefined, mode === 'open'));
+		expect(fixture.confirm).not.toHaveBeenCalled();
 	});
 
 	test('reopening the current call does not ask to join again', async () => {
@@ -519,7 +516,10 @@ describe('Calls room window', () => {
 	test('does not join if the room ends while confirmation is open', async () => {
 		let respond!: (result: { canceled: boolean }) => void;
 		fixture.confirm.mockImplementation(() => new Promise(resolve => { respond = resolve; }));
-		render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		fixture.session.currentRoomId.value = 'other-room';
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		expect(fixture.confirm).not.toHaveBeenCalled();
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts._calls.joinRoom }));
 		await waitFor(() => expect(fixture.confirm).toHaveBeenCalled());
 		fixture.connection.room.value.state = 'ended';
 		respond({ canceled: false });

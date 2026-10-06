@@ -55,7 +55,6 @@ export const ChannelChat = {
 	},
 	async play() {
 		const body = within(window.document.body);
-		(await body.findByRole('button', { name: 'キャンセル' })).click();
 		(await body.findByRole('button', { name: 'チャット' })).click();
 	},
 } satisfies StoryObj<typeof MkCallsRoomWindow>;

@@ -423,13 +423,10 @@ async function cancelRoom(): Promise<void> { if (room.value != null) { await mis
 
 async function endRoom(): Promise<void> { if (room.value != null) { await misskeyApi('calls/rooms/end', { roomId: props.roomId, expectedRevision: room.value.revision }); await refreshRoom(); } }
 
-async function joinRoom(startMuted = false, requestConfirmation = false): Promise<void> {
+async function joinRoom(startMuted = false): Promise<void> {
 	if (!canJoinCalls.value) return;
 	if (session.currentRoomId.value != null && session.currentRoomId.value !== props.roomId) {
 		const { canceled } = await os.confirm({ type: 'warning', text: i18n.ts._calls.switchRoomConfirm });
-		if (canceled) return;
-	} else if (requestConfirmation) {
-		const { canceled } = await os.confirm({ type: 'question', title: room.value?.title, text: i18n.ts._calls.joinRoomConfirm });
 		if (canceled) return;
 	}
 	if (disposed || !canJoinCalls.value || room.value?.state !== 'open' || sessionIsCurrent.value || session.joining.value) return;
@@ -558,10 +555,7 @@ watch(() => room.value?.state, state => {
 });
 onMounted(() => {
 	window.addEventListener('pagehide', cleanupPopout);
-	void refreshRoom().then(() => {
-		if (room.value?.state === 'open' && myParticipant.value != null && myParticipant.value.role !== 'listener') void session.prepareMicrophones();
-		if (!disposed && room.value?.state === 'open' && !sessionIsCurrent.value && !session.joining.value) void joinRoom(isHost.value || room.value.mode === 'open', true);
-	}).catch(error => {
+	void refreshRoom().catch(error => {
 		console.error('[Calls] Room loading failed', error);
 		loadFailed.value = true;
 	});

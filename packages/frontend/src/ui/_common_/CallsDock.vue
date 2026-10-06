@@ -36,9 +36,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.sectionLabel">{{ i18n.ts._calls.requestSpeaker }}</strong>
 						<div :class="$style.userList">
 							<div v-for="participant in pendingRequests" :key="participant.id" :class="$style.userRow">
-								<MkA v-if="participantUser(participant.userId) != null" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.userLink"/>
-								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.userAvatar"/>
-								<div :class="$style.userBody"><strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong></div>
+								<MkA v-if="participant.user != null" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.userLink"/>
+								<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.userAvatar"/>
+								<div :class="$style.userBody"><strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong></div>
 								<button type="button" class="_button" :class="$style.inlineAction" @click="setRole(participant.id, 'speaker')">{{ i18n.ts.approve }}</button>
 								<button type="button" class="_button" :class="$style.inlineAction" @click="setRole(participant.id, 'listener')">{{ i18n.ts.reject }}</button>
 							</div>
@@ -49,11 +49,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.sectionLabel">{{ room?.mode === 'open' ? i18n.ts.users : i18n.ts._calls.speaker }}</strong>
 						<div :class="$style.userList">
 							<div v-for="participant in speakers" :key="participant.id" :class="$style.userRow">
-								<MkA v-if="participantUser(participant.userId) != null" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.userLink"/>
-								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="[$style.userAvatar, session.speakingParticipantIds.value.has(participant.id) && $style.userAvatarLive]"/>
+								<MkA v-if="participant.user != null" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.userLink"/>
+								<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="[$style.userAvatar, session.speakingParticipantIds.value.has(participant.id) && $style.userAvatarLive]"/>
 								<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
 								<div :class="$style.userBody">
-									<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
+									<strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong>
 									<small>{{ participant.role === 'host' ? i18n.ts._calls.host : participant.isMuted ? i18n.ts._calls.mutedStatus : session.speakingParticipantIds.value.has(participant.id) ? i18n.ts._calls.speakingNow : i18n.ts._calls.microphoneOn }}</small>
 								</div>
 								<button v-if="room?.mode === 'stage' && session.isHost.value && participant.role !== 'host'" type="button" class="_button" :class="$style.inlineAction" :aria-label="i18n.ts._calls.demoteListener" :title="i18n.ts._calls.demoteListener" @click="setRole(participant.id, 'listener')"><i class="ti ti-microphone-off"></i></button>
@@ -65,11 +65,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.sectionLabel">{{ i18n.ts._calls.listener }}</strong>
 						<div :class="$style.userList">
 							<div v-for="participant in listeners" :key="participant.id" :class="$style.userRow">
-								<MkA v-if="participantUser(participant.userId) != null" :to="userPage(participantUser(participant.userId)!)" :aria-label="acct(participantUser(participant.userId)!)" :class="$style.userLink"/>
-								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.userAvatar"/>
+								<MkA v-if="participant.user != null" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.userLink"/>
+								<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.userAvatar"/>
 								<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
 								<div :class="$style.userBody">
-									<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
+									<strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong>
 									<small><i class="ti ti-headphones"></i> {{ i18n.ts.online }}</small>
 								</div>
 							</div>
@@ -116,7 +116,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type * as Misskey from 'misskey-js';
 import MkCallsControls from '@/components/MkCallsControls.vue';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
@@ -135,7 +134,7 @@ const speakers = computed(() => participants.value.filter(participant => partici
 const listeners = computed(() => participants.value.filter(participant => participant.role === 'listener'));
 const pendingRequests = computed(() => listeners.value.filter(participant => participant.speakerRequestedAt != null));
 const hostParticipant = computed(() => participants.value.find(participant => participant.role === 'host') ?? null);
-const hostUser = computed(() => hostParticipant.value == null ? null : participantUser(hostParticipant.value.userId));
+const hostUser = computed(() => hostParticipant.value?.user ?? null);
 const isLiveSpeaking = computed(() => session.myParticipant.value != null && session.speakingParticipantIds.value.has(session.myParticipant.value.id));
 const microphoneOnCount = computed(() => speakers.value.filter(participant => !participant.isMuted).length);
 
@@ -153,10 +152,6 @@ watch(rootEl, (element, _, onCleanup) => {
 	});
 }, { flush: 'post' });
 
-function participantUser(userId: string): Misskey.entities.UserLite | null {
-	return participants.value.find(participant => participant.userId === userId)?.user ?? null;
-}
-
 function openRoom(): void {
 	if (session.currentRoomId.value == null) return;
 	expanded.value = false;
@@ -164,9 +159,9 @@ function openRoom(): void {
 }
 
 async function leaveRoom(): Promise<void> {
+	expanded.value = false;
 	const { canceled } = await os.confirm({ type: 'warning', text: session.isHost.value ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom });
 	if (canceled) return;
-	expanded.value = false;
 	try {
 		await session.leave();
 		os.toast(i18n.ts._calls.leftCall);
@@ -231,9 +226,8 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .resumeMain:disabled { cursor: wait; opacity: 0.72; }
 .avatarRing { position: relative; z-index: 0; display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; border-radius: 50%; isolation: isolate; }
 .avatarRingActive::before, .avatarRingActive::after { position: absolute; z-index: -1; inset: -4px; border: 2px solid var(--MI_THEME-accent); border-radius: 44% 56% 48% 52% / 52% 43% 57% 48%; content: ''; opacity: 0.62; pointer-events: none; transition: opacity 0.4s ease, scale 0.4s ease; }
-.avatarRingActive::before { animation: organicRing 3.2s ease-in-out infinite; }
 .avatarRingActive::after { inset: -7px; border-color: color-mix(in srgb, var(--MI_THEME-accent) 42%, transparent); opacity: 0; scale: 0.88; }
-.avatarRingLive::before { opacity: 1; }
+.avatarRingLive::before { opacity: 1; animation: organicRing 3.2s ease-in-out infinite; }
 .avatarRingLive::after { opacity: 0.72; scale: 1; animation: organicRing 1.25s -0.72s ease-in-out infinite reverse; }
 .avatar { width: 38px; height: 38px; }
 .body { min-width: 0; flex: 1; }
@@ -267,9 +261,9 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 }
 
 @keyframes organicRing {
-	0%, 100% { transform: scale(0.96) rotate(0deg); border-radius: 44% 56% 48% 52% / 52% 43% 57% 48%; }
-	35% { transform: scale(1.06) rotate(7deg); border-radius: 58% 42% 55% 45% / 42% 57% 43% 58%; }
-	68% { transform: scale(1.01) rotate(-5deg); border-radius: 49% 51% 39% 61% / 60% 44% 56% 40%; }
+	0%, 100% { transform: scale(0.96) rotate(0deg); }
+	35% { transform: scale(1.06) rotate(7deg); }
+	68% { transform: scale(1.01) rotate(-5deg); }
 }
 
 @keyframes avatarPulse {

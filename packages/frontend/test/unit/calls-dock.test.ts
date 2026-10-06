@@ -4,10 +4,11 @@
  */
 
 import { afterEach, expect, test, vi } from 'vitest';
-import { cleanup, fireEvent, render } from '@testing-library/vue';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/vue';
 import { nextTick, ref } from 'vue';
 import CallsDock from '@/ui/_common_/CallsDock.vue';
 import { i18n } from '@/i18n.js';
+import * as os from '@/os.js';
 
 const fixture = vi.hoisted(() => ({ session: null as any }));
 vi.mock('@/utility/calls-session.js', () => ({ useCallsSession: () => fixture.session }));
@@ -17,6 +18,38 @@ afterEach(() => {
 	cleanup();
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
+});
+
+test.each([true, false])('collapses the dock while awaiting leave confirmation (cancelled: %s)', async canceled => {
+	let respond!: (result: { canceled: boolean }) => void;
+	const confirm = vi.spyOn(os, 'confirm').mockImplementation(() => new Promise(resolve => { respond = resolve; }));
+	vi.spyOn(os, 'toast').mockImplementation(() => {});
+	fixture.session = {
+		elapsedTime: ref(null), isActive: ref(true), currentRoomId: ref('room'), room: ref({ title: 'Room', mode: 'open' }),
+		participants: ref([]), usersById: ref(new Map()), myParticipant: ref(null), speakingParticipantIds: ref(new Set()),
+		controls: ref({}), isHost: ref(false), isSpeaker: ref(false), joining: ref(false), leave: vi.fn().mockResolvedValue(undefined),
+	};
+	const view = render(CallsDock, { global: { stubs: {
+		MkAvatar: true, MkUserName: true,
+		MkCallsControls: { template: '<button @click="$emit(\'leave\')">Leave from panel</button>' },
+	} } });
+	const toggle = view.getByRole('button', { name: 'Room' });
+	await fireEvent.click(toggle);
+	expect(toggle.getAttribute('aria-expanded')).toBe('true');
+	await fireEvent.click(view.getByRole('button', { name: 'Leave from panel' }));
+	expect(confirm).toHaveBeenCalledWith({ type: 'warning', text: i18n.ts._calls.leaveRoom });
+	expect(toggle.getAttribute('aria-expanded')).toBe('false');
+	expect(view.queryByRole('button', { name: 'Leave from panel' })).toBeNull();
+	expect(fixture.session.leave).not.toHaveBeenCalled();
+	respond({ canceled });
+	await nextTick();
+	if (canceled) {
+		expect(fixture.session.leave).not.toHaveBeenCalled();
+		await fireEvent.click(toggle);
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+	} else {
+		await waitFor(() => expect(fixture.session.leave).toHaveBeenCalledOnce());
+	}
 });
 
 test('speaker and listener rows link to their profiles', async () => {

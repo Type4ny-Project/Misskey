@@ -59,3 +59,13 @@ export const ChannelChat = {
 		(await body.findByRole('button', { name: 'チャット' })).click();
 	},
 } satisfies StoryObj<typeof MkCallsRoomWindow>;
+
+export const Ended = {
+	...Default,
+	parameters: {
+		...Default.parameters,
+		msw: { handlers: [
+			http.post('/api/calls/rooms/show', () => HttpResponse.json({ room: { ...room, state: 'ended', endedAt: '2026-10-03T01:02:03.000Z' }, participants: [] })),
+		] },
+	},
+} satisfies StoryObj<typeof MkCallsRoomWindow>;

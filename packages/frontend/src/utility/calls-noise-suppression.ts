@@ -11,6 +11,7 @@ import type { RnnoiseWorkletNode } from '@sapphi-red/web-noise-suppressor';
 export type CallsNoiseSuppression = {
 	track: MediaStreamTrack;
 	setEnabled: (enabled: boolean) => void;
+	setMuted: (muted: boolean) => void;
 	close: () => void;
 };
 
@@ -41,6 +42,8 @@ export async function createCallsNoiseSuppression(stream: MediaStream, onError: 
 		track.contentHint = 'speech';
 		let failed = false;
 		let closed = false;
+		let muted: boolean | null = false;
+		let processorConnected = true;
 		processor.connect(destination);
 		source.connect(destination);
 		const setEnabled = (enabled: boolean) => {
@@ -48,7 +51,19 @@ export async function createCallsNoiseSuppression(stream: MediaStream, onError: 
 			if (enabled && failed) throw new Error('RNNoise processor is unavailable');
 			// Keep the destination track stable: toggling needs neither capture nor replaceTrack.
 			source.disconnect();
-			source.connect(enabled ? processor : destination);
+			if (enabled) {
+				if (!processorConnected) {
+					processor.connect(destination);
+					processorConnected = true;
+				}
+				source.connect(processor);
+			} else {
+				if (processorConnected) {
+					processor.disconnect();
+					processorConnected = false;
+				}
+				source.connect(destination);
+			}
 		};
 		processor.onprocessorerror = () => {
 			if (closed) return;
@@ -56,9 +71,20 @@ export async function createCallsNoiseSuppression(stream: MediaStream, onError: 
 			setEnabled(false);
 			onError(new Error('RNNoise audio processing failed'));
 		};
+		const setMuted = (nextMuted: boolean) => {
+			if (closed || muted === nextMuted) return;
+			muted = nextMuted;
+			void (nextMuted ? context.suspend() : context.resume()).catch(error => {
+				if (closed) return;
+				// A failed transition must not suppress a retry of the same request.
+				if (muted === nextMuted) muted = null;
+				onError(error);
+			});
+		};
 		return {
 			track,
 			setEnabled,
+			setMuted,
 			close() {
 				if (closed) return;
 				closed = true;
@@ -66,7 +92,7 @@ export async function createCallsNoiseSuppression(stream: MediaStream, onError: 
 				processor.onprocessorerror = null;
 				source.disconnect();
 				processor.destroy();
-				processor.disconnect();
+				if (processorConnected) processor.disconnect();
 				track.stop();
 				void context.close().catch(error => console.error('[Calls] Audio context close failed', error));
 			},

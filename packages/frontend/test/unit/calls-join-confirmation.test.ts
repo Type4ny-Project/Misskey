@@ -13,9 +13,9 @@ import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import type { MenuButton } from '@/types/menu.js';
 
-const fixture = vi.hoisted(() => ({ confirm: vi.fn(), inputText: vi.fn(), session: null as any, connection: null as any, policies: { canJoinCalls: true } }));
+const fixture = vi.hoisted(() => ({ close: vi.fn(), confirm: vi.fn(), inputText: vi.fn(), session: null as any, connection: null as any, policies: { canJoinCalls: true } }));
 vi.mock('@/i.js', () => ({ $i: { id: 'viewer', policies: fixture.policies } }));
-vi.mock('@/components/MkModal.vue', () => ({ default: { template: '<section><slot/></section>', methods: { close() {} } } }));
+vi.mock('@/components/MkModal.vue', () => ({ default: { emits: ['click', 'closed', 'esc'], template: '<section><slot/></section>', methods: { close() { fixture.close(); } } } }));
 vi.mock('@/components/MkStreamingNotesTimeline.vue', () => ({ default: { props: ['src', 'channel'], template: '<div data-testid="calls-chat-timeline" :data-channel="channel"/>' } }));
 vi.mock('@/components/MkButton.vue', () => ({ default: { template: '<button><slot/></button>' } }));
 vi.mock('@/components/global/MkA.vue', () => ({ default: { props: ['to'], template: '<a :href="to"><slot/></a>' } }));
@@ -25,7 +25,7 @@ vi.mock('@/composables/use-calls-room.js', () => ({ createCallsRoomConnection: (
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: vi.fn().mockResolvedValue({ id: 'host', username: 'host', name: 'Host' }) }));
 
 const stubs = {
-	MkModal: { template: '<section><slot/></section>', methods: { close() {} } },
+	MkModal: { emits: ['click', 'closed', 'esc'], template: '<section><slot/></section>', methods: { close() { fixture.close(); } } },
 	MkButton: { template: '<button><slot/></button>' },
 	MkA: { props: ['to'], template: '<a :href="to"><slot/></a>' },
 	MkInfo: true, MkAvatar: true, MkUserName: true, MkLoading: true, MkCallsControls: true, CallsVideo: true, MkStreamingNotesTimeline: true,
@@ -33,6 +33,7 @@ const stubs = {
 
 beforeEach(() => {
 	fixture.policies.canJoinCalls = true;
+	fixture.close.mockReset();
 	fixture.confirm.mockReset().mockResolvedValue({ canceled: true });
 	fixture.inputText.mockReset().mockResolvedValue({ canceled: false, result: ' New title ' });
 	vi.mocked(os.toast).mockClear();
@@ -45,9 +46,9 @@ beforeEach(() => {
 	fixture.connection = { room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()), refresh: vi.fn().mockResolvedValue(undefined), dispose: vi.fn() };
 	fixture.session = {
 		currentRoomId: ref(null), room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()),
-		elapsedTime: ref(null), isActive: ref(false), joining: ref(false), videos: ref([]), screenWindows: new Map(), mediaState: ref('idle'), mediaFailure: ref(null),
+		elapsedTime: ref(null), isActive: ref(false), joining: ref(false), videos: ref([]), screenAudioIds: ref(new Set()), screenWindows: new Map(), mediaState: ref('idle'), mediaFailure: ref(null),
 		speakerRequestResult: ref(null), replacedRoomId: ref(null), needsAudioResume: ref(false), controls: ref({}),
-		refresh: vi.fn().mockResolvedValue(undefined), prepareMicrophones: vi.fn(), join: vi.fn().mockResolvedValue(undefined),
+		leave: vi.fn().mockResolvedValue(undefined), refresh: vi.fn().mockResolvedValue(undefined), prepareMicrophones: vi.fn(), join: vi.fn().mockResolvedValue(undefined),
 		getParticipantVolume: vi.fn().mockReturnValue(100), setParticipantVolume: vi.fn(),
 	};
 });
@@ -66,6 +67,65 @@ describe('Calls room window', () => {
 		expect(os.post).toHaveBeenCalledWith({ channel });
 	});
 
+	test('keeps an initially ended room open with its final timing and no join prompt', async () => {
+		fixture.connection.room.value = null;
+		fixture.connection.refresh.mockImplementation(async () => {
+			fixture.connection.room.value = { id: 'room', title: 'Ended call', state: 'ended', moderatorUserIds: [], startedAt: '2026-10-04T23:30:00.000Z', endedAt: '2026-10-05T00:32:03.000Z' };
+		});
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await waitFor(() => expect(view.getByText('01:02:03')).toBeTruthy());
+		expect(view.getByRole('heading', { name: i18n.ts._calls.ended })).toBeTruthy();
+		expect(view.container.querySelectorAll('time')).toHaveLength(2);
+		expect(view.queryByRole('button', { name: i18n.ts._calls.joinRoom })).toBeNull();
+		expect(view.queryByRole('complementary')).toBeNull();
+		expect(fixture.close).not.toHaveBeenCalled();
+		expect(fixture.confirm).not.toHaveBeenCalled();
+		expect(fixture.session.prepareMicrophones).not.toHaveBeenCalled();
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts.close }));
+		expect(fixture.close).toHaveBeenCalledOnce();
+	});
+
+	test('keeps the summary after an active session is cleared on room end', async () => {
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		fixture.session.elapsedTime.value = '00:10';
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		const endedRoom = { ...fixture.session.room.value, state: 'ended', startedAt: '2026-10-04T23:00:00.000Z', endedAt: '2026-10-05T00:02:03.000Z' };
+		fixture.session.room.value = endedRoom;
+		fixture.session.isActive.value = false;
+		await nextTick();
+		expect(view.getByText('01:02:03')).toBeTruthy();
+		expect(fixture.close).not.toHaveBeenCalled();
+		fixture.connection.room.value = null;
+		fixture.connection.refresh.mockImplementation(async () => { fixture.connection.room.value = endedRoom; });
+		fixture.session.room.value = null;
+		fixture.session.currentRoomId.value = null;
+		await waitFor(() => expect(view.getByText('01:02:03')).toBeTruthy());
+		expect(view.queryByTitle(i18n.ts._calls.elapsedTime)).toBeNull();
+		expect(fixture.close).not.toHaveBeenCalled();
+		expect(fixture.session.join).not.toHaveBeenCalled();
+	});
+
+	test.each(['host', 'speaker'])('leaving as %s preserves only the room-end summary', async role => {
+		fixture.confirm.mockResolvedValue({ canceled: false });
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		fixture.session.participants.value = [{ id: 'viewer-participant', userId: 'viewer', role, isMuted: true }];
+		fixture.session.leave.mockImplementation(async () => {
+			fixture.session.currentRoomId.value = null;
+			fixture.session.isActive.value = false;
+			fixture.connection.room.value = { ...fixture.connection.room.value, state: role === 'host' ? 'ended' : 'open', startedAt: '2026-10-04T23:00:00.000Z', endedAt: role === 'host' ? '2026-10-05T00:02:03.000Z' : null };
+		});
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs: { ...stubs, MkCallsControls: { template: `<button @click="$emit('leave')">Leave call</button>` } } } });
+		await fireEvent.click(view.getByRole('button', { name: 'Leave call' }));
+		await waitFor(() => expect(fixture.session.leave).toHaveBeenCalledOnce());
+		if (role === 'host') {
+			expect(view.getByText('01:02:03')).toBeTruthy();
+			expect(fixture.close).not.toHaveBeenCalled();
+		} else {
+			expect(fixture.close).toHaveBeenCalledOnce();
+		}
+	});
 
 	test.each([true, false])('puts unmuted speakers first and updates their order (joined: %s)', async joined => {
 		const participants = [

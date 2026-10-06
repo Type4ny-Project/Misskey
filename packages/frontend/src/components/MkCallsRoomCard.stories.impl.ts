@@ -37,3 +37,20 @@ export const Default = {
 
 export const LongTitle = { ...Default, args: { room: { ...room, title: '長いルーム名でも参加者とルームを開く操作が分かりやすく表示されることを確認するための通話' } } } satisfies StoryObj<typeof MkCallsRoomCard>;
 export const Compact = { ...Default, args: { room, compact: true } } satisfies StoryObj<typeof MkCallsRoomCard>;
+
+const endedRoom = { ...room, id: 'calls-ended-room-story', state: 'ended', endedAt: '2026-10-02T01:12:35.000Z' } satisfies Misskey.entities.CallsRoom;
+export const Ended = {
+	...Default,
+	args: { room: endedRoom },
+	parameters: {
+		...Default.parameters,
+		msw: { handlers: [http.post('/api/calls/rooms/show', () => HttpResponse.json({ room: endedRoom, participants: [] }))] },
+	},
+} satisfies StoryObj<typeof MkCallsRoomCard>;
+
+export const EndedNarrow = {
+	...Ended,
+	render(args) {
+		return { components: { MkCallsRoomCard }, setup: () => ({ args }), template: '<div style="width: 280px"><MkCallsRoomCard v-bind="args" /></div>' };
+	},
+} satisfies StoryObj<typeof MkCallsRoomCard>;

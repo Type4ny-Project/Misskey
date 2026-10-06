@@ -45,7 +45,7 @@ class FakePeerConnection extends EventTarget {
 	public async setLocalDescription(description: RTCSessionDescriptionInit) { this.localDescription = description; this.signalingState = description.type === 'offer' ? 'have-local-offer' : 'stable'; }
 	public async createOffer() { return { type: 'offer' as const, sdp: 'offer' }; }
 	public async createAnswer() { return { type: 'answer' as const, sdp: 'answer' }; }
-	public getStats() {
+	public getStats(): Promise<Map<string, Record<string, unknown>>> {
 		return Promise.resolve(new Map([
 			['outbound', { type: 'outbound-rtp', kind: 'audio', packetsSent: 1, bytesSent: 1 }],
 			['transport', { type: 'transport', dtlsState: 'connected' }],
@@ -73,7 +73,7 @@ describe('CallsMediaController', () => {
 	beforeEach(() => {
 		FakePeerConnection.instances = [];
 		noiseSuppressionMock.mockReset();
-		noiseSuppressionMock.mockImplementation(async (stream: MediaStream) => ({ track: stream.getAudioTracks()[0], setEnabled: vi.fn(), close: vi.fn() }));
+		noiseSuppressionMock.mockImplementation(async (stream: MediaStream) => ({ track: stream.getAudioTracks()[0], setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() }));
 		apiMock.mockReset();
 		apiMock.mockImplementation(async (endpoint: string) => {
 			if (endpoint === 'calls/media/turn-credentials') return null;
@@ -117,11 +117,12 @@ describe('CallsMediaController', () => {
 		}
 	});
 
-	test('a muted host connects without waiting for outbound audio statistics', async () => {
+	test('a muted host connects and listens without polling, then resumes speaking detection on unmute', async () => {
 		vi.useFakeTimers();
 		installBrowserMedia(vi.fn().mockResolvedValue(stream(makeTrack('audio'))));
 		const stats = vi.spyOn(FakePeerConnection.prototype, 'getStats').mockResolvedValue(new Map());
-		const controller = new CallsMediaController('room-a', 'host');
+		const onStats = vi.fn();
+		const controller = new CallsMediaController('room-a', 'host', undefined, undefined, onStats);
 		controller.setMuted(true);
 		let connected = false;
 		const connecting = controller.connect().then(() => { connected = true; });
@@ -129,11 +130,74 @@ describe('CallsMediaController', () => {
 			await vi.advanceTimersByTimeAsync(0);
 			expect(connected).toBe(true);
 			expect(controller.localTrack?.enabled).toBe(false);
+			const processing = await noiseSuppressionMock.mock.results[0].value;
+			expect(processing.setMuted).toHaveBeenLastCalledWith(true);
 			expect(stats).not.toHaveBeenCalled();
+			const peer = FakePeerConnection.instances[0];
+			peer.dispatchEvent(new Event('connectionstatechange'));
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(stats).not.toHaveBeenCalled();
+			expect(onStats).not.toHaveBeenCalled();
+			controller.setMuted(false);
+			expect(processing.setMuted).toHaveBeenLastCalledWith(false);
+			await vi.advanceTimersByTimeAsync(1000);
+			expect(stats).toHaveBeenCalledTimes(2);
+			expect(onStats).toHaveBeenCalledTimes(2);
+			controller.setMuted(true);
+			await vi.advanceTimersByTimeAsync(1000);
+			expect(stats).toHaveBeenCalledTimes(2);
 		} finally {
 			const closing = controller.close();
 			await vi.advanceTimersByTimeAsync(250);
 			await Promise.allSettled([connecting, closing]);
+			stats.mockRestore();
+			vi.useRealTimers();
+		}
+	});
+
+	test('a listener receives the connection without polling microphone statistics', async () => {
+		vi.useFakeTimers();
+		installBrowserMedia(vi.fn());
+		const stats = vi.spyOn(FakePeerConnection.prototype, 'getStats');
+		const controller = new CallsMediaController('room-a', 'listener', undefined, undefined, vi.fn());
+		try {
+			await controller.connect();
+			FakePeerConnection.instances[0].dispatchEvent(new Event('connectionstatechange'));
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(controller.state).toBe('connected');
+			expect(stats).not.toHaveBeenCalled();
+		} finally {
+			await controller.close();
+			stats.mockRestore();
+			vi.useRealTimers();
+		}
+	});
+
+	test('unmuted speech keeps 120 detection samples per minute and detects silence on the next sample', async () => {
+		vi.useFakeTimers();
+		installBrowserMedia(vi.fn().mockResolvedValue(stream(makeTrack('audio'))));
+		let audioLevel = 0.1;
+		const stats = vi.spyOn(FakePeerConnection.prototype, 'getStats').mockImplementation(async () => new Map([
+			['source', { type: 'media-source', audioLevel }],
+		]));
+		const onStats = vi.fn();
+		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, onStats);
+		try {
+			await controller.connect();
+			FakePeerConnection.instances[0].dispatchEvent(new Event('connectionstatechange'));
+			await vi.advanceTimersByTimeAsync(499);
+			expect(onStats).not.toHaveBeenCalled();
+			await vi.advanceTimersByTimeAsync(1);
+			expect(onStats).toHaveBeenLastCalledWith(expect.objectContaining({ audioLevel: 0.1 }), true);
+			await vi.advanceTimersByTimeAsync(59_500);
+			expect(stats).toHaveBeenCalledTimes(120);
+			expect(onStats).toHaveBeenCalledTimes(120);
+			expect(controller.localTrack?.enabled).toBe(true);
+			audioLevel = 0;
+			await vi.advanceTimersByTimeAsync(500);
+			expect(onStats).toHaveBeenLastCalledWith(expect.objectContaining({ audioLevel: 0 }), false);
+		} finally {
+			await controller.close();
 			stats.mockRestore();
 			vi.useRealTimers();
 		}
@@ -185,12 +249,48 @@ describe('CallsMediaController', () => {
 		expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/publish', expect.objectContaining({ mediaSource: 'screen', mid: '2' }));
 		screen.dispatchEvent(new Event('ended'));
 		await vi.waitFor(() => expect(apiMock).toHaveBeenCalledWith('calls/media/tracks/close', expect.anything()));
-		expect(localTrack).toHaveBeenCalledWith('screen', null);
+		expect(localTrack).toHaveBeenCalledWith('screen', null, expect.any(String));
 		expect(camera.stop).not.toHaveBeenCalled();
 		expect(audio.stop).not.toHaveBeenCalled();
 		await controller.close();
 		expect(camera.stop).toHaveBeenCalled();
 		expect(audio.stop).toHaveBeenCalled();
+	});
+
+	test('publishes two screen shares with independent audio and stops only the selected share', async () => {
+		const microphone = makeTrack('audio');
+		const screens = [makeTrack('video'), makeTrack('video')];
+		const audios = [makeTrack('audio'), makeTrack('audio')];
+		const getDisplayMedia = vi.fn();
+		for (let index = 0; index < screens.length; index++) {
+			getDisplayMedia.mockResolvedValueOnce({ getVideoTracks: () => [screens[index]], getAudioTracks: () => [audios[index]], getTracks: () => [screens[index], audios[index]] });
+		}
+		installBrowserMedia(vi.fn().mockResolvedValue(stream(microphone)), getDisplayMedia);
+		const localTrack = vi.fn();
+		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, undefined, undefined, false, { localTrack, remoteRemoved: vi.fn(), error: vi.fn() });
+		await controller.connect();
+		await controller.startVideo('screen');
+		await controller.startVideo('screen');
+		expect(getDisplayMedia).toHaveBeenCalledTimes(2);
+		expect(getDisplayMedia).toHaveBeenCalledWith(expect.objectContaining({ audio: true }));
+		const publications = apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish');
+		expect(publications.slice(1).map(([, input]) => input.mid)).toEqual(['1', '2', '3', '4']);
+		expect(publications[2][1].screenPublicationId).toBeDefined();
+		expect(publications[4][1].screenPublicationId).toBeDefined();
+		expect(publications[2][1].screenPublicationId).not.toBe(publications[4][1].screenPublicationId);
+		await controller.setVideoQuality('screen', { height: 1080, frameRate: 60 });
+		for (const screen of screens) expect(screen.applyConstraints).toHaveBeenCalledOnce();
+		screens[0].dispatchEvent(new Event('ended'));
+		await vi.waitFor(() => expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/close')).toHaveLength(2));
+		expect(audios[0].stop).toHaveBeenCalledOnce();
+		expect(screens[1].stop).not.toHaveBeenCalled();
+		expect(audios[1].stop).not.toHaveBeenCalled();
+		expect(microphone.stop).not.toHaveBeenCalled();
+		audios[1].dispatchEvent(new Event('ended'));
+		await vi.waitFor(() => expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/close')).toHaveLength(3));
+		expect(screens[1].stop).not.toHaveBeenCalled();
+		await controller.close();
+		expect(audios[1].stop).toHaveBeenCalledOnce();
 	});
 
 	test.each(['camera', 'screen'] as const)('stops local %s capture when moderation removes its publication', async source => {
@@ -213,7 +313,7 @@ describe('CallsMediaController', () => {
 		expect((source === 'camera' ? camera : screen).stop).toHaveBeenCalledOnce();
 		expect((source === 'camera' ? screen : camera).stop).not.toHaveBeenCalled();
 		expect(audio.stop).not.toHaveBeenCalled();
-		expect(localTrack).toHaveBeenCalledWith(source, null);
+		expect(localTrack).toHaveBeenCalledWith(source, null, expect.any(String));
 		expect(apiMock).not.toHaveBeenCalledWith('calls/media/tracks/close', expect.anything());
 		await controller.close();
 	});
@@ -221,7 +321,7 @@ describe('CallsMediaController', () => {
 	test('rapid noise suppression toggles preserve the sender, mute and recording track without recapturing', async () => {
 		const tracks = Array.from({ length: 2 }, () => makeTrack('audio'));
 		const output = makeTrack('audio');
-		const processing = { track: output, setEnabled: vi.fn(), close: vi.fn() };
+		const processing = { track: output, setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
 		noiseSuppressionMock.mockResolvedValueOnce(processing);
 		const getUserMedia = vi.fn();
 		for (const track of tracks) getUserMedia.mockResolvedValueOnce(stream(track));
@@ -261,7 +361,7 @@ describe('CallsMediaController', () => {
 
 	test('uses the latest suppression and mute settings when RNNoise finishes loading', async () => {
 		const raw = makeTrack('audio');
-		const processing = { track: makeTrack('audio'), setEnabled: vi.fn(), close: vi.fn() };
+		const processing = { track: makeTrack('audio'), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
 		let finishLoading!: (value: typeof processing) => void;
 		noiseSuppressionMock.mockImplementationOnce(() => new Promise(resolve => { finishLoading = resolve; }));
 		installBrowserMedia(vi.fn().mockResolvedValue(stream(raw)));
@@ -280,7 +380,7 @@ describe('CallsMediaController', () => {
 
 	test('leaving during RNNoise loading releases capture and never publishes it', async () => {
 		const raw = makeTrack('audio');
-		const processing = { track: makeTrack('audio'), setEnabled: vi.fn(), close: vi.fn() };
+		const processing = { track: makeTrack('audio'), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
 		let finishLoading!: (value: typeof processing) => void;
 		noiseSuppressionMock.mockImplementationOnce(() => new Promise(resolve => { finishLoading = resolve; }));
 		installBrowserMedia(vi.fn().mockResolvedValue(stream(raw)));
@@ -315,7 +415,7 @@ describe('CallsMediaController', () => {
 
 	test('failed microphone replacement releases the new processor and preserves the old muted audio', async () => {
 		const tracks = [makeTrack('audio'), makeTrack('audio')];
-		const processors = tracks.map(() => ({ track: makeTrack('audio'), setEnabled: vi.fn(), close: vi.fn() }));
+		const processors = tracks.map(() => ({ track: makeTrack('audio'), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() }));
 		noiseSuppressionMock.mockResolvedValueOnce(processors[0]).mockResolvedValueOnce(processors[1]);
 		installBrowserMedia(vi.fn().mockResolvedValueOnce(stream(tracks[0])).mockResolvedValueOnce(stream(tracks[1])));
 		const microphoneTrack = vi.fn();
@@ -391,7 +491,7 @@ describe('CallsMediaController', () => {
 		expect(FakePeerConnection.instances[0].transceivers[1].sender.track).toBe(replacement);
 		expect(camera.stop).toHaveBeenCalled();
 		expect(audio.stop).not.toHaveBeenCalled();
-		expect(localTrack).toHaveBeenLastCalledWith('camera', replacement);
+		expect(localTrack).toHaveBeenLastCalledWith('camera', replacement, 'camera');
 		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/tracks/publish')).toHaveLength(2);
 		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ video: expect.objectContaining({ deviceId: { exact: 'camera-b' } }), audio: false }));
 		await controller.close();

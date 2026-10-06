@@ -20,6 +20,7 @@ export type CallsPublicationBinding = {
 	providerMid: string | null;
 	mediaKind: 'audio' | 'video';
 	mediaSource?: 'microphone' | 'camera' | 'screen';
+	screenPublicationId?: string;
 	createdAt: string;
 };
 

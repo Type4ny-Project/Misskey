@@ -44,6 +44,11 @@ Calls の閲覧権限を持つユーザーが、ルーム内 Activity から You
 - PASS: backend Calls unit 110件、frontend Calls unit 176件、Calls API E2E 6件。backend/frontend型チェック・build、SDK再生成、変更ファイルlint・SPDX・locale safety。
 - PASS: 更新後の実ブラウザーで音声未接続の所有者が右クリック・長押しから再生・削除できること、PCの右側キューと狭い幅の縦並びを再確認。JavaScriptエラー0件。スクリーンショットを更新。
 
+2026-10-07、Activity土台をさらに更新し、develop `62d7367944` のCalls設定・接続情報を取り込み。下段のPR #76ではActivityとCalls設定のlocale競合を解消し、型定義を再生成した。上段のWatch Together・所有者の音声未接続時の操作・右側キューを維持している。
+
+- PASS: frontend Calls unit 246件（21ファイル）、frontend型チェック・build、i18n再生成・build、変更ファイルlint・SPDX・locale safety。前回のbackend Calls unit 110件・Calls API E2E 6件・SDK再生成は引き続き有効（今回の取り込みではbackend変更なし）。
+- PASS: 最終の実ブラウザーで1360pxの右側キュー、900px・390pxの下側キュー、タイトルと説明文の1行省略、右クリックの即時再生、タッチ長押しの削除、通常タップのリンク遷移を確認。JavaScriptエラー0件。3枚のスクリーンショットを更新。
+
 広告ブロックは含めていない。[YouTube標準の埋め込みパラメーター](https://developers.google.com/youtube/player_parameters)には広告を無効化する機能がなく、親ページからiframe内の通信を制御できない。
 
 YouTubeの埋め込み制限・地域制限・広告・ブラウザーの自動再生制限の影響は受ける。自動再生が止められた場合は「再生を許可」を表示する。実音声のCloudflare接続は試験用認証情報のため未検証。DB entity・migrationの変更はない。

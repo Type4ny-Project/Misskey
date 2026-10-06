@@ -73,7 +73,7 @@ describe('CallsMediaController', () => {
 	beforeEach(() => {
 		FakePeerConnection.instances = [];
 		noiseSuppressionMock.mockReset();
-		noiseSuppressionMock.mockImplementation(async (stream: MediaStream) => ({ track: stream.getAudioTracks()[0], setInputSensitivity: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() }));
+		noiseSuppressionMock.mockImplementation(async (stream: MediaStream) => ({ track: stream.getAudioTracks()[0], setInputSensitivity: vi.fn(), setInputVolume: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() }));
 		apiMock.mockReset();
 		apiMock.mockImplementation(async (endpoint: string) => {
 			if (endpoint === 'calls/media/turn-credentials') return null;
@@ -321,7 +321,7 @@ describe('CallsMediaController', () => {
 	test('rapid noise suppression toggles preserve the sender, mute and recording track without recapturing', async () => {
 		const tracks = Array.from({ length: 2 }, () => makeTrack('audio'));
 		const output = makeTrack('audio');
-		const processing = { track: output, setInputSensitivity: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
+		const processing = { track: output, setInputSensitivity: vi.fn(), setInputVolume: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
 		noiseSuppressionMock.mockResolvedValueOnce(processing);
 		const getUserMedia = vi.fn();
 		for (const track of tracks) getUserMedia.mockResolvedValueOnce(stream(track));
@@ -339,6 +339,8 @@ describe('CallsMediaController', () => {
 		await controller.setNoiseSuppression('webrtc');
 		expect(tracks[0].applyConstraints).toHaveBeenLastCalledWith({ noiseSuppression: true });
 		await controller.setNoiseSuppression('none');
+		controller.setInputVolume(150);
+		expect(processing.setInputVolume).toHaveBeenLastCalledWith(150);
 		controller.setInputSensitivity(-45);
 		expect(processing.setInputSensitivity).toHaveBeenLastCalledWith(-45);
 		expect(processing.setEnabled.mock.calls.map(([enabled]) => enabled)).toEqual([true, false, true, false, false, false]);
@@ -366,7 +368,7 @@ describe('CallsMediaController', () => {
 
 	test('uses the latest suppression and mute settings when RNNoise finishes loading', async () => {
 		const raw = makeTrack('audio');
-		const processing = { track: makeTrack('audio'), setInputSensitivity: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
+		const processing = { track: makeTrack('audio'), setInputSensitivity: vi.fn(), setInputVolume: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
 		let finishLoading!: (value: typeof processing) => void;
 		noiseSuppressionMock.mockImplementationOnce(() => new Promise(resolve => { finishLoading = resolve; }));
 		installBrowserMedia(vi.fn().mockResolvedValue(stream(raw)));
@@ -385,7 +387,7 @@ describe('CallsMediaController', () => {
 
 	test('leaving during RNNoise loading releases capture and never publishes it', async () => {
 		const raw = makeTrack('audio');
-		const processing = { track: makeTrack('audio'), setInputSensitivity: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
+		const processing = { track: makeTrack('audio'), setInputSensitivity: vi.fn(), setInputVolume: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
 		let finishLoading!: (value: typeof processing) => void;
 		noiseSuppressionMock.mockImplementationOnce(() => new Promise(resolve => { finishLoading = resolve; }));
 		installBrowserMedia(vi.fn().mockResolvedValue(stream(raw)));
@@ -420,7 +422,7 @@ describe('CallsMediaController', () => {
 
 	test('failed microphone replacement releases the new processor and preserves the old muted audio', async () => {
 		const tracks = [makeTrack('audio'), makeTrack('audio')];
-		const processors = tracks.map(() => ({ track: makeTrack('audio'), setInputSensitivity: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() }));
+		const processors = tracks.map(() => ({ track: makeTrack('audio'), setInputSensitivity: vi.fn(), setInputVolume: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() }));
 		noiseSuppressionMock.mockResolvedValueOnce(processors[0]).mockResolvedValueOnce(processors[1]);
 		installBrowserMedia(vi.fn().mockResolvedValueOnce(stream(tracks[0])).mockResolvedValueOnce(stream(tracks[1])));
 		const microphoneTrack = vi.fn();

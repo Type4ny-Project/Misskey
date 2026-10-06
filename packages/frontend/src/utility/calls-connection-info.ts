@@ -16,12 +16,12 @@ export type CallsConnectionInfo = {
 export function getCallsConnectionInfo(report: RTCStatsReport, state: RTCPeerConnectionState, servers: RTCIceServer[]): CallsConnectionInfo {
 	const values: {
 		id: string; type: string; selectedCandidatePairId?: string; localCandidateId?: string; remoteCandidateId?: string;
-		state?: string; selected?: boolean; nominated?: boolean; candidateType?: string; protocol?: string; relayProtocol?: string;
+		state?: string; selected?: boolean; candidateType?: string; protocol?: string; relayProtocol?: string;
 		currentRoundTripTime?: number; packetsLost?: number; packetsReceived?: number; packetsSent?: number; localId?: string;
 	}[] = [];
 	report.forEach(value => values.push(value));
 	const pairId = values.find(value => value.type === 'transport' && value.selectedCandidatePairId)?.selectedCandidatePairId;
-	const pair = values.find(value => value.id === pairId) ?? values.find(value => value.type === 'candidate-pair' && value.state === 'succeeded' && (value.selected || value.nominated));
+	const pair = values.find(value => value.id === pairId) ?? values.find(value => value.type === 'candidate-pair' && value.state === 'succeeded' && value.selected === true);
 	const local = values.find(value => value.id === pair?.localCandidateId);
 	const remote = values.find(value => value.id === pair?.remoteCandidateId);
 	const relay = local == null || remote == null ? null : local.candidateType === 'relay' || remote.candidateType === 'relay';

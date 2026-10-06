@@ -4,10 +4,10 @@
  */
 
 import { getCallsConnectionInfo } from './calls-connection-info.js';
-import type { CallsConnectionInfo } from './calls-connection-info.js';
 import { detectCallsMediaCapabilities, normalizeCallsMediaError, normalizeCallsStats, preferOpus } from './calls-media-core.js';
-import type { CallsNormalizedStats } from './calls-media-core.js';
 import { createCallsNoiseSuppression } from './calls-noise-suppression.js';
+import type { CallsConnectionInfo } from './calls-connection-info.js';
+import type { CallsNormalizedStats } from './calls-media-core.js';
 import type { CallsNoiseSuppression, CallsNoiseSuppressionMode } from './calls-noise-suppression.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 
@@ -59,6 +59,7 @@ export class CallsMediaController {
 	private muted = false;
 	private noiseSuppression: CallsNoiseSuppressionMode = 'rnnoise';
 	private inputSensitivity = -100;
+	private inputVolume = 100;
 	private reconnectReason: CallsNormalizedStats['reconnectReason'] = null;
 	private reconnectStartedAt = 0;
 	private recoveryTimeMs: number | null = null;
@@ -171,16 +172,17 @@ export class CallsMediaController {
 				console.warn('[Calls] Noise suppression failed', error);
 				this.noiseSuppression = 'none';
 				this.videoCallbacks?.noiseSuppressionChanged?.('none');
-			}, abort.signal, { rnnoise: this.noiseSuppression === 'rnnoise', inputSensitivity: this.inputSensitivity, onLevel: (level, transmitting) => { if (this.microphone?.track === track) this.videoCallbacks?.inputLevel?.(level, transmitting && !this.muted); } });
+			}, abort.signal, { rnnoise: this.noiseSuppression === 'rnnoise', inputSensitivity: this.inputSensitivity, inputVolume: this.inputVolume, onLevel: (level, transmitting) => { if (this.microphone?.track === track) this.videoCallbacks?.inputLevel?.(level, transmitting && !this.muted); } });
 			abort.signal.throwIfAborted();
 			await track.applyConstraints({ noiseSuppression: this.noiseSuppression === 'webrtc' });
 			await processing.setEnabled(this.noiseSuppression === 'rnnoise');
 			processing.setInputSensitivity(this.inputSensitivity);
+			processing.setInputVolume(this.inputVolume);
 		} catch (error) {
 			processing?.close();
 			processing = null;
 			if (abort.signal.aborted) throw new DOMException('Microphone acquisition cancelled', 'AbortError');
-			if (this.inputSensitivity > -100) { track.stop(); throw error; }
+			if (this.inputSensitivity > -100 || this.inputVolume !== 100) { track.stop(); throw error; }
 			console.warn('[Calls] Noise suppression unavailable; using unprocessed microphone', error);
 			this.noiseSuppression = 'none';
 			this.videoCallbacks?.noiseSuppressionChanged?.('none');
@@ -484,10 +486,10 @@ export class CallsMediaController {
 		});
 	}
 
-	public async switchCamera(deviceId: string, quality: CallsVideoQuality = { height: 720, frameRate: 30 }): Promise<void> {
+	public async switchCamera(deviceId: string | undefined, quality: CallsVideoQuality = { height: 720, frameRate: 30 }): Promise<void> {
 		const video = this.localVideos.get('camera');
 		if (video == null) return;
-		const stream = await navigator.mediaDevices.getUserMedia({ video: { ...videoConstraints(quality), deviceId: { exact: deviceId } }, audio: false });
+		const stream = await navigator.mediaDevices.getUserMedia({ video: { ...videoConstraints(quality), deviceId: deviceId == null ? undefined : { exact: deviceId } }, audio: false });
 		const track = stream.getVideoTracks()[0];
 		for (const extra of stream.getTracks()) if (extra !== track) extra.stop();
 		if (track == null) throw new DOMException('No video track', 'NotFoundError');
@@ -560,6 +562,12 @@ export class CallsMediaController {
 				throw error;
 			}
 		});
+	}
+
+	public setInputVolume(volume: number): void {
+		if (volume !== 100 && this.microphone != null && this.microphone.processing == null) throw new Error('Audio processing is unavailable');
+		this.inputVolume = volume;
+		this.microphone?.processing?.setInputVolume(volume);
 	}
 
 	public setInputSensitivity(threshold: number): void {

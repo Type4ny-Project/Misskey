@@ -10381,9 +10381,33 @@ export interface Locale extends ILocale {
          */
         "audioSettings": string;
         /**
-         * 通話設定
+         * Callsの設定
          */
         "settings": string;
+        /**
+         * システムの既定
+         */
+        "systemDefaultDevice": string;
+        /**
+         * 音声出力デバイス
+         */
+        "outputDevice": string;
+        /**
+         * マイクの入力音量
+         */
+        "inputVolume": string;
+        /**
+         * 通話の出力音量
+         */
+        "outputVolume": string;
+        /**
+         * デバイス一覧を更新（マイク・カメラの使用を許可）
+         */
+        "refreshDevices": string;
+        /**
+         * このブラウザーでは出力デバイスを選択できません。OSの設定を使用します。
+         */
+        "outputDeviceUnsupported": string;
         /**
          * 一般
          */

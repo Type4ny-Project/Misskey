@@ -15,7 +15,7 @@ vi.mock('@sapphi-red/web-noise-suppressor', () => ({
 	RnnoiseWorkletNode: class { constructor() { return fixture.processor; } },
 }));
 
-const gate = { connect: vi.fn(), disconnect: vi.fn(), port: { onmessage: null }, parameters: new Map([['threshold', { value: -100 }]]) };
+const gate = { connect: vi.fn(), disconnect: vi.fn(), port: { onmessage: null }, parameters: new Map([['threshold', { value: -100 }], ['inputGain', { value: 1 }]]) };
 const source = { connect: vi.fn(), disconnect: vi.fn() };
 const track = { stop: vi.fn(), contentHint: '' } as unknown as MediaStreamTrack;
 const destination = { channelCount: 2, stream: { getAudioTracks: () => [track] } };

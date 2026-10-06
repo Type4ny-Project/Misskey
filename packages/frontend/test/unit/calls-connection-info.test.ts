@@ -28,13 +28,22 @@ describe('Calls connection information', () => {
 
 	test('shows TURN ports without credentials and identifies the relay transport', () => {
 		const stats = report([
-			{ id: 'pair', type: 'candidate-pair', state: 'succeeded', nominated: true, localCandidateId: 'local', remoteCandidateId: 'remote' },
+			{ id: 'pair', type: 'candidate-pair', state: 'succeeded', selected: true, localCandidateId: 'local', remoteCandidateId: 'remote' },
 			{ id: 'local', type: 'local-candidate', candidateType: 'relay', protocol: 'udp', relayProtocol: 'tls' },
 			{ id: 'remote', type: 'remote-candidate', candidateType: 'host' },
 		]);
 		const info = getCallsConnectionInfo(stats, 'connected', [{ username: 'secret-user', credential: 'secret-password', urls: ['stun:stun.cloudflare.com:3478', 'turn:turn.cloudflare.com:3478?transport=udp', 'turn:turn.cloudflare.com:443?transport=udp', 'turn:turn.cloudflare.com:80?transport=tcp', 'turns:turn.cloudflare.com:443?transport=tcp'] }]);
 		expect(info).toMatchObject({ relay: true, protocol: 'tls', turnServers: [{ host: 'turn.cloudflare.com', udp: ['3478', '443'], tcp: ['80'], tls: ['443'] }] });
 		expect(JSON.stringify(info)).not.toContain('secret');
+	});
+
+	test('does not mistake a nominated pair for the selected pair', () => {
+		const stats = report([
+			{ id: 'old-pair', type: 'candidate-pair', state: 'succeeded', nominated: true, localCandidateId: 'local', remoteCandidateId: 'remote', currentRoundTripTime: 0.5 },
+			{ id: 'local', type: 'local-candidate', candidateType: 'relay', protocol: 'tcp' },
+			{ id: 'remote', type: 'remote-candidate', candidateType: 'host' },
+		]);
+		expect(getCallsConnectionInfo(stats, 'connected', [])).toMatchObject({ relay: null, protocol: null, roundTripTime: null });
 	});
 
 	test('leaves measurements unavailable before media traffic starts', () => {

@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import gateUrl from './calls-input-gate.worklet.js?url';
 import workletUrl from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url';
 import wasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
 import simdWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
+import gateUrl from './calls-input-gate.worklet.js?url';
 import type { RnnoiseWorkletNode } from '@sapphi-red/web-noise-suppressor';
 
 export type CallsNoiseSuppressionMode = 'rnnoise' | 'webrtc' | 'none';
@@ -15,11 +15,12 @@ export type CallsNoiseSuppression = {
 	track: MediaStreamTrack;
 	setEnabled: (enabled: boolean) => Promise<void>;
 	setInputSensitivity: (threshold: number) => void;
+	setInputVolume: (volume: number) => void;
 	setMuted: (muted: boolean) => void;
 	close: () => void;
 };
 
-export async function createCallsNoiseSuppression(stream: MediaStream, onError: (error: unknown) => void, signal: AbortSignal, options: { rnnoise: boolean; inputSensitivity: number; onLevel?: (level: number, transmitting: boolean) => void } = { rnnoise: true, inputSensitivity: -100 }): Promise<CallsNoiseSuppression> {
+export async function createCallsNoiseSuppression(stream: MediaStream, onError: (error: unknown) => void, signal: AbortSignal, options: { rnnoise: boolean; inputSensitivity: number; inputVolume?: number; onLevel?: (level: number, transmitting: boolean) => void } = { rnnoise: true, inputSensitivity: -100 }): Promise<CallsNoiseSuppression> {
 	signal.throwIfAborted();
 	if (typeof AudioWorkletNode !== 'function') throw new DOMException('AudioWorklet is unavailable', 'NotSupportedError');
 	// RNNoise processes 480-sample frames at 48 kHz, regardless of the microphone's sample rate.
@@ -37,7 +38,7 @@ export async function createCallsNoiseSuppression(stream: MediaStream, onError: 
 		const track = destination.stream.getAudioTracks()[0];
 		outputTrack = track;
 		track.contentHint = 'speech';
-		const gate = new AudioWorkletNode(context, 'calls-input-gate', { channelCount: 1, outputChannelCount: [1], parameterData: { threshold: options.inputSensitivity } });
+		const gate = new AudioWorkletNode(context, 'calls-input-gate', { channelCount: 1, outputChannelCount: [1], parameterData: { threshold: options.inputSensitivity, inputGain: (options.inputVolume ?? 100) / 100 } });
 		gate.port.onmessage = event => options.onLevel?.(event.data.level, event.data.open);
 		gate.connect(destination);
 		source.connect(gate);
@@ -90,6 +91,7 @@ export async function createCallsNoiseSuppression(stream: MediaStream, onError: 
 			track,
 			setEnabled,
 			setMuted,
+			setInputVolume(volume) { gate.parameters.get('inputGain')!.value = volume / 100; },
 			setInputSensitivity(threshold) { gate.parameters.get('threshold')!.value = threshold; },
 			close() {
 				if (closed) return;

@@ -4,7 +4,7 @@
  */
 
 import { computed, ref } from 'vue';
-import MkCallsSettings from './MkCallsSettings.vue';
+import MkCallsGeneralSettings from './MkCallsGeneralSettings.vue';
 import type { StoryObj } from '@storybook/vue3';
 import type { CallsNoiseSuppressionMode } from '@/utility/calls-noise-suppression.js';
 
@@ -14,10 +14,10 @@ export const Default = {
 		const threshold = ref(-45);
 		const settings = computed(() => ({ noiseSuppression: mode.value, inputSensitivity: threshold.value, inputLevel: -32, transmitting: true, busy: false, microphones: [], cameras: [], outputDevices: [], microphoneId: '', cameraId: '', outputDeviceId: '', inputVolume: 100, outputVolume: 100, supportsOutputDevice: true }));
 		return {
-			components: { MkCallsSettings },
+			components: { MkCallsGeneralSettings },
 			setup: () => ({ setDevice: async () => {}, refreshDevices: async () => {}, setInputVolume: () => {}, setOutputVolume: () => {}, getInfo: async () => null, getSettings: () => settings.value, async setNoiseSuppression(value: CallsNoiseSuppressionMode) { mode.value = value; }, setInputSensitivity(value: number) { threshold.value = value; } }),
-			template: '<MkCallsSettings :setDevice="setDevice" :refreshDevices="refreshDevices" :setInputVolume="setInputVolume" :setOutputVolume="setOutputVolume" :getInfo="getInfo" :getSettings="getSettings" :setNoiseSuppression="setNoiseSuppression" :setInputSensitivity="setInputSensitivity"/>',
+			template: '<MkCallsGeneralSettings :setDevice="setDevice" :refreshDevices="refreshDevices" :setInputVolume="setInputVolume" :setOutputVolume="setOutputVolume" :getSettings="getSettings" :setNoiseSuppression="setNoiseSuppression" :setInputSensitivity="setInputSensitivity"/>',
 		};
 	},
 	parameters: { layout: 'centered' },
-} satisfies StoryObj<typeof MkCallsSettings>;
+} satisfies StoryObj<typeof MkCallsGeneralSettings>;

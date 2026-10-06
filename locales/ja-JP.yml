@@ -2722,7 +2722,13 @@ _permissions:
 
 _calls:
   audioSettings: "通話設定"
-  settings: "通話設定"
+  settings: "Callsの設定"
+  systemDefaultDevice: "システムの既定"
+  outputDevice: "音声出力デバイス"
+  inputVolume: "マイクの入力音量"
+  outputVolume: "通話の出力音量"
+  refreshDevices: "デバイス一覧を更新（マイク・カメラの使用を許可）"
+  outputDeviceUnsupported: "このブラウザーでは出力デバイスを選択できません。OSの設定を使用します。"
   generalSettings: "一般"
   statisticsSettings: "統計表示"
   noiseSuppressionMode: "ノイズキャンセル"

@@ -7,7 +7,7 @@
 
 class CallsInputGate extends AudioWorkletProcessor {
 	static get parameterDescriptors() {
-		return [{ name: 'threshold', defaultValue: -100, minValue: -100, maxValue: 0, automationRate: 'k-rate' }];
+		return [{ name: 'threshold', defaultValue: -100, minValue: -100, maxValue: 0, automationRate: 'k-rate' }, { name: 'inputGain', defaultValue: 1, minValue: 0, maxValue: 2, automationRate: 'k-rate' }];
 	}
 
 	constructor() {
@@ -23,15 +23,16 @@ class CallsInputGate extends AudioWorkletProcessor {
 		if (input == null || output == null) return true;
 		let power = 0;
 		for (const sample of input) power += sample * sample;
-		const rms = Math.sqrt(power / input.length);
+		const inputGain = parameters.inputGain[0];
+		const rms = Math.sqrt(power / input.length) * inputGain;
 		const threshold = parameters.threshold[0];
 		if (threshold <= -100 || rms >= Math.pow(10, threshold / 20)) this.hold = sampleRate * 0.2;
 		else this.hold = Math.max(0, this.hold - input.length);
-		const open = this.hold > 0;
+		const open = this.hold > 0 && inputGain > 0;
 		// Keep word endings audible and ramp the gain to avoid clicks at the gate boundary.
 		for (let index = 0; index < output.length; index++) {
 			this.gain += ((open ? 1 : 0) - this.gain) * 0.01;
-			output[index] = input[index] * this.gain;
+			output[index] = input[index] * inputGain * this.gain;
 		}
 		this.reportFrames += input.length;
 		if (this.reportFrames >= sampleRate / 10) {

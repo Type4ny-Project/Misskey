@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import type { CallsNoiseSuppressionMode } from '@/utility/calls-noise-suppression.js';
-import { prefer } from '@/preferences.js';
 import { computed, ref, shallowRef, watch } from 'vue';
+import type { CallsNoiseSuppressionMode } from '@/utility/calls-noise-suppression.js';
 import type { CallsMediaFailure, CallsMediaState, CallsRemotePublication, CallsVideoQuality, CallsVideoSource } from '@/utility/calls-media.js';
 import type { MenuItem } from '@/types/menu.js';
+import { prefer } from '@/preferences.js';
 import { retainCallsRoomConnection } from '@/composables/use-calls-room.js';
 import { $i } from '@/i.js';
 import { CallsMediaController, captureCallsCamera } from '@/utility/calls-media.js';
@@ -61,8 +61,13 @@ const inputSensitivity = ref(prefer.s.callsInputSensitivity);
 const inputLevel = ref(-100);
 const inputTransmitting = ref(false);
 const audioSettingsBusy = ref(false);
-const selectedMicrophone = ref('');
-const selectedCamera = ref('');
+const selectedMicrophone = ref(prefer.s.callsMicrophone);
+const selectedCamera = ref(prefer.s.callsCamera);
+const selectedOutputDevice = ref(prefer.s.callsOutputDevice);
+const inputVolume = ref(prefer.s.callsInputVolume);
+const outputVolume = ref(prefer.s.callsOutputVolume);
+const outputDevices = shallowRef<MediaDeviceInfo[]>([]);
+const supportsOutputDevice = typeof HTMLMediaElement.prototype.setSinkId === 'function';
 const cameras = ref<MediaDeviceInfo[]>([]);
 const microphones = ref<MediaDeviceInfo[]>([]);
 const needsAudioResume = ref(false);
@@ -212,7 +217,7 @@ function getParticipantVolume(userId: string): number {
 function applyParticipantVolumes(): void {
 	for (const { participantId, element, screenPublicationId } of remoteAudio.values()) {
 		const participant = participants.value.find(item => item.id === participantId);
-		element.volume = screenPublicationId != null ? getScreenVolume(screenPublicationId) / 100 : participant == null ? 1 : getParticipantVolume(participant.userId) / 100;
+		element.volume = (outputVolume.value / 100) * (screenPublicationId != null ? getScreenVolume(screenPublicationId) / 100 : participant == null ? 1 : getParticipantVolume(participant.userId) / 100);
 	}
 }
 
@@ -239,14 +244,16 @@ function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublica
 	}
 	if (track.kind !== 'audio') return;
 	const audio = new Audio();
-	audio.autoplay = true;
 	audio.hidden = true;
 	audio.srcObject = new MediaStream([track]);
 	remoteAudio.set(publication.id, { participantId: publication.participantId, element: audio, screenPublicationId: publication.screenPublicationId });
 	if (publication.screenPublicationId != null) screenAudioIds.value = new Set(screenAudioIds.value).add(publication.screenPublicationId);
 	applyParticipantVolumes();
 	window.document.body.append(audio);
-	void audio.play().catch(() => { needsAudioResume.value = true; });
+	void (async () => {
+		if (supportsOutputDevice) await audio.setSinkId(selectedOutputDevice.value);
+		await audio.play();
+	})().catch(error => { console.warn('[Calls] Audio playback failed', error); needsAudioResume.value = true; });
 	track.addEventListener('ended', () => {
 		removeRemoteTrack(publication.id);
 	}, { once: true });
@@ -257,11 +264,9 @@ async function loadMicrophones(): Promise<void> {
 	const devices = await navigator.mediaDevices.enumerateDevices();
 	microphones.value = devices.filter(device => device.kind === 'audioinput');
 	cameras.value = devices.filter(device => device.kind === 'videoinput');
-	if (!microphones.value.some(device => device.deviceId === selectedMicrophone.value)) {
-		selectedMicrophone.value = microphones.value[0]?.deviceId ?? '';
-	}
-	if (!cameras.value.some(device => device.deviceId === selectedCamera.value)) {
-		selectedCamera.value = cameras.value[0]?.deviceId ?? '';
+	outputDevices.value = devices.filter(device => device.kind === 'audiooutput');
+	for (const [available, selected] of [[microphones.value, selectedMicrophone], [cameras.value, selectedCamera], [outputDevices.value, selectedOutputDevice]] as const) {
+		if (available.some(device => device.deviceId !== '') && !available.some(device => device.deviceId === selected.value)) selected.value = '';
 	}
 }
 
@@ -313,6 +318,7 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 	controller.setMuted(muted.value);
 	await controller.setNoiseSuppression(noiseSuppression.value);
 	controller.setInputSensitivity(inputSensitivity.value);
+	controller.setInputVolume(inputVolume.value);
 	await controller.connect(selectedMicrophone.value || undefined);
 	if (generation !== sessionGeneration || media.value !== controller) {
 		await controller.close().catch(() => undefined);
@@ -344,10 +350,6 @@ async function clearSession(): Promise<void> {
 	mediaFailure.value = null;
 	muted.value = false;
 	videoBusy.value = false;
-	selectedMicrophone.value = '';
-	selectedCamera.value = '';
-	microphones.value = [];
-	cameras.value = [];
 	for (const id of remoteAudio.keys()) removeRemoteTrack(id);
 	remoteAudio.clear();
 	participantVolumes.value = new Map();
@@ -546,9 +548,9 @@ async function cancelSpeakerRequest(): Promise<void> {
 }
 
 async function switchMicrophone(deviceId: string): Promise<void> {
-	if (!canSpeak.value) return;
+	if (isSpeaker.value && media.value != null) await media.value.switchMicrophone(deviceId || undefined);
 	selectedMicrophone.value = deviceId;
-	await media.value?.switchMicrophone(deviceId);
+	prefer.commit('callsMicrophone', deviceId);
 }
 
 async function toggleVideo(source: CallsVideoSource, addScreen = false, videoId?: string): Promise<void> {
@@ -612,6 +614,7 @@ async function openDeviceMenu(kind: 'microphone' | 'camera', event: MouseEvent):
 						try {
 							await controller.switchCamera(device.deviceId, videoQuality.value.camera);
 							selectedCamera.value = device.deviceId;
+							prefer.commit('callsCamera', device.deviceId);
 						} finally {
 							if (media.value === controller) videoBusy.value = false;
 						}
@@ -631,10 +634,74 @@ async function openAudioSettings(initialPage: 'general' | 'statistics' = 'genera
 	const { dispose } = popup(MkCallsSettings, {
 		initialPage,
 		getInfo: () => media.value?.getConnectionInfo() ?? Promise.resolve(null),
-		getSettings: () => ({ noiseSuppression: noiseSuppression.value, inputSensitivity: inputSensitivity.value, inputLevel: inputLevel.value, transmitting: inputTransmitting.value && !muted.value, busy: audioSettingsBusy.value }),
+		getSettings: getAudioSettings,
+		setDevice,
+		refreshDevices,
+		setInputVolume,
+		setOutputVolume,
 		setNoiseSuppression,
 		setInputSensitivity,
 	}, { closed: () => dispose() });
+}
+
+function getAudioSettings() {
+	return { noiseSuppression: noiseSuppression.value, inputSensitivity: inputSensitivity.value, inputLevel: inputLevel.value, transmitting: inputTransmitting.value && !muted.value, busy: audioSettingsBusy.value || videoBusy.value || joining.value, microphones: microphones.value, cameras: cameras.value, outputDevices: outputDevices.value, microphoneId: selectedMicrophone.value, cameraId: selectedCamera.value, outputDeviceId: selectedOutputDevice.value, inputVolume: inputVolume.value, outputVolume: outputVolume.value, supportsOutputDevice };
+}
+
+async function refreshDevices(): Promise<void> {
+	if (audioSettingsBusy.value) return;
+	audioSettingsBusy.value = true;
+	try {
+		await loadMicrophones();
+		const stream = await navigator.mediaDevices.getUserMedia({ audio: microphones.value.length > 0, video: cameras.value.length > 0 });
+		stream.getTracks().forEach(track => track.stop());
+		await loadMicrophones();
+	} catch (error) {
+		console.error('[Calls] Device discovery failed', error);
+		await alert({ type: 'error', text: i18n.ts._calls.mediaFailed });
+	} finally {
+		audioSettingsBusy.value = false;
+	}
+}
+
+async function setDevice(kind: 'microphone' | 'camera' | 'output', deviceId: string): Promise<void> {
+	if (audioSettingsBusy.value || joining.value || videoBusy.value) return;
+	audioSettingsBusy.value = true;
+	try {
+		if (kind === 'microphone') await switchMicrophone(deviceId);
+		else if (kind === 'camera') {
+			if (localVideos.value.has('camera')) await media.value?.switchCamera(deviceId || undefined, videoQuality.value.camera);
+			selectedCamera.value = deviceId;
+			prefer.commit('callsCamera', deviceId);
+		} else {
+			if (!supportsOutputDevice) throw new Error('Audio output selection is unavailable');
+			await Promise.all([...remoteAudio.values()].map(({ element }) => element.setSinkId(deviceId)));
+			selectedOutputDevice.value = deviceId;
+			prefer.commit('callsOutputDevice', deviceId);
+		}
+	} catch (error) {
+		console.error('[Calls] Device change failed', error);
+		await alert({ type: 'error', text: i18n.ts._calls.mediaFailed });
+	} finally {
+		audioSettingsBusy.value = false;
+	}
+}
+
+function setInputVolume(volume: number): void {
+	try {
+		media.value?.setInputVolume(volume);
+		inputVolume.value = volume;
+		prefer.commit('callsInputVolume', volume);
+	} catch (error) {
+		console.error('[Calls] Input volume change failed', error);
+		void alert({ type: 'error', text: i18n.ts._calls.mediaFailed });
+	}
+}
+
+function setOutputVolume(volume: number): void {
+	outputVolume.value = volume;
+	prefer.commit('callsOutputVolume', volume);
+	applyParticipantVolumes();
 }
 
 async function setNoiseSuppression(mode: CallsNoiseSuppressionMode): Promise<void> {
@@ -795,6 +862,13 @@ export function useCallsSession() {
 		noiseSuppression,
 		inputSensitivity,
 		openAudioSettings,
+		getAudioSettings,
+		setNoiseSuppression,
+		setInputSensitivity,
+		setDevice,
+		refreshDevices,
+		setInputVolume,
+		setOutputVolume,
 		localVideos,
 		videos,
 		screenWindows: callsScreenWindows,

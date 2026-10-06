@@ -16,7 +16,7 @@ import type { MenuButton } from '@/types/menu.js';
 const fixture = vi.hoisted(() => ({ close: vi.fn(), confirm: vi.fn(), inputText: vi.fn(), session: null as any, connection: null as any, policies: { canJoinCalls: true } }));
 vi.mock('@/i.js', () => ({ $i: { id: 'viewer', policies: fixture.policies } }));
 vi.mock('@/components/MkModal.vue', () => ({ default: { emits: ['click', 'closed', 'esc'], template: '<section><slot/></section>', methods: { close() { fixture.close(); } } } }));
-vi.mock('@/components/calls/MkCallsWatchTogether.vue', () => ({ default: { props: ['room', 'canControl'], template: '<div>Watch room: {{ room.id }}</div>' } }));
+vi.mock('@/components/calls/MkCallsWatchTogether.vue', () => ({ default: { props: ['room', 'canControl'], template: '<div :data-can-control="canControl">Watch room: {{ room.id }}</div>' } }));
 vi.mock('@/components/MkButton.vue', () => ({ default: { template: '<button><slot/></button>' } }));
 vi.mock('@/components/global/MkA.vue', () => ({ default: { props: ['to'], template: '<a :href="to"><slot/></a>' } }));
 vi.mock('@/os.js', () => ({ confirm: fixture.confirm, inputText: fixture.inputText, toast: vi.fn(), alert: vi.fn(), popupMenu: vi.fn(), contextMenu: vi.fn() }));
@@ -41,20 +41,30 @@ beforeEach(() => {
 	vi.mocked(os.popupMenu).mockClear();
 	vi.mocked(os.contextMenu).mockClear();
 	vi.mocked(misskeyApi).mockReset().mockResolvedValue({ roomRevision: 1, publications: [] } as never);
-	const room = { id: 'room', title: 'Another user’s room', state: 'open', mode: 'stage', revision: 1, moderatorUserIds: [] };
+	const room = { id: 'room', attachment: { type: 'personal', ownerUserId: 'host' }, title: 'Another user’s room', state: 'open', mode: 'stage', revision: 1, moderatorUserIds: [] };
 	const participants = [{ id: 'host-participant', userId: 'host', role: 'host', isMuted: true, user: { id: 'host', username: 'host', name: 'Host' } }];
 	fixture.connection = { room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()), refresh: vi.fn().mockResolvedValue(undefined), dispose: vi.fn() };
 	fixture.session = {
 		currentRoomId: ref(null), room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()),
-		elapsedTime: ref(null), isActive: ref(false), joining: ref(false), videos: ref([]), screenWindows: new Map(), screenAudioIds: ref(new Set()), mediaState: ref('idle'), mediaFailure: ref(null),
+		elapsedTime: ref(null), isActive: ref(false), joining: ref(false), videos: ref([]), screenWindows: new Map(), mediaState: ref('idle'), mediaFailure: ref(null),
 		speakerRequestResult: ref(null), replacedRoomId: ref(null), needsAudioResume: ref(false), controls: ref({}),
 		leave: vi.fn().mockResolvedValue(undefined), refresh: vi.fn().mockResolvedValue(undefined), prepareMicrophones: vi.fn(), join: vi.fn().mockResolvedValue(undefined),
 		getParticipantVolume: vi.fn().mockReturnValue(100), setParticipantVolume: vi.fn(),
+		screenAudioIds: ref(new Set()), getScreenVolume: vi.fn().mockReturnValue(100), setScreenVolume: vi.fn(),
 	};
 });
 afterEach(cleanup);
 
 describe('Calls room window', () => {
+	test('the owner can control Watch Together without an audio connection', async () => {
+		fixture.connection.room.value.attachment.ownerUserId = 'viewer';
+		fixture.connection.participants.value = [];
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts._calls.activities }));
+		await fireEvent.click(view.getByRole('button', { name: new RegExp(i18n.ts._watchTogether.title) }));
+		expect(view.getByText('Watch room: room').getAttribute('data-can-control')).toBe('true');
+	});
+
 	test('opens and closes the activity list inside the current call without leaving the session', async () => {
 		fixture.session.currentRoomId.value = 'room';
 		fixture.session.isActive.value = true;

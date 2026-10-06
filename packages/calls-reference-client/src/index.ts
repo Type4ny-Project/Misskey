@@ -62,6 +62,12 @@ export class CallsReferenceClient {
 		await this.createMediaSession(roomId);
 	}
 
+	// The browser integration calls this after transport connection and successful audio playback.
+	public confirmReady(): void {
+		if (this.peer == null || this.generation === 0) return;
+		this.channel?.send('ready', { connectionId: this.connectionId, generation: this.generation });
+	}
+
 	private async createMediaSession(roomId: string): Promise<void> {
 		this.peer?.close();
 		this.subscriptions.clear();

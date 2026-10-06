@@ -39,6 +39,11 @@ Calls の閲覧権限を持つユーザーが、ルーム内 Activity から You
 - PASS: 実ブラウザーの1360px幅でキューがプレーヤーの右側・上端に並び、900px・390px幅では下に並ぶことを座標で確認。1行省略、右クリックの即時再生、長押しの削除、通常タップのリンク遷移も維持。JavaScriptエラー0件。スクリーンショットを更新。
 - PASS: frontend Calls unit 62件、frontend型チェック・build、変更ファイルlint・SPDX・locale safety。
 
+2026-10-07、Activity土台の更新 `72cefcd7e2`（develop `0ecf33ed4a`を含む）をマージ。CallsRoomChannelの接続完了判定とWatch Togetherのアクセス確認、Activity一覧・Storybook登録の双方を維持して4ファイルの競合を解消。接続完了前の参加者が非表示でも、ルーム所有者のWatch Together操作は維持する。
+
+- PASS: backend Calls unit 110件、frontend Calls unit 176件、Calls API E2E 6件。backend/frontend型チェック・build、SDK再生成、変更ファイルlint・SPDX・locale safety。
+- PASS: 更新後の実ブラウザーで音声未接続の所有者が右クリック・長押しから再生・削除できること、PCの右側キューと狭い幅の縦並びを再確認。JavaScriptエラー0件。スクリーンショットを更新。
+
 広告ブロックは含めていない。[YouTube標準の埋め込みパラメーター](https://developers.google.com/youtube/player_parameters)には広告を無効化する機能がなく、親ページからiframe内の通信を制御できない。
 
 YouTubeの埋め込み制限・地域制限・広告・ブラウザーの自動再生制限の影響は受ける。自動再生が止められた場合は「再生を許可」を表示する。実音声のCloudflare接続は試験用認証情報のため未検証。DB entity・migrationの変更はない。

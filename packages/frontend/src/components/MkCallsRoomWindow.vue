@@ -44,7 +44,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 						<MkCallsActivities v-if="activitiesOpen" :activities="activities" :class="$style.activity" @close="activitiesOpen = false">
 							<template #default="{ activity }">
-								<MkCallsWatchTogether v-if="activity === 'watchTogether'" :room="room" :canControl="canModerateParticipants"/>
+								<MkCallsWatchTogether v-if="activity === 'watchTogether'" :room="room" :canControl="canModerateParticipants || room.attachment.ownerUserId === $i?.id"/>
 							</template>
 						</MkCallsActivities>
 					</section>

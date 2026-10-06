@@ -327,6 +327,7 @@ export type Channels = {
 			mute: boolean;
 			speaking: boolean;
 			heartbeat: { connectionId: string; generation: number };
+			ready: { connectionId: string; generation: number };
 		};
 	};
 	callsRooms: {

@@ -40,7 +40,7 @@ export function createCallsRoomConnection(roomId: string) {
 			participants.value = snapshot.participants;
 		}
 		lastRoomRevision.value = Math.max(lastRoomRevision.value, snapshot.room.revision);
-		const nextOwnParticipantId = snapshot.participants.find(participant => participant.userId === $i?.id)?.id ?? null;
+		const nextOwnParticipantId = snapshot.participants.find(participant => participant.userId === $i?.id)?.id ?? ownParticipantId;
 		if (ownParticipantId !== nextOwnParticipantId) {
 			ownParticipantId = nextOwnParticipantId;
 			resetSpeakingSendGate();
@@ -154,6 +154,8 @@ export function createCallsRoomConnection(roomId: string) {
 
 	return {
 		room, endReason, participants, connected, speakingParticipantIds, refresh,
+		identifyParticipant(participantId: string) { ownParticipantId = participantId; resetSpeakingSendGate(); },
+		ready(connectionId: string, generation: number) { channel.send('ready', { connectionId, generation }); },
 		setMuted(isMuted: boolean) { resetSpeakingSendGate(); channel.send('mute', isMuted); },
 		setSpeaking,
 		heartbeat(connectionId: string, generation: number) { channel.send('heartbeat', { connectionId, generation }); },

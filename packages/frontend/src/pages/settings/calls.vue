@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <SearchMarker path="/settings/calls" :label="i18n.ts._calls.settings" :keywords="['calls', 'microphone', 'camera', 'volume']" icon="ti ti-phone">
-	<MkCallsGeneralSettings :getSettings="session.getAudioSettings" :setNoiseSuppression="session.setNoiseSuppression" :setInputSensitivity="session.setInputSensitivity" :setInputVolume="session.setInputVolume" :setOutputVolume="session.setOutputVolume" :setDevice="session.setDevice" :refreshDevices="session.refreshDevices"/>
+	<MkCallsGeneralSettings :getSettings="session.getAudioSettings" :setAutoGainControl="session.setAutoGainControl" :setNoiseSuppression="session.setNoiseSuppression" :setInputSensitivity="session.setInputSensitivity" :setInputVolume="session.setInputVolume" :setOutputVolume="session.setOutputVolume" :setDevice="session.setDevice" :refreshDevices="session.refreshDevices"/>
 </SearchMarker>
 </template>
 

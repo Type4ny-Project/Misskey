@@ -62,6 +62,7 @@ export const PREF_DEF = definePreferences({
 	callsOutputDevice: { default: '' },
 	callsInputVolume: { default: 100 },
 	callsOutputVolume: { default: 100 },
+	callsAutoGainControl: { default: true },
 	callsNoiseSuppression: { default: 'rnnoise' as 'rnnoise' | 'webrtc' | 'none' },
 	callsInputSensitivity: { default: -100 },
 	accounts: {

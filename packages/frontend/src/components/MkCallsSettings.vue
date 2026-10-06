@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</nav>
 		<div :class="$style.content">
 			<MkCallsConnectionInfo v-if="page === 'statistics' && !closing" :getInfo="getInfo"/>
-			<MkCallsGeneralSettings v-if="page === 'general'" :getSettings="getSettings" :setNoiseSuppression="setNoiseSuppression" :setInputSensitivity="setInputSensitivity" :setInputVolume="setInputVolume" :setOutputVolume="setOutputVolume" :setDevice="setDevice" :refreshDevices="refreshDevices"/>
+			<MkCallsGeneralSettings v-if="page === 'general'" :getSettings="getSettings" :setAutoGainControl="setAutoGainControl" :setNoiseSuppression="setNoiseSuppression" :setInputSensitivity="setInputSensitivity" :setInputVolume="setInputVolume" :setOutputVolume="setOutputVolume" :setDevice="setDevice" :refreshDevices="refreshDevices"/>
 		</div>
 	</div>
 </MkModalWindow>

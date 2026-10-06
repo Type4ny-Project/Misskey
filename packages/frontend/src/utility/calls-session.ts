@@ -59,6 +59,7 @@ const sessionParticipant = shallowRef<Misskey.entities.CallsParticipant | null>(
 const muted = ref(false);
 const joining = ref(false);
 const replacedRoomId = ref<string | null>(null);
+const autoGainControl = ref(prefer.s.callsAutoGainControl);
 const noiseSuppression = ref<CallsNoiseSuppressionMode>(prefer.s.callsNoiseSuppression);
 const inputSensitivity = ref(prefer.s.callsInputSensitivity);
 const inputLevel = ref(-100);
@@ -331,6 +332,7 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 	);
 	media.value = controller;
 	controller.setMuted(muted.value);
+	await controller.setAutoGainControl(autoGainControl.value);
 	await controller.setNoiseSuppression(noiseSuppression.value);
 	controller.setInputSensitivity(inputSensitivity.value);
 	controller.setInputVolume(inputVolume.value);
@@ -656,13 +658,14 @@ async function openAudioSettings(initialPage: 'general' | 'statistics' = 'genera
 		refreshDevices,
 		setInputVolume,
 		setOutputVolume,
+		setAutoGainControl,
 		setNoiseSuppression,
 		setInputSensitivity,
 	}, { closed: () => dispose() });
 }
 
 function getAudioSettings() {
-	return { noiseSuppression: noiseSuppression.value, inputSensitivity: inputSensitivity.value, inputLevel: inputLevel.value, transmitting: inputTransmitting.value && !muted.value, busy: audioSettingsBusy.value || videoBusy.value || joining.value, microphones: microphones.value, cameras: cameras.value, outputDevices: outputDevices.value, microphoneId: selectedMicrophone.value, cameraId: selectedCamera.value, outputDeviceId: selectedOutputDevice.value, inputVolume: inputVolume.value, outputVolume: outputVolume.value, supportsOutputDevice };
+	return { autoGainControl: autoGainControl.value, noiseSuppression: noiseSuppression.value, inputSensitivity: inputSensitivity.value, inputLevel: inputLevel.value, transmitting: inputTransmitting.value && !muted.value, busy: audioSettingsBusy.value || videoBusy.value || joining.value, microphones: microphones.value, cameras: cameras.value, outputDevices: outputDevices.value, microphoneId: selectedMicrophone.value, cameraId: selectedCamera.value, outputDeviceId: selectedOutputDevice.value, inputVolume: inputVolume.value, outputVolume: outputVolume.value, supportsOutputDevice };
 }
 
 async function refreshDevices(): Promise<void> {
@@ -719,6 +722,21 @@ function setOutputVolume(volume: number): void {
 	outputVolume.value = volume;
 	prefer.commit('callsOutputVolume', volume);
 	applyParticipantVolumes();
+}
+
+async function setAutoGainControl(enabled: boolean): Promise<void> {
+	if (audioSettingsBusy.value) return;
+	audioSettingsBusy.value = true;
+	try {
+		await media.value?.setAutoGainControl(enabled);
+		autoGainControl.value = enabled;
+		prefer.commit('callsAutoGainControl', enabled);
+	} catch (error) {
+		console.error('[Calls] Automatic gain control change failed', error);
+		await alert({ type: 'error', text: i18n.ts._calls.mediaFailed });
+	} finally {
+		audioSettingsBusy.value = false;
+	}
 }
 
 async function setNoiseSuppression(mode: CallsNoiseSuppressionMode): Promise<void> {
@@ -889,6 +907,7 @@ export function useCallsSession() {
 		inputSensitivity,
 		openAudioSettings,
 		getAudioSettings,
+		setAutoGainControl,
 		setNoiseSuppression,
 		setInputSensitivity,
 		setDevice,

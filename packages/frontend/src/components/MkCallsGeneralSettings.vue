@@ -34,6 +34,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</select>
 		</label>
 		<p :class="$style.description">{{ i18n.ts._calls.noiseSuppressionDescription }}</p>
+		<label :class="$style.toggle">
+			<input type="checkbox" :checked="state.autoGainControl" :disabled="state.busy" @change="setAutoGainControl(($event.target as HTMLInputElement).checked)">
+			<span>{{ i18n.ts._calls.autoGainControl }}</span>
+		</label>
+		<p :class="$style.description">{{ i18n.ts._calls.autoGainControlDescription }}</p>
 		<label :class="$style.field">
 			<span>{{ i18n.ts._calls.inputSensitivity }} <strong>{{ state.inputSensitivity <= -100 ? i18n.ts._calls.inputGateDisabled : `${state.inputSensitivity} dBFS` }}</strong></span>
 			<input type="range" min="-100" max="0" step="1" :value="state.inputSensitivity" :disabled="state.busy" @input="setInputSensitivity(Number(($event.target as HTMLInputElement).value))">
@@ -58,7 +63,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 import type { CallsNoiseSuppressionMode } from '@/utility/calls-noise-suppression.js';
 
 export type CallsGeneralSettingsProps = {
-	getSettings: () => { noiseSuppression: CallsNoiseSuppressionMode; inputSensitivity: number; inputLevel: number; transmitting: boolean; busy: boolean; microphones: MediaDeviceInfo[]; cameras: MediaDeviceInfo[]; outputDevices: MediaDeviceInfo[]; microphoneId: string; cameraId: string; outputDeviceId: string; inputVolume: number; outputVolume: number; supportsOutputDevice: boolean };
+	getSettings: () => { autoGainControl: boolean; noiseSuppression: CallsNoiseSuppressionMode; inputSensitivity: number; inputLevel: number; transmitting: boolean; busy: boolean; microphones: MediaDeviceInfo[]; cameras: MediaDeviceInfo[]; outputDevices: MediaDeviceInfo[]; microphoneId: string; cameraId: string; outputDeviceId: string; inputVolume: number; outputVolume: number; supportsOutputDevice: boolean };
+	setAutoGainControl: (enabled: boolean) => Promise<void>;
 	setNoiseSuppression: (mode: CallsNoiseSuppressionMode) => Promise<void>;
 	setInputSensitivity: (threshold: number) => void;
 	setInputVolume: (volume: number) => void;
@@ -103,6 +109,8 @@ function devices(kind: typeof audioDeviceKinds[number]): MediaDeviceInfo[] { ret
 .field > span:has(> i) { justify-content: flex-start; }
 .field strong { font-size: 0.85em; font-variant-numeric: tabular-nums; }
 .field input { width: 100%; margin: 0; accent-color: var(--MI_THEME-accent); }
+.toggle { display: flex; align-items: center; gap: 12px; }
+.toggle input { margin: 0; accent-color: var(--MI_THEME-accent); }
 .select { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--MI_THEME-divider); border-radius: 8px; background: var(--MI_THEME-panel); color: var(--MI_THEME-fg); font: inherit; text-overflow: ellipsis; }
 .description { margin: -12px 0 0; font-size: 0.85em; line-height: 1.5; opacity: 0.7; }
 </style>

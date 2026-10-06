@@ -33,11 +33,11 @@ const fixture = vi.hoisted(() => ({
 	revocationListenerRemovals: [] as Array<ReturnType<typeof vi.fn>>,
 	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null }; participants: { value: Array<{ id: string; userId: string; role: string; isMuted: boolean; joinedAt?: string }> }; refresh: ReturnType<typeof vi.fn> }>,
 	remoteTrackCallbacks: [] as Array<(track: MediaStreamTrack, publication: CallsRemotePublication) => void>,
-	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; stopVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn>; setInputVolume: ReturnType<typeof vi.fn>; setInputSensitivity: ReturnType<typeof vi.fn> }>,
+	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; stopVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setAutoGainControl: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn>; setInputVolume: ReturnType<typeof vi.fn>; setInputSensitivity: ReturnType<typeof vi.fn> }>,
 }));
 
 vi.mock('@/utility/sound.js', () => ({ playMisskeySfx: fixture.playSound }));
-vi.mock('@/preferences.js', () => ({ prefer: { s: { callsNoiseSuppression: 'rnnoise', callsInputSensitivity: -100, callsMicrophone: '', callsCamera: '', callsOutputDevice: '', callsInputVolume: 100, callsOutputVolume: 100 }, commit: vi.fn() } }));
+vi.mock('@/preferences.js', () => ({ prefer: { s: { callsAutoGainControl: true, callsNoiseSuppression: 'rnnoise', callsInputSensitivity: -100, callsMicrophone: '', callsCamera: '', callsOutputDevice: '', callsInputVolume: 100, callsOutputVolume: 100 }, commit: vi.fn() } }));
 vi.mock('@/i.js', () => ({ $i: { id: 'user-a', policies: fixture.policies } }));
 vi.mock('@/i18n.js', () => ({ i18n: {
 	ts: { somethingHappened: 'Something went wrong', _calls: { videoFailed: 'Video failed', videoResolution: 'Resolution', videoSourceQuality: 'Source quality', videoFrameRate: 'Frame rate', connectedOnAnotherDevice: 'Connected on another device', switchDeviceConfirm: 'Disconnect the other device?', hostLeftRoomEnded: 'Host left; room ended' } },
@@ -79,6 +79,7 @@ vi.mock('@/utility/calls-media.js', () => ({
 		public stopVideo = vi.fn().mockResolvedValue(undefined);
 		public close = vi.fn().mockResolvedValue(undefined);
 		public setVideoQuality = vi.fn().mockResolvedValue(undefined);
+		public setAutoGainControl = vi.fn();
 		public setNoiseSuppression = vi.fn();
 		public setInputVolume = vi.fn();
 		public setInputSensitivity = vi.fn();
@@ -576,6 +577,11 @@ describe('Calls session device handoff', () => {
 		await fixture.popupMenu.mock.calls[0][0].at(-1).action();
 		const settings = fixture.popup.mock.calls[0][1];
 		expect(settings.getSettings().noiseSuppression).toBe('rnnoise');
+		await settings.setAutoGainControl(false);
+		expect(fixture.controllers[0].setAutoGainControl).toHaveBeenLastCalledWith(false);
+		expect(settings.getSettings().autoGainControl).toBe(false);
+		const { prefer } = await import('@/preferences.js');
+		expect(prefer.commit).toHaveBeenCalledWith('callsAutoGainControl', false);
 		await settings.setNoiseSuppression('webrtc');
 		expect(fixture.controllers[0].setNoiseSuppression).toHaveBeenLastCalledWith('webrtc');
 		expect(settings.getSettings().noiseSuppression).toBe('webrtc');

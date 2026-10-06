@@ -368,7 +368,8 @@ describe('CallsMediaController', () => {
 		await controller.setNoiseSuppression('rnnoise');
 		await controller.setNoiseSuppression('none');
 		await controller.setNoiseSuppression('webrtc');
-		expect(tracks[0].applyConstraints).toHaveBeenLastCalledWith({ noiseSuppression: true });
+		await controller.setAutoGainControl(false);
+		expect(tracks[0].applyConstraints).toHaveBeenLastCalledWith({ noiseSuppression: true, autoGainControl: false });
 		await controller.setNoiseSuppression('none');
 		controller.setInputVolume(150);
 		expect(processing.setInputVolume).toHaveBeenLastCalledWith(150);
@@ -383,7 +384,7 @@ describe('CallsMediaController', () => {
 		expect(output.enabled).toBe(false);
 		expect(microphoneTrack).toHaveBeenCalledExactlyOnceWith(output);
 		await controller.switchMicrophone('other-mic');
-		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: expect.objectContaining({ noiseSuppression: false, echoCancellation: { ideal: true }, deviceId: { exact: 'other-mic' } }) }));
+		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: expect.objectContaining({ noiseSuppression: false, autoGainControl: false, echoCancellation: { ideal: true }, deviceId: { exact: 'other-mic' } }) }));
 		const replacement = await noiseSuppressionMock.mock.results[1].value;
 		expect(replacement.setEnabled).toHaveBeenLastCalledWith(false);
 		expect(processing.close).toHaveBeenCalledOnce();

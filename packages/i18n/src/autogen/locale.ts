@@ -10453,6 +10453,14 @@ export interface Locale extends ILocale {
          */
         "noNoiseSuppression": string;
         /**
+         * 自動音量調整
+         */
+        "autoGainControl": string;
+        /**
+         * ブラウザーの自動音量調整でマイクの音量を揃えます。対応状況や効果はブラウザーによって異なります。
+         */
+        "autoGainControlDescription": string;
+        /**
          * RNNoise は音声処理で環境音を抑えます。WebRTC 標準はブラウザのノイズキャンセルを使います。エコーキャンセルはどのモードでも有効です。
          */
         "noiseSuppressionDescription": string;

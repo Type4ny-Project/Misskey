@@ -55,7 +55,7 @@ async function start(): Promise<void> {
 	abort = controller;
 	testing.value = true;
 	try {
-		const captured = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: state.value.microphoneId ? { exact: state.value.microphoneId } : undefined, echoCancellation: true, noiseSuppression: state.value.noiseSuppression === 'webrtc' }, video: false });
+		const captured = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: state.value.microphoneId ? { exact: state.value.microphoneId } : undefined, echoCancellation: true, autoGainControl: state.value.autoGainControl, noiseSuppression: state.value.noiseSuppression === 'webrtc' }, video: false });
 		if (controller.signal.aborted) { captured.getTracks().forEach(track => track.stop()); return; }
 		stream = captured;
 		const processor = await createCallsNoiseSuppression(captured, error => { console.error('[Calls] Microphone test processor failed', error); stop(); void os.alert({ type: 'error', text: i18n.ts._calls.mediaFailed }); }, controller.signal, { rnnoise: state.value.noiseSuppression === 'rnnoise', inputSensitivity: state.value.inputSensitivity, inputVolume: state.value.inputVolume, onLevel: (value, open) => { testLevel.value = value; testTransmitting.value = open; } });
@@ -75,7 +75,7 @@ async function start(): Promise<void> {
 	}
 }
 
-watch(() => [state.value.microphoneId, state.value.outputDeviceId, state.value.noiseSuppression], stop);
+watch(() => [state.value.microphoneId, state.value.outputDeviceId, state.value.noiseSuppression, state.value.autoGainControl], stop);
 watch(() => [state.value.inputVolume, state.value.outputVolume, state.value.inputSensitivity], () => {
 	processing?.setInputVolume(state.value.inputVolume);
 	processing?.setInputSensitivity(state.value.inputSensitivity);

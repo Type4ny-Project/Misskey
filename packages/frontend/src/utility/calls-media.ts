@@ -60,6 +60,7 @@ export class CallsMediaController {
 	private noiseSuppression: CallsNoiseSuppressionMode = 'rnnoise';
 	private inputSensitivity = -100;
 	private inputVolume = 100;
+	private autoGainControl = true;
 	private reconnectReason: CallsNormalizedStats['reconnectReason'] = null;
 	private reconnectStartedAt = 0;
 	private recoveryTimeMs: number | null = null;
@@ -137,7 +138,7 @@ export class CallsMediaController {
 				deviceId: deviceId == null ? undefined : { exact: deviceId },
 				channelCount: { ideal: 1 }, echoCancellation: { ideal: true },
 				// Apply browser suppression only in WebRTC mode; echo cancellation stays enabled.
-				noiseSuppression: this.noiseSuppression === 'webrtc', autoGainControl: { ideal: true },
+				noiseSuppression: this.noiseSuppression === 'webrtc', autoGainControl: this.autoGainControl,
 			},
 		});
 		const stream = await new Promise<MediaStream>((resolve, reject) => {
@@ -175,7 +176,7 @@ export class CallsMediaController {
 				this.videoCallbacks?.noiseSuppressionChanged?.('none');
 			}, abort.signal, { rnnoise: this.noiseSuppression === 'rnnoise', inputSensitivity: this.inputSensitivity, inputVolume: this.inputVolume, onLevel: (level, transmitting) => { if (this.microphone?.track === track) this.videoCallbacks?.inputLevel?.(level, transmitting && !this.muted); } });
 			abort.signal.throwIfAborted();
-			await track.applyConstraints({ noiseSuppression: this.noiseSuppression === 'webrtc' });
+			await track.applyConstraints({ noiseSuppression: this.noiseSuppression === 'webrtc', autoGainControl: this.autoGainControl });
 			await processing.setEnabled(this.noiseSuppression === 'rnnoise');
 			processing.setInputSensitivity(this.inputSensitivity);
 			processing.setInputVolume(this.inputVolume);
@@ -555,14 +556,22 @@ export class CallsMediaController {
 			if (this.noiseSuppression === mode || this.microphone == null) return;
 			if (mode === 'rnnoise' && this.microphone.processing == null) throw new Error('RNNoise is unavailable');
 			const previous = this.noiseSuppression;
-			await this.microphone.track.applyConstraints({ noiseSuppression: mode === 'webrtc' });
+			await this.microphone.track.applyConstraints({ noiseSuppression: mode === 'webrtc', autoGainControl: this.autoGainControl });
 			try {
 				await this.microphone.processing?.setEnabled(mode === 'rnnoise');
 				this.noiseSuppression = mode;
 			} catch (error) {
-				await this.microphone.track.applyConstraints({ noiseSuppression: previous === 'webrtc' });
+				await this.microphone.track.applyConstraints({ noiseSuppression: previous === 'webrtc', autoGainControl: this.autoGainControl });
 				throw error;
 			}
+		});
+	}
+
+	public async setAutoGainControl(enabled: boolean): Promise<void> {
+		if (this.microphone == null) { this.autoGainControl = enabled; return; }
+		await this.enqueue(async () => {
+			await this.microphone?.track.applyConstraints({ autoGainControl: enabled, noiseSuppression: this.noiseSuppression === 'webrtc' });
+			this.autoGainControl = enabled;
 		});
 	}
 

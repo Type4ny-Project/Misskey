@@ -362,13 +362,13 @@ describe('Calls session device handoff', () => {
 	});
 
 	test('adjusts only the selected user audio, retains volume for replacement tracks and clears it on leaving', async () => {
-
 		const gain = { gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() };
 		const close = vi.fn().mockResolvedValue(undefined);
 		vi.stubGlobal('AudioContext', class {
 			destination = {};
-			createMediaElementSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }));
+			createMediaStreamSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }));
 			createGain = vi.fn(() => gain);
+			createMediaStreamDestination = () => ({ stream: Object.assign(new MediaStream(), { getTracks: () => [] }) });
 			resume = vi.fn().mockResolvedValue(undefined);
 			close = close;
 		});
@@ -435,8 +435,9 @@ describe('Calls session device handoff', () => {
 		const gain = { gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() };
 		vi.stubGlobal('AudioContext', class {
 			destination = {};
-			createMediaElementSource = () => ({ connect: vi.fn(), disconnect: vi.fn() });
+			createMediaStreamSource = () => ({ connect: vi.fn(), disconnect: vi.fn() });
 			createGain = () => gain;
+			createMediaStreamDestination = () => ({ stream: Object.assign(new MediaStream(), { getTracks: () => [] }) });
 			resume = vi.fn().mockResolvedValue(undefined);
 			close = vi.fn().mockResolvedValue(undefined);
 		});
@@ -583,6 +584,15 @@ describe('Calls session device handoff', () => {
 	});
 
 	test('routes existing and new remote audio to the selected output device', async () => {
+		const outputStream = Object.assign(new MediaStream(), { getTracks: () => [] });
+		const gain = { gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() };
+		vi.stubGlobal('AudioContext', class {
+			createMediaStreamSource = () => ({ connect: vi.fn(), disconnect: vi.fn() });
+			createGain = () => gain;
+			createMediaStreamDestination = () => ({ stream: outputStream });
+			resume = vi.fn().mockResolvedValue(undefined);
+			close = vi.fn().mockResolvedValue(undefined);
+		});
 		const original = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'setSinkId');
 		const setSinkId = vi.fn().mockResolvedValue(undefined);
 		Object.defineProperty(HTMLMediaElement.prototype, 'setSinkId', { configurable: true, value: setSinkId });
@@ -596,12 +606,22 @@ describe('Calls session device handoff', () => {
 			receive('first');
 			await session.setDevice('output', 'headphones');
 			expect(setSinkId).toHaveBeenLastCalledWith('headphones');
+			const audio = document.querySelector('audio')!;
+			session.setParticipantVolume(session.participants.value[0].userId, 200);
+			expect(audio.srcObject).toBe(outputStream);
+			expect(gain.gain.value).toBe(2);
+			expect(gain.connect).toHaveBeenCalledWith(expect.objectContaining({ stream: outputStream }));
+			expect(setSinkId.mock.contexts.at(-1)).toBe(audio);
+			await session.setDevice('output', 'speakers');
+			expect(setSinkId).toHaveBeenLastCalledWith('speakers');
+			await session.setDevice('output', 'headphones');
 			receive('second');
 			expect(setSinkId).toHaveBeenLastCalledWith('headphones');
 			expect(session.getAudioSettings().outputDeviceId).toBe('headphones');
 			await session.leave();
 		} finally {
 			play.mockRestore();
+			vi.unstubAllGlobals();
 			if (original) Object.defineProperty(HTMLMediaElement.prototype, 'setSinkId', original);
 			else delete (HTMLMediaElement.prototype as Partial<HTMLMediaElement>).setSinkId;
 		}

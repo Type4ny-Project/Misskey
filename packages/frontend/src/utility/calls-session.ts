@@ -79,8 +79,8 @@ const reconnectCandidate = ref<CallsReconnectCandidate | null>(null);
 const reconnectRoomState = ref<'checking' | 'open' | 'unavailable'>('checking');
 const reconnectSecondsRemaining = ref(0);
 const speakerRequestResult = ref<'rejected' | null>(null);
-let volumeAudioContext: (AudioContext & { setSinkId?: (deviceId: string) => Promise<void> }) | null = null;
-const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement; playback: Promise<void>; screenPublicationId?: string; source?: MediaElementAudioSourceNode; gain?: GainNode }>();
+let volumeAudioContext: AudioContext | null = null;
+const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement; playback: Promise<void>; screenPublicationId?: string; source?: MediaStreamAudioSourceNode; gain?: GainNode; output?: MediaStreamAudioDestinationNode }>();
 const participantVolumes = shallowRef(new Map<string, number>());
 const localVideos = shallowRef(new Map<string, MediaStream>());
 const screenVolumes = shallowRef(new Map<string, number>());
@@ -214,6 +214,7 @@ function removeRemoteTrack(publicationId: string): void {
 	const item = remoteAudio.get(publicationId);
 	item?.source?.disconnect();
 	item?.gain?.disconnect();
+	item?.output?.stream.getTracks().forEach(track => track.stop());
 	const audio = item?.element;
 	if (audio != null) { audio.pause(); audio.srcObject = null; audio.remove(); }
 	remoteAudio.delete(publicationId);
@@ -232,14 +233,14 @@ function applyParticipantVolumes(): void {
 		const participant = participants.value.find(entry => entry.id === item.participantId);
 		const volume = item.screenPublicationId != null ? getScreenVolume(item.screenPublicationId) : participant == null ? 100 : getParticipantVolume(participant.userId);
 		if (item.screenPublicationId == null && volume !== 100 && item.gain == null) {
-			if (volumeAudioContext == null) {
-				volumeAudioContext = new AudioContext();
-				void volumeAudioContext.setSinkId?.(selectedOutputDevice.value).catch(error => { console.warn('[Calls] Audio output selection failed', error); needsAudioResume.value = true; });
-			}
-			item.source = volumeAudioContext.createMediaElementSource(item.element);
+			volumeAudioContext ??= new AudioContext();
+			item.source = volumeAudioContext.createMediaStreamSource(item.element.srcObject as MediaStream);
 			item.gain = volumeAudioContext.createGain();
+			item.output = volumeAudioContext.createMediaStreamDestination();
 			item.source.connect(item.gain);
-			item.gain.connect(volumeAudioContext.destination);
+			item.gain.connect(item.output);
+			item.element.srcObject = item.output.stream;
+			void item.element.play().catch(() => { needsAudioResume.value = true; });
 		}
 		const effectiveVolume = (outputVolume.value / 100) * (volume / 100);
 		item.element.volume = item.gain != null ? 1 : effectiveVolume;
@@ -718,7 +719,7 @@ async function setDevice(kind: 'microphone' | 'camera' | 'output', deviceId: str
 			prefer.commit('callsCamera', deviceId);
 		} else {
 			if (!supportsOutputDevice) throw new Error('Audio output selection is unavailable');
-			await Promise.all([volumeAudioContext?.setSinkId?.(deviceId), ...[...remoteAudio.values()].map(({ element }) => element.setSinkId(deviceId))]);
+			await Promise.all([...remoteAudio.values()].map(({ element }) => element.setSinkId(deviceId)));
 			selectedOutputDevice.value = deviceId;
 			prefer.commit('callsOutputDevice', deviceId);
 		}

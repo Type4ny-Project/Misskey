@@ -14844,9 +14844,17 @@ export interface Locale extends ILocale {
          */
         "empty": string;
         /**
-         * 動画の変更・再生・停止・シークはホスト・モデレーターが操作します
+         * ホスト・モデレーターの操作に同期します
          */
         "hostControls": string;
+        /**
+         * YouTubeの操作を共有中
+         */
+        "sharingControls": string;
+        /**
+         * 動画を変更
+         */
+        "changeVideo": string;
         /**
          * 視聴を開始
          */
@@ -14855,26 +14863,6 @@ export interface Locale extends ILocale {
          * YouTubeのプレーヤーに接続します。再生位置はルームに合わせます。
          */
         "startWatchingDescription": string;
-        /**
-         * 再生
-         */
-        "play": string;
-        /**
-         * 一時停止
-         */
-        "pause": string;
-        /**
-         * 再生位置を変更
-         */
-        "seek": string;
-        /**
-         * 再生位置（秒）
-         */
-        "position": string;
-        /**
-         * 自分の音量
-         */
-        "volume": string;
         /**
          * 動画を閉じる
          */

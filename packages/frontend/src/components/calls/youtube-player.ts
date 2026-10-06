@@ -23,7 +23,6 @@ export type YouTubePlayer = {
 	getCurrentTime(): number;
 	getPlayerState(): number;
 	getDuration(): number;
-	setVolume(volume: number): void;
 	destroy(): void;
 };
 type YouTubeAPI = { Player: new (element: HTMLElement, options: {
@@ -32,6 +31,7 @@ type YouTubeAPI = { Player: new (element: HTMLElement, options: {
 	playerVars: { origin: string; controls: number; disablekb: number; playsinline: number; rel: number };
 	events: {
 		onReady(event: { target: YouTubePlayer }): void;
+		onStateChange(event: { data: number }): void;
 		onError(): void;
 		onAutoplayBlocked(): void;
 	};

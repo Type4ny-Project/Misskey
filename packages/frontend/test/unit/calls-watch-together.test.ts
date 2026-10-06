@@ -11,7 +11,7 @@ import MkCallsWatchTogether from '@/components/calls/MkCallsWatchTogether.vue';
 import { youtubeVideoId } from '@/components/calls/youtube-player.js';
 import { i18n } from '@/i18n.js';
 
-const fixture = vi.hoisted(() => ({ handlers: new Map(), api: vi.fn(), dispose: vi.fn(), destroy: vi.fn(), play: vi.fn(), pause: vi.fn(), seek: vi.fn(), cue: vi.fn(), events: null as any }));
+const fixture = vi.hoisted(() => ({ handlers: new Map(), api: vi.fn(), dispose: vi.fn(), destroy: vi.fn(), play: vi.fn(), pause: vi.fn(), seek: vi.fn(), cue: vi.fn(), events: null as any, position: 0, playerState: 2, shared: null as any }));
 vi.mock('@/stream.js', () => ({ useStream: () => ({ useChannel: () => ({ on: (key: string, fn: unknown) => fixture.handlers.set(key, fn), dispose: fixture.dispose }), on: vi.fn(), off: vi.fn() }) }));
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: fixture.api }));
 vi.mock('@/components/MkButton.vue', () => ({ default: { props: ['type', 'disabled'], template: '<button :type="type ?? \'button\'" :disabled="disabled"><slot/></button>' } }));
@@ -21,7 +21,7 @@ vi.mock('@/components/calls/youtube-player.js', async importOriginal => ({
 	loadYouTubeAPI: async () => ({ Player: class {
 		constructor(_element: HTMLElement, options: any) {
 			fixture.events = options.events;
-			const player = { cueVideoById: fixture.cue, playVideo: fixture.play, pauseVideo: fixture.pause, seekTo: fixture.seek, getCurrentTime: () => 0, getPlayerState: () => 2, getDuration: () => 300, setVolume: vi.fn(), destroy: fixture.destroy };
+			const player = { cueVideoById: fixture.cue, playVideo: fixture.play, pauseVideo: fixture.pause, seekTo: fixture.seek, getCurrentTime: () => fixture.position, getPlayerState: () => fixture.playerState, getDuration: () => 300, setVolume: vi.fn(), destroy: fixture.destroy };
 			queueMicrotask(() => options.events.onReady({ target: player }));
 			return player;
 		}
@@ -29,7 +29,18 @@ vi.mock('@/components/calls/youtube-player.js', async importOriginal => ({
 }));
 const room = { id: 'room', state: 'open' } as Misskey.entities.CallsRoom;
 const state = () => ({ videoId: 'M7lc1UVf-VE', playing: true, position: 20, updatedAt: Date.now(), revision: 1, serverTime: Date.now() });
-beforeEach(() => { vi.clearAllMocks(); fixture.handlers.clear(); fixture.api.mockResolvedValue(state()); });
+beforeEach(() => {
+	vi.clearAllMocks(); fixture.handlers.clear(); fixture.events = null;
+	fixture.position = 0; fixture.playerState = 2; fixture.shared = state();
+	fixture.seek.mockImplementation((position: number) => { fixture.position = position; });
+	fixture.play.mockImplementation(() => { fixture.playerState = 1; fixture.events?.onStateChange({ data: 1 }); });
+	fixture.pause.mockImplementation(() => { fixture.playerState = 2; fixture.events?.onStateChange({ data: 2 }); });
+	fixture.cue.mockImplementation(() => { fixture.position = 0; fixture.playerState = 5; });
+	fixture.api.mockImplementation(async (endpoint, params) => {
+		if (endpoint.endsWith('/update')) fixture.shared = { ...fixture.shared, ...params, updatedAt: Date.now(), revision: fixture.shared.revision + 1 };
+		return fixture.shared;
+	});
+});
 afterEach(cleanup);
 
 test.each([
@@ -65,15 +76,29 @@ test('a viewer follows playback and seek events, has no shared controls, and rel
 	expect(fixture.api.mock.calls.every(([endpoint]) => endpoint === 'calls/watch-together/show')).toBe(true);
 });
 
-test('a controller shares canonical video IDs and sends play and seek with the current revision', async () => {
+test('a controller publishes native YouTube play, pause and seek without echoing remote commands', async () => {
+	fixture.shared = { ...state(), playing: false, position: 0 };
 	const view = render(MkCallsWatchTogether, { props: { room, canControl: true } });
-	await waitFor(() => expect(view.getByRole('button', { name: i18n.ts._watchTogether.pause })).toBeTruthy());
+	await waitFor(() => expect(view.getByRole('button', { name: i18n.ts._watchTogether.changeVideo })).toBeTruthy());
+	await fireEvent.click(view.getByRole('button', { name: i18n.ts._watchTogether.changeVideo }));
 	await fireEvent.update(view.getByLabelText(i18n.ts._watchTogether.videoUrl), 'https://youtu.be/dQw4w9WgXcQ');
 	await fireEvent.submit(view.getByLabelText(i18n.ts._watchTogether.videoUrl).closest('form')!);
 	expect(fixture.api).toHaveBeenCalledWith('calls/watch-together/update', { roomId: 'room', expectedRevision: 1, videoId: 'dQw4w9WgXcQ', playing: false, position: 0 });
-	await fireEvent.click(view.getByRole('button', { name: i18n.ts._watchTogether.pause }));
-	expect(fixture.api).toHaveBeenCalledWith('calls/watch-together/update', { roomId: 'room', expectedRevision: 1, playing: false });
-	await fireEvent.update(view.getByLabelText(i18n.ts._watchTogether.position), '90');
-	await fireEvent.submit(view.getByLabelText(i18n.ts._watchTogether.position).closest('form')!);
-	expect(fixture.api).toHaveBeenCalledWith('calls/watch-together/update', { roomId: 'room', expectedRevision: 1, position: 90 });
+	await fireEvent.click(view.getByRole('button', { name: i18n.ts._watchTogether.startWatching }));
+	await waitFor(() => expect(fixture.events).toBeTruthy());
+	await nextTick();
+	fixture.position = 1; fixture.playerState = 1;
+	fixture.events.onStateChange({ data: 1 });
+	await waitFor(() => expect(fixture.api).toHaveBeenCalledWith('calls/watch-together/update', { roomId: 'room', expectedRevision: 2, playing: true, position: 1 }));
+	fixture.position = 6; fixture.playerState = 2;
+	fixture.events.onStateChange({ data: 2 });
+	await waitFor(() => expect(fixture.api).toHaveBeenCalledWith('calls/watch-together/update', { roomId: 'room', expectedRevision: 3, playing: false, position: 6 }));
+	// A paused native seek need not fire a state-change event; the timer detects it.
+	fixture.position = 90;
+	await waitFor(() => expect(fixture.api).toHaveBeenCalledWith('calls/watch-together/update', { roomId: 'room', expectedRevision: 4, playing: false, position: 90 }), { timeout: 1500 });
+	fixture.handlers.get('watchTogether')({ state: { ...state(), videoId: 'dQw4w9WgXcQ', playing: true, position: 120, revision: 6 } });
+	await nextTick();
+	expect(fixture.play).toHaveBeenCalled();
+	expect(fixture.api.mock.calls.filter(([endpoint]) => endpoint.endsWith('/update'))).toHaveLength(4);
+	expect(view.queryByLabelText(i18n.ts._watchTogether.videoUrl)).toBeNull();
 });

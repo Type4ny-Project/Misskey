@@ -24,6 +24,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 	<slot></slot>
 	<button type="button" class="_button" :class="[$style.action, $style.leave]" :aria-label="state.role === 'host' ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom" :title="state.role === 'host' ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom" :disabled="state.joining" @click="emit('leave')"><i class="ti ti-phone-off"></i></button>
+	<slot name="afterLeave"></slot>
 </div>
 </template>
 

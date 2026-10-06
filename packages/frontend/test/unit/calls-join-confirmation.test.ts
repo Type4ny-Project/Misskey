@@ -57,6 +57,23 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
+	test('long-pressing the host opens a personal volume menu for a listener', async () => {
+		vi.useFakeTimers();
+		try {
+			fixture.session.currentRoomId.value = 'room';
+			fixture.session.isActive.value = true;
+			const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+			const tile = view.getByRole('region', { name: i18n.ts._calls.title }).querySelector('[data-participant-id="host-participant"]')!;
+			await fireEvent(tile, new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', clientX: 30, clientY: 40 }));
+			expect(os.contextMenu).not.toHaveBeenCalled();
+			await vi.advanceTimersByTimeAsync(500);
+			expect(os.contextMenu).toHaveBeenCalledWith([expect.objectContaining({ type: 'component', props: { userId: 'host', label: 'Host' } })], expect.any(PointerEvent));
+			expect(misskeyApi).not.toHaveBeenCalledWith('calls/media/reconcile', expect.anything());
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	test('opens a closable chat sidebar with a fixed composer while keeping the call stage visible', async () => {
 		const channel = { id: 'calls-channel', name: 'Call chat' };
 		fixture.connection.room.value = { ...fixture.connection.room.value, channelId: channel.id };
@@ -187,7 +204,7 @@ describe('Calls room window', () => {
 		await waitFor(() => expect(os.contextMenu).toHaveBeenCalledOnce());
 		expect(vi.mocked(os.contextMenu).mock.calls[0][1]).toBe(event);
 		const menu = vi.mocked(os.contextMenu).mock.calls[0][0] as MenuButton[];
-		expect(menu.map(item => item.text)).toContain(i18n.ts._calls.removeParticipant);
+		expect(menu.filter(item => item.text != null).map(item => item.text)).toContain(i18n.ts._calls.removeParticipant);
 		await menu.find(item => item.text === i18n.ts._calls.assignVcModerator)!.action(new PointerEvent('click'));
 		expect(misskeyApi).toHaveBeenCalledWith('calls/rooms/set-moderator', { roomId: 'room', participantId: 'other-participant', isModerator: true, expectedRevision: 1 });
 		expect(os.popupMenu).not.toHaveBeenCalled();
@@ -336,7 +353,7 @@ describe('Calls room window', () => {
 			{ type: 'warning', title: 'Speaker', text: i18n.ts._calls.stopParticipantScreenSharingConfirm },
 			{ type: 'warning', title: 'Speaker', text: i18n.ts._calls.removeParticipantConfirm },
 		]);
-		if (actor === 'moderator') expect(menu.map(item => item.text)).toEqual([i18n.ts._calls.mute, i18n.ts._calls.stopCamera, i18n.ts._calls.stopScreenSharing, i18n.ts._calls.removeParticipant]);
+		if (actor === 'moderator') expect(menu.filter(item => item.text != null).map(item => item.text)).toEqual([i18n.ts._calls.mute, i18n.ts._calls.stopCamera, i18n.ts._calls.stopScreenSharing, i18n.ts._calls.removeParticipant]);
 	});
 
 	test.each(['mute', 'stopCamera', 'stopScreenSharing', 'removeParticipant'] as const)('waits for confirmation and cancels %s without a moderation API call', async action => {
@@ -386,7 +403,7 @@ describe('Calls room window', () => {
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
 		await fireEvent.click(view.getByRole('button', { name: i18n.ts.details }));
 		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
-		expect((vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[]).map(item => item.text)).toEqual([...(hasScreen ? [i18n.ts._calls.stopScreenSharing] : []), i18n.ts._calls.removeParticipant]);
+		expect((vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[]).filter(item => item.text != null).map(item => item.text)).toEqual([...(hasScreen ? [i18n.ts._calls.stopScreenSharing] : []), i18n.ts._calls.removeParticipant]);
 	});
 
 	test('does not prompt or offer to join when the role disallows participation', async () => {

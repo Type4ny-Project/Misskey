@@ -357,6 +357,16 @@ describe('Calls session device handoff', () => {
 	});
 
 	test('adjusts only the selected user audio, retains volume for replacement tracks and clears it on leaving', async () => {
+
+		const gain = { gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() };
+		const close = vi.fn().mockResolvedValue(undefined);
+		vi.stubGlobal('AudioContext', class {
+			destination = {};
+			createMediaElementSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }));
+			createGain = vi.fn(() => gain);
+			resume = vi.fn().mockResolvedValue(undefined);
+			close = close;
+		});
 		const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
 		const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
 		try {
@@ -374,29 +384,49 @@ describe('Calls session device handoff', () => {
 			const audioC = receive('publication-c', 'participant-c');
 			expect(audioB.volume).toBe(1);
 			session.setParticipantVolume('user-b', 25);
-			expect(audioB.volume).toBe(0.25);
+			expect(audioB.volume).toBe(1);
+			expect(gain.gain.value).toBe(0.25);
 			expect(audioC.volume).toBe(1);
+			session.setParticipantVolume('user-b', 200);
+			expect(gain.gain.value).toBe(2);
+			expect(audioB.volume).toBe(1);
+			expect(audioC.volume).toBe(1);
+			session.setParticipantVolume('user-b', 25);
+			expect(gain.gain.value).toBe(0.25);
 			const replacementB = receive('publication-b', 'participant-b');
-			expect(replacementB.volume).toBe(0.25);
+			expect(replacementB.volume).toBe(1);
+			expect(gain.gain.value).toBe(0.25);
 			expect(audioB.isConnected).toBe(false);
 			session.setParticipantVolume('user-b', 0);
 			expect(audioC.volume).toBe(1);
 			expect(session.getParticipantVolume('user-b')).toBe(0);
-			expect(replacementB.volume).toBe(0);
+			expect(replacementB.volume).toBe(1);
+			expect(gain.gain.value).toBe(0);
 			await session.resumeAudio();
-			expect(replacementB.volume).toBe(0);
+			expect(replacementB.volume).toBe(1);
+			expect(gain.gain.value).toBe(0);
 			session.setParticipantVolume('user-b', 100);
 			expect(replacementB.volume).toBe(1);
 			await session.leave();
 			expect(document.querySelector('audio')).toBeNull();
 			expect(session.getParticipantVolume('user-b')).toBe(100);
+			expect(close).toHaveBeenCalledOnce();
 		} finally {
 			play.mockRestore();
 			pause.mockRestore();
+			vi.unstubAllGlobals();
 		}
 	});
 
 	test('sets each screen audio volume independently from the microphone and cleans up on leave', async () => {
+		const gain = { gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() };
+		vi.stubGlobal('AudioContext', class {
+			destination = {};
+			createMediaElementSource = () => ({ connect: vi.fn(), disconnect: vi.fn() });
+			createGain = () => gain;
+			resume = vi.fn().mockResolvedValue(undefined);
+			close = vi.fn().mockResolvedValue(undefined);
+		});
 		const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
 		const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
 		try {
@@ -416,7 +446,8 @@ describe('Calls session device handoff', () => {
 			session.setParticipantVolume('user-b', 50);
 			expect(first.audio.volume).toBe(0.25);
 			expect(second.audio.volume).toBe(0.75);
-			expect(microphone.audio.volume).toBe(0.5);
+			expect(microphone.audio.volume).toBe(1);
+			expect(gain.gain.value).toBe(0.5);
 			const replacement = receive('audio-a', 'screen-a');
 			expect(replacement.audio.volume).toBe(0.25);
 			replacement.track.dispatchEvent(new Event('ended'));
@@ -429,6 +460,7 @@ describe('Calls session device handoff', () => {
 		} finally {
 			play.mockRestore();
 			pause.mockRestore();
+			vi.unstubAllGlobals();
 		}
 	});
 

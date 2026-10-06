@@ -22,6 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<button type="button" class="_button" :class="[$style.action, state.screenOn && $style.active]" :aria-label="state.screenOn ? i18n.ts._calls.stopScreenSharing : i18n.ts._calls.startScreenSharing" :title="state.screenOn ? i18n.ts._calls.stopScreenSharing : i18n.ts._calls.startScreenSharing" :aria-pressed="state.screenOn" :disabled="videoDisabled" @click="emit('screen')"><i class="ti ti-screen-share"></i></button>
 		<button type="button" class="_button" :class="$style.settings" :aria-label="i18n.ts._calls.screenSettings" :title="i18n.ts._calls.screenSettings" aria-haspopup="menu" :disabled="videoDisabled" @click="emit('screenSettings', $event)"><i class="ti ti-chevron-down"></i></button>
 	</div>
+	<button type="button" class="_button" :class="$style.action" :aria-label="i18n.ts._calls.connectionInfo" :title="i18n.ts._calls.connectionInfo" @click="emit('connectionInfo')"><i class="ti ti-network" aria-hidden="true"></i></button>
 	<slot></slot>
 	<button type="button" class="_button" :class="[$style.action, $style.leave]" :aria-label="state.role === 'host' ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom" :title="state.role === 'host' ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom" :disabled="state.joining" @click="emit('leave')"><i class="ti ti-phone-off"></i></button>
 </div>
@@ -36,7 +37,7 @@ const props = defineProps<{
 	state: ReturnType<typeof useCallsSession>['controls']['value'];
 }>();
 const emit = defineEmits<{
-	(ev: 'mute' | 'camera' | 'screen' | 'speakerRequest' | 'leave'): void;
+	(ev: 'mute' | 'camera' | 'screen' | 'speakerRequest' | 'leave' | 'connectionInfo'): void;
 	(ev: 'microphoneSettings' | 'cameraSettings' | 'screenSettings', event: MouseEvent): void;
 }>();
 const videoDisabled = computed(() => props.state.joining || props.state.busy || props.state.status !== 'connected');

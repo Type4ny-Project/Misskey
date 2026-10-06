@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { getCallsConnectionInfo } from './calls-connection-info.js';
 import { detectCallsMediaCapabilities, normalizeCallsMediaError, normalizeCallsStats, preferOpus } from './calls-media-core.js';
-import type { CallsNormalizedStats } from './calls-media-core.js';
 import { createCallsNoiseSuppression } from './calls-noise-suppression.js';
-import type { CallsNoiseSuppression } from './calls-noise-suppression.js';
+import type { CallsConnectionInfo } from './calls-connection-info.js';
+import type { CallsNormalizedStats } from './calls-media-core.js';
+import type { CallsNoiseSuppression, CallsNoiseSuppressionMode } from './calls-noise-suppression.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 
 export type CallsVideoSource = 'camera' | 'screen';
@@ -55,7 +57,10 @@ export class CallsMediaController {
 	private lastStatsAt = 0;
 	private speaking = false;
 	private muted = false;
-	private noiseSuppression = true;
+	private noiseSuppression: CallsNoiseSuppressionMode = 'rnnoise';
+	private inputSensitivity = -100;
+	private inputVolume = 100;
+	private autoGainControl = true;
 	private reconnectReason: CallsNormalizedStats['reconnectReason'] = null;
 	private reconnectStartedAt = 0;
 	private recoveryTimeMs: number | null = null;
@@ -76,7 +81,8 @@ export class CallsMediaController {
 			ready?: () => void;
 			localTrack: (source: CallsVideoSource, track: MediaStreamTrack | null, id: string) => void;
 			microphoneTrack?: (track: MediaStreamTrack | null) => void;
-			noiseSuppressionChanged?: (enabled: boolean) => void;
+			noiseSuppressionChanged?: (mode: CallsNoiseSuppressionMode) => void;
+			inputLevel?: (level: number, transmitting: boolean) => void;
 			remoteRemoved: (publicationId: string) => void;
 			error: (error: unknown) => void;
 		},
@@ -86,6 +92,14 @@ export class CallsMediaController {
 			this.connectionId = previousConnection.connectionId;
 			this.generation = previousConnection.generation;
 		}
+	}
+
+	public async getConnectionInfo(): Promise<CallsConnectionInfo | null> {
+		const peer = this.peer;
+		if (peer == null) return null;
+		const report = await peer.getStats();
+		if (peer !== this.peer) return null;
+		return getCallsConnectionInfo(report, peer.connectionState, peer.getConfiguration().iceServers ?? []);
 	}
 
 	public async connect(deviceId?: string): Promise<void> {
@@ -123,8 +137,8 @@ export class CallsMediaController {
 			audio: {
 				deviceId: deviceId == null ? undefined : { exact: deviceId },
 				channelCount: { ideal: 1 }, echoCancellation: { ideal: true },
-				// RNNoise owns noise suppression. Preserve browser echo cancellation and gain control.
-				noiseSuppression: false, autoGainControl: { ideal: true },
+				// Apply browser suppression only in WebRTC mode; echo cancellation stays enabled.
+				noiseSuppression: this.noiseSuppression === 'webrtc', autoGainControl: this.autoGainControl,
 			},
 		});
 		const stream = await new Promise<MediaStream>((resolve, reject) => {
@@ -158,18 +172,22 @@ export class CallsMediaController {
 			processing = await createCallsNoiseSuppression(stream, error => {
 				if (this.microphone?.track !== track) return;
 				console.warn('[Calls] Noise suppression failed', error);
-				this.noiseSuppression = false;
-				this.videoCallbacks?.noiseSuppressionChanged?.(false);
-			}, abort.signal);
+				this.noiseSuppression = 'none';
+				this.videoCallbacks?.noiseSuppressionChanged?.('none');
+			}, abort.signal, { rnnoise: this.noiseSuppression === 'rnnoise', inputSensitivity: this.inputSensitivity, inputVolume: this.inputVolume, onLevel: (level, transmitting) => { if (this.microphone?.track === track) this.videoCallbacks?.inputLevel?.(level, transmitting && !this.muted); } });
 			abort.signal.throwIfAborted();
-			processing.setEnabled(this.noiseSuppression);
+			await track.applyConstraints({ noiseSuppression: this.noiseSuppression === 'webrtc', autoGainControl: this.autoGainControl });
+			await processing.setEnabled(this.noiseSuppression === 'rnnoise');
+			processing.setInputSensitivity(this.inputSensitivity);
+			processing.setInputVolume(this.inputVolume);
 		} catch (error) {
 			processing?.close();
 			processing = null;
 			if (abort.signal.aborted) throw new DOMException('Microphone acquisition cancelled', 'AbortError');
+			if (this.inputSensitivity > -100 || this.inputVolume !== 100) { track.stop(); throw error; }
 			console.warn('[Calls] Noise suppression unavailable; using unprocessed microphone', error);
-			this.noiseSuppression = false;
-			this.videoCallbacks?.noiseSuppressionChanged?.(false);
+			this.noiseSuppression = 'none';
+			this.videoCallbacks?.noiseSuppressionChanged?.('none');
 		} finally {
 			this.cancelAcquisition = null;
 		}
@@ -471,10 +489,10 @@ export class CallsMediaController {
 		});
 	}
 
-	public async switchCamera(deviceId: string, quality: CallsVideoQuality = { height: 720, frameRate: 30 }): Promise<void> {
+	public async switchCamera(deviceId: string | undefined, quality: CallsVideoQuality = { height: 720, frameRate: 30 }): Promise<void> {
 		const video = this.localVideos.get('camera');
 		if (video == null) return;
-		const stream = await navigator.mediaDevices.getUserMedia({ video: { ...videoConstraints(quality), deviceId: { exact: deviceId } }, audio: false });
+		const stream = await navigator.mediaDevices.getUserMedia({ video: { ...videoConstraints(quality), deviceId: deviceId == null ? undefined : { exact: deviceId } }, audio: false });
 		const track = stream.getVideoTracks()[0];
 		for (const extra of stream.getTracks()) if (extra !== track) extra.stop();
 		if (track == null) throw new DOMException('No video track', 'NotFoundError');
@@ -532,11 +550,41 @@ export class CallsMediaController {
 		else if (this.peer?.connectionState === 'connected') this.startStats();
 	}
 
-	public setNoiseSuppression(enabled: boolean): void {
-		if (this.noiseSuppression === enabled) return;
-		if (enabled && this.microphone != null && this.microphone.processing == null) throw new Error('RNNoise is unavailable');
-		this.microphone?.processing?.setEnabled(enabled);
-		this.noiseSuppression = enabled;
+	public async setNoiseSuppression(mode: CallsNoiseSuppressionMode): Promise<void> {
+		if (this.microphone == null) { this.noiseSuppression = mode; return; }
+		await this.enqueue(async () => {
+			if (this.noiseSuppression === mode || this.microphone == null) return;
+			if (mode === 'rnnoise' && this.microphone.processing == null) throw new Error('RNNoise is unavailable');
+			const previous = this.noiseSuppression;
+			await this.microphone.track.applyConstraints({ noiseSuppression: mode === 'webrtc', autoGainControl: this.autoGainControl });
+			try {
+				await this.microphone.processing?.setEnabled(mode === 'rnnoise');
+				this.noiseSuppression = mode;
+			} catch (error) {
+				await this.microphone.track.applyConstraints({ noiseSuppression: previous === 'webrtc', autoGainControl: this.autoGainControl });
+				throw error;
+			}
+		});
+	}
+
+	public async setAutoGainControl(enabled: boolean): Promise<void> {
+		if (this.microphone == null) { this.autoGainControl = enabled; return; }
+		await this.enqueue(async () => {
+			await this.microphone?.track.applyConstraints({ autoGainControl: enabled, noiseSuppression: this.noiseSuppression === 'webrtc' });
+			this.autoGainControl = enabled;
+		});
+	}
+
+	public setInputVolume(volume: number): void {
+		if (volume !== 100 && this.microphone != null && this.microphone.processing == null) throw new Error('Audio processing is unavailable');
+		this.inputVolume = volume;
+		this.microphone?.processing?.setInputVolume(volume);
+	}
+
+	public setInputSensitivity(threshold: number): void {
+		if (threshold > -100 && this.microphone != null && this.microphone.processing == null) throw new Error('Audio processing is unavailable');
+		this.inputSensitivity = threshold;
+		this.microphone?.processing?.setInputSensitivity(threshold);
 	}
 
 	public async switchMicrophone(deviceId?: string): Promise<void> {
@@ -558,7 +606,7 @@ export class CallsMediaController {
 			microphone.track.stop();
 			this.microphone = oldMicrophone;
 			this.localTrack = oldTrack;
-			oldMicrophone?.processing?.setEnabled(this.noiseSuppression);
+			await oldMicrophone?.processing?.setEnabled(this.noiseSuppression === 'rnnoise');
 			this.setMuted(this.muted);
 			this.videoCallbacks?.microphoneTrack?.(oldTrack);
 			throw error;

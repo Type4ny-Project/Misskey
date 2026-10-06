@@ -22,6 +22,12 @@ Calls の閲覧権限を持つユーザーが、ルーム内 Activity から You
 - PASS: 実YouTubeと2ブラウザーで、キューの共有・現在の動画を中断しない追加・モデレーターによるキュー選択と両プレーヤーの切り替え・実際の再生終了による自動送りを確認。1360×900と390×844で表示を確認し、未処理JavaScriptエラーは0件。
 - CI修正: CI用設定ではCallsが無効で、既存のWatch Together E2Eがルーム作成に失敗していた。音声を外部へ接続しないテスト用のCalls設定を`.github/misskey/test.yml`へ追加した。
 
+2026-10-07、キューのカードにサムネイル・タイトル・説明文を表示。既存の`/url`リンクプレビューを使い、検索APIやAPIキーを追加していない。リンクプレビューが無効・取得失敗の場合はURLと取得失敗の表示に切り替える。
+
+- PASS: frontend 61件、型チェック・build、lint・SPDX・locale safety。既存のキューテストでタイトル・説明文の表示も確認。
+- PASS: 実際のYouTube動画のタイトルと説明をローカルサーバーから取得し、デスクトップ・スマホ幅で表示を確認。両スクリーンショットを差し替えた。
+- BASELINE: Storybook登録の生成は完了。事前処理の`.storybook/main.ts`に既存のStorybook/Vite型エラーがあり、Storybook本体の検証は未実施。
+
 広告ブロックは含めていない。[YouTube標準の埋め込みパラメーター](https://developers.google.com/youtube/player_parameters)には広告を無効化する機能がなく、親ページからiframe内の通信を制御できない。
 
 YouTubeの埋め込み制限・地域制限・広告・ブラウザーの自動再生制限の影響は受ける。自動再生が止められた場合は「再生を許可」を表示する。実音声のCloudflare接続は試験用認証情報のため未検証。DB entity・migrationの変更はない。

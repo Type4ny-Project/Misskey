@@ -39,8 +39,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<ol v-else :class="$style.queueList">
 			<li v-for="(video, index) in state.queue" :key="index" :class="$style.queueVideo">
 				<span aria-hidden="true">{{ index + 1 }}</span>
-				<img :src="`https://i.ytimg.com/vi/${video}/mqdefault.jpg`" alt="" loading="lazy" referrerpolicy="no-referrer">
-				<div :class="$style.queueTitle"><a :href="`https://www.youtube.com/watch?v=${video}`" target="_blank" rel="noopener noreferrer">{{ `youtu.be/${video}` }}</a></div>
+				<MkCallsWatchTogetherVideoPreview :videoId="video" :class="$style.queueTitle"/>
 				<div v-if="canControl && room.state === 'open'" :class="$style.actions">
 					<MkButton small :disabled="busy" @click="playQueued(index)">{{ i18n.ts._watchTogether.playNow }}</MkButton>
 					<button type="button" class="_button" :class="$style.external" :disabled="busy" :aria-label="i18n.ts._watchTogether.removeFromQueue" @click="update({ queue: state.queue.filter((_, i) => i !== index) })"><i class="ti ti-x" aria-hidden="true"></i></button>
@@ -58,6 +57,7 @@ import { nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
 import { loadYouTubeAPI, youtubeVideoId } from './youtube-player.js';
 import type { YouTubePlayer } from './youtube-player.js';
 import type * as Misskey from 'misskey-js';
+import MkCallsWatchTogetherVideoPreview from './MkCallsWatchTogetherVideoPreview.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import { i18n } from '@/i18n.js';
@@ -258,8 +258,6 @@ onUnmounted(() => {
 .queueHeader h3 { margin: 0; font-size: 1rem; }
 .queueList { display: flex; flex-direction: column; gap: 8px; padding-left: 24px; }
 .queueVideo { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-.queueVideo img { width: 80px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; }
-.queueTitle { flex: 1; min-width: 120px; overflow-wrap: anywhere; }
-.queueTitle a { color: var(--MI_THEME-link); }
+.queueTitle { flex: 1; min-width: 240px; }
 .external:hover { background: var(--MI_THEME-buttonHoverBg); }
 </style>

@@ -31,6 +31,7 @@ const room = { id: 'room', state: 'open' } as Misskey.entities.CallsRoom;
 const state = () => ({ queue: [], videoId: 'M7lc1UVf-VE', playing: true, position: 20, updatedAt: Date.now(), revision: 1, serverTime: Date.now() });
 beforeEach(() => {
 	vi.clearAllMocks(); fixture.handlers.clear(); fixture.events = null;
+	vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ title: 'Next video title', description: 'Next video description' }) }));
 	fixture.position = 0; fixture.playerState = 2; fixture.shared = state();
 	fixture.seek.mockImplementation((position: number) => { fixture.position = position; });
 	fixture.play.mockImplementation(() => { fixture.playerState = 1; fixture.events?.onStateChange({ data: 1 }); });
@@ -41,7 +42,7 @@ beforeEach(() => {
 		return fixture.shared;
 	});
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 test.each([
 	['https://www.youtube.com/watch?v=M7lc1UVf-VE', 'M7lc1UVf-VE'],
@@ -114,6 +115,8 @@ test('video URLs can be queued, removed and advanced on native playback end', as
 	await fireEvent.update(view.getByLabelText(i18n.ts._watchTogether.videoUrl), 'https://youtu.be/' + video);
 	await fireEvent.click(view.getAllByRole('button', { name: i18n.ts._watchTogether.addToQueue })[0]);
 	await waitFor(() => expect(fixture.shared.queue).toHaveLength(1));
+	await waitFor(() => expect(view.getByText('Next video title')).toBeTruthy());
+	expect(view.getByText('Next video description')).toBeTruthy();
 	expect(fixture.shared.videoId).toBe('M7lc1UVf-VE');
 	await fireEvent.click(view.getByRole('button', { name: i18n.ts._watchTogether.removeFromQueue }));
 	await waitFor(() => expect(fixture.shared.queue).toHaveLength(0));

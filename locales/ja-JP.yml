@@ -2721,6 +2721,7 @@ _permissions:
   "write:calls": "Misskey Callsへの参加と音声通話を操作する"
 
 _calls:
+  openChat: "チャットを開く"
   audioSettings: "通話設定"
   settings: "Callsの設定"
   systemDefaultDevice: "システムの既定"

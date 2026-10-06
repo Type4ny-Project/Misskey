@@ -20,6 +20,7 @@ export class CallsEntityService {
 			} : {
 				type: 'chatRoom', ownerUserId: room.ownerUserId, chatRoomId: room.chatRoomId!,
 			},
+			channelId: room.channelId ?? null,
 			title: room.title,
 			description: room.description,
 			moderatorUserIds: room.moderatorUserIds,

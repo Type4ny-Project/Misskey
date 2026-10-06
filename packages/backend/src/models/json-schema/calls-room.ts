@@ -29,6 +29,7 @@ export const packedCallsRoomSchema = {
 				{ type: 'object', properties: { type: { type: 'string', enum: ['chatRoom'], optional: false, nullable: false }, ownerUserId: { type: 'string', format: 'id', optional: false, nullable: false }, chatRoomId: { type: 'string', format: 'id', optional: false, nullable: false } } },
 			],
 		},
+		channelId: { type: 'string', format: 'id', optional: false, nullable: true },
 		title: { type: 'string', optional: false, nullable: false },
 		description: { type: 'string', optional: false, nullable: false },
 		moderatorUserIds: { type: 'array', items: { type: 'string', format: 'id' }, optional: false, nullable: false },

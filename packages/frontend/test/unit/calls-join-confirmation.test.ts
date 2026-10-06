@@ -16,9 +16,11 @@ import type { MenuButton } from '@/types/menu.js';
 const fixture = vi.hoisted(() => ({ close: vi.fn(), confirm: vi.fn(), inputText: vi.fn(), session: null as any, connection: null as any, policies: { canJoinCalls: true } }));
 vi.mock('@/i.js', () => ({ $i: { id: 'viewer', policies: fixture.policies } }));
 vi.mock('@/components/MkModal.vue', () => ({ default: { emits: ['click', 'closed', 'esc'], template: '<section><slot/></section>', methods: { close() { fixture.close(); } } } }));
+vi.mock('@/components/MkPostForm.vue', () => ({ default: { props: { channel: Object, fixed: Boolean }, template: '<form data-testid="calls-chat-composer" :data-channel="channel.id" :data-fixed="fixed"/>' } }));
+vi.mock('@/components/MkStreamingNotesTimeline.vue', () => ({ default: { props: ['src', 'channel'], template: '<div data-testid="calls-chat-timeline" :data-channel="channel"/>' } }));
 vi.mock('@/components/MkButton.vue', () => ({ default: { template: '<button><slot/></button>' } }));
 vi.mock('@/components/global/MkA.vue', () => ({ default: { props: ['to'], template: '<a :href="to"><slot/></a>' } }));
-vi.mock('@/os.js', () => ({ confirm: fixture.confirm, inputText: fixture.inputText, toast: vi.fn(), alert: vi.fn(), popupMenu: vi.fn(), contextMenu: vi.fn() }));
+vi.mock('@/os.js', () => ({ __v_isRef: false, post: vi.fn(), confirm: fixture.confirm, inputText: fixture.inputText, toast: vi.fn(), alert: vi.fn(), popupMenu: vi.fn(), contextMenu: vi.fn() }));
 vi.mock('@/utility/calls-session.js', () => ({ useCallsSession: () => fixture.session }));
 vi.mock('@/composables/use-calls-room.js', () => ({ createCallsRoomConnection: () => fixture.connection }));
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: vi.fn().mockResolvedValue({ id: 'host', username: 'host', name: 'Host' }) }));
@@ -27,7 +29,7 @@ const stubs = {
 	MkModal: { emits: ['click', 'closed', 'esc'], template: '<section><slot/></section>', methods: { close() { fixture.close(); } } },
 	MkButton: { template: '<button><slot/></button>' },
 	MkA: { props: ['to'], template: '<a :href="to"><slot/></a>' },
-	MkInfo: true, MkAvatar: true, MkUserName: true, MkLoading: true, MkCallsControls: true, CallsVideo: true,
+	MkInfo: true, MkAvatar: true, MkUserName: true, MkLoading: true, MkCallsControls: true, CallsVideo: true, MkStreamingNotesTimeline: true,
 };
 
 beforeEach(() => {
@@ -55,15 +57,55 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
+	test('long-pressing the host opens a personal volume menu for a listener', async () => {
+		vi.useFakeTimers();
+		try {
+			fixture.session.currentRoomId.value = 'room';
+			fixture.session.isActive.value = true;
+			const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+			const tile = view.getByRole('region', { name: i18n.ts._calls.title }).querySelector('[data-participant-id="host-participant"]')!;
+			await fireEvent(tile, new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', clientX: 30, clientY: 40 }));
+			expect(os.contextMenu).not.toHaveBeenCalled();
+			await vi.advanceTimersByTimeAsync(500);
+			expect(os.contextMenu).toHaveBeenCalledWith([expect.objectContaining({ type: 'component', props: { userId: 'host', label: 'Host' } })], expect.any(PointerEvent));
+			expect(misskeyApi).not.toHaveBeenCalledWith('calls/media/reconcile', expect.anything());
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	test('opens a closable chat sidebar with a fixed composer while keeping the call stage visible', async () => {
+		const channel = { id: 'calls-channel', name: 'Call chat' };
+		fixture.connection.room.value = { ...fixture.connection.room.value, channelId: channel.id };
+		vi.mocked(misskeyApi).mockImplementation(async endpoint => endpoint === 'channels/show' ? channel : { id: 'host', username: 'host' });
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs: { ...stubs, MkStreamingNotesTimeline: false } } });
+		expect(view.queryByTestId('calls-chat-timeline')).toBeNull();
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts.chat }));
+		expect(view.getByTestId('calls-chat-timeline').getAttribute('data-channel')).toBe(channel.id);
+		await waitFor(() => expect(view.getByTestId('calls-chat-composer').getAttribute('data-channel')).toBe(channel.id));
+		expect(view.getByTestId('calls-chat-composer').getAttribute('data-fixed')).toBe('true');
+		expect(view.getByRole('region', { name: i18n.ts._calls.title })).toBeTruthy();
+		expect(view.getByRole('complementary', { name: i18n.ts.chat })).toBeTruthy();
+		expect(view.getByRole('complementary', { name: i18n.ts.users })).toBeTruthy();
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		expect(view.getByRole('button', { name: i18n.ts.users }).getAttribute('aria-pressed')).toBe('false');
+		expect(view.getByRole('complementary', { name: i18n.ts.chat })).toBeTruthy();
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts.users }));
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.chat }).querySelector('button')!);
+		expect(view.getByRole('button', { name: i18n.ts.chat }).getAttribute('aria-pressed')).toBe('false');
+		expect(view.getByRole('complementary', { name: i18n.ts.users })).toBeTruthy();
+	});
+
 	test('keeps an initially ended room open with its final timing and no join prompt', async () => {
 		fixture.connection.room.value = null;
 		fixture.connection.refresh.mockImplementation(async () => {
-			fixture.connection.room.value = { id: 'room', title: 'Ended call', state: 'ended', moderatorUserIds: [], startedAt: '2026-10-04T23:30:00.000Z', endedAt: '2026-10-05T00:32:03.000Z' };
+			fixture.connection.room.value = { id: 'room', title: 'Ended call', state: 'ended', channelId: 'calls-channel', moderatorUserIds: [], startedAt: '2026-10-04T23:30:00.000Z', endedAt: '2026-10-05T00:32:03.000Z' };
 		});
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
 		await waitFor(() => expect(view.getByText('01:02:03')).toBeTruthy());
 		expect(view.getByRole('heading', { name: i18n.ts._calls.ended })).toBeTruthy();
 		expect(view.container.querySelectorAll('time')).toHaveLength(2);
+		expect(view.queryByRole('button', { name: i18n.ts.chat })).toBeNull();
 		expect(view.queryByRole('button', { name: i18n.ts._calls.joinRoom })).toBeNull();
 		expect(view.queryByRole('complementary')).toBeNull();
 		expect(fixture.close).not.toHaveBeenCalled();
@@ -130,7 +172,7 @@ describe('Calls room window', () => {
 			fixture.session.isActive.value = true;
 		}
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		const names = () => Array.from(view.getByRole('complementary', { name: i18n.ts.users }).querySelectorAll('strong'), element => element.textContent);
+		const names = () => Array.from(view.getByRole('complementary', { name: i18n.ts.users }).querySelectorAll('section strong'), element => element.textContent);
 		expect(names()).toEqual(['alice', 'carol', 'zed', 'bob', 'eve']);
 		source.participants.value = participants.map(participant => participant.id === 'bob' ? { ...participant, isMuted: false } : participant);
 		await nextTick();
@@ -162,7 +204,7 @@ describe('Calls room window', () => {
 		await waitFor(() => expect(os.contextMenu).toHaveBeenCalledOnce());
 		expect(vi.mocked(os.contextMenu).mock.calls[0][1]).toBe(event);
 		const menu = vi.mocked(os.contextMenu).mock.calls[0][0] as MenuButton[];
-		expect(menu.map(item => item.text)).toContain(i18n.ts._calls.removeParticipant);
+		expect(menu.filter(item => item.text != null).map(item => item.text)).toContain(i18n.ts._calls.removeParticipant);
 		await menu.find(item => item.text === i18n.ts._calls.assignVcModerator)!.action(new PointerEvent('click'));
 		expect(misskeyApi).toHaveBeenCalledWith('calls/rooms/set-moderator', { roomId: 'room', participantId: 'other-participant', isModerator: true, expectedRevision: 1 });
 		expect(os.popupMenu).not.toHaveBeenCalled();
@@ -177,7 +219,7 @@ describe('Calls room window', () => {
 			{ id: 'listener-participant', userId: 'listener', role: 'listener', isMuted: true },
 		];
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button[aria-haspopup="menu"]')!);
 		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
 		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
 		vi.mocked(misskeyApi).mockRejectedValueOnce(new Error('Request failed'));
@@ -203,7 +245,7 @@ describe('Calls room window', () => {
 			{ id: 'listener-participant', userId: 'listener', role: 'listener', isMuted: true },
 		];
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button[aria-haspopup="menu"]')!);
 		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
 		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
 		await menu.find(item => item.text === i18n.ts._calls.transferHost)!.action(new PointerEvent('click'));
@@ -292,7 +334,7 @@ describe('Calls room window', () => {
 		fixture.connection.participants.value = fixture.session.participants.value;
 		vi.mocked(misskeyApi).mockResolvedValue({ roomRevision: 1, publications: ['camera', 'screen'].map(mediaSource => ({ id: mediaSource, participantId: 'speaker-participant', mediaKind: 'video', mediaSource })) } as never);
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button[aria-haspopup="menu"]')!);
 		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
 		expect(misskeyApi).toHaveBeenCalledWith('calls/media/reconcile', { roomId: 'room' });
 		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
@@ -311,7 +353,7 @@ describe('Calls room window', () => {
 			{ type: 'warning', title: 'Speaker', text: i18n.ts._calls.stopParticipantScreenSharingConfirm },
 			{ type: 'warning', title: 'Speaker', text: i18n.ts._calls.removeParticipantConfirm },
 		]);
-		if (actor === 'moderator') expect(menu.map(item => item.text)).toEqual([i18n.ts._calls.mute, i18n.ts._calls.stopCamera, i18n.ts._calls.stopScreenSharing, i18n.ts._calls.removeParticipant]);
+		if (actor === 'moderator') expect(menu.filter(item => item.text != null).map(item => item.text)).toEqual([i18n.ts._calls.mute, i18n.ts._calls.stopCamera, i18n.ts._calls.stopScreenSharing, i18n.ts._calls.removeParticipant]);
 	});
 
 	test.each(['mute', 'stopCamera', 'stopScreenSharing', 'removeParticipant'] as const)('waits for confirmation and cancels %s without a moderation API call', async action => {
@@ -326,7 +368,7 @@ describe('Calls room window', () => {
 		let finish!: (result: { canceled: boolean }) => void;
 		fixture.confirm.mockReturnValue(new Promise(resolve => { finish = resolve; }));
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button[aria-haspopup="menu"]')!);
 		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
 		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
 		vi.mocked(misskeyApi).mockClear();
@@ -346,7 +388,7 @@ describe('Calls room window', () => {
 			{ id: 'other-participant', userId: 'other', role: 'speaker', isMuted: false },
 		];
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		expect(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')).toBeNull();
+		expect(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button[aria-haspopup="menu"]')).toBeNull();
 	});
 
 	test.each([false, true])('hides video stop for absent sources with screen sharing %s', async hasScreen => {
@@ -361,7 +403,7 @@ describe('Calls room window', () => {
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
 		await fireEvent.click(view.getByRole('button', { name: i18n.ts.details }));
 		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
-		expect((vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[]).map(item => item.text)).toEqual([...(hasScreen ? [i18n.ts._calls.stopScreenSharing] : []), i18n.ts._calls.removeParticipant]);
+		expect((vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[]).filter(item => item.text != null).map(item => item.text)).toEqual([...(hasScreen ? [i18n.ts._calls.stopScreenSharing] : []), i18n.ts._calls.removeParticipant]);
 	});
 
 	test('does not prompt or offer to join when the role disallows participation', async () => {
@@ -434,7 +476,6 @@ describe('Calls room window', () => {
 		let finishCopy!: () => void;
 		const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockImplementation(() => new Promise<void>(resolve => { finishCopy = resolve; }));
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await waitFor(() => expect(fixture.confirm).toHaveBeenCalled());
 		await fireEvent.click(view.getByRole('button', { name: i18n.ts.copyLink }));
 		expect(writeText).toHaveBeenCalledWith(`${url}/calls/room`);
 		expect(os.toast).not.toHaveBeenCalled();
@@ -468,18 +509,16 @@ describe('Calls room window', () => {
 		expect(view.getAllByRole('slider')).toHaveLength(1);
 	});
 
-	test.each([true, false])('opening another user’s room joins only after consent (cancelled: %s)', async canceled => {
-		let respond!: (result: { canceled: boolean }) => void;
-		fixture.confirm.mockImplementation(() => new Promise(resolve => { respond = resolve; }));
-		render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await waitFor(() => expect(fixture.confirm).toHaveBeenCalledWith(expect.objectContaining({ type: 'question', title: 'Another user’s room' })));
+	test.each(['stage', 'open'])('opening a %s room waits for the bottom join button without prompting', async mode => {
+		fixture.connection.room.value.mode = mode;
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await waitFor(() => expect(fixture.connection.refresh).toHaveBeenCalled());
+		expect(fixture.confirm).not.toHaveBeenCalled();
 		expect(fixture.session.join).not.toHaveBeenCalled();
 		expect(fixture.session.prepareMicrophones).not.toHaveBeenCalled();
-		respond({ canceled });
-		if (canceled) {
-			await Promise.resolve();
-			expect(fixture.session.join).not.toHaveBeenCalled();
-		} else await waitFor(() => expect(fixture.session.join).toHaveBeenCalledWith('room', false, undefined, false));
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts._calls.joinRoom }));
+		await waitFor(() => expect(fixture.session.join).toHaveBeenCalledWith('room', false, undefined, mode === 'open'));
+		expect(fixture.confirm).not.toHaveBeenCalled();
 	});
 
 	test('reopening the current call does not ask to join again', async () => {
@@ -494,7 +533,10 @@ describe('Calls room window', () => {
 	test('does not join if the room ends while confirmation is open', async () => {
 		let respond!: (result: { canceled: boolean }) => void;
 		fixture.confirm.mockImplementation(() => new Promise(resolve => { respond = resolve; }));
-		render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		fixture.session.currentRoomId.value = 'other-room';
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		expect(fixture.confirm).not.toHaveBeenCalled();
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts._calls.joinRoom }));
 		await waitFor(() => expect(fixture.confirm).toHaveBeenCalled());
 		fixture.connection.room.value.state = 'ended';
 		respond({ canceled: false });

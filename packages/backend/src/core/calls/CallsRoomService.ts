@@ -13,11 +13,15 @@ import type {
 	CallsRoomsRepository,
 	MiCallsModerationLog,
 	ChatRoomsRepository,
+	ChannelsRepository,
 	MiCallsParticipant,
 	MiCallsRoom,
 	MiChatRoom,
 	MiUser,
 } from '@/models/_.js';
+import { MiChannel } from '@/models/Channel.js';
+import type { MiLocalUser } from '@/models/User.js';
+import { ChannelFollowingService } from '@/core/ChannelFollowingService.js';
 import type { CallsModerationAction } from '@/models/CallsModerationLog.js';
 import type { CallsParticipantRole } from '@/models/CallsParticipant.js';
 import type { CallsRoomMode, CallsRoomVisibility } from '@/models/CallsRoom.js';
@@ -79,6 +83,9 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		private callsEventService: CallsEventService,
 		private callsMediaRevocationService: CallsMediaRevocationService,
 		private callsTelemetryService: CallsTelemetryService,
+		@Inject(DI.channelsRepository)
+		private channelsRepository: ChannelsRepository,
+		private channelFollowingService: ChannelFollowingService,
 	) {}
 
 	public async onModuleInit(): Promise<void> {
@@ -164,38 +171,57 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		if (activeAttachment != null) throw new CallsRoomError('active-attachment');
 
 		const now = new Date();
-		const room = await this.callsRoomsRepository.insertOne({
-			id: this.idService.gen(),
-			attachmentType: params.attachmentType,
-			ownerUserId: owner.id,
-			chatRoomId: params.attachmentType === 'chatRoom' ? params.chatRoomId : null,
-			title,
-			description,
-			mode: params.mode ?? 'open',
-			visibility: params.attachmentType === 'chatRoom' ? 'specified' : (params.visibility ?? 'specified'),
-			visibleUserIds: params.attachmentType === 'personal' && params.visibility === 'specified' ? [...new Set(params.visibleUserIds ?? [])] : [],
-			moderatorUserIds: [],
-			state: 'scheduled',
-			scheduledAt: params.scheduledAt ?? null,
-			startedAt: null,
-			endedAt: null,
-			revision: 0,
-			createdAt: now,
-			updatedAt: now,
-		});
+		const room = await this.callsRoomsRepository.manager.transaction(async manager => {
+			const channel = params.attachmentType === 'personal' && params.visibility === 'public'
+				? await manager.getRepository(MiChannel).save({
+					id: this.idService.gen(), userId: owner.id, name: title.slice(0, 128),
+					description, isUnlisted: true, isLocalOnly: true, allowRenoteToExternal: false,
+				})
+				: null;
+			const room = await manager.getRepository<MiCallsRoom>(this.callsRoomsRepository.target).save({
+				id: this.idService.gen(),
+				attachmentType: params.attachmentType,
+				ownerUserId: owner.id,
+				chatRoomId: params.attachmentType === 'chatRoom' ? params.chatRoomId : null,
+				channelId: channel?.id ?? null,
+				title,
+				description,
+				mode: params.mode ?? 'open',
+				visibility: params.attachmentType === 'chatRoom' ? 'specified' : (params.visibility ?? 'specified'),
+				visibleUserIds: params.attachmentType === 'personal' && params.visibility === 'specified' ? [...new Set(params.visibleUserIds ?? [])] : [],
+				moderatorUserIds: [],
+				state: 'scheduled',
+				scheduledAt: params.scheduledAt ?? null,
+				startedAt: null,
+				endedAt: null,
+				revision: 0,
+				createdAt: now,
+				updatedAt: now,
+			});
 
-		await this.callsParticipantsRepository.insertOne({
-			id: this.idService.gen(),
-			roomId: room.id,
-			userId: owner.id,
-			role: 'host',
-			state: 'active',
-			isMuted: false,
-			joinedAt: now,
-			leftAt: null,
-			speakerRequestedAt: null,
-			updatedAt: now,
+			await manager.getRepository<MiCallsParticipant>(this.callsParticipantsRepository.target).save({
+				id: this.idService.gen(),
+				roomId: room.id,
+				userId: owner.id,
+				role: 'host',
+				state: 'active',
+				isMuted: false,
+				joinedAt: now,
+				leftAt: null,
+				speakerRequestedAt: null,
+				updatedAt: now,
+			});
+			return room;
 		});
+		try {
+			await this.followRoomChannel(owner, room);
+		} catch (error) {
+			await this.callsRoomsRepository.manager.transaction(async manager => {
+				await manager.getRepository<MiCallsRoom>(this.callsRoomsRepository.target).delete(room.id);
+				if (room.channelId != null) await manager.getRepository(MiChannel).delete(room.channelId);
+			});
+			throw error;
+		}
 		this.callsTelemetryService.lifecycle({ action: 'room-created', roomId: room.id });
 		this.callsEventService.publishRoomsList('created', { roomId: room.id });
 
@@ -400,10 +426,14 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
 
 		const current = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id });
-		if (current?.state === 'active') return current;
+		if (current?.state === 'active') {
+			await this.followRoomChannel(user, room);
+			return current;
+		}
 		const role = current?.role === 'host' ? 'host' : room.mode === 'open' ? 'speaker' : 'listener';
 		await this.assertCapacity(room, role);
 
+		await this.followRoomChannel(user, room);
 		const now = new Date();
 		let joined: MiCallsParticipant;
 		if (current != null) {
@@ -433,6 +463,12 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		}
 		await this.bumpRevision(roomId);
 		return joined;
+	}
+
+	private async followRoomChannel(user: MiUser, room: MiCallsRoom): Promise<void> {
+		if (room.channelId == null) return;
+		const channel = await this.channelsRepository.findOneByOrFail({ id: room.channelId });
+		await this.channelFollowingService.followOrRequest(user as MiLocalUser, channel, true);
 	}
 
 	@bindThis
@@ -659,12 +695,16 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		if (room.state !== 'scheduled' && room.state !== 'open') throw new CallsRoomError('invalid-state');
 		const sanitizedTitle = this.sanitizeMetadata(title);
 		if (sanitizedTitle.length === 0) throw new CallsRoomError('invalid-metadata');
-		const result = await this.callsRoomsRepository.createQueryBuilder().update()
-			.set({ title: sanitizedTitle, revision: () => '"revision" + 1', updatedAt: new Date() })
-			.where('id = :roomId AND revision = :expectedRevision AND state = :state', { roomId, expectedRevision, state: room.state })
-			.returning('*').execute();
-		if (result.affected !== 1) throw new CallsRoomError('stale-revision');
-		const updated = result.raw[0] as MiCallsRoom;
+		const updated = await this.callsRoomsRepository.manager.transaction(async manager => {
+			const result = await manager.getRepository<MiCallsRoom>(this.callsRoomsRepository.target).createQueryBuilder().update()
+				.set({ title: sanitizedTitle, revision: () => '"revision" + 1', updatedAt: new Date() })
+				.where('id = :roomId AND revision = :expectedRevision AND state = :state', { roomId, expectedRevision, state: room.state })
+				.returning('*').execute();
+			if (result.affected !== 1) throw new CallsRoomError('stale-revision');
+			const updated = result.raw[0] as MiCallsRoom;
+			if (updated.channelId != null) await manager.getRepository(MiChannel).update(updated.channelId, { name: updated.title.slice(0, 128) });
+			return updated;
+		});
 		await this.callsEventService.publish(roomId, updated.revision, 'title', { title: updated.title });
 		this.callsEventService.publishRoomsList('updated', { roomId, action: 'title' });
 		return updated;
@@ -707,6 +747,13 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 					const promoted = await participants.update({ id: participant.id, state: 'active' }, { role: 'host', speakerRequestedAt: null, updatedAt: now });
 					if (promoted.affected !== 1) throw new CallsRoomError('participant-not-found');
 					const updated = result.raw[0] as MiCallsRoom;
+					if (room.channelId != null) {
+						const channels = manager.getRepository(MiChannel);
+						const channel = await channels.findOneByOrFail({ id: room.channelId });
+						const collaboratorIds = channel.collaboratorIds.filter(id => id !== participant.userId);
+						if (channel.userId != null && !collaboratorIds.includes(channel.userId)) collaboratorIds.push(channel.userId);
+						await channels.update(channel.id, { userId: participant.userId, collaboratorIds });
+					}
 					await logs.insert({ id: this.idService.gen(), roomId, actorUserId: host.id, targetParticipantId: participant.id, action: 'promote', previousRole: participant.role, nextRole: 'host', reason: 'host-transfer', roomRevision: updated.revision, createdAt: now });
 					return { room: updated, formerHostParticipantId: formerHost.id, formerHostRole: 'speaker' as const };
 				});

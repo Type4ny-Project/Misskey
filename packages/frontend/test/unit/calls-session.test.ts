@@ -362,6 +362,16 @@ describe('Calls session device handoff', () => {
 	});
 
 	test('adjusts only the selected user audio, retains volume for replacement tracks and clears it on leaving', async () => {
+		const gain = { gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() };
+		const close = vi.fn().mockResolvedValue(undefined);
+		vi.stubGlobal('AudioContext', class {
+			destination = {};
+			createMediaStreamSource = vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() }));
+			createGain = vi.fn(() => gain);
+			createMediaStreamDestination = () => ({ stream: Object.assign(new MediaStream(), { getTracks: () => [] }) });
+			resume = vi.fn().mockResolvedValue(undefined);
+			close = close;
+		});
 		const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
 		const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
 		try {
@@ -382,29 +392,55 @@ describe('Calls session device handoff', () => {
 			session.setOutputVolume(100);
 			expect(audioB.volume).toBe(1);
 			session.setParticipantVolume('user-b', 25);
-			expect(audioB.volume).toBe(0.25);
+			expect(audioB.volume).toBe(1);
+			expect(gain.gain.value).toBe(0.25);
 			expect(audioC.volume).toBe(1);
+			session.setParticipantVolume('user-b', 200);
+			expect(gain.gain.value).toBe(2);
+			expect(audioB.volume).toBe(1);
+			expect(audioC.volume).toBe(1);
+			session.setOutputVolume(50);
+			expect(gain.gain.value).toBe(1);
+			expect(audioC.volume).toBe(0.5);
+			session.setOutputVolume(100);
+			expect(gain.gain.value).toBe(2);
+			session.setParticipantVolume('user-b', 25);
+			expect(gain.gain.value).toBe(0.25);
 			const replacementB = receive('publication-b', 'participant-b');
-			expect(replacementB.volume).toBe(0.25);
+			expect(replacementB.volume).toBe(1);
+			expect(gain.gain.value).toBe(0.25);
 			expect(audioB.isConnected).toBe(false);
 			session.setParticipantVolume('user-b', 0);
 			expect(audioC.volume).toBe(1);
 			expect(session.getParticipantVolume('user-b')).toBe(0);
-			expect(replacementB.volume).toBe(0);
+			expect(replacementB.volume).toBe(1);
+			expect(gain.gain.value).toBe(0);
 			await session.resumeAudio();
-			expect(replacementB.volume).toBe(0);
+			expect(replacementB.volume).toBe(1);
+			expect(gain.gain.value).toBe(0);
 			session.setParticipantVolume('user-b', 100);
 			expect(replacementB.volume).toBe(1);
 			await session.leave();
 			expect(document.querySelector('audio')).toBeNull();
 			expect(session.getParticipantVolume('user-b')).toBe(100);
+			expect(close).toHaveBeenCalledOnce();
 		} finally {
 			play.mockRestore();
 			pause.mockRestore();
+			vi.unstubAllGlobals();
 		}
 	});
 
 	test('sets each screen audio volume independently from the microphone and cleans up on leave', async () => {
+		const gain = { gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() };
+		vi.stubGlobal('AudioContext', class {
+			destination = {};
+			createMediaStreamSource = () => ({ connect: vi.fn(), disconnect: vi.fn() });
+			createGain = () => gain;
+			createMediaStreamDestination = () => ({ stream: Object.assign(new MediaStream(), { getTracks: () => [] }) });
+			resume = vi.fn().mockResolvedValue(undefined);
+			close = vi.fn().mockResolvedValue(undefined);
+		});
 		const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
 		const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
 		try {
@@ -424,7 +460,8 @@ describe('Calls session device handoff', () => {
 			session.setParticipantVolume('user-b', 50);
 			expect(first.audio.volume).toBe(0.25);
 			expect(second.audio.volume).toBe(0.75);
-			expect(microphone.audio.volume).toBe(0.5);
+			expect(microphone.audio.volume).toBe(1);
+			expect(gain.gain.value).toBe(0.5);
 			const replacement = receive('audio-a', 'screen-a');
 			expect(replacement.audio.volume).toBe(0.25);
 			replacement.track.dispatchEvent(new Event('ended'));
@@ -437,6 +474,7 @@ describe('Calls session device handoff', () => {
 		} finally {
 			play.mockRestore();
 			pause.mockRestore();
+			vi.unstubAllGlobals();
 		}
 	});
 
@@ -546,6 +584,15 @@ describe('Calls session device handoff', () => {
 	});
 
 	test('routes existing and new remote audio to the selected output device', async () => {
+		const outputStream = Object.assign(new MediaStream(), { getTracks: () => [] });
+		const gain = { gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() };
+		vi.stubGlobal('AudioContext', class {
+			createMediaStreamSource = () => ({ connect: vi.fn(), disconnect: vi.fn() });
+			createGain = () => gain;
+			createMediaStreamDestination = () => ({ stream: outputStream });
+			resume = vi.fn().mockResolvedValue(undefined);
+			close = vi.fn().mockResolvedValue(undefined);
+		});
 		const original = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'setSinkId');
 		const setSinkId = vi.fn().mockResolvedValue(undefined);
 		Object.defineProperty(HTMLMediaElement.prototype, 'setSinkId', { configurable: true, value: setSinkId });
@@ -559,12 +606,22 @@ describe('Calls session device handoff', () => {
 			receive('first');
 			await session.setDevice('output', 'headphones');
 			expect(setSinkId).toHaveBeenLastCalledWith('headphones');
+			const audio = document.querySelector('audio')!;
+			session.setParticipantVolume(session.participants.value[0].userId, 200);
+			expect(audio.srcObject).toBe(outputStream);
+			expect(gain.gain.value).toBe(2);
+			expect(gain.connect).toHaveBeenCalledWith(expect.objectContaining({ stream: outputStream }));
+			expect(setSinkId.mock.contexts.at(-1)).toBe(audio);
+			await session.setDevice('output', 'speakers');
+			expect(setSinkId).toHaveBeenLastCalledWith('speakers');
+			await session.setDevice('output', 'headphones');
 			receive('second');
 			expect(setSinkId).toHaveBeenLastCalledWith('headphones');
 			expect(session.getAudioSettings().outputDeviceId).toBe('headphones');
 			await session.leave();
 		} finally {
 			play.mockRestore();
+			vi.unstubAllGlobals();
 			if (original) Object.defineProperty(HTMLMediaElement.prototype, 'setSinkId', original);
 			else delete (HTMLMediaElement.prototype as Partial<HTMLMediaElement>).setSinkId;
 		}

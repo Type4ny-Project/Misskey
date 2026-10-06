@@ -10377,6 +10377,10 @@ export interface Locale extends ILocale {
     };
     "_calls": {
         /**
+         * チャットを開く
+         */
+        "openChat": string;
+        /**
          * 通話設定
          */
         "audioSettings": string;

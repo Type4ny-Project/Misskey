@@ -79,7 +79,8 @@ const reconnectCandidate = ref<CallsReconnectCandidate | null>(null);
 const reconnectRoomState = ref<'checking' | 'open' | 'unavailable'>('checking');
 const reconnectSecondsRemaining = ref(0);
 const speakerRequestResult = ref<'rejected' | null>(null);
-const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement; playback: Promise<void>; screenPublicationId?: string }>();
+let volumeAudioContext: AudioContext | null = null;
+const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement; playback: Promise<void>; screenPublicationId?: string; source?: MediaStreamAudioSourceNode; gain?: GainNode; output?: MediaStreamAudioDestinationNode }>();
 const participantVolumes = shallowRef(new Map<string, number>());
 const localVideos = shallowRef(new Map<string, MediaStream>());
 const screenVolumes = shallowRef(new Map<string, number>());
@@ -210,7 +211,11 @@ function disposeConnection(): void {
 }
 
 function removeRemoteTrack(publicationId: string): void {
-	const audio = remoteAudio.get(publicationId)?.element;
+	const item = remoteAudio.get(publicationId);
+	item?.source?.disconnect();
+	item?.gain?.disconnect();
+	item?.output?.stream.getTracks().forEach(track => track.stop());
+	const audio = item?.element;
 	if (audio != null) { audio.pause(); audio.srcObject = null; audio.remove(); }
 	remoteAudio.delete(publicationId);
 	screenAudioIds.value = new Set([...remoteAudio.values()].flatMap(item => item.screenPublicationId == null ? [] : [item.screenPublicationId]));
@@ -224,9 +229,22 @@ function getParticipantVolume(userId: string): number {
 }
 
 function applyParticipantVolumes(): void {
-	for (const { participantId, element, screenPublicationId } of remoteAudio.values()) {
-		const participant = participants.value.find(item => item.id === participantId);
-		element.volume = (outputVolume.value / 100) * (screenPublicationId != null ? getScreenVolume(screenPublicationId) / 100 : participant == null ? 1 : getParticipantVolume(participant.userId) / 100);
+	for (const item of remoteAudio.values()) {
+		const participant = participants.value.find(entry => entry.id === item.participantId);
+		const volume = item.screenPublicationId != null ? getScreenVolume(item.screenPublicationId) : participant == null ? 100 : getParticipantVolume(participant.userId);
+		if (item.screenPublicationId == null && volume !== 100 && item.gain == null) {
+			volumeAudioContext ??= new AudioContext();
+			item.source = volumeAudioContext.createMediaStreamSource(item.element.srcObject as MediaStream);
+			item.gain = volumeAudioContext.createGain();
+			item.output = volumeAudioContext.createMediaStreamDestination();
+			item.source.connect(item.gain);
+			item.gain.connect(item.output);
+			item.element.srcObject = item.output.stream;
+			void item.element.play().catch(() => { needsAudioResume.value = true; });
+		}
+		const effectiveVolume = (outputVolume.value / 100) * (volume / 100);
+		item.element.volume = item.gain != null ? 1 : effectiveVolume;
+		if (item.gain != null) item.gain.gain.value = effectiveVolume;
 	}
 }
 
@@ -240,8 +258,9 @@ function setScreenVolume(publicationId: string, volume: number): void {
 }
 
 function setParticipantVolume(userId: string, volume: number): void {
-	participantVolumes.value = new Map(participantVolumes.value).set(userId, Math.max(0, Math.min(100, volume)));
+	participantVolumes.value = new Map(participantVolumes.value).set(userId, Math.max(0, Math.min(200, volume)));
 	applyParticipantVolumes();
+	void volumeAudioContext?.resume().catch(() => { needsAudioResume.value = true; });
 }
 
 function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublication): void {
@@ -255,13 +274,14 @@ function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublica
 	const audio = new Audio();
 	audio.hidden = true;
 	audio.srcObject = new MediaStream([track]);
-	const playback = (async () => {
-		if (supportsOutputDevice) await audio.setSinkId(selectedOutputDevice.value);
-		await audio.play();
-	})().catch(error => { console.warn('[Calls] Audio playback failed', error); needsAudioResume.value = true; });
-	remoteAudio.set(publication.id, { participantId: publication.participantId, element: audio, playback, screenPublicationId: publication.screenPublicationId });
+	const item = { participantId: publication.participantId, element: audio, playback: Promise.resolve(), screenPublicationId: publication.screenPublicationId };
+	remoteAudio.set(publication.id, item);
 	if (publication.screenPublicationId != null) screenAudioIds.value = new Set(screenAudioIds.value).add(publication.screenPublicationId);
 	applyParticipantVolumes();
+	item.playback = (async () => {
+		if (supportsOutputDevice) await audio.setSinkId(selectedOutputDevice.value);
+		await Promise.all([audio.play(), volumeAudioContext?.resume()]);
+	})().catch(error => { console.warn('[Calls] Audio playback failed', error); needsAudioResume.value = true; });
 	window.document.body.append(audio);
 	track.addEventListener('ended', () => {
 		removeRemoteTrack(publication.id);
@@ -371,11 +391,15 @@ async function clearSession(): Promise<void> {
 	videoBusy.value = false;
 	for (const id of remoteAudio.keys()) removeRemoteTrack(id);
 	remoteAudio.clear();
+	const previousVolumeContext = volumeAudioContext;
+	volumeAudioContext = null;
 	participantVolumes.value = new Map();
 	localVideos.value = new Map();
 	remoteVideos.value = new Map();
 	needsAudioResume.value = false;
+	const closingVolumeContext = previousVolumeContext?.close();
 	await controller?.close().catch(() => undefined);
+	await closingVolumeContext;
 }
 
 function attachConnection(roomId: string): CallsRoomConnection {
@@ -808,7 +832,7 @@ function openScreenSettings(event: MouseEvent): void {
 }
 
 async function resumeAudio(): Promise<void> {
-	await Promise.all([...remoteAudio.values()].map(({ element }) => element.play()));
+	await Promise.all([volumeAudioContext?.resume(), ...[...remoteAudio.values()].map(({ element }) => element.play())]);
 	needsAudioResume.value = false;
 	if (media.value != null) await announceMediaReady(media.value, sessionGeneration);
 }

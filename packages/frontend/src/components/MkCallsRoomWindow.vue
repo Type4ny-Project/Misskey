@@ -133,7 +133,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<small v-if="room.scheduledAt != null">{{ new Date(room.scheduledAt).toLocaleString() }}</small>
 					<MkButton v-if="isHost" primary large rounded :disabled="!canJoinCalls" @click="openRoom">{{ i18n.ts._calls.openRoom }}</MkButton>
 				</template>
-				<button v-if="!sessionIsCurrent && room.channelId != null && room.state !== 'ended'" type="button" class="_button" :class="$style.mobileChatToggle" :aria-pressed="showChat" @click="showChat = !showChat"><i class="ti ti-messages" aria-hidden="true"></i> {{ i18n.ts._calls.openChat }}</button>
+				<button v-if="!sessionIsCurrent && room.channelId != null && room.state !== 'ended'" type="button" class="_button" :class="$style.mobileChatToggle" :aria-label="i18n.ts._calls.openChat" :title="i18n.ts._calls.openChat" :aria-pressed="showChat" @click="showChat = !showChat"><i class="ti ti-messages" aria-hidden="true"></i></button>
 			</footer>
 		</template>
 	</section>
@@ -683,14 +683,16 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 	.footer { padding-left: 12px; padding-right: 12px; }
 }
 @media (max-width: 600px) {
-	.callLayout { position: relative; --participants-width: min(240px, 80vw); --chat-width: min(380px, 85vw); }
+	.callLayout { position: relative; --participants-width: min(240px, 80vw); --chat-width: 100%; }
 	.participantsSidebar, .chatSidebar { position: absolute; top: 0; bottom: 0; z-index: 1; }
 	.participantsSidebar, .participantsToggle, .desktopChatToggle { display: none; }
 	.mobileChatToggle { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 40px; height: 48px; padding: 0 8px; border-radius: 14px; font-size: 20px; }
 	.mobileChatToggle[aria-pressed="true"] { color: var(--MI_THEME-accent); }
 	.footer { flex-direction: row; flex-wrap: wrap; justify-content: center; }
 	.joinButton { width: auto; }
-	.chatSidebar { right: 0; z-index: 2; }
+	.chatSidebar { right: 0; width: 100%; z-index: 2; pointer-events: none; transition: none; }
+	.chatOpen { pointer-events: auto; }
+	.chatHidden { transform: translateY(100%); }
 	.participantsOpen, .chatOpen { margin: 0; }
 }
 @media (prefers-reduced-motion: reduce) {

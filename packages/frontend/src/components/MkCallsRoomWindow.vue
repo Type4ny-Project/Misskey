@@ -568,7 +568,7 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 .elapsedTime { font-variant-numeric: tabular-nums; color: var(--MI_THEME-fgTransparentWeak); }
 .menuButton { width: 36px; height: 36px; border-radius: 50%; font-size: 20px; }
 .body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 16px; padding: 16px; background: var(--MI_THEME-bg); }
-.chat { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
+.chat { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
 .chatHeader { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px; border-bottom: 1px solid var(--MI_THEME-divider); }
 .chatComposer { flex-shrink: 0; max-height: 50%; overflow: auto; border-bottom: 1px solid var(--MI_THEME-divider); }
 .chatTimeline { flex: 1; min-height: 0; overflow: auto; }
@@ -576,7 +576,8 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 .summary { width: min(100%, 560px); box-sizing: border-box; margin: auto; padding: 24px; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
 .summaryTitle { display: flex; align-items: center; gap: 8px; margin: 0 0 24px; font-size: 1.1rem; }
 .callLayout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0; }
-.withChat { grid-template-columns: min(380px, 50%) minmax(0, 1fr); }
+.withChat { grid-template-columns: minmax(0, 1fr) min(380px, 50%); }
+.withChat .stage { grid-column: 1; }
 .stage { grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; overflow: auto; }
 .participantArea { grid-column: 1; grid-row: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 24px; padding: 16px; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
 .groupLabel { margin-bottom: 12px; font-size: 0.85rem; font-weight: 600; opacity: 0.65; }
@@ -612,7 +613,7 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 	.header { padding: 12px; }
 	.body { padding: 12px; }
 	.callLayout { grid-template-columns: 120px minmax(0, 1fr); gap: 8px; }
-	.withChat { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+	.withChat { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
 	.participantArea { padding: 8px; }
 	.person { grid-template-columns: minmax(0, 1fr); justify-items: start; }
 	.person > .avatarWrap, .person > .listenerAvatar { grid-row: auto; }

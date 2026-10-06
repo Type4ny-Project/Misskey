@@ -4,12 +4,12 @@
  */
 
 import { http, HttpResponse } from 'msw';
-import { userDetailed } from '../../.storybook/fakes.js';
+import { userLite } from '../../.storybook/fakes.js';
 import MkCallsRoomWindow from './MkCallsRoomWindow.vue';
 import type { StoryObj } from '@storybook/vue3';
 import type * as Misskey from 'misskey-js';
 
-const host = userDetailed();
+const host = { ...userLite(), isFollowing: false, isFollowed: false };
 const room = {
 	id: 'calls-window-story', attachment: { type: 'personal', ownerUserId: host.id },
 	title: '今日のMisskeyについて話そう', description: '', mode: 'stage', visibility: 'public',
@@ -23,8 +23,17 @@ export const Default = {
 	parameters: {
 		layout: 'fullscreen',
 		msw: { handlers: [
-			http.post('/api/calls/rooms/show', () => HttpResponse.json({ room, participants: [{ id: 'calls-host-story', roomId: room.id, userId: host.id, role: 'host', state: 'active', isMuted: true, joinedAt: room.startedAt, leftAt: null, speakerRequestedAt: null }] })),
-			http.post('/api/users/show', () => HttpResponse.json(host)),
+			http.post('/api/calls/rooms/show', () => HttpResponse.json({ room, participants: [{ id: 'calls-host-story', roomId: room.id, userId: host.id, role: 'host', state: 'active', isMuted: true, joinedAt: room.startedAt, leftAt: null, speakerRequestedAt: null, user: host }] })),
+		] },
+	},
+} satisfies StoryObj<typeof MkCallsRoomWindow>;
+
+export const Ended = {
+	...Default,
+	parameters: {
+		...Default.parameters,
+		msw: { handlers: [
+			http.post('/api/calls/rooms/show', () => HttpResponse.json({ room: { ...room, state: 'ended', endedAt: '2026-10-03T01:02:03.000Z' }, participants: [] })),
 		] },
 	},
 } satisfies StoryObj<typeof MkCallsRoomWindow>;

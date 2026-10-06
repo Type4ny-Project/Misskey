@@ -205,6 +205,22 @@ export class MiMeta {
 	})
 	public enableLoginBonus: boolean;
 
+	@Column('varchar', {
+		length: 5,
+		default: '00:00',
+	})
+	public loginBonusResetTime: string;
+
+	@Column('integer', {
+		default: 1,
+	})
+	public loginBonusMinPoints: number;
+
+	@Column('integer', {
+		default: 5,
+	})
+	public loginBonusMaxPoints: number;
+
 	@Column('boolean', {
 		default: false,
 	})

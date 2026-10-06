@@ -6,12 +6,12 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable import/no-default-export */
 import { http, HttpResponse } from 'msw';
-import { userDetailed } from '../../.storybook/fakes.js';
+import { userLite } from '../../.storybook/fakes.js';
 import MkCallsRoomCard from './MkCallsRoomCard.vue';
 import type { StoryObj } from '@storybook/vue3';
 import type * as Misskey from 'misskey-js';
 
-const host = userDetailed();
+const host = { ...userLite(), isFollowing: false, isFollowed: false };
 const room = {
 	id: 'calls-room-story', attachment: { type: 'personal', ownerUserId: host.id },
 	title: '今日のMisskeyについて話そう', description: '', mode: 'stage', visibility: 'public',
@@ -28,8 +28,7 @@ export const Default = {
 		layout: 'centered',
 		msw: {
 			handlers: [
-				http.post('/api/calls/rooms/show', () => HttpResponse.json({ room, participants: [{ id: 'calls-host-story', roomId: room.id, userId: host.id, role: 'host', state: 'active', isMuted: true, joinedAt: room.startedAt, leftAt: null, speakerRequestedAt: null }] })),
-				http.post('/api/users/show', () => HttpResponse.json(host)),
+				http.post('/api/calls/rooms/show', () => HttpResponse.json({ room, participants: [{ id: 'calls-host-story', roomId: room.id, userId: host.id, role: 'host', state: 'active', isMuted: true, joinedAt: room.startedAt, leftAt: null, speakerRequestedAt: null, user: host }] })),
 			],
 		},
 	},
@@ -37,3 +36,20 @@ export const Default = {
 
 export const LongTitle = { ...Default, args: { room: { ...room, title: '長いルーム名でも参加者とルームを開く操作が分かりやすく表示されることを確認するための通話' } } } satisfies StoryObj<typeof MkCallsRoomCard>;
 export const Compact = { ...Default, args: { room, compact: true } } satisfies StoryObj<typeof MkCallsRoomCard>;
+
+const endedRoom = { ...room, id: 'calls-ended-room-story', state: 'ended', endedAt: '2026-10-02T01:12:35.000Z' } satisfies Misskey.entities.CallsRoom;
+export const Ended = {
+	...Default,
+	args: { room: endedRoom },
+	parameters: {
+		...Default.parameters,
+		msw: { handlers: [http.post('/api/calls/rooms/show', () => HttpResponse.json({ room: endedRoom, participants: [] }))] },
+	},
+} satisfies StoryObj<typeof MkCallsRoomCard>;
+
+export const EndedNarrow = {
+	...Ended,
+	render(args) {
+		return { components: { MkCallsRoomCard }, setup: () => ({ args }), template: '<div style="width: 280px"><MkCallsRoomCard v-bind="args" /></div>' };
+	},
+} satisfies StoryObj<typeof MkCallsRoomCard>;

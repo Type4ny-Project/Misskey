@@ -1,6 +1,7 @@
 import {
 	Antenna,
 	CallsRoom,
+	CallsParticipant,
 	ChatMessage,
 	ChatMessageLite,
 	DriveFile,
@@ -317,13 +318,20 @@ export type Channels = {
 			roomId: string;
 		};
 		events: {
+			title: (payload: CallsRoomEventBase & { title: string }) => void;
 			lifecycle: (payload: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled'; reason?: 'host-timeout' }) => void;
-			participant: (payload: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' | 'updated' }) => void;
+			participant: (payload: CallsRoomEventBase & {
+				participantId: string;
+				action: 'joined' | 'left' | 'removed' | 'updated';
+				participant?: CallsParticipant & { user: (UserLite & { isFollowing: boolean; isFollowed: boolean }) | null };
+				moderatorUserIds?: string[];
+			}) => void;
 			role: (payload: CallsRoomEventBase & { participantId: string; role: 'host' | 'speaker' | 'listener' }) => void;
 			speakerRequest: (payload: CallsRoomEventBase & { participantId: string; requested: boolean }) => void;
 			mute: (payload: CallsRoomEventBase & { participantId: string; isMuted: boolean }) => void;
 			speaking: (payload: CallsRoomEventBase & { participantIds: string[] }) => void;
 			track: (payload: CallsRoomEventBase & { participantId: string; publicationId: string; available: boolean; mediaKind: 'audio' | 'video'; mediaSource?: 'microphone' | 'camera' | 'screen' }) => void;
+			videoStopped: (payload: CallsRoomEventBase & { participantId: string; mediaSource: 'camera' | 'screen' }) => void;
 			revoked: (payload: CallsRoomEventBase & { participantId?: string; connectionId?: string; generation?: number; reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation' | 'replaced' }) => void;
 		};
 		receives: {
@@ -336,7 +344,7 @@ export type Channels = {
 		params: null;
 		events: {
 			created: (payload: { action: 'created'; room: CallsRoom }) => void;
-			updated: (payload: { action: 'open' | 'ended' | 'cancelled' | 'participants'; room: CallsRoom }) => void;
+			updated: (payload: { action: 'open' | 'ended' | 'cancelled' | 'participants' | 'title'; room: CallsRoom }) => void;
 		};
 		receives: null;
 	};

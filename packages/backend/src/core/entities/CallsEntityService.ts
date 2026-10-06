@@ -4,11 +4,14 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import type { MiCallsParticipant, MiCallsRoom } from '@/models/_.js';
+import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import type { MiCallsParticipant, MiCallsRoom, MiUser } from '@/models/_.js';
 import type { Packed } from '@/misc/json-schema.js';
 
 @Injectable()
 export class CallsEntityService {
+	constructor(private userEntityService: UserEntityService) {}
+
 	public packRoom(room: MiCallsRoom): Packed<'CallsRoom'> {
 		return {
 			id: room.id,
@@ -44,5 +47,28 @@ export class CallsEntityService {
 			leftAt: participant.leftAt?.toISOString() ?? null,
 			speakerRequestedAt: participant.speakerRequestedAt?.toISOString() ?? null,
 		};
+	}
+
+	public async packParticipants(participants: MiCallsParticipant[], me: MiUser) {
+		const userIds = participants.map(participant => participant.userId);
+		const [users, relations] = userIds.length > 0
+			? await Promise.all([
+				this.userEntityService.packMany(userIds, me, { schema: 'UserLite' }),
+				this.userEntityService.getRelations(me.id, userIds),
+			])
+			: [[], new Map()] as const;
+		const usersById = new Map(users.map(user => [user.id, user]));
+
+		return participants.map(participant => {
+			const user = usersById.get(participant.userId);
+			return {
+				...this.packParticipant(participant),
+				user: user == null ? null : {
+					...user,
+					isFollowing: relations.get(user.id)?.isFollowing ?? false,
+					isFollowed: relations.get(user.id)?.isFollowed ?? false,
+				},
+			};
+		});
 	}
 }

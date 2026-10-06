@@ -9,6 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<button type="button" class="_button" :class="$style.select" :aria-label="focused ? i18n.ts._calls.showVideoGrid : i18n.ts._calls.focusVideo" :aria-pressed="focused" @click="emit('select')"></button>
 	<button v-if="needsPlayback" type="button" class="_button" :class="$style.play" :aria-label="i18n.ts._calls.resumeVideo" @click="startPlayback"><i class="ti ti-player-play"></i> {{ i18n.ts._calls.resumeVideo }}</button>
 	<button v-if="screenWindow" type="button" class="_button" :class="$style.windowButton" :aria-label="i18n.ts.openInWindow" :title="i18n.ts.openInWindow" :aria-pressed="screenWindowActive" @click="emit('screenWindow')"><i class="ti ti-app-window"></i></button>
+	<label v-if="audioVolume != null" :class="$style.volume" @click.stop @contextmenu.stop><i class="ti ti-volume"></i><input type="range" min="0" max="100" step="1" :value="audioVolume" :aria-label="`${i18n.ts._calls.screenAudioVolume}: ${label}`" @input="emit('volume', ($event.target as HTMLInputElement).valueAsNumber)"></label>
 	<figcaption :class="$style.caption"><span>{{ label }}</span></figcaption>
 </figure>
 </template>
@@ -24,8 +25,9 @@ const props = defineProps<{
 	focused?: boolean;
 	screenWindow?: boolean;
 	screenWindowActive?: boolean;
+	audioVolume?: number;
 }>();
-const emit = defineEmits<{ (ev: 'select' | 'screenWindow'): void }>();
+const emit = defineEmits<{ (ev: 'select' | 'screenWindow'): void; (ev: 'volume', value: number): void }>();
 const video = shallowRef<HTMLVideoElement | null>(null);
 const needsPlayback = shallowRef(false);
 
@@ -53,6 +55,7 @@ watch([video, () => props.stream], ([element, stream]) => {
 	margin: 0;
 	overflow: hidden;
 	min-width: 0;
+	min-height: 0;
 	border-radius: var(--MI-radius);
 	background: var(--MI_THEME-bg);
 }
@@ -69,6 +72,7 @@ watch([video, () => props.stream], ([element, stream]) => {
 .video {
 	display: block;
 	width: 100%;
+	height: 100%;
 	aspect-ratio: 16 / 9;
 	object-fit: contain;
 	background: var(--MI_THEME-bg);
@@ -96,6 +100,9 @@ watch([video, () => props.stream], ([element, stream]) => {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+.volume { position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--MI_THEME-panel); }
+.volume > input { width: 100px; accent-color: var(--MI_THEME-accent); }
 
 .windowButton { position: absolute; bottom: 8px; right: 8px; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 8px; background: var(--MI_THEME-panel); font-size: 20px; opacity: 0; transition: opacity 0.18s ease; }
 .play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--MI_THEME-panel); }

@@ -35,6 +35,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						{{ i18n.ts.updatedAt }}: <MkTime :time="announcement.updatedAt" mode="detail"/>
 					</div>
 				</div>
+				<MkAnnouncementReactions :announcement="announcement" interactive @update="Object.assign(announcement, $event)"/>
 				<div v-if="$i && !announcement.silence && !announcement.isRead" :class="$style.footer">
 					<MkButton primary @click="read(announcement)"><i class="ti ti-check"></i> {{ i18n.ts.gotIt }}</MkButton>
 				</div>
@@ -50,6 +51,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { ref, computed, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
+import MkAnnouncementReactions from '@/components/MkAnnouncementReactions.vue';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';

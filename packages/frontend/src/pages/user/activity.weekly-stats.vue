@@ -86,13 +86,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed, ref } from 'vue';
 import { url } from '@@/js/config.js';
+import { char2fluentEmojiFilePath, char2twemojiFilePath } from '@@/js/emoji-base.js';
 import MkButton from '@/components/MkButton.vue';
 import MkNumber from '@/components/MkNumber.vue';
 import MkReactionIcon from '@/components/MkReactionIcon.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkError from '@/components/global/MkError.vue';
 import * as os from '@/os.js';
-import { $i } from '@/i.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { uploadFile } from '@/utility/drive.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -142,7 +142,9 @@ const weekLabel = computed(() => {
 	return `${new Date(stats.value.sinceDate).toLocaleDateString()} からのまとめ`;
 });
 
-const statsUrl = computed(() => $i ? `${url}/@${$i.username}/stats` : url);
+const statsUrl = `${url}/:my/stats`;
+const statsInvitation = 'あなたも、自分のStatsを見てみませんか？';
+const statsLink = `[${statsInvitation}](${statsUrl})`;
 
 const metrics = computed(() => {
 	if (stats.value == null) return [];
@@ -158,20 +160,22 @@ const shareText = computed(() => {
 	if (stats.value == null) return 'Weekly Stats';
 
 	const lines = [
-		'Weekly Stats',
-		`期間: ${weekLabel.value}`,
-		`投稿数: ${stats.value.notesCount}`,
-		`リアクションした数: ${stats.value.reactionsCount}`,
-		`もらったリアクション数: ${stats.value.receivedReactionsCount}`,
-		`投稿した日数: ${stats.value.postingDaysCount}`,
-		'よく使った絵文字 Top 3:',
+		'📊 今週のまとめ · Weekly Stats',
+		weekLabel.value,
+		'',
+		`投稿：${stats.value.notesCount.toLocaleString()}件（${stats.value.postingDaysCount.toLocaleString()}日）`,
+		`送ったリアクション：${stats.value.reactionsCount.toLocaleString()}回`,
+		`もらったリアクション：${stats.value.receivedReactionsCount.toLocaleString()}回`,
+		'',
+		'よく使った絵文字 TOP 3',
 		formatRanking(stats.value.topReactions),
-		'もらった絵文字 Top 3:',
+		'',
+		'もらった絵文字 TOP 3',
 		formatRanking(stats.value.topReceivedReactions),
 	];
 
 	if (includeTopPostedChannel.value && stats.value.topPostedChannel != null) {
-		lines.push(`今週一番投稿したチャンネル: ${stats.value.topPostedChannel.name} (${stats.value.topPostedChannel.notesCount} posts)`);
+		lines.push('', '今週一番投稿したチャンネル', `${stats.value.topPostedChannel.name}（${stats.value.topPostedChannel.notesCount.toLocaleString()}件）`);
 	}
 
 	return lines.join('\n');
@@ -179,7 +183,7 @@ const shareText = computed(() => {
 
 function formatRanking(items: ReactionRankingItem[]): string {
 	return items.length > 0
-		? items.map((item, index) => `${index + 1}. ${item.reaction} x${item.count}`).join('\n')
+		? items.map((item, index) => `${index + 1}位 ${item.reaction.replace(/@\.:$/, ':')} × ${item.count.toLocaleString()}回`).join('\n')
 		: 'なし';
 }
 
@@ -199,8 +203,8 @@ async function shareStats(): Promise<void> {
 	const file = new File([blob], 'weekly-stats.png', { type: 'image/png' });
 	const shareDataWithFile: ShareData = {
 		title: 'Weekly Stats',
-		text: shareText.value,
-		url: statsUrl.value,
+		text: `${shareText.value}\n\n${statsInvitation}`,
+		url: statsUrl,
 		files: [file],
 	};
 
@@ -211,8 +215,8 @@ async function shareStats(): Promise<void> {
 
 	const shareData: ShareData = {
 		title: 'Weekly Stats',
-		text: shareText.value,
-		url: statsUrl.value,
+		text: `${shareText.value}\n\n${statsInvitation}`,
+		url: statsUrl,
 	};
 
 	if (navigator.share) {
@@ -220,7 +224,7 @@ async function shareStats(): Promise<void> {
 		return;
 	}
 
-	copyToClipboard(`${shareText.value}\n${statsUrl.value}`);
+	copyToClipboard(`${shareText.value}\n\n${statsLink}`);
 }
 
 async function shareWithNote(): Promise<void> {
@@ -238,7 +242,7 @@ async function shareWithNote(): Promise<void> {
 		const driveFile = await os.promiseDialog(filePromise);
 
 		await os.post({
-			initialText: `${shareText.value}\n${statsUrl.value}`,
+			initialText: `${shareText.value}\n\n${statsLink}`,
 			initialFiles: [driveFile],
 		});
 	} finally {
@@ -283,9 +287,11 @@ async function renderStatsImage(): Promise<Blob> {
 	drawMetric(ctx, '投稿した日数', stats.value.postingDaysCount.toLocaleString(), 884, 240, accent);
 
 	drawText(ctx, 'よく使った絵文字 Top 3', 96, 382, 26, 480, 'bold');
-	drawRanking(ctx, stats.value.topReactions, 96, 430);
 	drawText(ctx, 'もらった絵文字 Top 3', 604, 382, 26, 480, 'bold');
-	drawRanking(ctx, stats.value.topReceivedReactions, 604, 430);
+	await Promise.all([
+		drawRanking(ctx, stats.value.topReactions, 96, 430),
+		drawRanking(ctx, stats.value.topReceivedReactions, 604, 430),
+	]);
 
 	if (includeTopPostedChannel.value && stats.value.topPostedChannel != null) {
 		drawText(ctx, `今週一番投稿したチャンネル: ${stats.value.topPostedChannel.name}`, 96, 548, 24, 640);
@@ -310,14 +316,46 @@ function drawMetric(ctx: CanvasRenderingContext2D, label: string, value: string,
 	drawText(ctx, value, x, y + 62, 54, 240, 'bold');
 }
 
-function drawRanking(ctx: CanvasRenderingContext2D, items: ReactionRankingItem[], x: number, y: number): void {
+async function drawRanking(ctx: CanvasRenderingContext2D, items: ReactionRankingItem[], x: number, y: number): Promise<void> {
 	if (items.length === 0) {
 		drawText(ctx, 'なし', x, y, 26, 420);
 		return;
 	}
 
+	const images = await Promise.all(items.map(item => loadReactionImage(item.reaction)));
 	items.forEach((item, index) => {
-		drawText(ctx, `${index + 1}. ${item.reaction}  x${item.count.toLocaleString()}`, x, y + (index * 38), 28, 420);
+		const rowY = y + (index * 38);
+		drawText(ctx, `${index + 1}.`, x, rowY, 28, 32);
+		const image = images[index];
+		if (image != null) {
+			const ratio = Math.min(240 / image.naturalWidth, 28 / image.naturalHeight);
+			const width = image.naturalWidth * ratio;
+			const height = image.naturalHeight * ratio;
+			ctx.drawImage(image, x + 40, rowY - 26 + (28 - height) / 2, width, height);
+		} else {
+			drawText(ctx, item.reaction.replace(/@\.:$/, ':'), x + 40, rowY, 28, 280);
+		}
+		drawText(ctx, `× ${item.count.toLocaleString()}回`, x + 340, rowY, 28, 120);
+	});
+}
+
+function loadReactionImage(reaction: string): Promise<HTMLImageElement | null> {
+	let imageUrl: string;
+	if (reaction.startsWith(':')) {
+		imageUrl = `/emoji/${encodeURIComponent(reaction.slice(1, -1))}.webp?static=1`;
+	} else if (prefer.s.emojiStyle === 'native') {
+		return Promise.resolve(null);
+	} else {
+		imageUrl = prefer.s.emojiStyle === 'twemoji' ? char2twemojiFilePath(reaction) : char2fluentEmojiFilePath(reaction);
+	}
+
+	return new Promise(resolve => {
+		const image = new Image();
+		// 絵文字エンドポイントはメディアプロキシへリダイレクトするため、画像保存には CORS が必要。
+		image.crossOrigin = 'anonymous';
+		image.onload = () => resolve(image.naturalWidth > 0 && image.naturalHeight > 0 ? image : null);
+		image.onerror = () => resolve(null);
+		image.src = imageUrl;
 	});
 }
 

@@ -4,68 +4,65 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader :actions="[]">
-	<div class="_spacer _gaps" style="--MI_SPACER-w: 1280px;">
-		<h2>{{ room?.title ?? i18n.ts._drawing.title }}</h2>
-		<div>{{ i18n.ts._drawing.description }}</div>
-		<MkInfo v-if="error" warn>{{ error }}</MkInfo>
-		<MkInfo v-else-if="!connected" warn>{{ i18n.ts._drawing.disconnected }}</MkInfo>
-		<MkInfo v-if="participationError && !error" warn>{{ participationError }}</MkInfo>
-		<div v-if="room && !state && !error" class="_gaps">
-			<template v-if="isHost && (room.state === 'open' || room.state === 'scheduled')">
-				<MkSelect v-model="scope" :items="scopeItems"><template #label>{{ i18n.ts._drawing.scope }}</template></MkSelect>
-				<MkButton primary :disabled="busy || !connected" @click="start">{{ i18n.ts._drawing.start }}</MkButton>
-			</template>
-			<MkInfo v-else>{{ i18n.ts._drawing.waiting }}</MkInfo>
-		</div>
-		<template v-if="state && !error">
-			<MkInfo v-if="state.ended">{{ i18n.ts._drawing.ended }}</MkInfo>
-			<div :class="$style.toolbar">
-				<MkButton v-if="!joined && !state.ended" primary :disabled="busy || !connected" @click="join">{{ i18n.ts._drawing.join }}</MkButton>
-				<MkButton v-if="joined && !state.ended" :disabled="busy" @click="leave">{{ i18n.ts._drawing.leave }}</MkButton>
-				<label>{{ i18n.ts._drawing.color }} <input v-model="color" type="color" :disabled="!canDraw"></label>
-				<label>{{ i18n.ts._drawing.width }} <input v-model.number="width" type="range" min="1" max="64" :disabled="!canDraw"> {{ width }}</label>
-				<MkButton :disabled="!canDraw" :primary="!eraser" @click="eraser = false">{{ i18n.ts._drawing.pen }}</MkButton>
-				<MkButton :disabled="!canDraw" :primary="eraser" @click="eraser = true">{{ i18n.ts._drawing.eraser }}</MkButton>
-				<MkButton :disabled="busy || pending > 0" @click="save(false)">{{ i18n.ts._drawing.save }}</MkButton>
-				<MkButton :disabled="busy || pending > 0" @click="save(true)">{{ i18n.ts._drawing.attach }}</MkButton>
-				<MkButton v-if="isHost && !state.ended" danger :disabled="busy || !connected" @click="clear">{{ i18n.ts._drawing.clear }}</MkButton>
-				<MkButton v-if="isHost && !state.ended" danger :disabled="busy || !connected" @click="end">{{ i18n.ts._drawing.end }}</MkButton>
-			</div>
-			<canvas ref="canvas" :style="{ '--MI_DRAWING-paper': DRAWING_PAPER_COLOR }" width="1280" height="720" :class="[$style.canvas, !canDraw && $style.disabled]" :aria-label="i18n.ts._drawing.title" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="pointerUp" @lostpointercapture="pointerUp"></canvas>
-			<div :class="$style.people">
-				<strong>{{ i18n.ts._chat.members }} ({{ state.participantIds.length }}/16)</strong>
-				<div v-for="userId in state.participantIds" :key="userId" :class="$style.person">
-					<MkAvatar v-if="users.get(userId)" :user="users.get(userId)!" :class="$style.avatar"/>
-					<MkUserName v-if="users.get(userId)" :user="users.get(userId)!"/><span v-else>{{ userId }}</span>
-					<button v-if="isHost && userId !== $i.id && !state.ended" type="button" class="_button" :aria-label="i18n.ts._drawing.remove" @click="kick(userId)"><i class="ti ti-user-x"></i></button>
-				</div>
-			</div>
-			<div v-if="chatRoom" class="_gaps">
-				<MkA :to="`/chat/room/${chatRoom.id}`">{{ i18n.ts._chat.messages }}</MkA>
-				<div v-for="message in chatMessages.slice(-20)" :key="message.id"><XMessage :message="message"/></div>
-				<XForm v-if="!state.ended" :room="chatRoom"/>
-			</div>
-			<div v-else class="_gaps">
-				<div v-for="message in state.messages" :key="message.id" :class="$style.message">
-					<strong><MkUserName v-if="users.get(message.userId)" :user="users.get(message.userId)!"/><span v-else>{{ message.userId }}</span></strong>
-					<span>{{ message.text }}</span>
-				</div>
-				<form :class="$style.toolbar" @submit.prevent="sendMessage">
-					<MkInput v-model="text" :disabled="!canDraw || busy"><template #label>{{ i18n.ts.inputMessageHere }}</template><template #caption>{{ i18n.ts._drawing.messageLimit }}</template></MkInput>
-					<MkButton :disabled="!canSend" type="submit">{{ i18n.ts.send }}</MkButton>
-				</form>
-			</div>
+<div class="_gaps">
+	<div>{{ i18n.ts._drawing.description }}</div>
+	<MkInfo v-if="error" warn>{{ error }}</MkInfo>
+	<MkInfo v-else-if="!connected" warn>{{ i18n.ts._drawing.disconnected }}</MkInfo>
+	<MkInfo v-if="participationError && !error" warn>{{ participationError }}</MkInfo>
+	<div v-if="room && !state && !error" class="_gaps">
+		<template v-if="isHost && (room.state === 'open' || room.state === 'scheduled')">
+			<MkSelect v-model="scope" :items="scopeItems"><template #label>{{ i18n.ts._drawing.scope }}</template></MkSelect>
+			<MkButton primary :disabled="busy || !connected" @click="start">{{ i18n.ts._drawing.start }}</MkButton>
 		</template>
+		<MkInfo v-else>{{ i18n.ts._drawing.waiting }}</MkInfo>
 	</div>
-</PageWithHeader>
+	<template v-if="state && !error">
+		<MkInfo v-if="state.ended">{{ i18n.ts._drawing.ended }}</MkInfo>
+		<div :class="$style.toolbar">
+			<MkButton v-if="!joined && !state.ended" primary :disabled="busy || !connected" @click="join">{{ i18n.ts._drawing.join }}</MkButton>
+			<MkButton v-if="joined && !state.ended" :disabled="busy" @click="leave">{{ i18n.ts._drawing.leave }}</MkButton>
+			<label>{{ i18n.ts._drawing.color }} <input v-model="color" type="color" :disabled="!canDraw"></label>
+			<label>{{ i18n.ts._drawing.width }} <input v-model.number="width" type="range" min="1" max="64" :disabled="!canDraw"> {{ width }}</label>
+			<MkButton :disabled="!canDraw" :primary="!eraser" @click="eraser = false">{{ i18n.ts._drawing.pen }}</MkButton>
+			<MkButton :disabled="!canDraw" :primary="eraser" @click="eraser = true">{{ i18n.ts._drawing.eraser }}</MkButton>
+			<MkButton :disabled="busy || pending > 0" @click="save(false)">{{ i18n.ts._drawing.save }}</MkButton>
+			<MkButton :disabled="busy || pending > 0" @click="save(true)">{{ i18n.ts._drawing.attach }}</MkButton>
+			<MkButton v-if="isHost && !state.ended" danger :disabled="busy || !connected" @click="clear">{{ i18n.ts._drawing.clear }}</MkButton>
+			<MkButton v-if="isHost && !state.ended" danger :disabled="busy || !connected" @click="end">{{ i18n.ts._drawing.end }}</MkButton>
+		</div>
+		<canvas ref="canvas" :style="{ '--MI_DRAWING-paper': DRAWING_PAPER_COLOR }" width="1280" height="720" :class="[$style.canvas, !canDraw && $style.disabled]" :aria-label="i18n.ts._drawing.title" @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerUp" @pointercancel="pointerUp" @lostpointercapture="pointerUp"></canvas>
+		<div :class="$style.people">
+			<strong>{{ i18n.ts._chat.members }} ({{ state.participantIds.length }}/16)</strong>
+			<div v-for="userId in state.participantIds" :key="userId" :class="$style.person">
+				<MkAvatar v-if="users.get(userId)" :user="users.get(userId)!" :class="$style.avatar"/>
+				<MkUserName v-if="users.get(userId)" :user="users.get(userId)!"/><span v-else>{{ userId }}</span>
+				<button v-if="isHost && userId !== $i.id && !state.ended" type="button" class="_button" :aria-label="i18n.ts._drawing.remove" @click="kick(userId)"><i class="ti ti-user-x"></i></button>
+			</div>
+		</div>
+		<div v-if="chatRoom" class="_gaps">
+			<MkA :to="`/chat/room/${chatRoom.id}`">{{ i18n.ts._chat.messages }}</MkA>
+			<div v-for="message in chatMessages.slice(-20)" :key="message.id"><XMessage :message="message"/></div>
+			<XForm v-if="!state.ended" :room="chatRoom"/>
+		</div>
+		<div v-else class="_gaps">
+			<div v-for="message in state.messages" :key="message.id" :class="$style.message">
+				<strong><MkUserName v-if="users.get(message.userId)" :user="users.get(message.userId)!"/><span v-else>{{ message.userId }}</span></strong>
+				<span>{{ message.text }}</span>
+			</div>
+			<form :class="$style.toolbar" @submit.prevent="sendMessage">
+				<MkInput v-model="text" :disabled="!canDraw || busy"><template #label>{{ i18n.ts.inputMessageHere }}</template><template #caption>{{ i18n.ts._drawing.messageLimit }}</template></MkInput>
+				<MkButton :disabled="!canSend" type="submit">{{ i18n.ts.send }}</MkButton>
+			</form>
+		</div>
+	</template>
+</div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onDeactivated, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef } from 'vue';
-import { canvasBlob, DRAWING_PAPER_COLOR, paintStroke } from './canvas.js';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef } from 'vue';
+import { canvasBlob, DRAWING_PAPER_COLOR, paintStroke } from './drawing-canvas.js';
 import type * as Misskey from 'misskey-js';
-import type { DrawingSnapshot, DrawingStroke } from './canvas.js';
+import type { DrawingSnapshot, DrawingStroke } from './drawing-canvas.js';
 import XForm from '@/pages/chat/room.form.vue';
 import XMessage from '@/pages/chat/XMessage.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -77,14 +74,14 @@ import { i18n } from '@/i18n.js';
 import { useStream } from '@/stream.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { uploadFile } from '@/utility/drive.js';
-import { definePage } from '@/page.js';
 import * as os from '@/os.js';
 
-const props = defineProps<{ roomId: string }>();
+const props = defineProps<{ room: Misskey.entities.CallsRoom }>();
+const emit = defineEmits<{ (ev: 'refresh'): void }>();
 const $i = ensureSignin();
 const stream = useStream();
 const canvas = useTemplateRef('canvas');
-const room = shallowRef<Misskey.entities.CallsRoom | null>(null);
+const room = computed(() => props.room);
 const state = shallowRef<DrawingSnapshot | null>(null);
 const chatRoom = shallowRef<Misskey.entities.ChatRoom | null>(null);
 const chatMessages = ref<Misskey.entities.ChatMessage[]>([]);
@@ -106,7 +103,7 @@ const pending = ref(0);
 const connected = ref(stream.state === 'connected');
 const isHost = computed(() => room.value?.attachment.ownerUserId === $i.id);
 const joined = computed(() => state.value?.participantIds.includes($i.id) === true);
-const canDraw = computed(() => joined.value && state.value?.ended === false && connected.value && !error.value && !participationError.value && $i.policies.chatAvailability === 'available');
+const canDraw = computed(() => room.value.state === 'open' && joined.value && state.value?.ended === false && connected.value && !error.value && !participationError.value && $i.policies.chatAvailability === 'available');
 const canSend = computed(() => canDraw.value && !busy.value && text.value.trim().length > 0 && [...text.value].length <= 500);
 let channel: Misskey.IChannelConnection<Misskey.Channels['drawing']> | null = null;
 let chatChannel: Misskey.IChannelConnection<Misskey.Channels['chatRoom']> | null = null;
@@ -158,7 +155,7 @@ async function refresh() {
 	if (!active || refreshing) return;
 	refreshing = true;
 	try {
-		const { canvas: snapshot } = await misskeyApi('drawing/show', { roomId: props.roomId });
+		const { canvas: snapshot } = await misskeyApi('drawing/show', { roomId: props.room.id });
 		if (!active) return;
 		const recovered = error.value !== '' || !connected.value;
 		error.value = '';
@@ -178,7 +175,7 @@ async function update(action: 'join' | 'leave' | 'clear' | 'end' | 'kick' | 'mes
 	busy.value = true;
 	if (action === 'join') participationError.value = '';
 	try {
-		await misskeyApi(`drawing/${action}`, { roomId: props.roomId, canvasId: state.value.canvasId, ...params } as never);
+		await misskeyApi(`drawing/${action}`, { roomId: props.room.id, canvasId: state.value.canvasId, ...params } as never);
 		await refresh();
 		return true;
 	} catch (cause) {
@@ -193,10 +190,10 @@ async function start() {
 	busy.value = true;
 	try {
 		if (room.value?.state === 'scheduled') {
-			await misskeyApi('calls/rooms/open', { roomId: props.roomId, expectedRevision: room.value.revision });
-			room.value = (await misskeyApi('calls/rooms/show', { roomId: props.roomId })).room;
+			await misskeyApi('calls/rooms/open', { roomId: props.room.id, expectedRevision: room.value.revision });
+			emit('refresh');
 		}
-		await misskeyApi('drawing/start', { roomId: props.roomId, scope: scope.value }); await refresh();
+		await misskeyApi('drawing/start', { roomId: props.room.id, scope: scope.value }); await refresh();
 	} catch (cause) { showError(cause); } finally { busy.value = false; }
 }
 
@@ -239,7 +236,7 @@ function flushStroke(final = false) {
 	pending.value++;
 	strokeQueue = strokeQueue.then(async () => {
 		if (!active || !canDraw.value || state.value?.canvasId !== canvasId) return;
-		try { await misskeyApi('drawing/stroke', { roomId: props.roomId, canvasId, stroke }); } catch (cause) {
+		try { await misskeyApi('drawing/stroke', { roomId: props.room.id, canvasId, stroke }); } catch (cause) {
 			if ((cause as { code?: string }).code === 'DRAWING_INVALID_STATE') await refresh(); else showError(cause);
 		}
 	}).finally(() => { pending.value--; });
@@ -262,7 +259,7 @@ async function save(attach: boolean) {
 		await strokeQueue;
 		await refresh();
 		const blob = await canvasBlob(canvas.value);
-		const file = await uploadFile(blob, { name: `drawing-${props.roomId}.png` }).filePromise;
+		const file = await uploadFile(blob, { name: `drawing-${props.room.id}.png` }).filePromise;
 		if (attach) await os.post({ initialFiles: [file] }); else os.success();
 	} catch (cause) { console.error(cause); } finally { busy.value = false; }
 }
@@ -288,14 +285,12 @@ async function activate() {
 	if (active) return;
 	active = true;
 	error.value = '';
-	channel = stream.useChannel('drawing', { roomId: props.roomId });
+	channel = stream.useChannel('drawing', { roomId: props.room.id });
 	channel.on('updated', onUpdated);
 	channel.on('revoked', () => { error.value = i18n.ts._drawing.unavailable; stopPointer(); });
 	stream.on('_connected_', onConnected);
 	stream.on('_disconnected_', onDisconnected);
 	try {
-		room.value = (await misskeyApi('calls/rooms/show', { roomId: props.roomId })).room;
-		if (!active) return;
 		scope.value = room.value.attachment.type === 'chatRoom' ? 'chatRoom' : room.value.visibility === 'public' ? 'public' : 'calls';
 		if (room.value.attachment.type === 'chatRoom') {
 			const chat = await misskeyApi('chat/rooms/show', { roomId: room.value.attachment.chatRoomId });
@@ -324,14 +319,14 @@ async function activate() {
 	} catch (cause) { showError(cause); }
 	if (!active) return;
 	poll = window.setInterval(() => { if (!error.value) void refresh(); }, 15000);
-	heartbeat = window.setInterval(() => { if (canDraw.value) void misskeyApi('drawing/join', { roomId: props.roomId, canvasId: state.value!.canvasId }).catch(showError); }, 30000);
+	heartbeat = window.setInterval(() => { if (canDraw.value) void misskeyApi('drawing/join', { roomId: props.room.id, canvasId: state.value!.canvasId }).catch(showError); }, 30000);
 }
 
 function deactivate() {
 	if (!active) return;
 	active = false;
 	stopPointer();
-	if (joined.value && state.value && !state.value.ended) void misskeyApi('drawing/leave', { roomId: props.roomId, canvasId: state.value.canvasId }).catch(console.error);
+	if (joined.value && state.value && !state.value.ended) void misskeyApi('drawing/leave', { roomId: props.room.id, canvasId: state.value.canvasId }).catch(console.error);
 	window.clearInterval(poll);
 	window.clearInterval(heartbeat);
 	channel?.dispose();
@@ -341,10 +336,7 @@ function deactivate() {
 }
 
 onMounted(activate);
-onActivated(activate);
-onDeactivated(deactivate);
 onBeforeUnmount(deactivate);
-definePage(computed(() => ({ title: i18n.ts._drawing.title, icon: 'ti ti-brush' })));
 </script>
 
 <style lang="scss" module>

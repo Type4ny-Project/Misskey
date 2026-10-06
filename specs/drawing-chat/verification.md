@@ -31,3 +31,7 @@ SPDX の既存違反は `packages/backend/migration/1774789240317-event.js` と 
 ![スマホ幅](screenshots/mobile.png)
 
 2026-10-04、Calls PR #18 のマージ後の `origin/develop`（`eaf828bb2c`）を取り込み、SDK を再生成して競合を解消した。取り込み後も DrawingService unit 6件、Calls API e2e 8件、backend / frontend typecheck、`pnpm build-misskey-js-with-types`、変更ファイル lint・SPDX・locale safety はすべて PASS。上記の migration ヘッダー欠落は develop 側で修正済み。ブラウザー確認の記録は初回実装時のもの。
+
+2026-10-06、最新 develop（`1dcdf3624a`）を取り込み、絵チャをCallsルーム内のアクティビティへ移した。DrawingService unit 7件、Calls API e2e 8件、frontend Calls関連 unit 51件、backend / frontend typecheck、SDK再生成、frontend build、アイコン生成、アクティビティのStorybook登録生成、lint・SPDX・locale safetyはすべて PASS。通話中の開閉・一覧への戻りでセッションを切断・再参加しないことと、ルーム終了時に開いたアクティビティを保持することをunitで確認した。
+
+専用の新規DBとRedis DB 7を使い、独立した2ブラウザーで同じCalls画面内の描画同期、一覧へ戻ると絵チャの参加枠だけを解除すること、再表示時のキャンバス復帰、1280×720 PNGのドライブ保存、390px幅、アクティビティの閉じ直し、絵チャ終了後の保存可否を確認した。ホストが音声なしで絵チャを使う場合も、既存30秒更新でCallsの在席期限が延び、95秒待った後もルームがopenのままであることを確認。期限の延長fixtureは使っていない。ページの未処理JavaScriptエラーは0件。Cloudflare実音声接続は引き続きSKIPPED。スクリーンショットはこのルーム内UIのものへ差し替えた。

@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:leaveActiveClass="$style.dockLeaveActive"
 		:leaveToClass="$style.dockLeaveTo"
 	>
-		<div v-if="session.isActive.value && room != null && callsWindowRoomId !== session.currentRoomId.value" ref="rootEl" :class="$style.root">
+		<div v-if="session.isActive.value && room != null && callsWindowRoomId !== session.currentRoomId.value" ref="rootEl" :class="$style.root" @keydown.esc="expanded = false">
 			<Transition
 				:enterActiveClass="$style.panelEnterActive"
 				:enterFromClass="$style.panelEnterFrom"
@@ -36,8 +36,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.sectionLabel">{{ i18n.ts._calls.requestSpeaker }}</strong>
 						<div :class="$style.userList">
 							<div v-for="participant in pendingRequests" :key="participant.id" :class="$style.userRow">
-								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.userAvatar"/>
-								<div :class="$style.userBody"><strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong></div>
+								<MkA v-if="participant.user != null" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.userLink"/>
+								<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.userAvatar"/>
+								<div :class="$style.userBody"><strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong></div>
 								<button type="button" class="_button" :class="$style.inlineAction" @click="setRole(participant.id, 'speaker')">{{ i18n.ts.approve }}</button>
 								<button type="button" class="_button" :class="$style.inlineAction" @click="setRole(participant.id, 'listener')">{{ i18n.ts.reject }}</button>
 							</div>
@@ -48,10 +49,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.sectionLabel">{{ room?.mode === 'open' ? i18n.ts.users : i18n.ts._calls.speaker }}</strong>
 						<div :class="$style.userList">
 							<div v-for="participant in speakers" :key="participant.id" :class="$style.userRow">
-								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="[$style.userAvatar, session.speakingParticipantIds.value.has(participant.id) && $style.userAvatarLive]"/>
+								<MkA v-if="participant.user != null" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.userLink"/>
+								<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="[$style.userAvatar, session.speakingParticipantIds.value.has(participant.id) && $style.userAvatarLive]"/>
 								<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
 								<div :class="$style.userBody">
-									<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
+									<strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong>
 									<small>{{ participant.role === 'host' ? i18n.ts._calls.host : participant.isMuted ? i18n.ts._calls.mutedStatus : session.speakingParticipantIds.value.has(participant.id) ? i18n.ts._calls.speakingNow : i18n.ts._calls.microphoneOn }}</small>
 								</div>
 								<button v-if="room?.mode === 'stage' && session.isHost.value && participant.role !== 'host'" type="button" class="_button" :class="$style.inlineAction" :aria-label="i18n.ts._calls.demoteListener" :title="i18n.ts._calls.demoteListener" @click="setRole(participant.id, 'listener')"><i class="ti ti-microphone-off"></i></button>
@@ -63,10 +65,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<strong :class="$style.sectionLabel">{{ i18n.ts._calls.listener }}</strong>
 						<div :class="$style.userList">
 							<div v-for="participant in listeners" :key="participant.id" :class="$style.userRow">
-								<MkAvatar v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!" :class="$style.userAvatar"/>
+								<MkA v-if="participant.user != null" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.userLink"/>
+								<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.userAvatar"/>
 								<div v-else :class="$style.avatarPlaceholder"><i class="ti ti-user"></i></div>
 								<div :class="$style.userBody">
-									<strong><MkUserName v-if="participantUser(participant.userId) != null" :user="participantUser(participant.userId)!"/><template v-else>{{ participant.userId }}</template></strong>
+									<strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong>
 									<small><i class="ti ti-headphones"></i> {{ i18n.ts.online }}</small>
 								</div>
 							</div>
@@ -76,14 +79,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</Transition>
 
 			<div :class="$style.summaryRow">
-				<button type="button" class="_button _panel" :class="[$style.main, expanded && $style.mainExpanded]" :aria-expanded="expanded" aria-controls="calls-dock-panel" @click="expanded = !expanded">
+				<button type="button" class="_button _panel" :class="[$style.main, $style.compactMain, expanded && $style.mainExpanded]" :aria-label="room.title" :title="room.title" :aria-expanded="expanded" aria-controls="calls-dock-panel" @click="expanded = !expanded">
+					<i class="ti ti-volume" :class="$style.compactIcon" aria-hidden="true"></i>
 					<div :class="[$style.avatarRing, $style.avatarRingActive, isLiveSpeaking && $style.avatarRingLive]">
 						<MkAvatar v-if="hostUser != null" :user="hostUser" :class="$style.avatar"/>
 						<i v-else class="ti ti-phone"></i>
 					</div>
 					<div :class="$style.body">
-						<div :class="$style.titleRow"><strong>{{ room.title }}</strong></div>
-						<small>{{ participants.length }} {{ i18n.ts.users }} · {{ i18n.tsx._calls.peopleSpeaking({ count: speakingCount }) }}</small>
+						<div :class="$style.titleRow"><strong>{{ room.title }}</strong><span v-if="session.elapsedTime.value != null" :class="$style.elapsedTime" :title="i18n.ts._calls.elapsedTime"><i class="ti ti-clock" aria-hidden="true"></i> {{ session.elapsedTime.value }}</span></div>
+						<small>{{ participants.length }} {{ i18n.ts.users }} · {{ i18n.tsx._calls.peopleWithMicrophoneOn({ count: microphoneOnCount }) }}</small>
 					</div>
 					<i class="ti ti-chevron-up" :class="[$style.expandIcon, expanded && $style.expandIconExpanded]"></i>
 				</button>
@@ -93,7 +97,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 		</div>
-		<div v-else-if="!session.isActive.value && !session.joining.value && session.reconnectCandidate.value != null" :class="$style.root">
+		<div v-else-if="!session.isActive.value && !session.joining.value && session.reconnectCandidate.value != null" ref="rootEl" :class="$style.root">
 			<div :class="$style.summaryRow">
 				<button type="button" class="_button _panel" :class="[$style.main, $style.resumeMain]" :disabled="session.joining.value || session.reconnectRoomState.value !== 'open'" @click="resumeRecentRoom">
 					<div :class="[$style.avatarRing, $style.avatarRingActive]"><i class="ti ti-phone-call"></i></div>
@@ -111,31 +115,42 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import type * as Misskey from 'misskey-js';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import MkCallsControls from '@/components/MkCallsControls.vue';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { callsWindowRoomId, openCallsRoom } from '@/utility/calls-window.js';
 import { useCallsSession } from '@/utility/calls-session.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import MkA from '@/components/global/MkA.vue';
+import { acct, userPage } from '@/filters/user.js';
 
 const session = useCallsSession();
 const expanded = ref(false);
 const rootEl = ref<HTMLElement | null>(null);
 const room = computed(() => session.room.value);
 const participants = computed(() => session.participants.value);
-const speakers = computed(() => participants.value.filter(participant => participant.role !== 'listener'));
+const speakers = computed(() => participants.value.filter(participant => participant.role !== 'listener').sort((a, b) => Number(a.isMuted) - Number(b.isMuted)));
 const listeners = computed(() => participants.value.filter(participant => participant.role === 'listener'));
 const pendingRequests = computed(() => listeners.value.filter(participant => participant.speakerRequestedAt != null));
 const hostParticipant = computed(() => participants.value.find(participant => participant.role === 'host') ?? null);
-const hostUser = computed(() => hostParticipant.value == null ? null : participantUser(hostParticipant.value.userId));
+const hostUser = computed(() => hostParticipant.value?.user ?? null);
 const isLiveSpeaking = computed(() => session.myParticipant.value != null && session.speakingParticipantIds.value.has(session.myParticipant.value.id));
-const speakingCount = computed(() => session.speakingParticipantIds.value.size);
+const microphoneOnCount = computed(() => speakers.value.filter(participant => !participant.isMuted).length);
 
-function participantUser(userId: string): Misskey.entities.UserLite | null {
-	return session.usersById.value.get(userId) ?? null;
-}
+watch(rootEl, (element, _, onCleanup) => {
+	if (element == null) return;
+	const updateHeight = () => {
+		window.document.body.style.setProperty('--MI-callsDockSpacing', `calc(${element.offsetHeight}px + var(--MI-margin))`);
+	};
+	const observer = new ResizeObserver(updateHeight);
+	observer.observe(element);
+	updateHeight();
+	onCleanup(() => {
+		observer.disconnect();
+		window.document.body.style.removeProperty('--MI-callsDockSpacing');
+	});
+}, { flush: 'post' });
 
 function openRoom(): void {
 	if (session.currentRoomId.value == null) return;
@@ -144,9 +159,9 @@ function openRoom(): void {
 }
 
 async function leaveRoom(): Promise<void> {
+	expanded.value = false;
 	const { canceled } = await os.confirm({ type: 'warning', text: session.isHost.value ? i18n.ts._calls.endRoom : i18n.ts._calls.leaveRoom });
 	if (canceled) return;
-	expanded.value = false;
 	try {
 		await session.leave();
 		os.toast(i18n.ts._calls.leftCall);
@@ -185,7 +200,7 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 </script>
 
 <style lang="scss" module>
-.root { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 1200; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: min(420px, calc(100vw - 32px)); }
+.root { position: fixed; right: 16px; bottom: calc(var(--MI-minBottomSpacing) + var(--MI-margin)); z-index: 900; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: min(420px, calc(100vw - 32px)); }
 .panel { display: flex; width: min(420px, calc(100vw - 32px)); max-height: min(70vh, 560px); flex-direction: column; gap: 14px; overflow: hidden auto; padding: 14px; border-radius: 24px; background: color(from var(--MI_THEME-panel) srgb r g b / 0.94); box-shadow: 0 16px 40px color(from var(--MI_THEME-bg) srgb r g b / 0.28); backdrop-filter: blur(18px); }
 .panelHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .panelTitle { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -196,27 +211,29 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 .section { display: flex; flex-direction: column; gap: 8px; }
 .sectionLabel { font-size: 0.78rem; letter-spacing: 0.04em; opacity: 0.72; text-transform: uppercase; }
 .userList { display: flex; flex-direction: column; gap: 6px; }
-.userRow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 16px; background: color(from var(--MI_THEME-bg) srgb r g b / 0.28); }
+.userRow { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 16px; background: color(from var(--MI_THEME-bg) srgb r g b / 0.28); }
+.userLink { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 .userAvatar, .avatarPlaceholder { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; }
 .avatarPlaceholder { display: grid; place-items: center; background: var(--MI_THEME-bg); }
 .userAvatarLive { box-shadow: 0 0 0 3px var(--MI_THEME-accent), 0 0 16px color-mix(in srgb, var(--MI_THEME-accent) 38%, transparent); animation: avatarPulse 1.35s ease-in-out infinite alternate; }
 .userBody { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
 .userBody small { opacity: 0.68; }
-.inlineAction { flex: 0 0 auto; padding: 6px 10px; border-radius: 999px; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); font-size: 0.78rem; font-weight: 700; }
+.inlineAction { position: relative; z-index: 2; flex: 0 0 auto; padding: 6px 10px; border-radius: 999px; background: var(--MI_THEME-accentedBg); color: var(--MI_THEME-accent); font-size: 0.78rem; font-weight: 700; }
 .summaryRow { display: flex; align-items: stretch; gap: 8px; }
+.compactIcon { display: none; }
 .main { display: flex; min-width: min(310px, calc(100vw - 120px)); align-items: center; gap: 11px; padding: 9px 12px; border-radius: 22px; text-align: left; box-shadow: 0 12px 30px color(from var(--MI_THEME-bg) srgb r g b / 0.24); }
 .resumeMain { min-width: min(350px, calc(100vw - 92px)); }
 .resumeMain:disabled { cursor: wait; opacity: 0.72; }
 .avatarRing { position: relative; z-index: 0; display: grid; width: 42px; height: 42px; flex: 0 0 42px; place-items: center; border-radius: 50%; isolation: isolate; }
 .avatarRingActive::before, .avatarRingActive::after { position: absolute; z-index: -1; inset: -4px; border: 2px solid var(--MI_THEME-accent); border-radius: 44% 56% 48% 52% / 52% 43% 57% 48%; content: ''; opacity: 0.62; pointer-events: none; transition: opacity 0.4s ease, scale 0.4s ease; }
-.avatarRingActive::before { animation: organicRing 3.2s ease-in-out infinite; }
 .avatarRingActive::after { inset: -7px; border-color: color-mix(in srgb, var(--MI_THEME-accent) 42%, transparent); opacity: 0; scale: 0.88; }
-.avatarRingLive::before { opacity: 1; }
+.avatarRingLive::before { opacity: 1; animation: organicRing 3.2s ease-in-out infinite; }
 .avatarRingLive::after { opacity: 0.72; scale: 1; animation: organicRing 1.25s -0.72s ease-in-out infinite reverse; }
 .avatar { width: 38px; height: 38px; }
 .body { min-width: 0; flex: 1; }
 .titleRow { display: flex; align-items: center; gap: 7px; }
 .titleRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.elapsedTime { flex-shrink: 0; font-size: 0.8rem; font-variant-numeric: tabular-nums; opacity: 0.66; }
 .body small { display: block; overflow: hidden; margin-top: 3px; opacity: 0.66; text-overflow: ellipsis; white-space: nowrap; }
 .actions { display: flex; gap: 8px; }
 .action { display: grid; width: 52px; place-items: center; border-radius: 20px; font-size: 1.15rem; }
@@ -244,9 +261,9 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 }
 
 @keyframes organicRing {
-	0%, 100% { transform: scale(0.96) rotate(0deg); border-radius: 44% 56% 48% 52% / 52% 43% 57% 48%; }
-	35% { transform: scale(1.06) rotate(7deg); border-radius: 58% 42% 55% 45% / 42% 57% 43% 58%; }
-	68% { transform: scale(1.01) rotate(-5deg); border-radius: 49% 51% 39% 61% / 60% 44% 56% 40%; }
+	0%, 100% { transform: scale(0.96) rotate(0deg); }
+	35% { transform: scale(1.06) rotate(7deg); }
+	68% { transform: scale(1.01) rotate(-5deg); }
 }
 
 @keyframes avatarPulse {
@@ -267,8 +284,20 @@ onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerD
 }
 
 @media (max-width: 500px) {
-	.root { right: 12px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 24px); }
+	.root { right: 12px; max-width: calc(100vw - 24px); }
 	.panel { width: calc(100vw - 24px); max-height: min(60vh, 480px); }
 	.main { min-width: calc(100vw - 144px); }
+}
+
+@media (orientation: portrait) {
+	.root { right: max(12px, env(safe-area-inset-right)); max-width: calc(100vw - 24px); }
+	.panel { box-sizing: border-box; width: min(420px, calc(100vw - 24px)); max-height: min(60vh, 480px); }
+	.compactMain { width: 56px; min-width: 56px; height: 60px; justify-content: center; padding: 0; border-radius: 20px; }
+	.compactMain .avatarRing, .compactMain .body, .compactMain .expandIcon { display: none; }
+	.compactIcon { display: block; font-size: 24px; color: var(--MI_THEME-accent); }
+	.mainExpanded { background: var(--MI_THEME-accentedBg); }
+	.actions { display: none; }
+	.panelEnterFrom { transform: translateX(24px) scaleX(0.88); }
+	.panelLeaveTo { transform: translateX(16px) scaleX(0.94); }
 }
 </style>

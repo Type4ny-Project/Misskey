@@ -249,6 +249,28 @@ describe('RoleService', () => {
 	});
 
 	describe('getUserPolicies', () => {
+		test('Calls participation follows the instance default and role priority', async () => {
+			const user = await createUser();
+			const allowedUser = await createUser();
+			const deniedUser = await createUser();
+			const allowedRole = await createRole({
+				policies: { canJoinCalls: { useDefault: false, priority: 0, value: true } },
+			});
+			const deniedRole = await createRole({
+				policies: { canJoinCalls: { useDefault: false, priority: 2, value: false } },
+			});
+			await roleService.assign(allowedUser.id, allowedRole.id);
+			await roleService.assign(deniedUser.id, allowedRole.id);
+			await roleService.assign(deniedUser.id, deniedRole.id);
+
+			meta.policies = {};
+			expect((await roleService.getUserPolicies(user.id)).canJoinCalls).toBe(true);
+			meta.policies = { canJoinCalls: false };
+			expect((await roleService.getUserPolicies(user.id)).canJoinCalls).toBe(false);
+			expect((await roleService.getUserPolicies(allowedUser.id)).canJoinCalls).toBe(true);
+			expect((await roleService.getUserPolicies(deniedUser.id)).canJoinCalls).toBe(false);
+		});
+
 		test('instance default policies', async () => {
 			const user = await createUser();
 			meta.policies = {

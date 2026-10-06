@@ -139,6 +139,8 @@ export class DrawingService {
 			const result = await transaction.exec();
 			const error = result?.find(([err]) => err != null)?.[0];
 			if (error != null) throw error;
+			// Drawing without audio still counts as the host being present in the Calls room.
+			if (room.ownerUserId === user.id && (action === 'start' || action === 'join')) await this.liveConnections.touchHost(roomId);
 			const { removedIds, lastSeen, ...visible } = control;
 			this.events.publishDrawingStream(roomId, { ...visible, action, stroke: action === 'stroke' ? params.stroke! : null, message });
 		});

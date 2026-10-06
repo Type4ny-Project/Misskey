@@ -33,20 +33,25 @@ import type { EventEmitter } from 'events';
 
 //#region Stream type-body definitions
 type CallsRoomEventBase = { sequence: number; roomRevision: number; occurredAt: string };
+type CallsParticipantWithUser = Packed<'CallsParticipant'> & {
+	user: (Packed<'UserLite'> & { isFollowing: boolean; isFollowed: boolean }) | null;
+};
 export interface CallsRoomEventTypes {
+	title: CallsRoomEventBase & { title: string };
 	lifecycle: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled'; reason?: 'host-timeout' };
-	participant: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' | 'updated' };
+	participant: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' | 'updated'; participant?: CallsParticipantWithUser; moderatorUserIds?: string[] };
 	role: CallsRoomEventBase & { participantId: string; role: 'host' | 'speaker' | 'listener' };
 	speakerRequest: CallsRoomEventBase & { participantId: string; requested: boolean };
 	mute: CallsRoomEventBase & { participantId: string; isMuted: boolean };
 	speaking: CallsRoomEventBase & { participantIds: string[] };
 	track: CallsRoomEventBase & { participantId: string; publicationId: string; available: boolean; mediaKind: 'audio' | 'video'; mediaSource?: 'microphone' | 'camera' | 'screen' };
+	videoStopped: CallsRoomEventBase & { participantId: string; mediaSource: 'camera' | 'screen' };
 	revoked: CallsRoomEventBase & { participantId?: string; connectionId?: string; generation?: number; reason: 'access' | 'moderation' | 'room-ended' | 'logout' | 'stale-generation' | 'replaced' };
 }
 
 export interface CallsRoomsEventTypes {
 	created: { roomId: MiCallsRoom['id'] };
-	updated: { roomId: MiCallsRoom['id']; action: 'open' | 'ended' | 'cancelled' | 'participants' };
+	updated: { roomId: MiCallsRoom['id']; action: 'open' | 'ended' | 'cancelled' | 'participants' | 'title' };
 }
 
 export interface BroadcastTypes {
@@ -283,7 +288,7 @@ export interface InternalEventTypes {
 	userListMemberRemoved: { userListId: MiUserList['id']; memberId: MiUser['id']; };
 }
 
-type EventTypesToEventPayload<T> = EventUnionFromDictionary<UndefinedAsNullAll<SerializedAll<T>>>;
+export type EventTypesToEventPayload<T> = EventUnionFromDictionary<UndefinedAsNullAll<SerializedAll<T>>>;
 
 // name/messages(spec) pairs dictionary
 export type GlobalEvents = {

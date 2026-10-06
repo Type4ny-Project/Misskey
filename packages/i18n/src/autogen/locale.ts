@@ -6753,6 +6753,18 @@ export interface Locale extends ILocale {
     };
     "_announcement": {
         /**
+         * リアクションを有効にする
+         */
+        "reactionsEnabled": string;
+        /**
+         * 詳細を開いてリアクションする
+         */
+        "reactInDetail": string;
+        /**
+         * リアクションしたユーザー
+         */
+        "reactionUsers": string;
+        /**
          * 既存ユーザーのみ
          */
         "forExistingUsers": string;
@@ -6776,6 +6788,14 @@ export interface Locale extends ILocale {
          * アクティブなお知らせが多いため、UXが低下する可能性があります。終了したお知らせはアーカイブすることを検討してください。
          */
         "tooManyActiveAnnouncementDescription": string;
+        /**
+         * リアクションすると、このお知らせは既読になります。
+         */
+        "reactionReadDescription": string;
+        /**
+         * 「{title}」にリアクションすると、このお知らせは既読になります。
+         */
+        "reactionReadConfirmText": ParameterizedString<"title">;
         /**
          * 既読にしますか？
          */
@@ -7120,6 +7140,40 @@ export interface Locale extends ILocale {
         "description": string;
     };
     "_serverSettings": {
+        "_loginBonus": {
+            /**
+             * ログインボーナス
+             */
+            "title": string;
+            /**
+             * ログインボーナスを有効にする
+             */
+            "enabled": string;
+            /**
+             * 付与日の切り替え時刻（日本時間）
+             */
+            "resetTime": string;
+            /**
+             * 毎日この時刻以降の最初のアクセスで、1日1回ポイントを付与します。ページを開いたままの場合は再読み込みしてください。
+             */
+            "resetTimeDescription": string;
+            /**
+             * 付与ポイントの下限
+             */
+            "minPoints": string;
+            /**
+             * 付与ポイントの上限
+             */
+            "maxPoints": string;
+            /**
+             * 下限から上限までの整数をランダムに付与します。同じ値にすると固定ポイントになります。
+             */
+            "pointsDescription": string;
+            /**
+             * ポイントは1以上の整数で、下限が上限以下になるように設定してください。
+             */
+            "invalidPointsRange": string;
+        };
         /**
          * アイコン画像のURL
          */
@@ -8526,6 +8580,50 @@ export interface Locale extends ILocale {
              */
             "chatAvailability": string;
             /**
+             * Callsの使用
+             */
+            "canJoinCalls": string;
+            /**
+             * Callsでの発言
+             */
+            "canSpeakInCalls": string;
+            /**
+             * Callsでの映像配信
+             */
+            "canPublishCallsVideo": string;
+            /**
+             * Callsでの画面共有
+             */
+            "canShareCallsScreen": string;
+            /**
+             * Callsのスピーカー数の上限
+             */
+            "callsRoomSpeakerLimit": string;
+            /**
+             * Callsのリスナー数の上限
+             */
+            "callsRoomListenerLimit": string;
+            /**
+             * ポイントの送信
+             */
+            "canSendPoints": string;
+            /**
+             * 1日あたりのイベント作成上限
+             */
+            "eventCreationDailyLimit": string;
+            /**
+             * 作成したCallsに適用されます。ホストを含み、0にすると無制限です。
+             */
+            "callsRoomSpeakerLimitDescription": string;
+            /**
+             * 作成したCallsに適用されます。0にすると無制限です。
+             */
+            "callsRoomListenerLimitDescription": string;
+            /**
+             * 0にするとイベントを作成できません。
+             */
+            "eventCreationDailyLimitDescription": string;
+            /**
              * アップロード可能なファイル種別
              */
             "uploadableFileTypes": string;
@@ -9640,6 +9738,30 @@ export interface Locale extends ILocale {
          * ダイレクトメッセージ
          */
         "chatMessage": string;
+        /**
+         * 通話に参加したとき（自分）
+         */
+        "callsJoin": string;
+        /**
+         * 通話から退出したとき（自分）
+         */
+        "callsLeave": string;
+        /**
+         * 通話に参加したとき（他の人）
+         */
+        "callsParticipantJoin": string;
+        /**
+         * 通話から退出したとき（他の人）
+         */
+        "callsParticipantLeave": string;
+        /**
+         * 通話のマイクをミュートしたとき
+         */
+        "callsMute": string;
+        /**
+         * 通話のマイクをアンミュートしたとき
+         */
+        "callsUnmute": string;
     };
     "_soundSettings": {
         /**
@@ -10255,6 +10377,18 @@ export interface Locale extends ILocale {
     };
     "_calls": {
         /**
+         * アクティビティ
+         */
+        "activities": string;
+        /**
+         * アクティビティ一覧に戻る
+         */
+        "backToActivities": string;
+        /**
+         * このアカウントではコールへの参加が許可されていません。
+         */
+        "participationNotAllowed": string;
+        /**
          * カメラの設定
          */
         "cameraSettings": string;
@@ -10355,6 +10489,14 @@ export interface Locale extends ILocale {
          */
         "startScreenSharing": string;
         /**
+         * 画面共有を追加
+         */
+        "addScreenSharing": string;
+        /**
+         * 画面共有の音量
+         */
+        "screenAudioVolume": string;
+        /**
          * 共有を停止
          */
         "stopScreenSharing": string;
@@ -10399,6 +10541,10 @@ export interface Locale extends ILocale {
          */
         "peopleSpeaking": ParameterizedString<"count">;
         /**
+         * {count}人が発言中
+         */
+        "peopleWithMicrophoneOn": ParameterizedString<"count">;
+        /**
          * 接続済み
          */
         "connected": string;
@@ -10426,6 +10572,22 @@ export interface Locale extends ILocale {
          * 通話から退出しました
          */
         "leftCall": string;
+        /**
+         * 通話時間
+         */
+        "elapsedTime": string;
+        /**
+         * 開始日時
+         */
+        "startedAt": string;
+        /**
+         * 終了日時
+         */
+        "endedAt": string;
+        /**
+         * ルーム全体の通話時間
+         */
+        "totalDuration": string;
         /**
          * 新しい通話
          */
@@ -10505,6 +10667,10 @@ export interface Locale extends ILocale {
          * ルーム名
          */
         "roomTitle": string;
+        /**
+         * タイトルを変更
+         */
+        "changeTitle": string;
         /**
          * 説明
          */
@@ -10713,6 +10879,30 @@ export interface Locale extends ILocale {
          * 参加者から削除
          */
         "removeParticipant": string;
+        /**
+         * ホストを譲る
+         */
+        "transferHost": string;
+        /**
+         * この参加者にホストを譲りますか？あなたはスピーカーとして通話に残ります。
+         */
+        "transferHostConfirm": string;
+        /**
+         * この参加者のマイクをミュートしますか？
+         */
+        "muteParticipantConfirm": string;
+        /**
+         * この参加者のカメラを停止しますか？
+         */
+        "stopParticipantCameraConfirm": string;
+        /**
+         * この参加者の画面共有を停止しますか？
+         */
+        "stopParticipantScreenSharingConfirm": string;
+        /**
+         * この参加者を通話から退出させますか？
+         */
+        "removeParticipantConfirm": string;
         /**
          * ホスト
          */
@@ -14616,7 +14806,7 @@ export interface Locale extends ILocale {
          */
         "tagsCaption": string;
         /**
-         * イベントの作成上限に達しました（1日5件まで）
+         * 本日のイベント作成上限に達しました
          */
         "rateLimitReached": string;
         /**

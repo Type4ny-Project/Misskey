@@ -9,7 +9,7 @@ import { EventService } from '@/core/EventService.js';
 import type { EventEntityService } from '@/core/entities/EventEntityService.js';
 import type { ChannelService } from '@/core/ChannelService.js';
 import type { IdService } from '@/core/IdService.js';
-import type { RoleService } from '@/core/RoleService.js';
+import { DEFAULT_POLICIES, type RoleService } from '@/core/RoleService.js';
 import type { EventsRepository, ChannelsRepository, MiEvent } from '@/models/_.js';
 import type { MiLocalUser } from '@/models/User.js';
 import CreateEvent from '@/server/api/endpoints/events/create.js';
@@ -29,9 +29,10 @@ function createFixture() {
 	events.findOneByOrFail.mockResolvedValue(event);
 	events.countBy.mockResolvedValue(0);
 	roles.isModerator.mockResolvedValue(false);
+	roles.getUserPolicies.mockResolvedValue({ ...DEFAULT_POLICIES });
 	ids.gen.mockReturnValue('event');
 	const service = new EventService(events, mock<ChannelsRepository>(), mock<ChannelService>(), ids, roles);
-	return { events, service, entity };
+	return { events, service, entity, roles };
 }
 
 describe('Event time range validation', () => {
@@ -69,5 +70,26 @@ describe('Event time range validation', () => {
 		const { service, events } = createFixture();
 		await service.update(user, 'event', params);
 		expect(events.update).toHaveBeenCalledWith('event', expect.objectContaining(params));
+	});
+});
+
+
+describe('Event daily creation limit', () => {
+	test.each([
+		{ limit: 2, count: 2, allowed: false },
+		{ limit: 10, count: 5, allowed: true },
+		{ limit: 0, count: 0, allowed: false },
+	])('applies a role limit of $limit with $count events today', async ({ limit, count, allowed }) => {
+		const { service, events, roles } = createFixture();
+		roles.getUserPolicies.mockResolvedValue({ ...DEFAULT_POLICIES, eventCreationDailyLimit: limit });
+		events.countBy.mockResolvedValue(count);
+		const operation = service.create({ user, title: 'Event', startAt });
+		if (allowed) {
+			await operation;
+			expect(events.insertOne).toHaveBeenCalled();
+		} else {
+			await expect(operation).rejects.toBeInstanceOf(EventService.TooManyEventsError);
+			expect(events.insertOne).not.toHaveBeenCalled();
+		}
 	});
 });

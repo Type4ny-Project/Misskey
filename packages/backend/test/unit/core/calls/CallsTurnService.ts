@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { Config } from '@/config.js';
 import { CallsTurnService, isBrowserSafeCallsIceUrl } from '@/core/calls/CallsTurnService.js';
+import { CallsRoomError } from '@/core/calls/CallsRoomService.js';
 
 describe('CallsTurnService', () => {
 	afterEach(() => vi.unstubAllGlobals());
@@ -18,7 +19,7 @@ describe('CallsTurnService', () => {
 		vi.stubGlobal('fetch', fetch);
 		const credentialStore = { register: vi.fn().mockResolvedValue(undefined), revokeUsername: vi.fn().mockResolvedValue(undefined) };
 		const participants = { findOneBy: vi.fn().mockResolvedValue({ id: 'participant-a' }) };
-		const rooms = { getRoom: vi.fn().mockResolvedValue({ id: 'room-a', state: 'open' }), assertCanAccess: vi.fn() };
+		const rooms = { getRoom: vi.fn().mockResolvedValue({ id: 'room-a', state: 'open' }), assertCanAccess: vi.fn(), assertCanJoin: vi.fn() };
 		const config = { cloudflareRealtime: { turn: { tokenId: 'server-key-id', apiToken: 'server-api-token', ttl: 3600 } } } as Config;
 		const service = new CallsTurnService(config, participants as never, rooms as never, credentialStore as never);
 
@@ -30,6 +31,20 @@ describe('CallsTurnService', () => {
 		}));
 		expect(JSON.stringify(result)).not.toContain('server-api-token');
 		expect(credentialStore.register).toHaveBeenCalledWith('short-lived-user', 'participant-a', 'room-a', 'user-a', expect.any(String), 3600);
+	});
+
+	test('does not issue TURN credentials when the role disallows participation', async () => {
+		const fetch = vi.fn();
+		vi.stubGlobal('fetch', fetch);
+		const rooms = {
+			getRoom: vi.fn().mockResolvedValue({ id: 'room-a', state: 'open' }),
+			assertCanAccess: vi.fn(),
+			assertCanJoin: vi.fn().mockRejectedValue(new CallsRoomError('access-denied')),
+		};
+		const config = { cloudflareRealtime: { turn: { tokenId: 'server-key-id', apiToken: 'server-api-token', ttl: 3600 } } } as Config;
+		const service = new CallsTurnService(config, {} as never, rooms as never, {} as never);
+		await expect(service.issue({ id: 'user-a' } as never, 'room-a')).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fetch).not.toHaveBeenCalled();
 	});
 
 	test.each([

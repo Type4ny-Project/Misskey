@@ -137,6 +137,12 @@ type AdminAnnouncementsListRequest = operations['admin___announcements___list'][
 type AdminAnnouncementsListResponse = operations['admin___announcements___list']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminAnnouncementsReactionsRequest = operations['admin___announcements___reactions']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAnnouncementsReactionsResponse = operations['admin___announcements___reactions']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminAnnouncementsUpdateRequest = operations['admin___announcements___update']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -541,6 +547,12 @@ type AnnouncementCreated = {
 };
 
 // @public (undocumented)
+type AnnouncementsReactRequest = operations['announcements___react']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AnnouncementsReactResponse = operations['announcements___react']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AnnouncementsRequest = operations['announcements']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -835,6 +847,9 @@ type CallsRoomsListRequest = operations['calls___rooms___list']['requestBody']['
 type CallsRoomsListResponse = operations['calls___rooms___list']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type CallsRoomsMuteParticipantRequest = operations['calls___rooms___mute-participant']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
 type CallsRoomsOpenRequest = operations['calls___rooms___open']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -863,6 +878,21 @@ type CallsRoomsShowRequest = operations['calls___rooms___show']['requestBody']['
 
 // @public (undocumented)
 type CallsRoomsShowResponse = operations['calls___rooms___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsStopParticipantVideoRequest = operations['calls___rooms___stop-participant-video']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsTransferHostRequest = operations['calls___rooms___transfer-host']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsTransferHostResponse = operations['calls___rooms___transfer-host']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsUpdateTitleRequest = operations['calls___rooms___update-title']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsRoomsUpdateTitleResponse = operations['calls___rooms___update-title']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type CallsUsersActiveRoomsRequest = operations['calls___users___active-rooms']['requestBody']['content']['application/json'];
@@ -1205,6 +1235,9 @@ export type Channels = {
             roomId: string;
         };
         events: {
+            title: (payload: CallsRoomEventBase & {
+                title: string;
+            }) => void;
             lifecycle: (payload: CallsRoomEventBase & {
                 state: 'scheduled' | 'open' | 'ended' | 'cancelled';
                 reason?: 'host-timeout';
@@ -1212,6 +1245,13 @@ export type Channels = {
             participant: (payload: CallsRoomEventBase & {
                 participantId: string;
                 action: 'joined' | 'left' | 'removed' | 'updated';
+                participant?: CallsParticipant & {
+                    user: (UserLite & {
+                        isFollowing: boolean;
+                        isFollowed: boolean;
+                    }) | null;
+                };
+                moderatorUserIds?: string[];
             }) => void;
             role: (payload: CallsRoomEventBase & {
                 participantId: string;
@@ -1234,6 +1274,10 @@ export type Channels = {
                 available: boolean;
                 mediaKind: 'audio' | 'video';
                 mediaSource?: 'microphone' | 'camera' | 'screen';
+            }) => void;
+            videoStopped: (payload: CallsRoomEventBase & {
+                participantId: string;
+                mediaSource: 'camera' | 'screen';
             }) => void;
             revoked: (payload: CallsRoomEventBase & {
                 participantId?: string;
@@ -1259,7 +1303,7 @@ export type Channels = {
                 room: CallsRoom;
             }) => void;
             updated: (payload: {
-                action: 'open' | 'ended' | 'cancelled' | 'participants';
+                action: 'open' | 'ended' | 'cancelled' | 'participants' | 'title';
                 room: CallsRoom;
             }) => void;
         };
@@ -2012,6 +2056,8 @@ declare namespace entities {
         AdminAnnouncementsDeleteRequest,
         AdminAnnouncementsListRequest,
         AdminAnnouncementsListResponse,
+        AdminAnnouncementsReactionsRequest,
+        AdminAnnouncementsReactionsResponse,
         AdminAnnouncementsUpdateRequest,
         AdminAvatarDecorationsCreateRequest,
         AdminAvatarDecorationsCreateResponse,
@@ -2146,6 +2192,8 @@ declare namespace entities {
         AdminUpdateUserNoteRequest,
         AnnouncementsRequest,
         AnnouncementsResponse,
+        AnnouncementsReactRequest,
+        AnnouncementsReactResponse,
         AnnouncementsShowRequest,
         AnnouncementsShowResponse,
         AntennasCreateRequest,
@@ -2212,6 +2260,7 @@ declare namespace entities {
         CallsRoomsLeaveRequest,
         CallsRoomsListRequest,
         CallsRoomsListResponse,
+        CallsRoomsMuteParticipantRequest,
         CallsRoomsOpenRequest,
         CallsRoomsOpenResponse,
         CallsRoomsRemoveParticipantRequest,
@@ -2222,6 +2271,11 @@ declare namespace entities {
         CallsRoomsSetRoleResponse,
         CallsRoomsShowRequest,
         CallsRoomsShowResponse,
+        CallsRoomsStopParticipantVideoRequest,
+        CallsRoomsTransferHostRequest,
+        CallsRoomsTransferHostResponse,
+        CallsRoomsUpdateTitleRequest,
+        CallsRoomsUpdateTitleResponse,
         CallsUsersActiveRoomsRequest,
         CallsUsersActiveRoomsResponse,
         ChannelsCreateRequest,
@@ -4047,7 +4101,7 @@ type RoleLite = components['schemas']['RoleLite'];
 type RolePolicies = components['schemas']['RolePolicies'];
 
 // @public (undocumented)
-export const rolePolicies: readonly ["gtlAvailable", "ltlAvailable", "canPublicNote", "mentionLimit", "canInvite", "inviteLimit", "inviteLimitCycle", "inviteExpirationTime", "canManageCustomEmojis", "canManageAvatarDecorations", "canSearchNotes", "canSearchUsers", "canUseTranslator", "canHideAds", "canCreateChannel", "driveCapacityMb", "maxFileSizeMb", "alwaysMarkNsfw", "canUpdateBioMedia", "pinLimit", "antennaLimit", "wordMuteLimit", "webhookLimit", "clipLimit", "noteEachClipsLimit", "userListLimit", "userEachUserListsLimit", "rateLimitFactor", "avatarDecorationLimit", "canImportAntennas", "canImportBlocking", "canImportFollowing", "canImportMuting", "canImportUserLists", "chatAvailability", "uploadableFileTypes", "noteDraftLimit", "scheduledNoteLimit", "watermarkAvailable", "loginBonusGrantEnabled", "reactionLimit"];
+export const rolePolicies: readonly ["gtlAvailable", "ltlAvailable", "canPublicNote", "mentionLimit", "canInvite", "inviteLimit", "inviteLimitCycle", "inviteExpirationTime", "canManageCustomEmojis", "canManageAvatarDecorations", "canSearchNotes", "canSearchUsers", "canUseTranslator", "canHideAds", "canCreateChannel", "driveCapacityMb", "maxFileSizeMb", "alwaysMarkNsfw", "canUpdateBioMedia", "pinLimit", "antennaLimit", "wordMuteLimit", "webhookLimit", "clipLimit", "noteEachClipsLimit", "userListLimit", "userEachUserListsLimit", "rateLimitFactor", "avatarDecorationLimit", "canImportAntennas", "canImportBlocking", "canImportFollowing", "canImportMuting", "canImportUserLists", "chatAvailability", "canJoinCalls", "canSpeakInCalls", "canPublishCallsVideo", "canShareCallsScreen", "callsRoomSpeakerLimit", "callsRoomListenerLimit", "canSendPoints", "eventCreationDailyLimit", "uploadableFileTypes", "noteDraftLimit", "scheduledNoteLimit", "watermarkAvailable", "loginBonusGrantEnabled", "reactionLimit"];
 
 // @public (undocumented)
 type RolesListResponse = operations['roles___list']['responses']['200']['content']['application/json'];
@@ -4468,9 +4522,9 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:236:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:251:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:320:4 - (ae-forgotten-export) The symbol "CallsRoomEventBase" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:237:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:252:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:321:4 - (ae-forgotten-export) The symbol "CallsRoomEventBase" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

@@ -32,6 +32,8 @@ import type {
 	AdminAnnouncementsDeleteRequest,
 	AdminAnnouncementsListRequest,
 	AdminAnnouncementsListResponse,
+	AdminAnnouncementsReactionsRequest,
+	AdminAnnouncementsReactionsResponse,
 	AdminAnnouncementsUpdateRequest,
 	AdminAvatarDecorationsCreateRequest,
 	AdminAvatarDecorationsCreateResponse,
@@ -166,6 +168,8 @@ import type {
 	AdminUpdateUserNoteRequest,
 	AnnouncementsRequest,
 	AnnouncementsResponse,
+	AnnouncementsReactRequest,
+	AnnouncementsReactResponse,
 	AnnouncementsShowRequest,
 	AnnouncementsShowResponse,
 	AntennasCreateRequest,
@@ -232,6 +236,7 @@ import type {
 	CallsRoomsLeaveRequest,
 	CallsRoomsListRequest,
 	CallsRoomsListResponse,
+	CallsRoomsMuteParticipantRequest,
 	CallsRoomsOpenRequest,
 	CallsRoomsOpenResponse,
 	CallsRoomsRemoveParticipantRequest,
@@ -242,6 +247,11 @@ import type {
 	CallsRoomsSetRoleResponse,
 	CallsRoomsShowRequest,
 	CallsRoomsShowResponse,
+	CallsRoomsStopParticipantVideoRequest,
+	CallsRoomsTransferHostRequest,
+	CallsRoomsTransferHostResponse,
+	CallsRoomsUpdateTitleRequest,
+	CallsRoomsUpdateTitleResponse,
 	CallsUsersActiveRoomsRequest,
 	CallsUsersActiveRoomsResponse,
 	ChannelsCreateRequest,
@@ -815,6 +825,7 @@ export type Endpoints = {
 	'admin/announcements/create': { req: AdminAnnouncementsCreateRequest; res: AdminAnnouncementsCreateResponse };
 	'admin/announcements/delete': { req: AdminAnnouncementsDeleteRequest; res: EmptyResponse };
 	'admin/announcements/list': { req: AdminAnnouncementsListRequest; res: AdminAnnouncementsListResponse };
+	'admin/announcements/reactions': { req: AdminAnnouncementsReactionsRequest; res: AdminAnnouncementsReactionsResponse };
 	'admin/announcements/update': { req: AdminAnnouncementsUpdateRequest; res: EmptyResponse };
 	'admin/avatar-decorations/create': { req: AdminAvatarDecorationsCreateRequest; res: AdminAvatarDecorationsCreateResponse };
 	'admin/avatar-decorations/delete': { req: AdminAvatarDecorationsDeleteRequest; res: EmptyResponse };
@@ -913,6 +924,7 @@ export type Endpoints = {
 	'admin/update-proxy-account': { req: AdminUpdateProxyAccountRequest; res: AdminUpdateProxyAccountResponse };
 	'admin/update-user-note': { req: AdminUpdateUserNoteRequest; res: EmptyResponse };
 	'announcements': { req: AnnouncementsRequest; res: AnnouncementsResponse };
+	'announcements/react': { req: AnnouncementsReactRequest; res: AnnouncementsReactResponse };
 	'announcements/show': { req: AnnouncementsShowRequest; res: AnnouncementsShowResponse };
 	'antennas/create': { req: AntennasCreateRequest; res: AntennasCreateResponse };
 	'antennas/delete': { req: AntennasDeleteRequest; res: EmptyResponse };
@@ -950,12 +962,16 @@ export type Endpoints = {
 	'calls/rooms/join': { req: CallsRoomsJoinRequest; res: CallsRoomsJoinResponse };
 	'calls/rooms/leave': { req: CallsRoomsLeaveRequest; res: EmptyResponse };
 	'calls/rooms/list': { req: CallsRoomsListRequest; res: CallsRoomsListResponse };
+	'calls/rooms/mute-participant': { req: CallsRoomsMuteParticipantRequest; res: EmptyResponse };
 	'calls/rooms/open': { req: CallsRoomsOpenRequest; res: CallsRoomsOpenResponse };
 	'calls/rooms/remove-participant': { req: CallsRoomsRemoveParticipantRequest; res: EmptyResponse };
 	'calls/rooms/request-speaker': { req: CallsRoomsRequestSpeakerRequest; res: EmptyResponse };
 	'calls/rooms/set-moderator': { req: CallsRoomsSetModeratorRequest; res: CallsRoomsSetModeratorResponse };
 	'calls/rooms/set-role': { req: CallsRoomsSetRoleRequest; res: CallsRoomsSetRoleResponse };
 	'calls/rooms/show': { req: CallsRoomsShowRequest; res: CallsRoomsShowResponse };
+	'calls/rooms/stop-participant-video': { req: CallsRoomsStopParticipantVideoRequest; res: EmptyResponse };
+	'calls/rooms/transfer-host': { req: CallsRoomsTransferHostRequest; res: CallsRoomsTransferHostResponse };
+	'calls/rooms/update-title': { req: CallsRoomsUpdateTitleRequest; res: CallsRoomsUpdateTitleResponse };
 	'calls/users/active-rooms': { req: CallsUsersActiveRoomsRequest; res: CallsUsersActiveRoomsResponse };
 	'channels/create': { req: ChannelsCreateRequest; res: ChannelsCreateResponse };
 	'channels/favorite': { req: ChannelsFavoriteRequest; res: EmptyResponse };

@@ -4,10 +4,9 @@
  */
 
 import { computed, ref, shallowRef, watch } from 'vue';
-import type * as Misskey from 'misskey-js';
 import type { CallsMediaFailure, CallsMediaState, CallsRemotePublication, CallsVideoQuality, CallsVideoSource } from '@/utility/calls-media.js';
 import type { MenuItem } from '@/types/menu.js';
-import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
+import { retainCallsRoomConnection } from '@/composables/use-calls-room.js';
 import { $i } from '@/i.js';
 import { CallsMediaController, captureCallsCamera } from '@/utility/calls-media.js';
 import { detectCallsMediaCapabilities, normalizeCallsMediaError } from '@/utility/calls-media-core.js';
@@ -15,9 +14,10 @@ import { miLocalStorage } from '@/local-storage.js';
 import { i18n } from '@/i18n.js';
 import { alert, confirm, popup, popupMenu, toast } from '@/os.js';
 import { misskeyApi, misskeyApiKeepalive } from '@/utility/misskey-api.js';
-import { callsScreenWindowStream, clearCallsScreenWindow, showCallsScreenWindow } from '@/utility/calls-screen-window.js';
+import { playMisskeySfx } from '@/utility/sound.js';
+import { callsScreenWindows, clearCallsScreenWindow, clearCallsScreenWindows, showCallsScreenWindow } from '@/utility/calls-screen-window.js';
 
-type CallsRoomConnection = ReturnType<typeof createCallsRoomConnection>;
+type CallsRoomConnection = ReturnType<typeof retainCallsRoomConnection>;
 type CallsReconnectCandidate = { roomId: string; title: string; userId: string; reconnectToken: string; expiresAt: number };
 const reconnectStorageKey = 'miux:calls-reconnect' as const;
 
@@ -64,21 +64,24 @@ const reconnectCandidate = ref<CallsReconnectCandidate | null>(null);
 const reconnectRoomState = ref<'checking' | 'open' | 'unavailable'>('checking');
 const reconnectSecondsRemaining = ref(0);
 const speakerRequestResult = ref<'rejected' | null>(null);
-const usersById = shallowRef(new Map<string, Misskey.entities.UserLite>());
-const remoteAudio = new Map<string, HTMLAudioElement>();
-const localVideos = shallowRef(new Map<CallsVideoSource, MediaStream>());
+const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement; screenPublicationId?: string }>();
+const participantVolumes = shallowRef(new Map<string, number>());
+const localVideos = shallowRef(new Map<string, MediaStream>());
+const screenVolumes = shallowRef(new Map<string, number>());
+const screenAudioIds = shallowRef(new Set<string>());
 const remoteVideos = shallowRef(new Map<string, { participantId: string; source: CallsVideoSource; stream: MediaStream }>());
 const videoBusy = ref(false);
 const videoQuality = ref<Record<CallsVideoSource, CallsVideoQuality>>({ camera: { height: 720, frameRate: 30 }, screen: { height: 1080, frameRate: 30 } });
 const canShareScreen = typeof navigator.mediaDevices?.getDisplayMedia === 'function';
 const videos = computed(() => [
-	...[...localVideos.value].map(([source, stream]) => ({ id: `local-${source}`, participantId: myParticipant.value?.id ?? '', source, stream, local: true })),
+	...[...localVideos.value].map(([id, stream]) => ({ id: `local-${id}`, participantId: myParticipant.value?.id ?? '', source: id === 'camera' ? 'camera' as const : 'screen' as const, stream, local: true })),
 	...[...remoteVideos.value].map(([id, video]) => ({ id, ...video, local: false })),
 ]);
 
 let removeTrackListener: (() => void) | null = null;
 let removeRevokedListener: (() => void) | null = null;
 let sessionGeneration = 0;
+let sessionSoundActive = false;
 let reconnectExpiryTimer: number | null = null;
 let reconnectCountdownTimer: number | null = null;
 let reconnectConnection: CallsRoomConnection | null = null;
@@ -109,7 +112,7 @@ function setReconnectCandidate(candidate: CallsReconnectCandidate | null): void 
 	updateReconnectCountdown(candidate);
 	reconnectExpiryTimer = window.setTimeout(() => dismissReconnectCandidate(), Math.max(0, candidate.expiresAt - Date.now()));
 	reconnectCountdownTimer = window.setInterval(() => updateReconnectCountdown(candidate), 1000);
-	reconnectConnection = createCallsRoomConnection(candidate.roomId);
+	reconnectConnection = retainCallsRoomConnection(candidate.roomId);
 	stopReconnectRoomWatch = watch(reconnectConnection.room, room => {
 		if (room == null) return;
 		if (room.state !== 'open') {
@@ -133,13 +136,47 @@ const speakingParticipantIds = computed(() => connection.value?.speakingParticip
 const connected = computed(() => connection.value?.connected.value ?? false);
 const myParticipant = computed(() => participants.value.find(participant => participant.userId === $i?.id) ?? null);
 const isActive = computed(() => currentRoomId.value != null && myParticipant.value != null && room.value?.state === 'open');
+
+watch(isActive, (active, _, onCleanup) => {
+	if (!active) return;
+	const onBeforeUnload = (event: BeforeUnloadEvent) => {
+		event.preventDefault();
+		event.returnValue = '';
+	};
+	window.addEventListener('beforeunload', onBeforeUnload);
+	onCleanup(() => window.removeEventListener('beforeunload', onBeforeUnload));
+}, { flush: 'sync' });
+
+const elapsedTime = ref<string | null>(null);
+
+watch(() => isActive.value ? myParticipant.value?.joinedAt ?? null : null, (joinedAt, _, onCleanup) => {
+	if (joinedAt == null) {
+		elapsedTime.value = null;
+		return;
+	}
+	const startedAt = new Date(joinedAt).getTime();
+	const update = () => {
+		const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+		const hours = Math.floor(seconds / 3600);
+		const minutes = Math.floor(seconds / 60) % 60;
+		elapsedTime.value = [...(hours > 0 ? [hours] : []), minutes, seconds % 60].map(value => String(value).padStart(2, '0')).join(':');
+	};
+	update();
+	const timer = window.setInterval(update, 1000);
+	onCleanup(() => window.clearInterval(timer));
+}, { immediate: true });
+
 const isHost = computed(() => myParticipant.value?.role === 'host');
+const canSpeak = computed(() => $i?.policies.canJoinCalls === true && $i.policies.canSpeakInCalls);
 const isSpeaker = computed(() => myParticipant.value?.role === 'host' || myParticipant.value?.role === 'speaker');
+const canPublishVideo = computed(() => isSpeaker.value && $i?.policies.canJoinCalls === true && $i.policies.canPublishCallsVideo === true);
+const canShareScreenMedia = computed(() => isSpeaker.value && $i?.policies.canJoinCalls === true && $i.policies.canShareCallsScreen === true);
 const controls = computed(() => ({
 	role: myParticipant.value?.role ?? 'listener',
-	muted: muted.value, cameraOn: localVideos.value.has('camera'), screenOn: localVideos.value.has('screen'),
+	canSpeak: isSpeaker.value && canSpeak.value, canPublishVideo: canPublishVideo.value, canShareScreen: canShareScreenMedia.value,
+	muted: muted.value, cameraOn: localVideos.value.has('camera'), screenOn: [...localVideos.value.keys()].some(id => id !== 'camera'),
 	status: mediaState.value, busy: videoBusy.value, joining: joining.value, screenSupported: canShareScreen,
-	speakerRequestEnabled: room.value?.mode === 'stage',
+	speakerRequestEnabled: canSpeak.value && room.value?.mode === 'stage',
 	speakerRequested: myParticipant.value?.speakerRequestedAt != null,
 }));
 
@@ -153,12 +190,38 @@ function disposeConnection(): void {
 }
 
 function removeRemoteTrack(publicationId: string): void {
-	const audio = remoteAudio.get(publicationId);
+	const audio = remoteAudio.get(publicationId)?.element;
 	if (audio != null) { audio.pause(); audio.srcObject = null; audio.remove(); }
 	remoteAudio.delete(publicationId);
+	screenAudioIds.value = new Set([...remoteAudio.values()].flatMap(item => item.screenPublicationId == null ? [] : [item.screenPublicationId]));
 	const next = new Map(remoteVideos.value);
 	next.delete(publicationId);
 	remoteVideos.value = next;
+}
+
+function getParticipantVolume(userId: string): number {
+	return participantVolumes.value.get(userId) ?? 100;
+}
+
+function applyParticipantVolumes(): void {
+	for (const { participantId, element, screenPublicationId } of remoteAudio.values()) {
+		const participant = participants.value.find(item => item.id === participantId);
+		element.volume = screenPublicationId != null ? getScreenVolume(screenPublicationId) / 100 : participant == null ? 1 : getParticipantVolume(participant.userId) / 100;
+	}
+}
+
+function getScreenVolume(publicationId: string): number {
+	return screenVolumes.value.get(publicationId) ?? 100;
+}
+
+function setScreenVolume(publicationId: string, volume: number): void {
+	screenVolumes.value = new Map(screenVolumes.value).set(publicationId, Math.max(0, Math.min(100, volume)));
+	applyParticipantVolumes();
+}
+
+function setParticipantVolume(userId: string, volume: number): void {
+	participantVolumes.value = new Map(participantVolumes.value).set(userId, Math.max(0, Math.min(100, volume)));
+	applyParticipantVolumes();
 }
 
 function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublication): void {
@@ -173,7 +236,9 @@ function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublica
 	audio.autoplay = true;
 	audio.hidden = true;
 	audio.srcObject = new MediaStream([track]);
-	remoteAudio.set(publication.id, audio);
+	remoteAudio.set(publication.id, { participantId: publication.participantId, element: audio, screenPublicationId: publication.screenPublicationId });
+	if (publication.screenPublicationId != null) screenAudioIds.value = new Set(screenAudioIds.value).add(publication.screenPublicationId);
+	applyParticipantVolumes();
 	window.document.body.append(audio);
 	void audio.play().catch(() => { needsAudioResume.value = true; });
 	track.addEventListener('ended', () => {
@@ -217,11 +282,14 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 		previousConnection,
 		replaceExisting,
 		{
-			localTrack(source, track) {
+			noiseSuppressionChanged(enabled) {
+				if (generation === sessionGeneration && media.value === controller) noiseSuppression.value = enabled;
+			},
+			localTrack(_source, track, id) {
 				if (generation !== sessionGeneration || media.value !== controller) return;
 				const next = new Map(localVideos.value);
-				if (track == null) next.delete(source);
-				else next.set(source, new MediaStream([track]));
+				if (track == null) next.delete(id);
+				else next.set(id, new MediaStream([track]));
 				localVideos.value = next;
 			},
 			remoteRemoved: removeRemoteTrack,
@@ -230,23 +298,32 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 				void alert({ type: 'error', text: i18n.ts._calls.videoFailed });
 			},
 		},
+		canSpeak.value,
 	);
 	media.value = controller;
 	controller.setMuted(muted.value);
-	await controller.setNoiseSuppression(noiseSuppression.value);
+	controller.setNoiseSuppression(noiseSuppression.value);
 	await controller.connect(selectedMicrophone.value || undefined);
-	controller.setMuted(muted.value);
 	if (generation !== sessionGeneration || media.value !== controller) {
 		await controller.close().catch(() => undefined);
 		return;
 	}
+	if (participant.role !== 'listener' && controller.localTrack === null) {
+		muted.value = true;
+		connection.value?.setMuted(true);
+	}
+	controller.setMuted(muted.value);
 	if (participant.role !== 'listener') await loadMicrophones();
 }
 
 async function clearSession(): Promise<void> {
+	if (sessionSoundActive) playMisskeySfx('callsLeave');
+	sessionSoundActive = false;
 	cancelCameraPreview?.();
-	clearCallsScreenWindow();
+	clearCallsScreenWindows();
 	sessionGeneration += 1;
+	screenVolumes.value = new Map();
+	screenAudioIds.value = new Set();
 	const controller = media.value;
 	media.value = null;
 	disposeConnection();
@@ -259,9 +336,9 @@ async function clearSession(): Promise<void> {
 	selectedCamera.value = '';
 	microphones.value = [];
 	cameras.value = [];
-	usersById.value = new Map();
 	for (const id of remoteAudio.keys()) removeRemoteTrack(id);
 	remoteAudio.clear();
+	participantVolumes.value = new Map();
 	localVideos.value = new Map();
 	remoteVideos.value = new Map();
 	needsAudioResume.value = false;
@@ -270,7 +347,7 @@ async function clearSession(): Promise<void> {
 
 function attachConnection(roomId: string): CallsRoomConnection {
 	disposeConnection();
-	const next = createCallsRoomConnection(roomId);
+	const next = retainCallsRoomConnection(roomId);
 	connection.value = next;
 	removeTrackListener = next.onTrackChange(() => { void media.value?.reconcile(); });
 	removeRevokedListener = next.onRevoked(event => {
@@ -309,12 +386,11 @@ async function join(roomId: string, alreadyParticipant: boolean, reconnectToken?
 		generation = ++sessionGeneration;
 		currentRoomId.value = roomId;
 		const next = attachConnection(roomId);
-		await next.refresh();
 		if (!alreadyParticipant) {
 			await misskeyApi('calls/rooms/join', { roomId, reconnectToken });
 			joinedNow = true;
-			await next.refresh();
 		}
+		await next.refresh();
 		if (myParticipant.value == null) throw new Error('Calls participant state was not created');
 		muted.value = myParticipant.value.isMuted;
 		if (startMuted && myParticipant.value.role === 'host' && !muted.value) {
@@ -334,6 +410,8 @@ async function join(roomId: string, alreadyParticipant: boolean, reconnectToken?
 			await connectMedia(generation, undefined, true);
 		}
 		if (generation !== sessionGeneration) return;
+		if (!sessionSoundActive) playMisskeySfx('callsJoin');
+		sessionSoundActive = true;
 		replacedRoomId.value = null;
 		if (startMuted && myParticipant.value?.role === 'host') next.setMuted(true);
 		setReconnectCandidate(null);
@@ -422,14 +500,23 @@ function onReconnectStorage(event: StorageEvent): void {
 }
 
 async function toggleMute(): Promise<void> {
-	if (!isSpeaker.value) return;
+	if (!isSpeaker.value || !canSpeak.value) return;
+	if (muted.value && media.value?.localTrack === null) {
+		try {
+			await media.value.switchMicrophone(selectedMicrophone.value || undefined);
+		} catch (error) {
+			console.error('[Calls] Microphone unavailable', error);
+			await alert({ type: 'error', text: i18n.ts._calls.mediaFailed });
+			return;
+		}
+	}
 	muted.value = !muted.value;
 	media.value?.setMuted(muted.value);
 	connection.value?.setMuted(muted.value);
 }
 
 async function requestSpeaker(): Promise<void> {
-	if (currentRoomId.value == null || room.value?.mode !== 'stage' || myParticipant.value?.role !== 'listener') return;
+	if (!canSpeak.value || currentRoomId.value == null || room.value?.mode !== 'stage' || myParticipant.value?.role !== 'listener') return;
 	speakerRequestResult.value = null;
 	await misskeyApi('calls/rooms/request-speaker', { roomId: currentRoomId.value });
 	await connection.value?.refresh();
@@ -447,16 +534,19 @@ async function cancelSpeakerRequest(): Promise<void> {
 }
 
 async function switchMicrophone(deviceId: string): Promise<void> {
+	if (!canSpeak.value) return;
 	selectedMicrophone.value = deviceId;
 	await media.value?.switchMicrophone(deviceId);
 }
 
-async function toggleVideo(source: CallsVideoSource): Promise<void> {
+async function toggleVideo(source: CallsVideoSource, addScreen = false, videoId?: string): Promise<void> {
 	const controller = media.value;
 	if (!isSpeaker.value || joining.value || videoBusy.value || mediaState.value !== 'connected' || controller == null) return;
+	const active = source === 'camera' ? localVideos.value.has('camera') : [...localVideos.value.keys()].some(id => id !== 'camera');
+	if ((addScreen || !active) && !(source === 'camera' ? canPublishVideo.value : canShareScreenMedia.value)) return;
 	videoBusy.value = true;
 	try {
-		if (localVideos.value.has(source)) await controller.stopVideo(source);
+		if (!addScreen && active) await controller.stopVideo(source, videoId);
 		else if (source === 'camera') {
 			const stream = await captureCallsCamera(selectedCamera.value || undefined, videoQuality.value.camera);
 			let published = false;
@@ -488,7 +578,7 @@ async function toggleVideo(source: CallsVideoSource): Promise<void> {
 }
 
 async function openDeviceMenu(kind: 'microphone' | 'camera', event: MouseEvent): Promise<void> {
-	if (joining.value || videoBusy.value || !isSpeaker.value) return;
+	if (joining.value || videoBusy.value || !isSpeaker.value || !(kind === 'camera' ? canPublishVideo.value : canSpeak.value)) return;
 	const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined;
 	await loadMicrophones();
 	const devices = kind === 'microphone' ? microphones.value : cameras.value;
@@ -520,22 +610,22 @@ async function openDeviceMenu(kind: 'microphone' | 'camera', event: MouseEvent):
 				}
 			},
 		})),
-		...(kind === 'camera' ? [null, ...videoQualityMenu('camera')] : [null, { type: 'switch' as const, text: i18n.ts._calls.noiseSuppression, ref: computed({ get: () => noiseSuppression.value, set: value => { void setNoiseSuppression(value); } }) }]),
+		...(kind === 'camera' ? [null, ...videoQualityMenu('camera')] : [null, { type: 'switch' as const, text: i18n.ts._calls.noiseSuppression, ref: computed({ get: () => noiseSuppression.value, set: value => { setNoiseSuppression(value); } }) }]),
 	], target);
 }
 
-async function setNoiseSuppression(enabled: boolean): Promise<void> {
+function setNoiseSuppression(enabled: boolean): void {
 	try {
-		await media.value?.setNoiseSuppression(enabled);
+		media.value?.setNoiseSuppression(enabled);
 		noiseSuppression.value = enabled;
 	} catch (error) {
 		console.error('[Calls] Noise suppression change failed', error);
-		await alert({ type: 'error', text: i18n.ts.somethingHappened });
+		void alert({ type: 'error', text: i18n.ts.somethingHappened });
 	}
 }
 
 async function setVideoQuality(source: CallsVideoSource, quality: CallsVideoQuality): Promise<void> {
-	if (joining.value || videoBusy.value || !isSpeaker.value) return;
+	if (joining.value || videoBusy.value || !(source === 'camera' ? canPublishVideo.value : canShareScreenMedia.value)) return;
 	videoBusy.value = true;
 	try {
 		await media.value?.setVideoQuality(source, quality);
@@ -564,18 +654,40 @@ function videoQualityMenu(source: CallsVideoSource): MenuItem[] {
 }
 
 function openScreenSettings(event: MouseEvent): void {
-	if (joining.value || videoBusy.value || !isSpeaker.value) return;
-	popupMenu(videoQualityMenu('screen'), event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
+	if (joining.value || videoBusy.value || !canShareScreenMedia.value) return;
+	popupMenu([
+		...videoQualityMenu('screen'),
+		{ type: 'divider' },
+		{ text: i18n.ts._calls.addScreenSharing, icon: 'ti ti-plus', action: () => toggleVideo('screen', true) },
+		...[...localVideos.value].filter(([id]) => id !== 'camera').map(([id, stream], index) => ({
+			text: `${i18n.ts._calls.stopScreenSharing} · ${stream.getVideoTracks()[0]?.label || index + 1}`,
+			icon: 'ti ti-screen-share-off', action: () => toggleVideo('screen', false, id),
+		})),
+	], event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined);
 }
 
 async function resumeAudio(): Promise<void> {
-	await Promise.all([...remoteAudio.values()].map(audio => audio.play()));
+	await Promise.all([...remoteAudio.values()].map(({ element }) => element.play()));
 	needsAudioResume.value = false;
 }
 
 watch(videos, current => {
-	if (callsScreenWindowStream.value != null && !current.some(video => video.stream === callsScreenWindowStream.value)) clearCallsScreenWindow();
+	for (const stream of callsScreenWindows.keys()) {
+		if (!current.some(video => video.stream === stream)) clearCallsScreenWindow(stream);
+	}
 });
+
+watch(participants, applyParticipantVolumes);
+
+watch(() => participants.value.map(participant => participant.userId), (current, previous) => {
+	if (!sessionSoundActive || joining.value || !isActive.value || !previous.includes($i?.id ?? '')) return;
+	if (current.some(id => id !== $i?.id && !previous.includes(id))) playMisskeySfx('callsParticipantJoin');
+	if (previous.some(id => id !== $i?.id && !current.includes(id))) playMisskeySfx('callsParticipantLeave');
+});
+
+watch(muted, value => {
+	if (sessionSoundActive && !joining.value && isActive.value) playMisskeySfx(value ? 'callsMute' : 'callsUnmute');
+}, { flush: 'sync' });
 
 watch(() => participants.value.filter(participant => participant.role !== 'listener').map(participant => participant.id).join(','), () => {
 	void media.value?.reconcile().catch(error => {
@@ -585,11 +697,14 @@ watch(() => participants.value.filter(participant => participant.role !== 'liste
 });
 
 watch(() => myParticipant.value?.isMuted, value => {
-	if (value != null) muted.value = value;
+	if (value != null) {
+		muted.value = value;
+		media.value?.setMuted(value);
+	}
 });
 
 watch(() => myParticipant.value?.role, (role, previousRole) => {
-	if (previousRole === 'listener' && role === 'speaker' && room.value?.state === 'open') void reconnectMedia();
+	if (previousRole === 'listener' && (role === 'speaker' || role === 'host') && room.value?.state === 'open') void reconnectMedia();
 });
 
 watch(() => myParticipant.value?.speakerRequestedAt, (requestedAt, previousRequestedAt) => {
@@ -606,15 +721,6 @@ watch(() => room.value?.state, state => {
 		safeRemoveReconnectCandidate();
 		void clearSession();
 	}
-});
-
-watch(() => participants.value.map(participant => participant.userId), async userIds => {
-	const missingIds = [...new Set(userIds)].filter(userId => !usersById.value.has(userId));
-	if (missingIds.length === 0) return;
-	const fetched = await Promise.all(missingIds.map(userId => misskeyApi('users/show', { userId }).catch(() => null)));
-	const next = new Map(usersById.value);
-	for (const user of fetched) if (user != null) next.set(user.id, user);
-	usersById.value = next;
 });
 
 window.addEventListener('pagehide', onPageHide);
@@ -634,6 +740,7 @@ export function useCallsSession() {
 		connected,
 		myParticipant,
 		isActive,
+		elapsedTime,
 		isHost,
 		isSpeaker,
 		joining,
@@ -648,19 +755,21 @@ export function useCallsSession() {
 		noiseSuppression,
 		localVideos,
 		videos,
-		screenWindowStream: callsScreenWindowStream,
+		screenWindows: callsScreenWindows,
 		showScreenWindow: showCallsScreenWindow,
 		videoBusy,
 		canShareScreen,
 		toggleVideo,
 		selectedMicrophone,
 		microphones,
+		screenAudioIds,
+		getScreenVolume,
+		setScreenVolume,
 		needsAudioResume,
 		reconnectCandidate,
 		reconnectRoomState,
 		reconnectSecondsRemaining,
 		speakerRequestResult,
-		usersById,
 		join,
 		leave,
 		toggleMute,
@@ -669,6 +778,8 @@ export function useCallsSession() {
 		switchMicrophone,
 		prepareMicrophones,
 		resumeAudio,
+		getParticipantVolume,
+		setParticipantVolume,
 		resumeRecentRoom,
 		dismissReconnectCandidate,
 		refresh() { return connection.value?.refresh() ?? Promise.resolve(); },

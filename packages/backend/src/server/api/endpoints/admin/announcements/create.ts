@@ -60,6 +60,7 @@ export const paramDef = {
 		display: { type: 'string', enum: ['normal', 'banner', 'dialog'], default: 'normal' },
 		forExistingUsers: { type: 'boolean', default: false },
 		silence: { type: 'boolean', default: false },
+		reactionsEnabled: { type: 'boolean', default: false },
 		needConfirmationToRead: { type: 'boolean', default: false },
 		userId: { type: 'string', format: 'misskey:id', nullable: true, default: null },
 	},
@@ -83,6 +84,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				forExistingUsers: ps.forExistingUsers,
 				silence: ps.silence,
 				needConfirmationToRead: ps.needConfirmationToRead,
+				reactionsEnabled: ps.reactionsEnabled,
 				userId: ps.userId,
 			}, me);
 

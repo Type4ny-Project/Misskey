@@ -169,6 +169,15 @@ export type paths = {
          */
         post: operations['admin___announcements___list'];
     };
+    '/admin/announcements/reactions': {
+        /**
+         * admin/announcements/reactions
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:admin:announcements*
+         */
+        post: operations['admin___announcements___reactions'];
+    };
     '/admin/announcements/update': {
         /**
          * admin/announcements/update
@@ -1070,6 +1079,15 @@ export type paths = {
          */
         post: operations['announcements'];
     };
+    '/announcements/react': {
+        /**
+         * announcements/react
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:reactions*
+         */
+        post: operations['announcements___react'];
+    };
     '/announcements/show': {
         /**
          * announcements/show
@@ -1404,6 +1422,15 @@ export type paths = {
          */
         post: operations['calls___rooms___list'];
     };
+    '/calls/rooms/mute-participant': {
+        /**
+         * calls/rooms/mute-participant
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:calls*
+         */
+        post: operations['calls___rooms___mute-participant'];
+    };
     '/calls/rooms/open': {
         /**
          * calls/rooms/open
@@ -1457,6 +1484,33 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:calls*
          */
         post: operations['calls___rooms___show'];
+    };
+    '/calls/rooms/stop-participant-video': {
+        /**
+         * calls/rooms/stop-participant-video
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:calls*
+         */
+        post: operations['calls___rooms___stop-participant-video'];
+    };
+    '/calls/rooms/transfer-host': {
+        /**
+         * calls/rooms/transfer-host
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:calls*
+         */
+        post: operations['calls___rooms___transfer-host'];
+    };
+    '/calls/rooms/update-title': {
+        /**
+         * calls/rooms/update-title
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:calls*
+         */
+        post: operations['calls___rooms___update-title'];
     };
     '/calls/users/active-rooms': {
         /**
@@ -2589,7 +2643,7 @@ export type paths = {
          * federation/update-remote-user
          * @description No description provided.
          *
-         *     **Credential required**: *No*
+         *     **Credential required**: *Yes* / **Permission**: *read:account*
          */
         post: operations['federation___update-remote-user'];
     };
@@ -3445,10 +3499,9 @@ export type paths = {
     '/i/revoke-token': {
         /**
          * i/revoke-token
-         * @description No description provided.
+         * @description Revoke an access token of the authenticated user. Requires credential. When called with an access token (third-party app), only the token currently in use can be revoked.
          *
-         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
-         *     **Credential required**: *Yes*
+         *     **Credential required**: *No*
          */
         post: operations['i___revoke-token'];
     };
@@ -5133,6 +5186,11 @@ export type components = {
             needConfirmationToRead: boolean;
             silence: boolean;
             forYou: boolean;
+            reactionsEnabled: boolean;
+            reactions: {
+                [key: string]: number;
+            };
+            myReaction: string | null;
             isRead?: boolean;
         };
         App: {
@@ -6076,6 +6134,14 @@ export type components = {
             canManageAvatarDecorations: boolean;
             canSearchNotes: boolean;
             canSearchUsers: boolean;
+            canSpeakInCalls: boolean;
+            canPublishCallsVideo: boolean;
+            canShareCallsScreen: boolean;
+            callsRoomSpeakerLimit: number;
+            callsRoomListenerLimit: number;
+            canSendPoints: boolean;
+            eventCreationDailyLimit: number;
+            canJoinCalls: boolean;
             canUseTranslator: boolean;
             canHideAds: boolean;
             canCreateChannel: boolean;
@@ -7638,6 +7704,8 @@ export interface operations {
                     /** @default false */
                     silence?: boolean;
                     /** @default false */
+                    reactionsEnabled?: boolean;
+                    /** @default false */
                     needConfirmationToRead?: boolean;
                     /**
                      * Format: misskey:id
@@ -7828,10 +7896,95 @@ export interface operations {
                         isActive: boolean;
                         forExistingUsers: boolean;
                         silence: boolean;
+                        reactionsEnabled: boolean;
                         needConfirmationToRead: boolean;
                         userId: string | null;
                         imageUrl: string | null;
+                        reactions: {
+                            [key: string]: number;
+                        };
                         reads: number;
+                    }[];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    admin___announcements___reactions: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    announcementId: string;
+                    /** @default 10 */
+                    limit?: number;
+                    /** Format: misskey:id */
+                    sinceId?: string;
+                    /** Format: misskey:id */
+                    untilId?: string;
+                    sinceDate?: number;
+                    untilDate?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** Format: id */
+                        id: string;
+                        /** Format: date-time */
+                        createdAt: string;
+                        reaction: string;
+                        user: components['schemas']['UserLite'];
                     }[];
                 };
             };
@@ -7897,6 +8050,7 @@ export interface operations {
                     display?: 'normal' | 'banner' | 'dialog';
                     forExistingUsers?: boolean;
                     silence?: boolean;
+                    reactionsEnabled?: boolean;
                     needConfirmationToRead?: boolean;
                     isActive?: boolean;
                 };
@@ -11186,6 +11340,9 @@ export interface operations {
                         nowLocalUsers: number;
                         maxLocalUsers: number;
                         enableLoginBonus: boolean;
+                        loginBonusResetTime: string;
+                        loginBonusMinPoints: number;
+                        loginBonusMaxPoints: number;
                         cacheRemoteFiles: boolean;
                         cacheRemoteSensitiveFiles: boolean;
                         emailRequiredForSignup: boolean;
@@ -14719,6 +14876,9 @@ export interface operations {
             content: {
                 'application/json': {
                     enableLoginBonus?: boolean;
+                    loginBonusResetTime?: string;
+                    loginBonusMinPoints?: number;
+                    loginBonusMaxPoints?: number;
                     disableRegistration?: boolean | null;
                     pinnedUsers?: string[] | null;
                     hiddenTags?: string[] | null;
@@ -15114,6 +15274,82 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    announcements___react: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    announcementId: string;
+                    reaction: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Announcement'];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16791,6 +17027,8 @@ export interface operations {
                             participantId: string;
                             /** @enum {string} */
                             mediaSource: 'microphone' | 'camera' | 'screen';
+                            /** Format: id */
+                            screenPublicationId?: string;
                             /** @enum {string} */
                             mediaKind: 'audio' | 'video';
                         }[];
@@ -17151,6 +17389,8 @@ export interface operations {
                      * @enum {string}
                      */
                     mediaSource?: 'microphone' | 'camera' | 'screen';
+                    /** Format: misskey:id */
+                    screenPublicationId?: string;
                     mid: string;
                     sessionDescription: {
                         /** @enum {string} */
@@ -17940,6 +18180,72 @@ export interface operations {
             };
         };
     };
+    'calls___rooms___mute-participant': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    participantId: string;
+                    expectedRevision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     calls___rooms___open: {
         requestBody: {
             content: {
@@ -18305,8 +18611,285 @@ export interface operations {
                 content: {
                     'application/json': {
                         room: components['schemas']['CallsRoom'];
-                        participants: components['schemas']['CallsParticipant'][];
+                        participants: {
+                            /** Format: id */
+                            id: string;
+                            /** Format: id */
+                            roomId: string;
+                            /** Format: id */
+                            userId: string;
+                            /** @enum {string} */
+                            role: 'host' | 'speaker' | 'listener';
+                            /** @enum {string} */
+                            state: 'active' | 'left' | 'removed';
+                            isMuted: boolean;
+                            /** Format: date-time */
+                            joinedAt: string;
+                            /** Format: date-time */
+                            leftAt: string | null;
+                            /** Format: date-time */
+                            speakerRequestedAt: string | null;
+                            user: {
+                                /**
+                                 * Format: id
+                                 * @example xxxxxxxxxx
+                                 */
+                                id: string;
+                                /** @example 藍 */
+                                name: string | null;
+                                /** @example ai */
+                                username: string;
+                                /**
+                                 * @description The local host is represented with `null`.
+                                 * @example misskey.example.com
+                                 */
+                                host: string | null;
+                                /** Format: url */
+                                avatarUrl: string;
+                                avatarBlurhash: string | null;
+                                avatarDecorations: {
+                                    /** Format: id */
+                                    id: string;
+                                    angle?: number;
+                                    flipH?: boolean;
+                                    /** Format: url */
+                                    url: string;
+                                    offsetX?: number;
+                                    offsetY?: number;
+                                }[];
+                                isBot?: boolean;
+                                isCat?: boolean;
+                                requireSigninToViewContents?: boolean;
+                                makeNotesFollowersOnlyBefore?: number | null;
+                                makeNotesHiddenBefore?: number | null;
+                                instance?: {
+                                    name: string | null;
+                                    softwareName: string | null;
+                                    softwareVersion: string | null;
+                                    iconUrl: string | null;
+                                    faviconUrl: string | null;
+                                    themeColor: string | null;
+                                };
+                                emojis: {
+                                    [key: string]: string;
+                                };
+                                /** @enum {string} */
+                                onlineStatus: 'unknown' | 'online' | 'active' | 'offline';
+                                badgeRoles?: {
+                                    name: string;
+                                    iconUrl: string | null;
+                                    displayOrder: number;
+                                }[];
+                                isFollowing: boolean;
+                                isFollowed: boolean;
+                            } | null;
+                        }[];
                     };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'calls___rooms___stop-participant-video': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    participantId: string;
+                    /** @enum {string} */
+                    mediaSource: 'camera' | 'screen';
+                    expectedRevision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'calls___rooms___transfer-host': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    participantId: string;
+                    expectedRevision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['CallsRoom'];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'calls___rooms___update-title': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    title: string;
+                    expectedRevision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['CallsRoom'];
                 };
             };
             /** @description Client error */
@@ -27348,6 +27931,15 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -40962,6 +41554,8 @@ export interface operations {
             content: {
                 'application/json': {
                     endpoint: string;
+                    auth: string;
+                    publickey: string;
                 };
             };
         };
@@ -41001,6 +41595,15 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

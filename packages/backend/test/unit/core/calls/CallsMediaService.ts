@@ -18,7 +18,7 @@ function createFixture(role: MiCallsParticipant['role'] = 'speaker') {
 		findOneBy: vi.fn().mockResolvedValue(participant),
 		findBy: vi.fn().mockResolvedValue([]),
 	};
-	const rooms = { getRoom: vi.fn().mockResolvedValue(room), assertCanAccess: vi.fn().mockResolvedValue(undefined), snapshot: vi.fn(), leave: vi.fn().mockResolvedValue(undefined) };
+	const rooms = { assertCanPublish: vi.fn().mockResolvedValue(undefined), getRoom: vi.fn().mockResolvedValue(room), assertCanAccess: vi.fn().mockResolvedValue(undefined), assertCanJoin: vi.fn().mockResolvedValue(undefined), snapshot: vi.fn(), leave: vi.fn().mockResolvedValue(undefined) };
 	const live = {
 		get: vi.fn().mockResolvedValue(null),
 		withRoomLock: vi.fn(async (_roomId: string, callback: (assertHeld: () => Promise<void>) => Promise<unknown>) => callback(async () => undefined)),
@@ -54,6 +54,17 @@ describe('CallsMediaService authorization boundaries', () => {
 		fixture.rooms.assertCanAccess.mockRejectedValue(new CallsRoomError('access-denied'));
 		await expect(fixture.service.heartbeat(user, room.id, 'connection-a', 2)).rejects.toMatchObject({ code: 'access-denied' });
 		expect(fixture.rooms.leave).toHaveBeenCalledWith(user, room.id);
+		expect(fixture.live.heartbeat).not.toHaveBeenCalled();
+	});
+
+	test.each(['connect', 'heartbeat'] as const)('rejects media %s when the role disallows participation', async operation => {
+		const fixture = createFixture('listener');
+		fixture.rooms.assertCanJoin.mockRejectedValue(new CallsRoomError('access-denied'));
+		await expect(operation === 'connect'
+			? fixture.service.createSession(user, { roomId: room.id, connectionId: 'connection-a', applicationId: 'app-a' })
+			: fixture.service.heartbeat(user, room.id, 'connection-a', 2)).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fixture.rooms.leave).toHaveBeenCalledWith(user, room.id);
+		expect(fixture.provider.createSession).not.toHaveBeenCalled();
 		expect(fixture.live.heartbeat).not.toHaveBeenCalled();
 	});
 
@@ -99,6 +110,15 @@ describe('CallsMediaService authorization boundaries', () => {
 		expect(fixture.bindings.clearSubscriptions).toHaveBeenCalledWith(fixture.participant.id, 2);
 	});
 
+	test.each(['microphone', 'camera', 'screen'] as const)('denied %s permission stops publication before provider access', async mediaSource => {
+		const fixture = createFixture();
+		fixture.rooms.assertCanPublish.mockRejectedValue(new CallsRoomError('access-denied'));
+		await expect(fixture.service.publish(user, { roomId: room.id, connectionId: 'connection-a', generation: 2, mid: '0', mediaSource, sessionDescription: { type: 'offer', sdp: 'offer' } })).rejects.toMatchObject({ code: 'access-denied' });
+		expect(fixture.rooms.assertCanPublish).toHaveBeenCalledWith(user, mediaSource);
+		expect(fixture.provider.addTracks).not.toHaveBeenCalled();
+		expect(fixture.quota.reserveTrack).not.toHaveBeenCalled();
+	});
+
 	test('listener cannot publish and never reaches the provider', async () => {
 		const fixture = createFixture('listener');
 		await expect(fixture.service.publish(user, { roomId: room.id, connectionId: 'connection-a', generation: 2, mid: '0', sessionDescription: { type: 'offer', sdp: 'offer' } })).rejects.toBeInstanceOf(CallsMediaAccessError);
@@ -115,6 +135,23 @@ describe('CallsMediaService authorization boundaries', () => {
 		expect(fixture.provider.addTracks).toHaveBeenCalledWith('session-a', [expect.objectContaining({ kind: mediaKind, trackName: `${mediaSource}-participant-a-2-1` })], expect.anything());
 		expect(fixture.bindings.createPublication).toHaveBeenCalledWith(expect.objectContaining({ mediaKind, mediaSource }));
 		expect(fixture.quota.reserveTrack).toHaveBeenCalledWith('app-a', `${mediaSource}-participant-a-2-1`);
+	});
+
+	test('publishes screen audio linked to the current owned screen video', async () => {
+		const fixture = createFixture();
+		fixture.bindings.getPublication.mockResolvedValue({ id: 'screen-a', roomId: room.id, participantId: 'participant-a', connectionId: 'connection-a', generation: 2, mediaKind: 'video', mediaSource: 'screen' });
+		fixture.provider.addTracks.mockResolvedValue({ tracks: [{ mid: '2' }] });
+		fixture.bindings.createPublication.mockResolvedValue({ id: 'screen-audio' });
+		await fixture.service.publish(user, { roomId: room.id, connectionId: 'connection-a', generation: 2, mid: '2', mediaSource: 'screen', screenPublicationId: 'screen-a', sessionDescription: { type: 'offer', sdp: 'sdp' } });
+		expect(fixture.provider.addTracks).toHaveBeenCalledWith('session-a', [expect.objectContaining({ kind: 'audio' })], expect.anything());
+		expect(fixture.bindings.createPublication).toHaveBeenCalledWith(expect.objectContaining({ mediaKind: 'audio', mediaSource: 'screen', screenPublicationId: 'screen-a' }));
+	});
+
+	test.each([{ participantId: 'participant-b' }, { roomId: 'room-b' }, { generation: 1 }, { mediaSource: 'camera' }])('rejects attaching screen audio to a foreign or stale publication: %s', async invalid => {
+		const fixture = createFixture();
+		fixture.bindings.getPublication.mockResolvedValue({ roomId: room.id, participantId: 'participant-a', connectionId: 'connection-a', generation: 2, mediaKind: 'video', mediaSource: 'screen', ...invalid });
+		await expect(fixture.service.publish(user, { roomId: room.id, connectionId: 'connection-a', generation: 2, mid: '2', mediaSource: 'screen', screenPublicationId: 'screen-a', sessionDescription: { type: 'offer', sdp: 'sdp' } })).rejects.toBeInstanceOf(CallsMediaAccessError);
+		expect(fixture.provider.addTracks).not.toHaveBeenCalled();
 	});
 
 	test('maps subscription mids to public IDs even when provider results are reordered', async () => {

@@ -10,8 +10,10 @@ import SessionCreate from '@/server/api/endpoints/calls/media/session-create.js'
 import CredentialRefresh from '@/server/api/endpoints/calls/media/credential-refresh.js';
 import { CallsMediaCredentialService } from '@/core/calls/CallsMediaCredentialService.js';
 import { StaleCallsConnectionError } from '@/core/calls/CallsLiveConnectionService.js';
-import { CallsFeatureDisabledError } from '@/core/calls/CallsRoomService.js';
+import { CallsFeatureDisabledError, CallsRoomError } from '@/core/calls/CallsRoomService.js';
+import { CallsEntityService } from '@/core/entities/CallsEntityService.js';
 import RoomsList from '@/server/api/endpoints/calls/rooms/list.js';
+import RoomsShow from '@/server/api/endpoints/calls/rooms/show.js';
 import ActiveRooms from '@/server/api/endpoints/calls/users/active-rooms.js';
 import type { Config } from '@/config.js';
 import type { MiLocalUser } from '@/models/User.js';
@@ -55,4 +57,50 @@ test('renews an expired credential only while its connection is current', async 
 	expect(connections.assertCurrent).toHaveBeenCalledWith(claims.participantId, claims.connectionId, claims.generation);
 	connections.assertCurrent.mockRejectedValue(new StaleCallsConnectionError());
 	await expect(endpoint.exec(input, { id: claims.userId } as MiLocalUser, null)).rejects.toMatchObject({ code: 'CALLS_STALE_CONNECTION' });
+});
+
+test('includes participant UserLite data and follow relations in a room snapshot', async () => {
+	const joinedAt = new Date('2026-01-01T00:00:00.000Z');
+	const room = {
+		id: 'rooma', attachmentType: 'personal', ownerUserId: 'user-a', chatRoomId: null,
+		title: 'Room', description: '', moderatorUserIds: [], mode: 'open', visibility: 'public', state: 'open',
+		scheduledAt: null, startedAt: joinedAt, endedAt: null, revision: 1, createdAt: joinedAt, updatedAt: joinedAt,
+	};
+	const participant = {
+		id: 'participanta', roomId: 'rooma', userId: 'user-a', role: 'listener', state: 'active', isMuted: false,
+		joinedAt, leftAt: null, speakerRequestedAt: null,
+	};
+	const liteUser = { id: 'user-a', username: 'alice', avatarUrl: 'https://example.com/avatar.png' };
+	const userEntityService = {
+		packMany: vi.fn().mockResolvedValue([liteUser]),
+		getRelations: vi.fn().mockResolvedValue(new Map([['user-a', { isFollowing: true, isFollowed: false }]])),
+	};
+	const callsEntityService = new CallsEntityService(userEntityService as never);
+	const callsRoomService = { snapshot: vi.fn().mockResolvedValue({ room, participants: [participant] }) };
+	const endpoint = new RoomsShow(callsRoomService as never, callsEntityService);
+	const result = await endpoint.exec({ roomId: 'rooma' }, { id: 'viewer' } as MiLocalUser, null);
+
+	expect(result.participants).toEqual([{
+		id: participant.id,
+		roomId: participant.roomId,
+		userId: participant.userId,
+		role: participant.role,
+		state: participant.state,
+		isMuted: participant.isMuted,
+		joinedAt: joinedAt.toISOString(),
+		leftAt: null,
+		speakerRequestedAt: null,
+		user: { ...liteUser, isFollowing: true, isFollowed: false },
+	}]);
+	expect(userEntityService.packMany).toHaveBeenCalledWith(['user-a'], { id: 'viewer' }, { schema: 'UserLite' });
+	expect(userEntityService.getRelations).toHaveBeenCalledWith('viewer', ['user-a']);
+});
+
+test('does not load participant users when a room snapshot is denied', async () => {
+	const callsRoomService = { snapshot: vi.fn().mockRejectedValue(new CallsRoomError('access-denied')) };
+	const callsEntityService = { packRoom: vi.fn(), packParticipants: vi.fn() };
+	const endpoint = new RoomsShow(callsRoomService as never, callsEntityService as never);
+
+	await expect(endpoint.exec({ roomId: 'rooma' }, { id: 'viewer' } as MiLocalUser, null)).rejects.toMatchObject({ code: 'CALLS_ACCESS_DENIED' });
+	expect(callsEntityService.packParticipants).not.toHaveBeenCalled();
 });

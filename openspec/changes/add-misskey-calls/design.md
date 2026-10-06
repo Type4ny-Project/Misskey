@@ -88,11 +88,11 @@ flowchart TB
 
 - `personal`は1対1 DM通話ではなく、1人のlocal userが開催する複数人のSpaces型ルームとする。
 - personal roomのvisibilityは`public | followers | specified`を提供する。`public`は認証済みlocal userが検索・参加でき、`followers`は開催者をフォローするlocal user、`specified`は開催者が指定したlocal userだけが参加できる。未認証guestとremote actorはvisibilityにかかわらず参加できない。
-- 1 roomの初期上限はhostを含むspeaker 8人、listener 100人とし、instance administratorがより小さい値へ設定できる。上限判定はroom join / role promotionのauthoritative transactionで行う。
+- room単位のspeaker / listener人数に固定上限を設けない。room join / role promotionでは現在のaccess、room state、roleを引き続き検証する。
 - ChatRoom CallsはChatRoomのownerまたはmoderatorだけが作成でき、参加には現在のChatRoom accessを要求する。
 - listenerからhostへのspeaker requestと承認queueを初期版へ含める。requestは発言権そのものではなく、hostが承認してrole revisionが更新された後だけpublishを許可する。
 - Calls protocolの初期versionは`1.0`とする。第三者clientはOAuth 2.0 Authorization Code + PKCE、MiAuth、または明示発行API tokenを使い、`read:calls` / `write:calls`で認可する。
-- 第三者applicationの初期default quotaは同時media session 10、同時published audio track 8とし、instance administratorがapp単位で縮小・停止できる。room / user / instance上限も別途適用する。
+- 第三者applicationの初期default quotaは同時media session 10、同時published audio track 8とし、instance administratorがapp単位で縮小・停止できる。
 - Misskey accountを持たないguest invitationは無効とし、将来のversioned extensionとしてのみ追加する。
 
 ### 1. Calls roomをChatRoomから独立した集約として持つ

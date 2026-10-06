@@ -37,12 +37,13 @@ function fixture() {
 	const live = new Set<string>();
 	const memberships = new Set([owner.id, member.id]);
 	const events = vi.fn();
+	const touchHost = vi.fn();
 	const service = new DrawingService(redis as never, { findOneBy: async ({ userId }: { userId: string }) => participants.get(userId) ?? null } as never,
 		{ getRoom: async () => room, assertCanAccess: async () => {} } as never,
-		{ withRoomLock: async (_id: string, callback: (assertHeld: () => Promise<void>) => Promise<unknown>) => callback(async () => {}), get: async (id: string) => live.has(id) ? {} : null } as never,
+		{ withRoomLock: async (_id: string, callback: (assertHeld: () => Promise<void>) => Promise<unknown>) => callback(async () => {}), get: async (id: string) => live.has(id) ? {} : null, touchHost } as never,
 		{ getChatAvailability: async () => ({ read: true, write: true }), findRoomById: async () => ({ id: 'chat' }), isRoomMember: async (_room: unknown, id: string) => memberships.has(id) } as never,
 		{ publishDrawingStream: events } as never);
-	return { service, redis, room, participants, live, memberships, events };
+	return { service, redis, room, participants, live, memberships, events, touchHost };
 }
 
 async function start(f: ReturnType<typeof fixture>, scope: 'public' | 'chatRoom' | 'calls' = 'public') {
@@ -51,6 +52,17 @@ async function start(f: ReturnType<typeof fixture>, scope: 'public' | 'chatRoom'
 }
 
 describe('DrawingService', () => {
+	test('a drawing host without audio refreshes the Calls deadline, while other members cannot keep an absent host present', async () => {
+		const f = fixture();
+		const { canvasId } = await start(f);
+		expect(f.touchHost).toHaveBeenCalledWith('room');
+		f.touchHost.mockClear();
+		await f.service.update(member, 'room', 'join', { canvasId });
+		expect(f.touchHost).not.toHaveBeenCalled();
+		await f.service.update(owner, 'room', 'join', { canvasId });
+		expect(f.touchHost).toHaveBeenCalledOnce();
+	});
+
 	test('two members share strokes and late/reloaded clients receive the current canvas', async () => {
 		const f = fixture();
 		const state = await start(f);

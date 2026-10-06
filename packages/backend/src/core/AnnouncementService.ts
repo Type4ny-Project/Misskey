@@ -5,15 +5,22 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { Brackets, EntityNotFoundError } from 'typeorm';
+import emojilist from '@misskey-dev/emoji-data/emojilist.json' with { type: 'json' };
 import { DI } from '@/di-symbols.js';
 import type { MiUser } from '@/models/User.js';
-import type { AnnouncementReadsRepository, AnnouncementsRepository, MiAnnouncement, MiAnnouncementRead, UsersRepository } from '@/models/_.js';
+import type { AnnouncementReadsRepository, AnnouncementReactionsRepository, AnnouncementsRepository, MiAnnouncement, MiAnnouncementRead, UsersRepository } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
 import { Packed } from '@/misc/json-schema.js';
 import { IdService } from '@/core/IdService.js';
 import { AnnouncementEntityService } from '@/core/entities/AnnouncementEntityService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
+import { CustomEmojiService } from '@/core/CustomEmojiService.js';
+import { RoleService } from '@/core/RoleService.js';
+import { IdentifiableError } from '@/misc/identifiable-error.js';
+import { isDuplicateKeyValueError } from '@/misc/is-duplicate-key-value-error.js';
+
+const unicodeReactions = new Set(emojilist.flatMap(([emoji]) => [emoji, emoji.includes('\u200d') ? emoji : emoji.replace(/\ufe0f/g, '')]));
 
 @Injectable()
 export class AnnouncementService {
@@ -27,6 +34,11 @@ export class AnnouncementService {
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
 
+		@Inject(DI.announcementReactionsRepository)
+		private announcementReactionsRepository: AnnouncementReactionsRepository,
+
+		private customEmojiService: CustomEmojiService,
+		private roleService: RoleService,
 		private idService: IdService,
 		private globalEventService: GlobalEventService,
 		private moderationLogService: ModerationLogService,
@@ -78,6 +90,7 @@ export class AnnouncementService {
 			forExistingUsers: values.forExistingUsers,
 			silence: values.silence,
 			needConfirmationToRead: values.needConfirmationToRead,
+			reactionsEnabled: values.reactionsEnabled,
 			userId: values.userId,
 		});
 
@@ -130,6 +143,7 @@ export class AnnouncementService {
 			forExistingUsers: values.forExistingUsers,
 			silence: values.silence,
 			needConfirmationToRead: values.needConfirmationToRead,
+			reactionsEnabled: values.reactionsEnabled,
 			isActive: values.isActive,
 		});
 
@@ -199,6 +213,41 @@ export class AnnouncementService {
 	}
 
 	@bindThis
+	public async react(user: MiUser, announcementId: MiAnnouncement['id'], reaction: string | null): Promise<Packed<'Announcement'>> {
+		const announcement = await this.announcementsRepository.findOneByOrFail({ id: announcementId });
+		if ((announcement.userId != null && announcement.userId !== user.id) ||
+			(announcement.forExistingUsers && announcement.id <= user.id)) {
+			throw new EntityNotFoundError(this.announcementsRepository.metadata.target, { id: announcementId });
+		}
+		if (!announcement.reactionsEnabled) throw new IdentifiableError('REACTIONS_DISABLED');
+
+		if (reaction == null) {
+			await this.announcementReactionsRepository.delete({ announcementId, userId: user.id });
+		} else {
+			const custom = reaction.match(/^:([\w+-]+)(?:@\.)?:$/);
+			if (custom) {
+				const emoji = (await this.customEmojiService.localEmojisCache.fetch()).get(custom[1]);
+				if (emoji == null || (emoji.roleIdsThatCanBeUsedThisEmojiAsReaction.length > 0 &&
+					!(await this.roleService.getUserRoles(user.id)).some(role => emoji.roleIdsThatCanBeUsedThisEmojiAsReaction.includes(role.id)))) {
+					throw new IdentifiableError('INVALID_REACTION');
+				}
+				reaction = `:${emoji.name}:`;
+			} else {
+				if (!unicodeReactions.has(reaction)) throw new IdentifiableError('INVALID_REACTION');
+				reaction = reaction.includes('\u200d') ? reaction : reaction.replace(/\ufe0f/g, '');
+			}
+			await this.announcementReactionsRepository.upsert({
+				id: this.idService.gen(),
+				announcementId,
+				userId: user.id,
+				reaction,
+			}, ['userId', 'announcementId']);
+			await this.read(user, announcementId);
+		}
+		return this.getAnnouncement(announcementId, user);
+	}
+
+	@bindThis
 	public async read(user: MiUser, announcementId: MiAnnouncement['id']): Promise<void> {
 		try {
 			await this.announcementReadsRepository.insert({
@@ -206,8 +255,8 @@ export class AnnouncementService {
 				announcementId: announcementId,
 				userId: user.id,
 			});
-		} catch (_) {
-			return;
+		} catch (err) {
+			if (!isDuplicateKeyValueError(err)) throw err;
 		}
 
 		const announcement = await this.announcementsRepository.findOneBy({ id: announcementId });

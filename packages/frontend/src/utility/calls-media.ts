@@ -5,11 +5,16 @@
 
 import { detectCallsMediaCapabilities, normalizeCallsMediaError, normalizeCallsStats, preferOpus } from './calls-media-core.js';
 import type { CallsNormalizedStats } from './calls-media-core.js';
+import { createCallsNoiseSuppression } from './calls-noise-suppression.js';
+import type { CallsNoiseSuppression } from './calls-noise-suppression.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 
 export type CallsVideoSource = 'camera' | 'screen';
 export type CallsVideoQuality = { height: 480 | 720 | 1080 | 1440 | 2160 | 'source'; frameRate: 15 | 30 | 60 | 90 | 120 | 144 };
-export type CallsRemotePublication = { id: string; participantId: string; mediaKind: 'audio' | 'video'; mediaSource: 'microphone' | CallsVideoSource };
+export type CallsRemotePublication = { id: string; participantId: string; mediaKind: 'audio' | 'video'; mediaSource: 'microphone' | CallsVideoSource; screenPublicationId?: string };
+type CallsLocalTrack = { track: MediaStreamTrack; publicationId?: string; transceiver?: RTCRtpTransceiver };
+type CallsLocalVideo = CallsLocalTrack & { source: CallsVideoSource; audio?: CallsLocalTrack };
+type CallsMicrophone = { track: MediaStreamTrack; processing: CallsNoiseSuppression | null };
 
 function videoConstraints(quality: CallsVideoQuality): MediaTrackConstraints {
 	if (quality.height === 'source') return { frameRate: { ideal: quality.frameRate, max: quality.frameRate } };
@@ -30,12 +35,15 @@ export class CallsMediaController {
 	public generation = 0;
 	public participantId: string | null = null;
 	public localTrack: MediaStreamTrack | null = null;
+	private microphone: CallsMicrophone | null = null;
 	private peer: RTCPeerConnection | null = null;
-	private localVideos = new Map<CallsVideoSource, { track: MediaStreamTrack; publicationId?: string; transceiver?: RTCRtpTransceiver }>();
+	private localVideos = new Map<string, CallsLocalVideo>();
 	private remotePublications = new Map<string, CallsRemotePublication>();
+	private receivedRemoteTracks = new Map<string, MediaStreamTrack>();
 	private connectionId: string = crypto.randomUUID();
 	private queue = Promise.resolve();
 	private reconnectTimer: number | null = null;
+	private reconnectPromise: Promise<void> | null = null;
 	private publications = new Set<string>();
 	private subscribedPublications = new Set<string>();
 	private mediaCredential: string | null = null;
@@ -65,10 +73,13 @@ export class CallsMediaController {
 		previousConnection?: { connectionId: string; generation: number },
 		private replaceExisting = false,
 		private videoCallbacks?: {
-			localTrack: (source: CallsVideoSource, track: MediaStreamTrack | null) => void;
+			localTrack: (source: CallsVideoSource, track: MediaStreamTrack | null, id: string) => void;
+			microphoneTrack?: (track: MediaStreamTrack | null) => void;
+			noiseSuppressionChanged?: (enabled: boolean) => void;
 			remoteRemoved: (publicationId: string) => void;
 			error: (error: unknown) => void;
 		},
+		private canUseMicrophone = true,
 	) {
 		if (previousConnection != null) {
 			this.connectionId = previousConnection.connectionId;
@@ -78,12 +89,21 @@ export class CallsMediaController {
 
 	public async connect(deviceId?: string): Promise<void> {
 		const capabilities = detectCallsMediaCapabilities();
-		if (!capabilities.secureContext || (this.role !== 'listener' && !capabilities.getUserMedia) || !capabilities.peerConnection || !capabilities.transceiver) {
+		if (!capabilities.secureContext || !capabilities.peerConnection || !capabilities.transceiver) {
 			this.fail('unsupported');
 			return;
 		}
 		try {
-			if (this.role !== 'listener') await this.acquireMicrophone(deviceId);
+			if (this.role !== 'listener' && this.canUseMicrophone && capabilities.getUserMedia) {
+				this.setState('acquiring-media');
+				try {
+					const microphone = await this.acquireMicrophone(deviceId);
+					this.useMicrophone(microphone);
+				} catch (error) {
+					if (!(error instanceof DOMException) || !['NotFoundError', 'NotReadableError', 'NotAllowedError', 'SecurityError'].includes(error.name)) throw error;
+					console.warn('[Calls] Joining without microphone:', error.name);
+				}
+			}
 			await this.enqueue(() => this.createConnection());
 		} catch (error) {
 			if (this.isClosed()) return;
@@ -97,13 +117,13 @@ export class CallsMediaController {
 		}
 	}
 
-	private async acquireMicrophone(deviceId?: string, noiseSuppression = this.noiseSuppression): Promise<void> {
-		this.setState('acquiring-media');
+	private async acquireMicrophone(deviceId?: string): Promise<CallsMicrophone> {
 		const mediaRequest = navigator.mediaDevices.getUserMedia({
 			audio: {
 				deviceId: deviceId == null ? undefined : { exact: deviceId },
 				channelCount: { ideal: 1 }, echoCancellation: { ideal: true },
-				noiseSuppression: { exact: noiseSuppression }, autoGainControl: { ideal: true },
+				// RNNoise owns noise suppression. Preserve browser echo cancellation and gain control.
+				noiseSuppression: false, autoGainControl: { ideal: true },
 			},
 		});
 		const stream = await new Promise<MediaStream>((resolve, reject) => {
@@ -126,10 +146,43 @@ export class CallsMediaController {
 				reject(error);
 			});
 		});
-		this.localTrack = stream.getAudioTracks()[0] ?? null;
-		if (this.localTrack == null) throw new DOMException('No audio track', 'NotFoundError');
-		this.localTrack.enabled = !this.muted;
-		this.localTrack.addEventListener('ended', () => void this.recoverFromDeviceLoss());
+		const track = stream.getAudioTracks()[0];
+		if (track == null) throw new DOMException('No audio track', 'NotFoundError');
+		if (this.isClosed()) { track.stop(); throw new DOMException('Call ended', 'AbortError'); }
+		track.enabled = !this.muted;
+		const abort = new AbortController();
+		this.cancelAcquisition = () => { track.stop(); abort.abort(); };
+		let processing: CallsNoiseSuppression | null = null;
+		try {
+			processing = await createCallsNoiseSuppression(stream, error => {
+				if (this.microphone?.track !== track) return;
+				console.warn('[Calls] Noise suppression failed', error);
+				this.noiseSuppression = false;
+				this.videoCallbacks?.noiseSuppressionChanged?.(false);
+			}, abort.signal);
+			abort.signal.throwIfAborted();
+			processing.setEnabled(this.noiseSuppression);
+		} catch (error) {
+			processing?.close();
+			processing = null;
+			if (abort.signal.aborted) throw new DOMException('Microphone acquisition cancelled', 'AbortError');
+			console.warn('[Calls] Noise suppression unavailable; using unprocessed microphone', error);
+			this.noiseSuppression = false;
+			this.videoCallbacks?.noiseSuppressionChanged?.(false);
+		} finally {
+			this.cancelAcquisition = null;
+		}
+		return { track, processing };
+	}
+
+	private useMicrophone(microphone: CallsMicrophone): void {
+		this.microphone = microphone;
+		this.localTrack = microphone.processing?.track ?? microphone.track;
+		this.setMuted(this.muted);
+		this.videoCallbacks?.microphoneTrack?.(this.localTrack);
+		microphone.track.addEventListener('ended', () => {
+			if (this.microphone === microphone) void this.recoverFromDeviceLoss();
+		});
 	}
 
 	public cancelMicrophoneRequest(): void {
@@ -155,8 +208,7 @@ export class CallsMediaController {
 		this.peer = peer;
 		if (turn != null) this.scheduleTurnRefresh(Date.parse(turn.expiresAt));
 		peer.addEventListener('track', event => {
-			const publication = this.remotePublications.get(event.transceiver.mid ?? '');
-			if (publication != null) this.onRemoteTrack?.(event.track, publication);
+			this.deliverRemoteTrack(event.transceiver.mid, event.track);
 		});
 		peer.addEventListener('connectionstatechange', () => {
 			if (peer !== this.peer) return;
@@ -174,7 +226,7 @@ export class CallsMediaController {
 			}
 		});
 
-		const sendTransceiver = peer.addTransceiver('audio', { direction: this.role === 'listener' ? 'recvonly' : 'sendrecv' });
+		const sendTransceiver = peer.addTransceiver('audio', { direction: this.localTrack == null ? 'recvonly' : 'sendrecv' });
 		const capabilities = RTCRtpReceiver.getCapabilities('audio');
 		if (capabilities != null && typeof sendTransceiver.setCodecPreferences === 'function') {
 			sendTransceiver.setCodecPreferences(preferOpus(capabilities.codecs));
@@ -198,29 +250,69 @@ export class CallsMediaController {
 			});
 			this.publications.add(result.publicationId);
 			await this.applyNegotiation(result.negotiation);
-			await this.waitUntilPublishing(peer);
 		}
-		for (const [source, video] of this.localVideos) {
+		for (const video of this.localVideos.values()) {
 			if (video.track.readyState === 'ended') continue;
 			video.publicationId = undefined;
-			await this.publishVideo(source, video);
+			await this.publishTrack(video.source, video);
+			if (video.audio != null && video.audio.track.readyState !== 'ended') {
+				video.audio.publicationId = undefined;
+				await this.publishTrack('screen', video.audio, video.publicationId);
+			}
 		}
 		const subscribed = await this.reconcileNow();
-		if (this.role === 'listener' && !subscribed && this.peer === peer) this.setState('connected');
+		// SDP exchanges stay serialized, but receiving need not wait for the sender's transport.
+		if (this.localTrack != null) {
+			await this.waitUntilConnected(peer);
+			this.setState('connected');
+		}
+		if (this.localTrack == null && !subscribed && this.peer === peer) this.setState('connected');
 	}
 
 	public reconcile(): Promise<boolean> {
+		if (this.reconnectPromise != null) return this.reconnectPromise.then(() => false);
+		if (!this.isClosed() && this.generation !== 0 && (this.state === 'failed' || this.peer?.connectionState === 'failed' || this.peer?.connectionState === 'disconnected')) {
+			return this.scheduleReconnect(this.peer?.connectionState === 'disconnected' ? 'disconnected' : 'failed').then(() => false);
+		}
 		return this.enqueue(() => this.reconcileNow());
+	}
+
+	private deliverRemoteTrack(mid: string | null, track: MediaStreamTrack): void {
+		const publication = this.remotePublications.get(mid ?? '');
+		if (publication == null || this.receivedRemoteTracks.get(publication.id) === track) return;
+		this.receivedRemoteTracks.set(publication.id, track);
+		this.onRemoteTrack?.(track, publication);
 	}
 
 	private async reconcileNow(): Promise<boolean> {
 		if (this.peer == null || this.generation === 0) return false;
 		await this.ensureCredential();
 		const authoritative = await misskeyApi('calls/media/reconcile', { roomId: this.roomId });
+		const authoritativeOwnIds = new Set(authoritative.publications.filter(publication => publication.participantId === this.participantId).map(publication => publication.id));
+		for (const [id, video] of this.localVideos) {
+			if (video.audio?.publicationId != null && !authoritativeOwnIds.has(video.audio.publicationId)) {
+				video.audio.track.stop();
+				await video.audio.transceiver?.sender.replaceTrack(null);
+				this.publications.delete(video.audio.publicationId);
+				video.audio = undefined;
+			}
+			if (video.publicationId == null || authoritativeOwnIds.has(video.publicationId)) continue;
+			video.track.stop();
+			video.audio?.track.stop();
+			this.localVideos.delete(id);
+			this.publications.delete(video.publicationId);
+			this.videoCallbacks?.localTrack(video.source, null, id);
+			await video.transceiver?.sender.replaceTrack(null);
+			if (video.audio != null) {
+				await video.audio.transceiver?.sender.replaceTrack(null);
+				if (video.audio.publicationId != null) this.publications.delete(video.audio.publicationId);
+			}
+		}
 		const authoritativeRemoteIds = new Set(authoritative.publications.filter(publication => publication.participantId !== this.participantId).map(publication => publication.id));
 		for (const publicationId of this.subscribedPublications) {
 			if (!authoritativeRemoteIds.has(publicationId)) {
 				this.subscribedPublications.delete(publicationId);
+				this.receivedRemoteTracks.delete(publicationId);
 				for (const [mid, publication] of this.remotePublications) {
 					if (publication.id !== publicationId) continue;
 					this.peer.getTransceivers().find(transceiver => transceiver.mid === mid)?.receiver.track.stop();
@@ -231,17 +323,24 @@ export class CallsMediaController {
 		}
 		const remoteIds = [...authoritativeRemoteIds].filter(publicationId => !this.subscribedPublications.has(publicationId));
 		if (remoteIds.length === 0) return false;
-		const negotiation = await misskeyApi('calls/media/tracks/subscribe', {
-			roomId: this.roomId, connectionId: this.connectionId, generation: this.generation, publicationIds: remoteIds,
-			operationId: crypto.randomUUID(),
-			participantId: this.participantId!, mediaCredential: this.mediaCredential!,
-		});
-		for (const subscription of negotiation.subscriptions ?? []) {
-			const publication = authoritative.publications.find(item => item.id === subscription.publicationId);
-			if (publication != null) this.remotePublications.set(subscription.mid, publication);
+		// The subscribe API accepts at most 64 publications per request.
+		for (let offset = 0; offset < remoteIds.length; offset += 64) {
+			const negotiation = await misskeyApi('calls/media/tracks/subscribe', {
+				roomId: this.roomId, connectionId: this.connectionId, generation: this.generation, publicationIds: remoteIds.slice(offset, offset + 64),
+				operationId: crypto.randomUUID(),
+				participantId: this.participantId!, mediaCredential: this.mediaCredential!,
+			});
+			for (const subscription of negotiation.subscriptions ?? []) {
+				const publication = authoritative.publications.find(item => item.id === subscription.publicationId);
+				if (publication != null) this.remotePublications.set(subscription.mid, publication);
+			}
+			await this.applyNegotiation(negotiation);
+			// Publishing may already have fired the track event for a reused receiver.
+			for (const transceiver of this.peer?.getTransceivers() ?? []) {
+				this.deliverRemoteTrack(transceiver.mid, transceiver.receiver.track);
+			}
+			for (const subscription of negotiation.subscriptions) this.subscribedPublications.add(subscription.publicationId);
 		}
-		await this.applyNegotiation(negotiation);
-		for (const subscription of negotiation.subscriptions) this.subscribedPublications.add(subscription.publicationId);
 		return true;
 	}
 
@@ -280,53 +379,58 @@ export class CallsMediaController {
 		});
 	}
 
-	private async waitUntilPublishing(peer: RTCPeerConnection): Promise<void> {
+	private async waitUntilConnected(peer: RTCPeerConnection): Promise<void> {
 		const deadline = Date.now() + 10_000;
 		while (Date.now() < deadline) {
 			if (peer !== this.peer) throw new DOMException('Calls media operation was replaced', 'AbortError');
-			if (peer.connectionState === 'failed') throw new Error('Publisher connection failed before sending audio packets');
-			const report = await peer.getStats();
-			let outboundReady = false;
-			let transportReady = false;
-			report.forEach(value => {
-				if (value.type === 'outbound-rtp' && value.kind === 'audio' && (value.packetsSent ?? 0) > 0 && (value.bytesSent ?? 0) > 0) outboundReady = true;
-				if (value.type === 'transport' && value.dtlsState === 'connected') transportReady = true;
-			});
-			if (peer.connectionState === 'connected' && outboundReady && transportReady) return;
+			if (peer.connectionState === 'failed') throw new Error('Calls media connection failed');
+			if (peer.connectionState === 'connected') return;
 			await new Promise(resolve => window.setTimeout(resolve, 250));
 		}
-		throw new Error('Publisher is not actually sending audio packets');
+		throw new Error('Calls media connection timed out');
 	}
 
 	public async startVideo(source: CallsVideoSource, deviceId?: string, quality: CallsVideoQuality = { height: 720, frameRate: 30 }, previewStream?: MediaStream): Promise<void> {
-		if (this.role === 'listener' || this.isClosed() || this.peer == null || this.localVideos.has(source)) {
+		if (this.role === 'listener' || this.isClosed() || this.peer == null || (source === 'camera' && this.localVideos.has('camera'))) {
 			previewStream?.getTracks().forEach(track => track.stop());
 			return;
 		}
 		// Call directly from the click handler so screen capture retains user activation.
 		const stream = source === 'camera'
 			? previewStream ?? await captureCallsCamera(deviceId, quality)
-			: await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints(quality), audio: false });
+			: await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints(quality), audio: true });
 		const track = stream.getVideoTracks()[0];
-		for (const extra of stream.getTracks()) if (extra !== track) extra.stop();
-		if (this.isClosed() || this.peer == null) { track?.stop(); return; }
-		if (track == null) throw new DOMException('No video track', 'NotFoundError');
+		const audio = source === 'screen' ? stream.getAudioTracks()[0] : undefined;
+		for (const extra of stream.getTracks()) if (extra !== track && extra !== audio) extra.stop();
+		if (this.isClosed() || this.peer == null) { track?.stop(); audio?.stop(); return; }
+		if (track == null) { audio?.stop(); throw new DOMException('No video track', 'NotFoundError'); }
 		track.contentHint = source === 'screen' ? 'detail' : 'motion';
-		const video = { track };
-		this.localVideos.set(source, video);
-		this.videoCallbacks?.localTrack(source, track);
+		const id = source === 'camera' ? 'camera' : crypto.randomUUID();
+		const video: CallsLocalVideo = { source, track, audio: audio == null ? undefined : { track: audio } };
+		this.localVideos.set(id, video);
+		audio?.addEventListener('ended', () => {
+			const media = video.audio;
+			if (this.localVideos.get(id) !== video || media == null || media.track !== audio) return;
+			video.audio = undefined;
+			media.track.stop();
+			void this.enqueue(() => this.closePublishedTrack(media)).catch(error => this.videoCallbacks?.error(error));
+		}, { once: true });
+		this.videoCallbacks?.localTrack(source, track, id);
 		track.addEventListener('ended', () => {
-			if (this.localVideos.get(source)?.track === track) void this.stopVideo(source).catch(error => this.videoCallbacks?.error(error));
+			if (this.localVideos.get(id)?.track === track) void this.stopVideo(source, id).catch(error => this.videoCallbacks?.error(error));
 		}, { once: true });
 		try {
-			await this.enqueue(() => this.publishVideo(source, video));
+			await this.enqueue(async () => {
+				await this.publishTrack(source, video);
+				if (video.audio != null && this.localVideos.get(id) === video) await this.publishTrack('screen', video.audio, video.publicationId);
+			});
 		} catch (error) {
-			await this.stopVideo(source).catch(() => undefined);
+			await this.stopVideo(source, id).catch(() => undefined);
 			throw error;
 		}
 	}
 
-	private async publishVideo(source: CallsVideoSource, video: { track: MediaStreamTrack; publicationId?: string; transceiver?: RTCRtpTransceiver }): Promise<void> {
+	private async publishTrack(source: CallsVideoSource, video: CallsLocalTrack, screenPublicationId?: string): Promise<void> {
 		const peer = this.peer;
 		if (peer == null || this.isClosed() || video.track.readyState === 'ended') return;
 		await this.ensureCredential();
@@ -334,8 +438,8 @@ export class CallsMediaController {
 		video.transceiver = transceiver;
 		try {
 			// Keep screen/camera encoding consistent across browser and SFU renegotiations.
-			const codecs = RTCRtpSender.getCapabilities('video')?.codecs.filter(codec => ['video/vp8', 'video/rtx'].includes(codec.mimeType.toLowerCase()));
-			if (codecs?.some(codec => codec.mimeType.toLowerCase() === 'video/vp8') && typeof transceiver.setCodecPreferences === 'function') transceiver.setCodecPreferences(codecs);
+			const codecs = RTCRtpSender.getCapabilities(video.track.kind)?.codecs.filter(codec => (video.track.kind === 'audio' ? ['audio/opus'] : ['video/vp8', 'video/rtx']).includes(codec.mimeType.toLowerCase()));
+			if (codecs?.some(codec => codec.mimeType.toLowerCase() === (video.track.kind === 'audio' ? 'audio/opus' : 'video/vp8')) && typeof transceiver.setCodecPreferences === 'function') transceiver.setCodecPreferences(codecs);
 			const offer = await peer.createOffer();
 			await peer.setLocalDescription(offer);
 			await this.waitForIceGathering(peer);
@@ -343,7 +447,7 @@ export class CallsMediaController {
 			const result = await misskeyApi('calls/media/tracks/publish', {
 				roomId: this.roomId, participantId: this.participantId!, connectionId: this.connectionId,
 				generation: this.generation, operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential!,
-				mediaSource: source, mid: transceiver.mid!, sessionDescription: { type: 'offer', sdp: peer.localDescription?.sdp ?? offer.sdp ?? '' },
+				mediaSource: source, screenPublicationId, mid: transceiver.mid!, sessionDescription: { type: 'offer', sdp: peer.localDescription?.sdp ?? offer.sdp ?? '' },
 			});
 			video.publicationId = result.publicationId;
 			this.publications.add(result.publicationId);
@@ -356,11 +460,12 @@ export class CallsMediaController {
 	}
 
 	public async setVideoQuality(source: CallsVideoSource, quality: CallsVideoQuality): Promise<void> {
-		const video = this.localVideos.get(source);
-		if (video == null || this.isClosed()) return;
+		if (this.isClosed()) return;
 		await this.enqueue(async () => {
-			if (this.isClosed() || this.localVideos.get(source) !== video) return;
-			await video.track.applyConstraints(videoConstraints(quality));
+			if (this.isClosed()) return;
+			for (const video of this.localVideos.values()) {
+				if (video.source === source) await video.track.applyConstraints(videoConstraints(quality));
+			}
 		});
 	}
 
@@ -379,7 +484,7 @@ export class CallsMediaController {
 				video.track.stop();
 				video.track = track;
 				track.contentHint = 'motion';
-				this.videoCallbacks?.localTrack('camera', track);
+				this.videoCallbacks?.localTrack('camera', track, 'camera');
 				track.addEventListener('ended', () => {
 					if (video.track === track) void this.stopVideo('camera').catch(error => this.videoCallbacks?.error(error));
 				}, { once: true });
@@ -387,53 +492,83 @@ export class CallsMediaController {
 		} catch (error) { track.stop(); throw error; }
 	}
 
-	public async stopVideo(source: CallsVideoSource): Promise<void> {
-		const video = this.localVideos.get(source);
-		if (video == null) return;
-		video.track.stop();
-		this.localVideos.delete(source);
-		this.videoCallbacks?.localTrack(source, null);
+	public async stopVideo(source: CallsVideoSource, videoId?: string): Promise<void> {
+		const videos = [...this.localVideos].filter(([id, video]) => video.source === source && (videoId == null || id === videoId));
+		for (const [id, video] of videos) {
+			video.track.stop();
+			video.audio?.track.stop();
+			this.localVideos.delete(id);
+			this.videoCallbacks?.localTrack(source, null, id);
+		}
 		await this.enqueue(async () => {
-			await video.transceiver?.sender.replaceTrack(null);
-			if (video.publicationId == null || this.isClosed()) return;
-			await this.ensureCredential();
-			await misskeyApi('calls/media/tracks/close', {
-				roomId: this.roomId, participantId: this.participantId!, connectionId: this.connectionId,
-				generation: this.generation, operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential!, publicationId: video.publicationId,
-			});
-			this.publications.delete(video.publicationId);
+			for (const [, video] of videos) {
+				for (const media of [video.audio, video]) {
+					if (media == null) continue;
+					await this.closePublishedTrack(media);
+				}
+			}
 		});
+	}
+
+	private async closePublishedTrack(media: CallsLocalTrack): Promise<void> {
+		await media.transceiver?.sender.replaceTrack(null);
+		if (media.publicationId == null || this.isClosed()) return;
+		await this.ensureCredential();
+		await misskeyApi('calls/media/tracks/close', {
+			roomId: this.roomId, participantId: this.participantId!, connectionId: this.connectionId,
+			generation: this.generation, operationId: crypto.randomUUID(), mediaCredential: this.mediaCredential!, publicationId: media.publicationId,
+		});
+		this.publications.delete(media.publicationId);
 	}
 
 	public setMuted(muted: boolean): void {
 		this.muted = muted;
 		if (this.localTrack != null) this.localTrack.enabled = !muted;
+		if (this.microphone != null) this.microphone.track.enabled = !muted;
+		this.microphone?.processing?.setMuted(muted);
+		if (muted) this.stopStats();
+		else if (this.peer?.connectionState === 'connected') this.startStats();
 	}
 
-	public async setNoiseSuppression(enabled: boolean): Promise<void> {
+	public setNoiseSuppression(enabled: boolean): void {
 		if (this.noiseSuppression === enabled) return;
-		if (this.localTrack != null) await this.switchMicrophone(this.localTrack.getSettings().deviceId, enabled);
+		if (enabled && this.microphone != null && this.microphone.processing == null) throw new Error('RNNoise is unavailable');
+		this.microphone?.processing?.setEnabled(enabled);
 		this.noiseSuppression = enabled;
 	}
 
-	public async switchMicrophone(deviceId?: string, noiseSuppression = this.noiseSuppression): Promise<void> {
+	public async switchMicrophone(deviceId?: string): Promise<void> {
+		if (!this.canUseMicrophone) return;
 		const oldTrack = this.localTrack;
-		await this.acquireMicrophone(deviceId, noiseSuppression);
+		const oldMicrophone = this.microphone;
+		const microphone = await this.acquireMicrophone(deviceId);
+		if (this.isClosed()) { microphone.processing?.close(); microphone.track.stop(); return; }
+		this.useMicrophone(microphone);
+		if (oldTrack == null && this.peer != null) {
+			await this.enqueue(() => this.createConnection());
+			return;
+		}
 		const sender = this.peer?.getSenders().find(item => item.track?.kind === 'audio');
 		try {
 			await sender?.replaceTrack(this.localTrack);
 		} catch (error) {
-			this.localTrack?.stop();
+			microphone.processing?.close();
+			microphone.track.stop();
+			this.microphone = oldMicrophone;
 			this.localTrack = oldTrack;
+			oldMicrophone?.processing?.setEnabled(this.noiseSuppression);
+			this.setMuted(this.muted);
+			this.videoCallbacks?.microphoneTrack?.(oldTrack);
 			throw error;
 		}
-		oldTrack?.stop();
+		oldMicrophone?.processing?.close();
+		oldMicrophone?.track.stop();
 	}
 
 	private async recoverFromDeviceLoss(): Promise<void> {
-		if (this.role === 'listener' || this.state === 'leaving' || this.state === 'closed') return;
+		if (this.role === 'listener' || !this.canUseMicrophone || this.state === 'leaving' || this.state === 'closed') return;
 		try {
-			await this.acquireMicrophone();
+			await this.switchMicrophone();
 			this.scheduleReconnect('failed');
 		} catch (error) {
 			this.fail(error instanceof DOMException ? normalizeCallsMediaError(error) : 'hardware-failure');
@@ -455,16 +590,20 @@ export class CallsMediaController {
 
 	private isClosed(): boolean { return this.state === 'leaving' || this.state === 'closed'; }
 
-	private scheduleReconnect(reason: Exclude<CallsNormalizedStats['reconnectReason'], null>): void {
-		if (this.isClosed() || this.state === 'reconnecting') return;
+	private scheduleReconnect(reason: Exclude<CallsNormalizedStats['reconnectReason'], null>): Promise<void> {
+		if (this.isClosed()) return Promise.resolve();
+		if (this.reconnectPromise != null) return this.reconnectPromise;
 		this.reconnectReason = reason;
 		this.reconnectStartedAt = performance.now();
 		this.recoveryTimeMs = null;
 		this.setState('reconnecting');
-		void this.enqueue(() => this.createConnection()).catch(error => {
+		this.reconnectPromise = this.enqueue(() => this.createConnection()).catch(error => {
 			console.error('[Calls] Media reconnection failed', error);
 			if (!this.isClosed()) this.fail('negotiation-failed');
+		}).finally(() => {
+			this.reconnectPromise = null;
 		});
+		return this.reconnectPromise;
 	}
 
 	private async ensureCredential(): Promise<void> {
@@ -506,15 +645,24 @@ export class CallsMediaController {
 	}
 
 	private startStats(): void {
-		if (this.statsTimer != null) return;
+		// Only the local microphone needs speaking detection; listening needs no polling.
+		if (this.statsTimer != null || this.muted || this.localTrack == null || this.onStats == null) return;
+		this.lastStatsBytes = 0;
 		this.lastStatsAt = performance.now();
 		this.statsTimer = window.setInterval(() => void this.sampleStats(), 500);
 	}
 
+	private stopStats(): void {
+		if (this.statsTimer != null) window.clearInterval(this.statsTimer);
+		this.statsTimer = null;
+		this.speaking = false;
+	}
+
 	private async sampleStats(): Promise<void> {
-		if (this.peer == null) return;
+		if (this.peer == null || this.muted || this.localTrack == null) return;
 		const now = performance.now();
 		const report = await this.peer.getStats();
+		if (this.muted || this.isClosed()) return;
 		const normalized = normalizeCallsStats(report, this.lastStatsBytes, Math.max((now - this.lastStatsAt) / 1000, 0.001), { reason: this.reconnectReason, recoveryTimeMs: this.recoveryTimeMs });
 		this.lastStatsAt = now;
 		let bytes = 0;
@@ -536,25 +684,31 @@ export class CallsMediaController {
 	private cleanupPeer(stopTrack: boolean): void {
 		if (this.reconnectTimer != null) window.clearTimeout(this.reconnectTimer);
 		if (this.turnRefreshTimer != null) window.clearTimeout(this.turnRefreshTimer);
-		if (this.statsTimer != null) window.clearInterval(this.statsTimer);
+		this.stopStats();
 		this.reconnectTimer = null;
 		this.turnRefreshTimer = null;
-		this.statsTimer = null;
-		this.speaking = false;
 		this.cancelMicrophoneRequest();
 		this.peer?.close();
 		this.peer = null;
 		this.subscribedPublications.clear();
 		for (const publication of this.remotePublications.values()) this.videoCallbacks?.remoteRemoved(publication.id);
 		this.remotePublications.clear();
+		this.receivedRemoteTracks.clear();
 		if (stopTrack) {
-			for (const [source, video] of this.localVideos) {
+			for (const [id, video] of this.localVideos) {
 				video.track.stop();
-				this.videoCallbacks?.localTrack(source, null);
+				video.audio?.track.stop();
+				this.videoCallbacks?.localTrack(video.source, null, id);
 			}
 			this.localVideos.clear();
 		}
-		if (stopTrack) { this.localTrack?.stop(); this.localTrack = null; }
+		if (stopTrack) {
+			this.microphone?.processing?.close();
+			this.microphone?.track.stop();
+			this.microphone = null;
+			this.localTrack = null;
+			this.videoCallbacks?.microphoneTrack?.(null);
+		}
 	}
 
 	private setState(state: CallsMediaState): void { this.state = state; this.failure = null; this.onState?.(state, null); }

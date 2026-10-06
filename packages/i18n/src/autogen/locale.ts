@@ -10381,6 +10381,202 @@ export interface Locale extends ILocale {
          */
         "openChat": string;
         /**
+         * 通話設定
+         */
+        "audioSettings": string;
+        /**
+         * Callsの設定
+         */
+        "settings": string;
+        /**
+         * システムの既定
+         */
+        "systemDefaultDevice": string;
+        /**
+         * スピーカー
+         */
+        "outputDevice": string;
+        /**
+         * 音声
+         */
+        "audioSection": string;
+        /**
+         * マイクテスト
+         */
+        "microphoneTest": string;
+        /**
+         * テストを終了
+         */
+        "stopMicrophoneTest": string;
+        /**
+         * マイクの音を選択中のスピーカーで再生します。
+         */
+        "microphoneTestDescription": string;
+        /**
+         * プレビューをする
+         */
+        "previewCamera": string;
+        /**
+         * マイクの入力音量
+         */
+        "inputVolume": string;
+        /**
+         * 通話の出力音量
+         */
+        "outputVolume": string;
+        /**
+         * デバイス一覧を更新（マイク・カメラの使用を許可）
+         */
+        "refreshDevices": string;
+        /**
+         * このブラウザーでは出力デバイスを選択できません。OSの設定を使用します。
+         */
+        "outputDeviceUnsupported": string;
+        /**
+         * 一般
+         */
+        "generalSettings": string;
+        /**
+         * 統計表示
+         */
+        "statisticsSettings": string;
+        /**
+         * ノイズキャンセル
+         */
+        "noiseSuppressionMode": string;
+        /**
+         * RNNoise
+         */
+        "rnnoiseMode": string;
+        /**
+         * WebRTC 標準
+         */
+        "webrtcMode": string;
+        /**
+         * なし
+         */
+        "noNoiseSuppression": string;
+        /**
+         * 自動音量調整
+         */
+        "autoGainControl": string;
+        /**
+         * ブラウザーの自動音量調整でマイクの音量を揃えます。対応状況や効果はブラウザーによって異なります。
+         */
+        "autoGainControlDescription": string;
+        /**
+         * RNNoise は音声処理で環境音を抑えます。WebRTC 標準はブラウザのノイズキャンセルを使います。エコーキャンセルはどのモードでも有効です。
+         */
+        "noiseSuppressionDescription": string;
+        /**
+         * 送信開始のしきい値
+         */
+        "inputSensitivity": string;
+        /**
+         * この音量より小さな音は送信しません。右に動かすほど小さな環境音を送りにくくなります。
+         */
+        "inputSensitivityDescription": string;
+        /**
+         * しきい値なし（すべて送信）
+         */
+        "inputGateDisabled": string;
+        /**
+         * 入力音量
+         */
+        "inputLevel": string;
+        /**
+         * 送信中
+         */
+        "inputTransmitting": string;
+        /**
+         * しきい値未満・ミュート
+         */
+        "inputNotTransmitting": string;
+        /**
+         * 接続情報
+         */
+        "connectionInfo": string;
+        /**
+         * 状態
+         */
+        "connectionStatus": string;
+        /**
+         * 接続品質の推移
+         */
+        "connectionHistory": string;
+        /**
+         * この画面を開いている間、直近3分の測定値を表示します。パケットロスは接続開始からの累積値です。
+         */
+        "connectionHistoryDescription": string;
+        /**
+         * 送信
+         */
+        "sending": string;
+        /**
+         * 受信
+         */
+        "receiving": string;
+        /**
+         * 通話サーバー
+         */
+        "callServer": string;
+        /**
+         * Cloudflare Realtime SFU
+         */
+        "cloudflareSfu": string;
+        /**
+         * TURN サーバー
+         */
+        "turnServer": string;
+        /**
+         * ホスト
+         */
+        "turnHost": string;
+        /**
+         * UDP ポート
+         */
+        "udpPort": string;
+        /**
+         * TCP ポート
+         */
+        "tcpPort": string;
+        /**
+         * TLS ポート
+         */
+        "tlsPort": string;
+        /**
+         * 送信（マイク・カメラ・画面共有）
+         */
+        "sendingMedia": string;
+        /**
+         * 受信
+         */
+        "receivingMedia": string;
+        /**
+         * 通信経路
+         */
+        "connectionRoute": string;
+        /**
+         * 直接（NAT 越え）
+         */
+        "directRoute": string;
+        /**
+         * TURN 中継
+         */
+        "relayRoute": string;
+        /**
+         * パケットロス
+         */
+        "packetLoss": string;
+        /**
+         * 往復時間
+         */
+        "roundTripTime": string;
+        /**
+         * 接続情報を取得できませんでした
+         */
+        "connectionInfoUnavailable": string;
+        /**
          * このアカウントではコールへの参加が許可されていません。
          */
         "participationNotAllowed": string;

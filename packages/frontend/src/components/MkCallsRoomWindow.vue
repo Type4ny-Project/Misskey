@@ -119,7 +119,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkButton v-if="room.state === 'ended'" rounded @click="closeWindow">{{ i18n.ts.close }}</MkButton>
 				<template v-else-if="sessionIsCurrent">
 					<MkButton v-if="session.needsAudioResume.value" rounded @click="session.resumeAudio()">{{ i18n.ts._calls.resumeAudio }}</MkButton>
-					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="toggleCamera" @screen="session.toggleVideo('screen')" @microphoneSettings="openDeviceMenu('microphone', $event)" @cameraSettings="openDeviceMenu('camera', $event)" @screenSettings="openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveCurrentRoom">
+					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="toggleCamera" @screen="session.toggleVideo('screen')" @microphoneSettings="openDeviceMenu('microphone', $event)" @cameraSettings="openDeviceMenu('camera', $event)" @connectionInfo="openConnectionInfo" @screenSettings="openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveCurrentRoom">
 						<template #afterLeave>
 							<button v-if="room.channelId != null" type="button" class="_button" :class="$style.mobileChatToggle" :aria-label="i18n.ts._calls.openChat" :title="i18n.ts._calls.openChat" :aria-pressed="showChat" @click="showChat = !showChat"><i class="ti ti-messages" aria-hidden="true"></i></button>
 						</template>
@@ -613,6 +613,12 @@ onUnmounted(() => {
 });
 
 watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVideoId.value)) focusedVideoId.value = null; });
+
+function openConnectionInfo(): void {
+	if (popoutWindow != null) window.focus();
+	void session.openAudioSettings('statistics');
+}
+
 </script>
 
 <style lang="scss" module>

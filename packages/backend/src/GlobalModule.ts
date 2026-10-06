@@ -74,8 +74,13 @@ const $redisForPub: Provider = {
 const $redisForSub: Provider = {
 	provide: DI.redisForSub,
 	useFactory: (config: Config) => {
-		const redis = new Redis.Redis(config.redisForPubsub);
-		redis.subscribe(config.host);
+		const redis = new Redis.Redis({ ...config.redisForPubsub, autoResubscribe: false });
+		// An initial SUBSCRIBE can be discarded before ioredis has registered it for autoResubscribe.
+		redis.on('ready', () => {
+			redis.subscribe(config.host).catch(err => {
+				console.error('Redis subscription failed:', err);
+			});
+		});
 		return redis;
 	},
 	inject: [DI.config],

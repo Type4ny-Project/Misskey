@@ -9,6 +9,7 @@ import { bindThis } from '@/decorators.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
 import { CallsFeatureDisabledError, CallsRoomError, CallsRoomService } from '@/core/calls/CallsRoomService.js';
 import { CallsMediaService } from '@/core/calls/CallsMediaService.js';
+import { CallsLiveConnectionService } from '@/core/calls/CallsLiveConnectionService.js';
 import { CallsEntityService } from '@/core/entities/CallsEntityService.js';
 import { DI } from '@/di-symbols.js';
 import type { CallsParticipantsRepository } from '@/models/_.js';
@@ -30,6 +31,7 @@ export class CallsRoomChannel extends Channel {
 		@Inject(DI.callsParticipantsRepository)
 		private callsParticipantsRepository: CallsParticipantsRepository,
 		private callsEntityService: CallsEntityService,
+		private callsLiveConnectionService: CallsLiveConnectionService,
 	) { super(request); }
 
 	@bindThis
@@ -68,7 +70,7 @@ export class CallsRoomChannel extends Channel {
 		}
 		if (data.type === 'participant' && (data.body.action === 'joined' || data.body.action === 'updated')) {
 			const participant = await this.callsParticipantsRepository.findOneBy({ id: data.body.participantId, roomId: this.roomId });
-			if (participant != null) {
+			if (participant != null && await this.callsLiveConnectionService.isReady(participant.id)) {
 				const [packedParticipant] = await this.callsEntityService.packParticipants([participant], this.user);
 				this.send(data.type, data.body.action === 'updated'
 					? { ...data.body, participant: packedParticipant, moderatorUserIds: room.moderatorUserIds }
@@ -86,6 +88,9 @@ export class CallsRoomChannel extends Channel {
 		if (type === 'speaking' && typeof body === 'boolean') void this.callsRoomService.reportSpeaking(this.user, this.roomId, body).catch(() => undefined);
 		if (type === 'heartbeat' && typeof body === 'object' && body != null && !Array.isArray(body) && typeof body.connectionId === 'string' && typeof body.generation === 'number') {
 			void this.callsMediaService.heartbeat(this.user, this.roomId, body.connectionId, body.generation).catch(() => undefined);
+		}
+		if (type === 'ready' && typeof body === 'object' && body != null && !Array.isArray(body) && typeof body.connectionId === 'string' && typeof body.generation === 'number') {
+			void this.callsRoomService.confirmReady(this.user, this.roomId, { connectionId: body.connectionId, generation: body.generation }).catch(() => undefined);
 		}
 	}
 

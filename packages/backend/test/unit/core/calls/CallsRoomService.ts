@@ -103,6 +103,36 @@ describe('CallsRoomService lifecycle', () => {
 		expect(followOrRequest).toHaveBeenCalledWith(viewer, { id: room.channelId }, true);
 	});
 
+	test('hides connecting participants from snapshots and user presence while retaining them for negotiation', async () => {
+		const service = createAccessFixture();
+		const room = { ...baseRoom, state: 'open', visibility: 'public' };
+		const participants = [{ id: 'ready', roomId: room.id, userId: 'ready-user' }, { id: 'connecting', roomId: room.id, userId: viewer.id }];
+		Object.assign(service, {
+			callsRoomsRepository: { findOneBy: async () => room, findBy: async () => [room] },
+			callsParticipantsRepository: { findBy: async () => participants },
+			callsLiveConnectionService: { isReady: async (id: string) => id === 'ready' },
+		});
+		expect((await service.snapshot(viewer, room.id)).participants).toEqual([participants[0]]);
+		expect((await service.snapshot(viewer, room.id, true)).participants).toEqual(participants);
+		expect(await service.listActiveRoomsForUsers(viewer, ['ready-user', viewer.id])).toEqual([{ userId: 'ready-user', roomId: room.id }]);
+	});
+
+	test('announces participation once after media readiness is confirmed', async () => {
+		const fixture = createConnectionFixture('host');
+		const markReady = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false);
+		const publish = vi.fn();
+		Object.assign(fixture.service, {
+			callsLiveConnectionService: { ...fixture.live, markReady },
+			callsEventService: { publish },
+		});
+		const user = { id: 'owner-a', host: null } as MiUser;
+		const identity = { connectionId: 'new-device', generation: 2 };
+		await fixture.service.confirmReady(user, fixture.room.id, identity);
+		await fixture.service.confirmReady(user, fixture.room.id, identity);
+		expect(markReady).toHaveBeenCalledWith('participant-a', 'new-device', 2);
+		expect(publish).toHaveBeenCalledExactlyOnceWith(fixture.room.id, 2, 'participant', { participantId: 'participant-a', action: 'joined' });
+	});
+
 	test('filters followed hosts and active participants before limiting rooms, preserving access checks', async () => {
 		const service = createAccessFixture({ followings: { 'followed-host': {}, 'followed-listener': {} } });
 		const hosted = { ...baseRoom, id: 'hosted', ownerUserId: 'followed-host', state: 'open', visibility: 'public' };
@@ -110,7 +140,7 @@ describe('CallsRoomService lifecycle', () => {
 		const privateRoom = { ...baseRoom, id: 'private', state: 'open' };
 		const find = vi.fn().mockResolvedValue([hosted, attended, privateRoom]);
 		const findBy = vi.fn().mockResolvedValue([{ roomId: 'attended' }, { roomId: 'private' }]);
-		Object.assign(service, { callsRoomsRepository: { find }, callsParticipantsRepository: { findBy } });
+		Object.assign(service, { callsRoomsRepository: { find }, callsParticipantsRepository: { findBy }, callsLiveConnectionService: { isReady: async () => true } });
 		await expect(service.listDiscoverable(viewer, 10, undefined, ['open'], true)).resolves.toEqual([hosted, attended]);
 		expect(findBy).toHaveBeenCalledWith({ userId: expect.objectContaining({ _value: ['followed-host', 'followed-listener'] }), state: 'active' });
 		expect(find).toHaveBeenCalledWith(expect.objectContaining({ where: [

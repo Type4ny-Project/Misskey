@@ -251,11 +251,16 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 	}
 
 	@bindThis
-	public async snapshot(user: MiUser, roomId: string): Promise<{ room: MiCallsRoom; participants: MiCallsParticipant[] }> {
+	public async snapshot(user: MiUser, roomId: string, includeConnecting = false): Promise<{ room: MiCallsRoom; participants: MiCallsParticipant[] }> {
 		const room = await this.getRoom(roomId);
 		await this.assertCanAccess(user, room);
 		const participants = await this.callsParticipantsRepository.findBy({ roomId, state: 'active' });
-		return { room, participants };
+		return { room, participants: includeConnecting ? participants : await this.connectedParticipants(participants) };
+	}
+
+	private async connectedParticipants(participants: MiCallsParticipant[]): Promise<MiCallsParticipant[]> {
+		const ready = await Promise.all(participants.map(participant => this.callsLiveConnectionService.isReady(participant.id)));
+		return participants.filter((_, index) => ready[index]);
 	}
 
 	@bindThis
@@ -267,7 +272,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		if (following) {
 			followingUserIds = Object.keys(await this.cacheService.userFollowingsCache.fetch(user.id));
 			if (followingUserIds.length === 0) return [];
-			const participants = await this.callsParticipantsRepository.findBy({ userId: In(followingUserIds), state: 'active' });
+			const participants = await this.connectedParticipants(await this.callsParticipantsRepository.findBy({ userId: In(followingUserIds), state: 'active' }));
 			followingRoomIds = [...new Set(participants.map(participant => participant.roomId))];
 		}
 		const candidates = await this.callsRoomsRepository.find({
@@ -294,7 +299,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 	@bindThis
 	public async listActiveRoomsForUsers(viewer: MiUser, userIds: MiUser['id'][]): Promise<Array<{ userId: MiUser['id']; roomId: MiCallsRoom['id'] }>> {
 		if (viewer.host !== null || userIds.length === 0) return [];
-		const participants = await this.callsParticipantsRepository.findBy({ userId: In(userIds), state: 'active' });
+		const participants = await this.connectedParticipants(await this.callsParticipantsRepository.findBy({ userId: In(userIds), state: 'active' }));
 		if (participants.length === 0) return [];
 		const rooms = await this.callsRoomsRepository.findBy({ id: In([...new Set(participants.map(participant => participant.roomId))]), state: 'open' });
 		const roomsById = new Map(rooms.map(room => [room.id, room]));
@@ -448,9 +453,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 			});
 		}
 		await this.followRoomChannel(user, room);
-		const revision = await this.bumpRevision(roomId);
-		await this.callsEventService.publish(roomId, revision, 'participant', { participantId: joined.id, action: 'joined' });
-		this.callsTelemetryService.lifecycle({ action: 'participant-joined', roomId, participantId: joined.id });
+		await this.bumpRevision(roomId);
 		return joined;
 	}
 
@@ -458,6 +461,22 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		if (room.channelId == null) return;
 		const channel = await this.channelsRepository.findOneByOrFail({ id: room.channelId });
 		await this.channelFollowingService.followOrRequest(user as MiLocalUser, channel, true);
+	}
+
+	@bindThis
+	public async confirmReady(user: MiUser, roomId: string, identity: CallsConnectionIdentity): Promise<void> {
+		await this.callsLiveConnectionService.withRoomLock(roomId, async () => {
+			await this.assertCanJoin(user);
+			const room = await this.getRoom(roomId);
+			await this.assertCanAccess(user, room);
+			if (room.state !== 'open') throw new CallsRoomError('invalid-state');
+			const participant = await this.callsParticipantsRepository.findOneBy({ roomId, userId: user.id, state: 'active' });
+			if (participant == null) throw new CallsRoomError('participant-not-found');
+			if (!await this.callsLiveConnectionService.markReady(participant.id, identity.connectionId, identity.generation)) return;
+			const revision = await this.bumpRevision(roomId);
+			await this.callsEventService.publish(roomId, revision, 'participant', { participantId: participant.id, action: 'joined' });
+			this.callsTelemetryService.lifecycle({ action: 'participant-joined', roomId, participantId: participant.id });
+		});
 	}
 
 	@bindThis

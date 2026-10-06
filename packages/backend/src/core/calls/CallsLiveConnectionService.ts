@@ -16,6 +16,7 @@ export type CallsLiveConnection = {
 	sessionId: string | null;
 	createdAt: string;
 	lastSeenAt: string;
+	ready?: boolean;
 };
 
 export class StaleCallsConnectionError extends Error {}
@@ -44,6 +45,19 @@ export class CallsLiveConnectionService {
 	public async get(participantId: string): Promise<CallsLiveConnection | null> {
 		const value = await this.redis.get(this.connectionKey(participantId));
 		return value == null ? null : JSON.parse(value) as CallsLiveConnection;
+	}
+
+	public async isReady(participantId: string): Promise<boolean> {
+		return (await this.get(participantId))?.ready === true;
+	}
+
+	public async markReady(participantId: string, connectionId: string, generation: number): Promise<boolean> {
+		const connection = await this.assertCurrent(participantId, connectionId, generation);
+		if (connection.sessionId == null) throw new StaleCallsConnectionError();
+		if (connection.ready) return false;
+		connection.ready = true;
+		await this.redis.set(this.connectionKey(participantId), JSON.stringify(connection), 'EX', CallsLiveConnectionService.ttlSeconds);
+		return true;
 	}
 
 	public async touchHost(roomId: string, onlyIfMissing = false): Promise<void> {

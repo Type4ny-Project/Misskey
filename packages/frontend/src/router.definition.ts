@@ -204,6 +204,10 @@ export const ROUTE_DEF = [{
 		name: 'other',
 		component: page(() => import('@/pages/settings/other.vue')),
 	}, {
+		path: '/keyboard-shortcuts',
+		name: 'keyboard-shortcuts',
+		component: page(() => import('@/pages/settings/keyboard-shortcuts.vue')),
+	}, {
 		path: '/timelineHeader',
 		name: 'timelineHeader',
 		component: page(() => import('@/pages/settings/timelineHeader.vue')),

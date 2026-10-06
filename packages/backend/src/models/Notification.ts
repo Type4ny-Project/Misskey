@@ -143,6 +143,12 @@ export type MiNotification = {
 	id: string;
 	createdAt: string;
 } | {
+	type: 'pointReceived';
+	id: string;
+	createdAt: string;
+	notifierId: MiUser['id'];
+	points: number;
+} | {
 	type: 'loginBonus';
 	id: string;
 	createdAt: string;

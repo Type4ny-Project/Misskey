@@ -52,6 +52,16 @@ async function composeNotification(data: PushNotificationDataMap[keyof PushNotif
 		*/
 		case 'notification':
 			switch (data.body.type) {
+				case 'pointReceived':
+					return [i18n.tsx._notification.pointReceivedFrom({
+						name: getUserName(data.body.user),
+						points: data.body.points,
+						pointName: i18n.ts.point,
+					}), {
+						icon: data.body.user.avatarUrl ?? undefined,
+						data,
+					}];
+
 				case 'follow': {
 					// users/showの型定義をswos.apiへ当てはめるのが困難なのでapiFetch.requestを直接使用
 					const account = await getAccountFromId(data.userId);

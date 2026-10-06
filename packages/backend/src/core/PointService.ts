@@ -7,6 +7,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import type { UsersRepository } from '@/models/_.js';
 import type { MiUser } from '@/models/User.js';
+import { NotificationService } from '@/core/NotificationService.js';
 import { bindThis } from '@/decorators.js';
 
 @Injectable()
@@ -14,6 +15,8 @@ export class PointService {
 	constructor(
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
+
+		private notificationService: NotificationService,
 	) {
 	}
 
@@ -61,6 +64,10 @@ export class PointService {
 		await this.usersRepository.update(recipientId, {
 			points: newRecipientBalance,
 		});
+
+		this.notificationService.createNotification(recipientId, 'pointReceived', {
+			points: amount,
+		}, senderId);
 
 		return {
 			success: true,

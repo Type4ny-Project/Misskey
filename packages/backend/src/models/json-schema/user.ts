@@ -629,6 +629,7 @@ export const packedMeDetailedOnlySchema = {
 				test: { optional: true, ...notificationRecieveConfig },
 				login: { optional: true, ...notificationRecieveConfig },
 				createToken: { optional: true, ...notificationRecieveConfig },
+				pointReceived: { optional: true, ...notificationRecieveConfig },
 				exportCompleted: { optional: true, ...notificationRecieveConfig },
 			},
 		},

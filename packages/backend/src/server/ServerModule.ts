@@ -46,6 +46,7 @@ import { ServerStatsChannel } from './api/stream/channels/server-stats.js';
 import { UserListChannel } from './api/stream/channels/user-list.js';
 import { RoleTimelineChannel } from './api/stream/channels/role-timeline.js';
 import { ChatUserChannel } from './api/stream/channels/chat-user.js';
+import { DrawingChannel } from '@/server/api/stream/channels/drawing.js';
 import { ChatRoomChannel } from './api/stream/channels/chat-room.js';
 import { CallsRoomChannel } from './api/stream/channels/calls-room.js';
 import { CallsRoomsChannel } from './api/stream/channels/calls-rooms.js';
@@ -93,6 +94,7 @@ import { SigninWithPasskeyApiService } from './api/SigninWithPasskeyApiService.j
 		RoleTimelineChannel,
 		ChatUserChannel,
 		ChatRoomChannel,
+		DrawingChannel,
 		CallsRoomChannel,
 		CallsRoomsChannel,
 		ReversiChannel,

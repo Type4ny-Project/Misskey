@@ -14818,4 +14818,118 @@ export interface Locale extends ILocale {
          */
         "unknownError": string;
     };
+    "_drawing": {
+        /**
+         * 絵チャ
+         */
+        "title": string;
+        /**
+         * キャンバスを開く
+         */
+        "start": string;
+        /**
+         * 絵チャに参加
+         */
+        "join": string;
+        /**
+         * 絵チャから退出
+         */
+        "leave": string;
+        /**
+         * 参加できる人
+         */
+        "scope": string;
+        /**
+         * 公開ルームにアクセスできる人
+         */
+        "public": string;
+        /**
+         * ChatRoomのメンバー
+         */
+        "chatRoom": string;
+        /**
+         * Callsに参加している人
+         */
+        "calls": string;
+        /**
+         * ペン
+         */
+        "pen": string;
+        /**
+         * 消しゴム
+         */
+        "eraser": string;
+        /**
+         * 色
+         */
+        "color": string;
+        /**
+         * 太さ
+         */
+        "width": string;
+        /**
+         * 全消去
+         */
+        "clear": string;
+        /**
+         * キャンバスを全消去しますか？ 全員の絵が消えます。
+         */
+        "clearConfirm": string;
+        /**
+         * 絵チャを終了
+         */
+        "end": string;
+        /**
+         * 絵チャを終了しますか？ 終了後は編集できません。必要なら先に画像をドライブへ保存してください。
+         */
+        "endConfirm": string;
+        /**
+         * この絵チャは終了しました。画像の保存・添付は引き続きできます。
+         */
+        "ended": string;
+        /**
+         * この絵チャにはアクセスできません。参加範囲とCallsの参加状態を確認してください。
+         */
+        "unavailable": string;
+        /**
+         * ホストがキャンバスを開くと参加できます。
+         */
+        "waiting": string;
+        /**
+         * ドライブに保存
+         */
+        "save": string;
+        /**
+         * 画像を添付して投稿
+         */
+        "attach": string;
+        /**
+         * 絵チャから退出させる
+         */
+        "remove": string;
+        /**
+         * この参加者を絵チャから退出させますか？ 再参加できなくなります。
+         */
+        "removeConfirm": string;
+        /**
+         * 500文字まで
+         */
+        "messageLimit": string;
+        /**
+         * 絵チャに参加できません。利用権限・参加範囲・空き人数を確認してください。画像の閲覧と保存は引き続きできます。
+         */
+        "cannotJoin": string;
+        /**
+         * キャンバスの容量に達しました。画像を保存してから、ホストが全消去してください。
+         */
+        "canvasFull": string;
+        /**
+         * 1280×720、同時参加16人まで。音声に接続せずに描くこともできます。
+         */
+        "description": string;
+        /**
+         * 再接続を待っています。
+         */
+        "disconnected": string;
+    };
 }

@@ -522,3 +522,13 @@ export * as 'admin/inbox-rule/edit' from './endpoints/admin/inbox-rule/edit.js';
 export * as 'admin/inbox-rule/set' from './endpoints/admin/inbox-rule/set.js';
 export * as 'admin/inbox-rule/delete' from './endpoints/admin/inbox-rule/delete.js';
 export * as 'admin/inbox-rule/list' from './endpoints/admin/inbox-rule/list.js';
+
+export * as 'drawing/show' from './endpoints/drawing/show.js';
+export * as 'drawing/start' from './endpoints/drawing/start.js';
+export * as 'drawing/join' from './endpoints/drawing/join.js';
+export * as 'drawing/leave' from './endpoints/drawing/leave.js';
+export * as 'drawing/stroke' from './endpoints/drawing/stroke.js';
+export * as 'drawing/clear' from './endpoints/drawing/clear.js';
+export * as 'drawing/end' from './endpoints/drawing/end.js';
+export * as 'drawing/kick' from './endpoints/drawing/kick.js';
+export * as 'drawing/message' from './endpoints/drawing/message.js';

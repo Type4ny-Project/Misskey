@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { DrawingService } from './drawing/DrawingService.js';
 import { Module } from '@nestjs/common';
 import { FanoutTimelineEndpointService } from '@/core/FanoutTimelineEndpointService.js';
 import { AbuseReportService } from '@/core/AbuseReportService.js';
@@ -345,6 +346,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		QueueModule,
 	],
 	providers: [
+		DrawingService,
 		LoggerService,
 		AbuseReportService,
 		AbuseReportNotificationService,
@@ -678,6 +680,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		//#endregion
 	],
 	exports: [
+		DrawingService,
 		QueueModule,
 		LoggerService,
 		AbuseReportService,

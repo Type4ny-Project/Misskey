@@ -16,6 +16,7 @@ import type { MenuButton } from '@/types/menu.js';
 const fixture = vi.hoisted(() => ({ close: vi.fn(), confirm: vi.fn(), inputText: vi.fn(), session: null as any, connection: null as any, policies: { canJoinCalls: true } }));
 vi.mock('@/i.js', () => ({ $i: { id: 'viewer', policies: fixture.policies } }));
 vi.mock('@/components/MkModal.vue', () => ({ default: { emits: ['click', 'closed', 'esc'], template: '<section><slot/></section>', methods: { close() { fixture.close(); } } } }));
+vi.mock('@/components/calls/MkCallsDrawing.vue', () => ({ default: { props: ['room'], template: '<div>Drawing room: {{ room.id }}</div>' } }));
 vi.mock('@/components/MkButton.vue', () => ({ default: { template: '<button><slot/></button>' } }));
 vi.mock('@/components/global/MkA.vue', () => ({ default: { props: ['to'], template: '<a :href="to"><slot/></a>' } }));
 vi.mock('@/os.js', () => ({ confirm: fixture.confirm, inputText: fixture.inputText, toast: vi.fn(), alert: vi.fn(), popupMenu: vi.fn(), contextMenu: vi.fn() }));
@@ -54,6 +55,38 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
+	test('opens drawing as an activity inside the current call and keeps the session when returning or closing', async () => {
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		const open = vi.spyOn(window, 'open');
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		const activityButton = view.getByRole('button', { name: i18n.ts._calls.activities });
+		await fireEvent.click(activityButton);
+		expect(activityButton.getAttribute('aria-expanded')).toBe('true');
+		await fireEvent.click(view.getByRole('button', { name: new RegExp(i18n.ts._drawing.title) }));
+		expect(view.getByText('Drawing room: room')).toBeTruthy();
+		expect(view.container.querySelector('mk-calls-controls-stub')).toBeTruthy();
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts._calls.backToActivities }));
+		expect(view.queryByText('Drawing room: room')).toBeNull();
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts.close }));
+		expect(activityButton.getAttribute('aria-expanded')).toBe('false');
+		expect(fixture.session.leave).not.toHaveBeenCalled();
+		expect(fixture.session.join).not.toHaveBeenCalled();
+		expect(open).not.toHaveBeenCalled();
+		open.mockRestore();
+	});
+
+	test('keeps selected drawing mounted while the room changes to its end summary', async () => {
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts._calls.activities }));
+		await fireEvent.click(view.getByRole('button', { name: new RegExp(i18n.ts._drawing.title) }));
+		const drawing = view.getByText('Drawing room: room');
+		fixture.connection.room.value = { ...fixture.connection.room.value, state: 'ended' };
+		await nextTick();
+		expect(view.getByRole('heading', { name: i18n.ts._calls.ended })).toBeTruthy();
+		expect(view.getByText('Drawing room: room')).toBe(drawing);
+	});
+
 	test('opens and closes the activity list inside the current call without leaving the session', async () => {
 		fixture.session.currentRoomId.value = 'room';
 		fixture.session.isActive.value = true;
@@ -62,7 +95,7 @@ describe('Calls room window', () => {
 		const activityButton = view.getByRole('button', { name: i18n.ts._calls.activities });
 		await fireEvent.click(activityButton);
 		expect(activityButton.getAttribute('aria-expanded')).toBe('true');
-		expect(view.getByText(i18n.ts._calls.noActivities)).toBeTruthy();
+		expect(view.getByRole('button', { name: new RegExp(i18n.ts._drawing.title) })).toBeTruthy();
 		expect(view.container.querySelector('mk-calls-controls-stub')).toBeTruthy();
 		await fireEvent.click(view.getByRole('button', { name: i18n.ts.close }));
 		expect(activityButton.getAttribute('aria-expanded')).toBe('false');
@@ -75,11 +108,11 @@ describe('Calls room window', () => {
 	test('keeps an opened activity mounted while the room changes to its end summary', async () => {
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
 		await fireEvent.click(view.getByRole('button', { name: i18n.ts._calls.activities }));
-		const activities = view.getByText(i18n.ts._calls.noActivities);
+		const activities = view.getByRole('button', { name: new RegExp(i18n.ts._drawing.title) });
 		fixture.connection.room.value = { ...fixture.connection.room.value, state: 'ended' };
 		await nextTick();
 		expect(view.getByRole('heading', { name: i18n.ts._calls.ended })).toBeTruthy();
-		expect(view.getByText(i18n.ts._calls.noActivities)).toBe(activities);
+		expect(view.getByRole('button', { name: new RegExp(i18n.ts._drawing.title) })).toBe(activities);
 	});
 
 	test('keeps an initially ended room open with its final timing and no join prompt', async () => {

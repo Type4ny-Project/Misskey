@@ -13,6 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<h1 :class="$style.title">{{ room?.title ?? i18n.ts._calls.title }}</h1>
 				<small v-if="sessionIsCurrent && session.elapsedTime.value != null" :class="$style.elapsedTime" :title="i18n.ts._calls.elapsedTime"><i class="ti ti-clock" aria-hidden="true"></i> {{ session.elapsedTime.value }}</small>
 			</div>
+			<button v-if="room != null && room.state !== 'ended'" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.users" :title="i18n.ts.users" :aria-pressed="showParticipants" @click="showParticipants = !showParticipants"><i class="ti ti-users" aria-hidden="true"></i></button>
 			<button v-if="room?.channelId != null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.chat" :title="i18n.ts.chat" :aria-pressed="showChat" @click="showChat = !showChat"><i class="ti ti-messages" aria-hidden="true"></i></button>
 			<button v-if="room != null" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.copyLink" :title="i18n.ts.copyLink" @click="copyRoomLink"><i class="ti ti-link" aria-hidden="true"></i></button>
 			<button v-if="hasRoomMenu" type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.details" :disabled="session.joining.value" aria-haspopup="menu" @click="openRoomMenu"><i class="ti ti-dots"></i></button>
@@ -34,20 +35,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkInfo v-if="sessionIsCurrent && session.mediaFailure.value != null" warn>{{ failureText }}</MkInfo>
 				<MkInfo v-if="sessionIsCurrent && session.speakerRequestResult.value === 'rejected'" warn>{{ i18n.ts._calls.speakerRequestRejected }}</MkInfo>
 
-				<div :class="[$style.callLayout, showChat && room.channelId != null && $style.withChat]">
-					<aside v-if="showChat && room.channelId != null" :class="$style.chat" :aria-label="i18n.ts.chat">
-						<header :class="$style.chatHeader">
-							<strong>{{ i18n.ts.chat }}</strong>
-							<button type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.close" @click="showChat = false"><i class="ti ti-x" aria-hidden="true"></i></button>
-						</header>
-						<MkInfo v-if="chatLoadFailed" warn>{{ i18n.ts.somethingHappened }}</MkInfo>
-						<div :class="$style.chatComposer">
-							<MkPostForm v-if="chatChannel != null && $i != null" :channel="chatChannel" fixed :autofocus="false"/>
-						</div>
-						<div :class="$style.chatTimeline">
-							<MkStreamingNotesTimeline :key="room.channelId" src="channel" :channel="room.channelId"/>
-						</div>
-					</aside>
+				<div :class="$style.callLayout">
+					<div v-if="room.channelId != null" :class="[$style.chatSidebar, showChat && $style.chatOpen]">
+						<Transition :enterActiveClass="$style.sidebarTransition" :leaveActiveClass="$style.sidebarTransition" :enterFromClass="$style.chatHidden" :leaveToClass="$style.chatHidden">
+							<aside v-show="showChat" :class="$style.chat" :aria-label="i18n.ts.chat">
+								<header :class="$style.chatHeader">
+									<strong>{{ i18n.ts.chat }}</strong>
+									<button type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.close" @click="showChat = false"><i class="ti ti-x" aria-hidden="true"></i></button>
+								</header>
+								<MkInfo v-if="chatLoadFailed" warn>{{ i18n.ts.somethingHappened }}</MkInfo>
+								<div :class="$style.chatComposer">
+									<MkPostForm v-if="chatChannel != null && $i != null" :channel="chatChannel" fixed :autofocus="false"/>
+								</div>
+								<div :class="$style.chatTimeline">
+									<MkStreamingNotesTimeline :key="room.channelId" src="channel" :channel="room.channelId"/>
+								</div>
+							</aside>
+						</Transition>
+					</div>
 					<section ref="stage" :class="$style.stage" :aria-label="i18n.ts._calls.title">
 						<div ref="videoGrid" :class="$style.videoGrid" :style="videoGridStyle">
 							<CallsVideo v-for="video in roomVideos" :key="video.id" :stream="video.stream" :audioVolume="!video.local && session.screenAudioIds.value.has(video.id) ? session.getScreenVolume(video.id) : undefined" screenWindow :screenWindowActive="session.screenWindows.has(video.stream)" :label="videoLabel(video.participantId)" :speaking="speakingParticipantIds.has(video.participantId)" :focused="focusedVideoId === video.id" :class="focusedVideoId === video.id && $style.focusedVideo" @contextmenu.capture.stop.prevent="openParticipantMenu(participants.find(participant => participant.id === video.participantId), $event)" @volume="session.setScreenVolume(video.id, $event)" @select="focusVideo(video.id)" @screenWindow="showScreenWindow(video.stream, video.participantId)"/>
@@ -58,47 +63,55 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 					</section>
-					<aside v-if="!showChat || room.channelId == null" :class="$style.participantArea" :aria-label="i18n.ts.users">
-						<section v-if="speakers.length > 0" :aria-label="i18n.ts._calls.speaker">
-							<div v-if="room.mode === 'stage'" :class="$style.groupLabel">{{ i18n.ts._calls.speaker }}</div>
-							<TransitionGroup tag="div" :class="$style.people" :moveClass="$style.personMove">
-								<div v-for="participant in speakers" :key="participant.id" :class="$style.person" @contextmenu.capture.stop.prevent="openParticipantMenu(participant, $event)">
-									<MkA v-if="participant.user != null" v-user-preview="participant.userId" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.personLink"/>
-									<div :class="[$style.avatarWrap, speakingParticipantIds.has(participant.id) && $style.speaking]">
-										<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.avatar"/>
-										<div v-else :class="[$style.avatar, $style.avatarPlaceholder]"><i class="ti ti-user"></i></div>
-										<span :class="$style.microphoneBadge" :title="participant.isMuted ? i18n.ts._calls.mutedStatus : i18n.ts._calls.microphoneOn"><i :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i></span>
-									</div>
-									<div :class="$style.personName">
-										<strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong>
-										<button v-if="canModerateParticipants && participant.role !== 'host' && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
-									</div>
-									<small :class="speakingParticipantIds.has(participant.id) && $style.speakingLabel">{{ speakingParticipantIds.has(participant.id) ? i18n.ts._calls.speakingNow : participant.role === 'host' ? i18n.ts._calls.host : room.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.vcModerator : i18n.ts._calls.speaker }}</small>
-									<label v-if="sessionIsCurrent && participant.userId !== $i?.id" :class="$style.personVolume">
-										<span>{{ i18n.ts.volume }} · {{ session.getParticipantVolume(participant.userId) }}%</span>
-										<input type="range" min="0" max="100" step="1" :value="session.getParticipantVolume(participant.userId)" :aria-label="`${i18n.ts.volume}: ${videoLabel(participant.id)}`" @input="session.setParticipantVolume(participant.userId, ($event.target as HTMLInputElement).valueAsNumber)">
-									</label>
-								</div>
-							</TransitionGroup>
-						</section>
+					<div :class="[$style.participantsSidebar, showParticipants && $style.participantsOpen]">
+						<Transition :enterActiveClass="$style.sidebarTransition" :leaveActiveClass="$style.sidebarTransition" :enterFromClass="$style.participantsHidden" :leaveToClass="$style.participantsHidden">
+							<aside v-show="showParticipants" :class="$style.participantArea" :aria-label="i18n.ts.users">
+								<header :class="$style.chatHeader">
+									<strong>{{ i18n.ts.users }}</strong>
+									<button type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.close" @click="showParticipants = false"><i class="ti ti-x" aria-hidden="true"></i></button>
+								</header>
+								<section v-if="speakers.length > 0" :aria-label="i18n.ts._calls.speaker">
+									<div v-if="room.mode === 'stage'" :class="$style.groupLabel">{{ i18n.ts._calls.speaker }}</div>
+									<TransitionGroup tag="div" :class="$style.people" :moveClass="$style.personMove">
+										<div v-for="participant in speakers" :key="participant.id" :class="$style.person" @contextmenu.capture.stop.prevent="openParticipantMenu(participant, $event)">
+											<MkA v-if="participant.user != null" v-user-preview="participant.userId" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.personLink"/>
+											<div :class="[$style.avatarWrap, speakingParticipantIds.has(participant.id) && $style.speaking]">
+												<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.avatar"/>
+												<div v-else :class="[$style.avatar, $style.avatarPlaceholder]"><i class="ti ti-user"></i></div>
+												<span :class="$style.microphoneBadge" :title="participant.isMuted ? i18n.ts._calls.mutedStatus : i18n.ts._calls.microphoneOn"><i :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i></span>
+											</div>
+											<div :class="$style.personName">
+												<strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong>
+												<button v-if="canModerateParticipants && participant.role !== 'host' && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
+											</div>
+											<small :class="speakingParticipantIds.has(participant.id) && $style.speakingLabel">{{ speakingParticipantIds.has(participant.id) ? i18n.ts._calls.speakingNow : participant.role === 'host' ? i18n.ts._calls.host : room.moderatorUserIds.includes(participant.userId) ? i18n.ts._calls.vcModerator : i18n.ts._calls.speaker }}</small>
+											<label v-if="sessionIsCurrent && participant.userId !== $i?.id" :class="$style.personVolume">
+												<span>{{ i18n.ts.volume }} · {{ session.getParticipantVolume(participant.userId) }}%</span>
+												<input type="range" min="0" max="100" step="1" :value="session.getParticipantVolume(participant.userId)" :aria-label="`${i18n.ts.volume}: ${videoLabel(participant.id)}`" @input="session.setParticipantVolume(participant.userId, ($event.target as HTMLInputElement).valueAsNumber)">
+											</label>
+										</div>
+									</TransitionGroup>
+								</section>
 
-						<section v-if="listeners.length > 0" :aria-label="i18n.ts._calls.listener">
-							<div :class="$style.groupLabel">{{ i18n.ts._calls.listener }} · {{ listeners.length }}</div>
-							<TransitionGroup tag="div" :class="$style.people" :moveClass="$style.personMove">
-								<div v-for="participant in listeners" :key="participant.id" :class="$style.person" @contextmenu.capture.stop.prevent="openParticipantMenu(participant, $event)">
-									<MkA v-if="participant.user != null" v-user-preview="participant.userId" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.personLink"/>
-									<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.listenerAvatar"/>
-									<div v-else :class="[$style.listenerAvatar, $style.avatarPlaceholder]"><i class="ti ti-user"></i></div>
-									<div :class="$style.personName">
-										<strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong>
-										<button v-if="canModerateParticipants && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
-									</div>
-									<small v-if="room.moderatorUserIds.includes(participant.userId)">{{ i18n.ts._calls.vcModerator }}</small>
-									<small v-if="participant.speakerRequestedAt != null" :class="$style.speakingLabel"><i class="ti ti-hand-stop"></i> {{ i18n.ts._calls.requestSpeaker }}</small>
-								</div>
-							</TransitionGroup>
-						</section>
-					</aside>
+								<section v-if="listeners.length > 0" :aria-label="i18n.ts._calls.listener">
+									<div :class="$style.groupLabel">{{ i18n.ts._calls.listener }} · {{ listeners.length }}</div>
+									<TransitionGroup tag="div" :class="$style.people" :moveClass="$style.personMove">
+										<div v-for="participant in listeners" :key="participant.id" :class="$style.person" @contextmenu.capture.stop.prevent="openParticipantMenu(participant, $event)">
+											<MkA v-if="participant.user != null" v-user-preview="participant.userId" :to="userPage(participant.user!)" :aria-label="acct(participant.user!)" :class="$style.personLink"/>
+											<MkAvatar v-if="participant.user != null" :user="participant.user!" :class="$style.listenerAvatar"/>
+											<div v-else :class="[$style.listenerAvatar, $style.avatarPlaceholder]"><i class="ti ti-user"></i></div>
+											<div :class="$style.personName">
+												<strong><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></strong>
+												<button v-if="canModerateParticipants && participant.userId !== $i?.id" type="button" class="_button" :class="$style.personMenu" :aria-label="i18n.ts.details" aria-haspopup="menu" @click="openParticipantMenu(participant, $event)"><i class="ti ti-dots"></i></button>
+											</div>
+											<small v-if="room.moderatorUserIds.includes(participant.userId)">{{ i18n.ts._calls.vcModerator }}</small>
+											<small v-if="participant.speakerRequestedAt != null" :class="$style.speakingLabel"><i class="ti ti-hand-stop"></i> {{ i18n.ts._calls.requestSpeaker }}</small>
+										</div>
+									</TransitionGroup>
+								</section>
+							</aside>
+						</Transition>
+					</div>
 				</div>
 			</div>
 
@@ -235,6 +248,7 @@ const canJoinCalls = computed(() => $i?.policies.canJoinCalls !== false);
 const isSessionRoom = computed(() => session.currentRoomId.value === props.roomId);
 const pageConnection = shallowRef<ReturnType<typeof createCallsRoomConnection> | null>(isSessionRoom.value ? null : createCallsRoomConnection(props.roomId));
 const room = computed(() => isSessionRoom.value ? session.room.value : pageConnection.value?.room.value ?? null);
+const showParticipants = shallowRef(true);
 const showChat = shallowRef(false);
 const chatChannel = shallowRef<Misskey.entities.Channel | null>(null);
 const chatLoadFailed = shallowRef(false);
@@ -568,18 +582,24 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 .elapsedTime { font-variant-numeric: tabular-nums; color: var(--MI_THEME-fgTransparentWeak); }
 .menuButton { width: 36px; height: 36px; border-radius: 50%; font-size: 20px; }
 .body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 16px; padding: 16px; background: var(--MI_THEME-bg); }
-.chat { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
+.chat { height: 100%; width: var(--chat-width); box-sizing: border-box; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
 .chatHeader { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px; border-bottom: 1px solid var(--MI_THEME-divider); }
 .chatComposer { flex-shrink: 0; max-height: 50%; overflow: auto; border-bottom: 1px solid var(--MI_THEME-divider); }
 .chatTimeline { flex: 1; min-height: 0; overflow: auto; }
 .endedBody { overflow: auto; }
 .summary { width: min(100%, 560px); box-sizing: border-box; margin: auto; padding: 24px; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
 .summaryTitle { display: flex; align-items: center; gap: 8px; margin: 0 0 24px; font-size: 1.1rem; }
-.callLayout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0; }
-.withChat { grid-template-columns: minmax(0, 1fr) min(380px, 50%); }
-.withChat .stage { grid-column: 1; }
-.stage { grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; overflow: auto; }
-.participantArea { grid-column: 1; grid-row: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 24px; padding: 16px; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
+.callLayout { --participants-width: 200px; --chat-width: min(380px, 40vw); --sidebar-gap: 16px; display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.stage { order: 2; flex: 1; min-width: 0; min-height: 0; overflow: auto; }
+.participantsSidebar, .chatSidebar { flex-shrink: 0; width: 0; overflow: hidden; transition: width 0.25s ease, margin 0.25s ease; }
+.participantsSidebar { order: 1; }
+.chatSidebar { order: 3; }
+.participantsOpen { width: var(--participants-width); margin-right: var(--sidebar-gap); }
+.chatOpen { width: var(--chat-width); margin-left: var(--sidebar-gap); }
+.sidebarTransition { transition: transform 0.25s ease; }
+.participantsHidden { transform: translateX(-100%); }
+.chatHidden { transform: translateX(100%); }
+.participantArea { width: var(--participants-width); height: 100%; box-sizing: border-box; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 24px; padding: 16px; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
 .groupLabel { margin-bottom: 12px; font-size: 0.85rem; font-weight: 600; opacity: 0.65; }
 .people { display: flex; flex-direction: column; gap: 12px; }
 .person { position: relative; display: grid; min-width: 0; grid-template-columns: 40px minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 2px; }
@@ -612,15 +632,21 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 @media (max-width: 800px) {
 	.header { padding: 12px; }
 	.body { padding: 12px; }
-	.callLayout { grid-template-columns: 120px minmax(0, 1fr); gap: 8px; }
-	.withChat { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+	.callLayout { --participants-width: 120px; --sidebar-gap: 8px; }
 	.participantArea { padding: 8px; }
 	.person { grid-template-columns: minmax(0, 1fr); justify-items: start; }
 	.person > .avatarWrap, .person > .listenerAvatar { grid-row: auto; }
 	.person > small { grid-column: 1; }
 	.footer { padding-left: 12px; padding-right: 12px; }
 }
+@media (max-width: 600px) {
+	.callLayout { position: relative; --participants-width: min(240px, 80vw); --chat-width: min(380px, 85vw); }
+	.participantsSidebar, .chatSidebar { position: absolute; top: 0; bottom: 0; z-index: 1; }
+	.participantsSidebar { left: 0; }
+	.chatSidebar { right: 0; z-index: 2; }
+	.participantsOpen, .chatOpen { margin: 0; }
+}
 @media (prefers-reduced-motion: reduce) {
-	.avatarWrap, .personMove { transition: none; }
+	.avatarWrap, .personMove, .participantsSidebar, .chatSidebar, .sidebarTransition { transition: none; }
 }
 </style>

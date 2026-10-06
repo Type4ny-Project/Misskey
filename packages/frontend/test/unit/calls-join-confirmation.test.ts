@@ -67,8 +67,13 @@ describe('Calls room window', () => {
 		expect(view.getByTestId('calls-chat-composer').getAttribute('data-fixed')).toBe('true');
 		expect(view.getByRole('region', { name: i18n.ts._calls.title })).toBeTruthy();
 		expect(view.getByRole('complementary', { name: i18n.ts.chat })).toBeTruthy();
-		await fireEvent.click(view.getByRole('button', { name: i18n.ts.close }));
-		expect(view.queryByTestId('calls-chat-timeline')).toBeNull();
+		expect(view.getByRole('complementary', { name: i18n.ts.users })).toBeTruthy();
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		expect(view.getByRole('button', { name: i18n.ts.users }).getAttribute('aria-pressed')).toBe('false');
+		expect(view.getByRole('complementary', { name: i18n.ts.chat })).toBeTruthy();
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts.users }));
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.chat }).querySelector('button')!);
+		expect(view.getByRole('button', { name: i18n.ts.chat }).getAttribute('aria-pressed')).toBe('false');
 		expect(view.getByRole('complementary', { name: i18n.ts.users })).toBeTruthy();
 	});
 
@@ -147,7 +152,7 @@ describe('Calls room window', () => {
 			fixture.session.isActive.value = true;
 		}
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		const names = () => Array.from(view.getByRole('complementary', { name: i18n.ts.users }).querySelectorAll('strong'), element => element.textContent);
+		const names = () => Array.from(view.getByRole('complementary', { name: i18n.ts.users }).querySelectorAll('section strong'), element => element.textContent);
 		expect(names()).toEqual(['alice', 'carol', 'zed', 'bob', 'eve']);
 		source.participants.value = participants.map(participant => participant.id === 'bob' ? { ...participant, isMuted: false } : participant);
 		await nextTick();
@@ -194,7 +199,7 @@ describe('Calls room window', () => {
 			{ id: 'listener-participant', userId: 'listener', role: 'listener', isMuted: true },
 		];
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button[aria-haspopup="menu"]')!);
 		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
 		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
 		vi.mocked(misskeyApi).mockRejectedValueOnce(new Error('Request failed'));
@@ -220,7 +225,7 @@ describe('Calls room window', () => {
 			{ id: 'listener-participant', userId: 'listener', role: 'listener', isMuted: true },
 		];
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button[aria-haspopup="menu"]')!);
 		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
 		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
 		await menu.find(item => item.text === i18n.ts._calls.transferHost)!.action(new PointerEvent('click'));
@@ -309,7 +314,7 @@ describe('Calls room window', () => {
 		fixture.connection.participants.value = fixture.session.participants.value;
 		vi.mocked(misskeyApi).mockResolvedValue({ roomRevision: 1, publications: ['camera', 'screen'].map(mediaSource => ({ id: mediaSource, participantId: 'speaker-participant', mediaKind: 'video', mediaSource })) } as never);
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button[aria-haspopup="menu"]')!);
 		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
 		expect(misskeyApi).toHaveBeenCalledWith('calls/media/reconcile', { roomId: 'room' });
 		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
@@ -343,7 +348,7 @@ describe('Calls room window', () => {
 		let finish!: (result: { canceled: boolean }) => void;
 		fixture.confirm.mockReturnValue(new Promise(resolve => { finish = resolve; }));
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')!);
+		await fireEvent.click(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button[aria-haspopup="menu"]')!);
 		await waitFor(() => expect(os.popupMenu).toHaveBeenCalled());
 		const menu = vi.mocked(os.popupMenu).mock.calls[0][0] as MenuButton[];
 		vi.mocked(misskeyApi).mockClear();
@@ -363,7 +368,7 @@ describe('Calls room window', () => {
 			{ id: 'other-participant', userId: 'other', role: 'speaker', isMuted: false },
 		];
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
-		expect(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button')).toBeNull();
+		expect(view.getByRole('complementary', { name: i18n.ts.users }).querySelector('button[aria-haspopup="menu"]')).toBeNull();
 	});
 
 	test.each([false, true])('hides video stop for absent sources with screen sharing %s', async hasScreen => {

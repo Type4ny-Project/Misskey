@@ -28,7 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<button type="button" class="_button" :class="$style.circleButton" :aria-label="i18n.ts.close" @click="expanded = false"><i class="ti ti-chevron-down"></i></button>
 					</header>
 
-					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="session.toggleVideo('camera')" @screen="session.toggleVideo('screen')" @microphoneSettings="session.openDeviceMenu('microphone', $event)" @cameraSettings="session.openDeviceMenu('camera', $event)" @screenSettings="session.openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveRoom">
+					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="session.toggleVideo('camera')" @screen="session.toggleVideo('screen')" @microphoneSettings="session.openDeviceMenu('microphone', $event)" @cameraSettings="session.openDeviceMenu('camera', $event)" @connectionInfo="openConnectionInfo" @screenSettings="session.openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveRoom">
 						<button type="button" class="_button" :class="$style.detailsButton" :aria-label="i18n.ts.details" :title="i18n.ts.details" @click="openRoom"><i class="ti ti-layout-dashboard"></i></button>
 					</MkCallsControls>
 
@@ -116,6 +116,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import MkCallsConnectionInfo from '@/components/MkCallsConnectionInfo.vue';
 import MkCallsControls from '@/components/MkCallsControls.vue';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
@@ -197,6 +198,11 @@ function onWindowPointerDown(event: PointerEvent): void {
 
 onMounted(() => window.addEventListener('pointerdown', onWindowPointerDown));
 onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerDown));
+
+function openConnectionInfo(): void {
+	const { dispose } = os.popup(MkCallsConnectionInfo, { getInfo: session.getConnectionInfo }, { closed: () => dispose() });
+}
+
 </script>
 
 <style lang="scss" module>

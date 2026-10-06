@@ -745,6 +745,7 @@ export function useCallsSession() {
 		isSpeaker,
 		joining,
 		replacedRoomId,
+		getConnectionInfo() { return media.value?.getConnectionInfo() ?? Promise.resolve(null); },
 		mediaState,
 		mediaFailure,
 		muted,

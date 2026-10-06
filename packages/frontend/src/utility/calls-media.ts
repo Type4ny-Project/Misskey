@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { getCallsConnectionInfo } from './calls-connection-info.js';
+import type { CallsConnectionInfo } from './calls-connection-info.js';
 import { detectCallsMediaCapabilities, normalizeCallsMediaError, normalizeCallsStats, preferOpus } from './calls-media-core.js';
 import type { CallsNormalizedStats } from './calls-media-core.js';
 import { createCallsNoiseSuppression } from './calls-noise-suppression.js';
@@ -85,6 +87,14 @@ export class CallsMediaController {
 			this.connectionId = previousConnection.connectionId;
 			this.generation = previousConnection.generation;
 		}
+	}
+
+	public async getConnectionInfo(): Promise<CallsConnectionInfo | null> {
+		const peer = this.peer;
+		if (peer == null) return null;
+		const report = await peer.getStats();
+		if (peer !== this.peer) return null;
+		return getCallsConnectionInfo(report, peer.connectionState, peer.getConfiguration().iceServers ?? []);
 	}
 
 	public async connect(deviceId?: string): Promise<void> {

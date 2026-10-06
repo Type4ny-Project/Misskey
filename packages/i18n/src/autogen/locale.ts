@@ -10377,6 +10377,74 @@ export interface Locale extends ILocale {
     };
     "_calls": {
         /**
+         * 接続情報
+         */
+        "connectionInfo": string;
+        /**
+         * 状態
+         */
+        "connectionStatus": string;
+        /**
+         * 通話サーバー
+         */
+        "callServer": string;
+        /**
+         * Cloudflare Realtime SFU
+         */
+        "cloudflareSfu": string;
+        /**
+         * TURN サーバー
+         */
+        "turnServer": string;
+        /**
+         * ホスト
+         */
+        "turnHost": string;
+        /**
+         * UDP ポート
+         */
+        "udpPort": string;
+        /**
+         * TCP ポート
+         */
+        "tcpPort": string;
+        /**
+         * TLS ポート
+         */
+        "tlsPort": string;
+        /**
+         * 送信（マイク・カメラ・画面共有）
+         */
+        "sendingMedia": string;
+        /**
+         * 受信
+         */
+        "receivingMedia": string;
+        /**
+         * 通信経路
+         */
+        "connectionRoute": string;
+        /**
+         * 直接（NAT 越え）
+         */
+        "directRoute": string;
+        /**
+         * TURN 中継
+         */
+        "relayRoute": string;
+        /**
+         * パケットロス
+         */
+        "packetLoss": string;
+        /**
+         * 往復時間
+         */
+        "roundTripTime": string;
+        /**
+         * 接続情報を取得できませんでした
+         */
+        "connectionInfoUnavailable": string;
+        /**
          * このアカウントではコールへの参加が許可されていません。
          */
         "participationNotAllowed": string;

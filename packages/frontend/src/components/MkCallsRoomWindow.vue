@@ -92,7 +92,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkButton v-if="room.state === 'ended'" rounded @click="closeWindow">{{ i18n.ts.close }}</MkButton>
 				<template v-else-if="sessionIsCurrent">
 					<MkButton v-if="session.needsAudioResume.value" rounded @click="session.resumeAudio()">{{ i18n.ts._calls.resumeAudio }}</MkButton>
-					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="toggleCamera" @screen="session.toggleVideo('screen')" @microphoneSettings="openDeviceMenu('microphone', $event)" @cameraSettings="openDeviceMenu('camera', $event)" @screenSettings="openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveCurrentRoom"/>
+					<MkCallsControls :state="session.controls.value" @mute="session.toggleMute()" @camera="toggleCamera" @screen="session.toggleVideo('screen')" @microphoneSettings="openDeviceMenu('microphone', $event)" @cameraSettings="openDeviceMenu('camera', $event)" @connectionInfo="openConnectionInfo" @screenSettings="openScreenSettings($event)" @speakerRequest="session.controls.value.speakerRequested ? session.cancelSpeakerRequest() : session.requestSpeaker()" @leave="leaveCurrentRoom"/>
 				</template>
 				<template v-else-if="room.state === 'open'">
 					<MkInfo v-if="!canJoinCalls" warn>{{ i18n.ts._calls.participationNotAllowed }}</MkInfo>
@@ -114,6 +114,7 @@ import type * as Misskey from 'misskey-js';
 import { url } from '@@/js/config.js';
 import CallsVideo from '@/components/MkCallsVideo.vue';
 import MkModal from '@/components/MkModal.vue';
+import MkCallsConnectionInfo from '@/components/MkCallsConnectionInfo.vue';
 import MkCallsControls from '@/components/MkCallsControls.vue';
 import MkCallsRoomSummary from '@/components/MkCallsRoomSummary.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -526,6 +527,12 @@ onUnmounted(() => {
 });
 
 watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVideoId.value)) focusedVideoId.value = null; });
+
+function openConnectionInfo(): void {
+	if (popoutWindow != null) window.focus();
+	const { dispose } = os.popup(MkCallsConnectionInfo, { getInfo: session.getConnectionInfo }, { closed: () => dispose() });
+}
+
 </script>
 
 <style lang="scss" module>

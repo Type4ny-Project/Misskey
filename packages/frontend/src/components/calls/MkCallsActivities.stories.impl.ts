@@ -5,16 +5,11 @@
 
 import MkCallsActivities from './MkCallsActivities.vue';
 import type { StoryObj } from '@storybook/vue3';
-import type * as Misskey from 'misskey-js';
-
-const room = {
-	id: 'calls-activities-story', attachment: { type: 'personal', ownerUserId: 'host' },
-	title: 'アクティビティのあるコール', description: '', mode: 'open', visibility: 'public',
-	moderatorUserIds: [], state: 'open', scheduledAt: null, startedAt: '2026-10-06T00:00:00.000Z', endedAt: null,
-	revision: 1, createdAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z',
-} satisfies Misskey.entities.CallsRoom;
+import { i18n } from '@/i18n.js';
 
 export const Default = {
-	render(args) { return { components: { MkCallsActivities }, setup: () => ({ args }), template: '<MkCallsActivities v-bind="args" style="width: min(600px, 100%); box-sizing: border-box;" />' }; },
-	args: { room },
+	render(args) { return { components: { MkCallsActivities }, setup: () => ({ args }), template: '<MkCallsActivities v-bind="args" style="width: min(600px, 100%); box-sizing: border-box;"><template #default="{ activity }"><p>{{ activity }}</p></template></MkCallsActivities>' }; },
+	args: { activities: [{ id: 'sample', title: i18n.ts._calls.activities, description: i18n.ts._calls.title, icon: 'ti ti-device-gamepad-2' }] },
 } satisfies StoryObj<typeof MkCallsActivities>;
+
+export const Empty = { ...Default, args: { activities: [] } } satisfies StoryObj<typeof MkCallsActivities>;

@@ -42,7 +42,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<div :class="$style.tileName"><i :class="participant.isMuted ? 'ti ti-microphone-off' : 'ti ti-microphone'"></i><MkUserName v-if="participant.user != null" :user="participant.user!"/><template v-else>{{ participant.userId }}</template></div>
 							</div>
 						</div>
-						<MkCallsActivities v-if="activitiesOpen" :room="room" :class="$style.activity" @close="activitiesOpen = false" @refresh="refreshRoom"/>
+						<MkCallsActivities v-if="activitiesOpen" :activities="activities" :class="$style.activity" @close="activitiesOpen = false">
+							<template #default="{ activity }">
+								<MkCallsDrawing v-if="activity === 'drawing'" :room="room" @refresh="refreshRoom"/>
+							</template>
+						</MkCallsActivities>
 					</section>
 					<aside v-if="room.state !== 'ended'" :class="$style.participantArea" :aria-label="i18n.ts.users">
 						<section v-if="speakers.length > 0" :aria-label="i18n.ts._calls.speaker">
@@ -117,6 +121,7 @@ import MkModal from '@/components/MkModal.vue';
 import MkCallsControls from '@/components/MkCallsControls.vue';
 import MkCallsRoomSummary from '@/components/MkCallsRoomSummary.vue';
 import MkCallsActivities from '@/components/calls/MkCallsActivities.vue';
+import MkCallsDrawing from '@/components/calls/MkCallsDrawing.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
@@ -137,6 +142,7 @@ const emit = defineEmits<{ (ev: 'closed'): void; (ev: 'popout', popup: Window | 
 const dialog = shallowRef<InstanceType<typeof MkModal>>();
 const focusedVideoId = shallowRef<string | null>(null);
 const activitiesOpen = shallowRef(false);
+const activities = [{ id: 'drawing', title: i18n.ts._drawing.title, description: i18n.ts._drawing.description, icon: 'ti ti-brush' }];
 
 const popoutTarget = shallowRef<HTMLElement | null>(null);
 let popoutWindow: Window | null = null;

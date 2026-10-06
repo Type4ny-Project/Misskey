@@ -10385,6 +10385,10 @@ export interface Locale extends ILocale {
          */
         "backToActivities": string;
         /**
+         * 利用できるアクティビティはまだありません
+         */
+        "noActivities": string;
+        /**
          * このアカウントではコールへの参加が許可されていません。
          */
         "participationNotAllowed": string;

@@ -7,27 +7,37 @@ SPDX-License-Identifier: AGPL-3.0-only
 <section class="_panel" :class="$style.root" :aria-label="i18n.ts._calls.activities">
 	<header :class="$style.header">
 		<button v-if="activity != null" type="button" class="_button" :class="$style.iconButton" :aria-label="i18n.ts._calls.backToActivities" @click="activity = null"><i class="ti ti-arrow-left" aria-hidden="true"></i></button>
-		<h2 :class="$style.title">{{ activity === 'drawing' ? i18n.ts._drawing.title : i18n.ts._calls.activities }}</h2>
+		<h2 :class="$style.title">{{ activity?.title ?? i18n.ts._calls.activities }}</h2>
 		<button type="button" class="_button" :class="$style.iconButton" :aria-label="i18n.ts.close" @click="emit('close')"><i class="ti ti-x" aria-hidden="true"></i></button>
 	</header>
-	<MkCallsDrawing v-if="activity === 'drawing'" :room="room" @refresh="emit('refresh')"/>
-	<button v-else type="button" class="_button" :class="$style.choice" @click="activity = 'drawing'">
-		<i class="ti ti-brush" :class="$style.choiceIcon" aria-hidden="true"></i>
-		<span><strong>{{ i18n.ts._drawing.title }}</strong><small>{{ i18n.ts._drawing.description }}</small></span>
-		<i class="ti ti-chevron-right" aria-hidden="true"></i>
-	</button>
+	<slot v-if="activity != null" :activity="activity.id"></slot>
+	<div v-else class="_gaps_s">
+		<p v-if="activities.length === 0">{{ i18n.ts._calls.noActivities }}</p>
+		<button v-for="choice in activities" :key="choice.id" type="button" class="_button" :class="$style.choice" @click="activity = choice">
+			<i :class="[choice.icon, $style.choiceIcon]" aria-hidden="true"></i>
+			<span><strong>{{ choice.title }}</strong><small>{{ choice.description }}</small></span>
+			<i class="ti ti-chevron-right" aria-hidden="true"></i>
+		</button>
+	</div>
 </section>
 </template>
 
+<script lang="ts">
+export type CallsActivity = {
+	id: string;
+	title: string;
+	description: string;
+	icon: string;
+};
+</script>
+
 <script setup lang="ts">
 import { shallowRef } from 'vue';
-import type * as Misskey from 'misskey-js';
-import MkCallsDrawing from './MkCallsDrawing.vue';
 import { i18n } from '@/i18n.js';
 
-defineProps<{ room: Misskey.entities.CallsRoom }>();
-const emit = defineEmits<{ (ev: 'close'): void; (ev: 'refresh'): void }>();
-const activity = shallowRef<'drawing' | null>(null);
+defineProps<{ activities: CallsActivity[] }>();
+const emit = defineEmits<{ (ev: 'close'): void }>();
+const activity = shallowRef<CallsActivity | null>(null);
 </script>
 
 <style lang="scss" module>

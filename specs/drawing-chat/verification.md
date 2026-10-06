@@ -35,3 +35,7 @@ SPDX の既存違反は `packages/backend/migration/1774789240317-event.js` と 
 2026-10-06、最新 develop（`1dcdf3624a`）を取り込み、絵チャをCallsルーム内のアクティビティへ移した。DrawingService unit 7件、Calls API e2e 8件、frontend Calls関連 unit 51件、backend / frontend typecheck、SDK再生成、frontend build、アイコン生成、アクティビティのStorybook登録生成、lint・SPDX・locale safetyはすべて PASS。通話中の開閉・一覧への戻りでセッションを切断・再参加しないことと、ルーム終了時に開いたアクティビティを保持することをunitで確認した。
 
 専用の新規DBとRedis DB 7を使い、独立した2ブラウザーで同じCalls画面内の描画同期、一覧へ戻ると絵チャの参加枠だけを解除すること、再表示時のキャンバス復帰、1280×720 PNGのドライブ保存、390px幅、アクティビティの閉じ直し、絵チャ終了後の保存可否を確認した。ホストが音声なしで絵チャを使う場合も、既存30秒更新でCallsの在席期限が延び、95秒待った後もルームがopenのままであることを確認。期限の延長fixtureは使っていない。ページの未処理JavaScriptエラーは0件。Cloudflare実音声接続は引き続きSKIPPED。スクリーンショットはこのルーム内UIのものへ差し替えた。
+
+2026-10-06、Activity の土台を `codex/calls-activities`（PR #76）へ切り出し、絵チャはその上に追加する PR #34 に分離した。一覧コンポーネントは項目と scoped slot のみを受け取り、絵チャの import・API・ルーム型を持たない。Calls 画面が絵チャの項目と内容を渡す。Activity 単体は unit 52件、frontend typecheck、i18n / frontend build、Storybook 登録生成、lint・SPDX・locale safety が PASS。ブラウザーでも空の一覧・開閉・再表示・390px 幅・画面遷移なしを確認し、未処理 JavaScript エラーは0件だった。
+
+絵チャを接続した分離後も frontend unit 54件、typecheck、i18n / frontend build、lint・SPDX・locale safety が PASS。2ブラウザーで描画同期、一覧に戻る・閉じる・再表示時のキャンバス復帰、1280×720 PNG 保存、390px 幅、終了後の保存を再確認し、未処理 JavaScript エラーは0件。ビルド切り替え直後はプレビューの古いアセット参照で初期化が失敗したため、専用サーバーを再起動して確認した。Backend・API は今回変更しておらず、上記の unit・e2e・SDK生成・95秒の在席確認結果を引き継ぐ。Cloudflare 実音声は引き続き未検証。

@@ -2723,6 +2723,7 @@ _permissions:
 _calls:
   activities: "アクティビティ"
   backToActivities: "アクティビティ一覧に戻る"
+  noActivities: "利用できるアクティビティはまだありません"
   participationNotAllowed: "このアカウントではコールへの参加が許可されていません。"
   cameraSettings: "カメラの設定"
   screenSettings: "画面共有の設定"

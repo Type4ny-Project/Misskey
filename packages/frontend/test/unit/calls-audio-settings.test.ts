@@ -29,7 +29,7 @@ test('selects processing and threshold, shows the input meter, and disables chan
 	expect(setInputVolume).toHaveBeenCalledWith(150);
 	await fireEvent.update(view.getByRole('slider', { name: /Output volume/ }), '50');
 	expect(setOutputVolume).toHaveBeenCalledWith(50);
-	await fireEvent.click(view.getByRole('radio', { name: 'WebRTC' }));
+	await fireEvent.update(view.getByRole('combobox', { name: 'Noise cancellation' }), 'webrtc');
 	expect(setNoiseSuppression).toHaveBeenCalledWith('webrtc');
 	await fireEvent.update(view.getByRole('slider', { name: /Threshold/ }), '-35');
 	expect(setInputSensitivity).toHaveBeenCalledWith(-35);
@@ -37,11 +37,11 @@ test('selects processing and threshold, shows the input meter, and disables chan
 	expect(view.getByLabelText('Input level').getAttribute('aria-valuenow')).toBe('-32');
 	state.busy = true;
 	await nextTick();
-	expect((view.getByRole('radio', { name: 'WebRTC' }) as HTMLInputElement).disabled).toBe(true);
+	expect((view.getByRole('combobox', { name: 'Noise cancellation' }) as HTMLSelectElement).disabled).toBe(true);
 	expect((view.getByRole('slider', { name: /Threshold/ }) as HTMLInputElement).disabled).toBe(true);
 	await fireEvent.click(view.getByRole('button', { name: 'Statistics' }));
 	expect(view.getByText('Connection statistics')).toBeTruthy();
-	expect(view.queryByRole('radio', { name: 'WebRTC' })).toBeNull();
+	expect(view.queryByRole('combobox', { name: 'Noise cancellation' })).toBeNull();
 	await fireEvent.click(view.getByRole('button', { name: 'General' }));
 	expect(view.getByText('-35 dBFS')).toBeTruthy();
 });

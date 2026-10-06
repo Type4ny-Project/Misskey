@@ -27,13 +27,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<button class="_button" :class="$style.refresh" :disabled="state.busy" @click="refreshDevices">{{ i18n.ts._calls.refreshDevices }}</button>
 	</section>
 	<section :class="$style.section">
-		<fieldset :class="$style.modes">
-			<legend>{{ i18n.ts._calls.noiseSuppressionMode }}</legend>
-			<label v-for="mode in modes" :key="mode.value" :class="$style.mode">
-				<input type="radio" :name="radioName" :checked="state.noiseSuppression === mode.value" :value="mode.value" :disabled="state.busy" @change="setNoiseSuppression(mode.value)">
-				<span>{{ mode.label }}</span>
-			</label>
-		</fieldset>
+		<label :class="$style.field">
+			<span>{{ i18n.ts._calls.noiseSuppressionMode }}</span>
+			<select :value="state.noiseSuppression" :class="$style.select" :disabled="state.busy" @change="setNoiseSuppression(($event.target as HTMLSelectElement).value as CallsNoiseSuppressionMode)">
+				<option v-for="mode in modes" :key="mode.value" :value="mode.value">{{ mode.label }}</option>
+			</select>
+		</label>
 		<p :class="$style.description">{{ i18n.ts._calls.noiseSuppressionDescription }}</p>
 		<label :class="$style.field">
 			<span>{{ i18n.ts._calls.inputSensitivity }} <strong>{{ state.inputSensitivity <= -100 ? i18n.ts._calls.inputGateDisabled : `${state.inputSensitivity} dBFS` }}</strong></span>
@@ -70,14 +69,13 @@ export type CallsGeneralSettingsProps = {
 </script>
 
 <script setup lang="ts">
-import { computed, useId } from 'vue';
+import { computed } from 'vue';
 import MkCallsMicrophoneTest from '@/components/MkCallsMicrophoneTest.vue';
 import MkCallsCameraPreview from '@/components/MkCallsCameraPreview.vue';
 import { i18n } from '@/i18n.js';
 
 const props = defineProps<CallsGeneralSettingsProps>();
 const state = computed(() => props.getSettings());
-const radioName = useId();
 const audioDeviceKinds = ['microphone', 'output'] as const;
 const modes = [
 	{ value: 'rnnoise' as const, label: i18n.ts._calls.rnnoiseMode },
@@ -107,8 +105,4 @@ function devices(kind: typeof audioDeviceKinds[number]): MediaDeviceInfo[] { ret
 .field input { width: 100%; margin: 0; accent-color: var(--MI_THEME-accent); }
 .select { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--MI_THEME-divider); border-radius: 8px; background: var(--MI_THEME-panel); color: var(--MI_THEME-fg); font: inherit; text-overflow: ellipsis; }
 .description { margin: -12px 0 0; font-size: 0.85em; line-height: 1.5; opacity: 0.7; }
-.modes { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 16px; }
-.modes legend { padding: 0; margin-bottom: 20px; font-weight: bold; }
-.mode { display: flex; align-items: center; gap: 12px; }
-.mode input { margin: 0; accent-color: var(--MI_THEME-accent); width: 18px; height: 18px; }
 </style>

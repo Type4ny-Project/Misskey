@@ -10389,9 +10389,29 @@ export interface Locale extends ILocale {
          */
         "systemDefaultDevice": string;
         /**
-         * 音声出力デバイス
+         * スピーカー
          */
         "outputDevice": string;
+        /**
+         * 音声
+         */
+        "audioSection": string;
+        /**
+         * マイクテスト
+         */
+        "microphoneTest": string;
+        /**
+         * テストを終了
+         */
+        "stopMicrophoneTest": string;
+        /**
+         * マイクの音を選択中のスピーカーで再生します。
+         */
+        "microphoneTestDescription": string;
+        /**
+         * プレビューをする
+         */
+        "previewCamera": string;
         /**
          * マイクの入力音量
          */

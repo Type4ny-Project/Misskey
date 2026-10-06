@@ -5,49 +5,53 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="$style.body">
-	<h2>{{ i18n.ts._calls.generalSettings }}</h2>
-	<div :class="$style.devices">
-		<label v-for="kind in deviceKinds" :key="kind" :class="$style.field">
-			<span>{{ deviceLabel(kind) }}</span>
-			<select :value="deviceId(kind)" :class="$style.select" :disabled="state.busy || (kind === 'output' && !state.supportsOutputDevice)" @change="setDevice(kind, ($event.target as HTMLSelectElement).value)">
+	<section :class="$style.section">
+		<h2>{{ i18n.ts._calls.audioSection }}</h2>
+		<div :class="$style.audioGrid">
+			<div v-for="kind in audioDeviceKinds" :key="kind" class="_gaps_m">
+				<label :class="$style.field">
+					<span><i :class="kind === 'microphone' ? 'ti ti-microphone' : 'ti ti-headphones'" aria-hidden="true"></i> {{ deviceLabel(kind) }}</span>
+					<select :value="deviceId(kind)" :class="$style.select" :disabled="state.busy || (kind === 'output' && !state.supportsOutputDevice)" @change="setDevice(kind, ($event.target as HTMLSelectElement).value)">
+						<option value="">{{ i18n.ts._calls.systemDefaultDevice }}</option>
+						<option v-for="(device, index) in devices(kind)" :key="device.deviceId" :value="device.deviceId">{{ device.label || `${deviceLabel(kind)} ${index + 1}` }}</option>
+					</select>
+				</label>
+				<label :class="$style.field">
+					<span>{{ kind === 'microphone' ? i18n.ts._calls.inputVolume : i18n.ts._calls.outputVolume }} <strong>{{ kind === 'microphone' ? state.inputVolume : state.outputVolume }}%</strong></span>
+					<input type="range" min="0" :max="kind === 'microphone' ? 200 : 100" step="1" :value="kind === 'microphone' ? state.inputVolume : state.outputVolume" :disabled="state.busy" @input="kind === 'microphone' ? setInputVolume(Number(($event.target as HTMLInputElement).value)) : setOutputVolume(Number(($event.target as HTMLInputElement).value))">
+				</label>
+			</div>
+		</div>
+		<p v-if="!state.supportsOutputDevice" :class="$style.description">{{ i18n.ts._calls.outputDeviceUnsupported }}</p>
+		<MkCallsMicrophoneTest :getSettings="getSettings"/>
+		<button class="_button" :class="$style.refresh" :disabled="state.busy" @click="refreshDevices">{{ i18n.ts._calls.refreshDevices }}</button>
+	</section>
+	<section :class="$style.section">
+		<fieldset :class="$style.modes">
+			<legend>{{ i18n.ts._calls.noiseSuppressionMode }}</legend>
+			<label v-for="mode in modes" :key="mode.value" :class="$style.mode">
+				<input type="radio" :name="radioName" :checked="state.noiseSuppression === mode.value" :value="mode.value" :disabled="state.busy" @change="setNoiseSuppression(mode.value)">
+				<span>{{ mode.label }}</span>
+			</label>
+		</fieldset>
+		<p :class="$style.description">{{ i18n.ts._calls.noiseSuppressionDescription }}</p>
+		<label :class="$style.field">
+			<span>{{ i18n.ts._calls.inputSensitivity }} <strong>{{ state.inputSensitivity <= -100 ? i18n.ts._calls.inputGateDisabled : `${state.inputSensitivity} dBFS` }}</strong></span>
+			<input type="range" min="-100" max="0" step="1" :value="state.inputSensitivity" :disabled="state.busy" @input="setInputSensitivity(Number(($event.target as HTMLInputElement).value))">
+		</label>
+		<p :class="$style.description">{{ i18n.ts._calls.inputSensitivityDescription }}</p>
+	</section>
+	<section :class="$style.section">
+		<h2>{{ i18n.ts._calls.camera }}</h2>
+		<label :class="$style.field">
+			<span>{{ i18n.ts._calls.selectCamera }}</span>
+			<select :value="state.cameraId" :class="$style.select" :disabled="state.busy" @change="setDevice('camera', ($event.target as HTMLSelectElement).value)">
 				<option value="">{{ i18n.ts._calls.systemDefaultDevice }}</option>
-				<option v-for="(device, index) in devices(kind)" :key="device.deviceId" :value="device.deviceId">{{ device.label || `${deviceLabel(kind)} ${index + 1}` }}</option>
+				<option v-for="(device, index) in state.cameras" :key="device.deviceId" :value="device.deviceId">{{ device.label || `${i18n.ts._calls.camera} ${index + 1}` }}</option>
 			</select>
 		</label>
-		<button class="_button" :class="$style.refresh" :disabled="state.busy" @click="refreshDevices">{{ i18n.ts._calls.refreshDevices }}</button>
-		<p v-if="!state.supportsOutputDevice" :class="$style.description">{{ i18n.ts._calls.outputDeviceUnsupported }}</p>
-		<label :class="$style.field">
-			<span>{{ i18n.ts._calls.inputVolume }} <strong>{{ state.inputVolume }}%</strong></span>
-			<input type="range" min="0" max="200" step="1" :value="state.inputVolume" :disabled="state.busy" @input="setInputVolume(Number(($event.target as HTMLInputElement).value))">
-		</label>
-		<label :class="$style.field">
-			<span>{{ i18n.ts._calls.outputVolume }} <strong>{{ state.outputVolume }}%</strong></span>
-			<input type="range" min="0" max="100" step="1" :value="state.outputVolume" @input="setOutputVolume(Number(($event.target as HTMLInputElement).value))">
-		</label>
-	</div>
-
-	<label :class="$style.field">
-		<span>{{ i18n.ts._calls.noiseSuppressionMode }}</span>
-		<select :value="state.noiseSuppression" :disabled="state.busy" :class="$style.select" @change="changeMode">
-			<option value="rnnoise">{{ i18n.ts._calls.rnnoiseMode }}</option>
-			<option value="webrtc">{{ i18n.ts._calls.webrtcMode }}</option>
-			<option value="none">{{ i18n.ts._calls.noNoiseSuppression }}</option>
-		</select>
-	</label>
-	<p :class="$style.description">{{ i18n.ts._calls.noiseSuppressionDescription }}</p>
-	<label :class="$style.field">
-		<span>{{ i18n.ts._calls.inputSensitivity }} <strong>{{ state.inputSensitivity <= -100 ? i18n.ts._calls.inputGateDisabled : `${state.inputSensitivity} dBFS` }}</strong></span>
-		<input type="range" min="-100" max="0" step="1" :value="state.inputSensitivity" :disabled="state.busy" @input="setInputSensitivity(Number(($event.target as HTMLInputElement).value))">
-	</label>
-	<p :class="$style.description">{{ i18n.ts._calls.inputSensitivityDescription }}</p>
-	<div :class="$style.field">
-		<span>{{ i18n.ts._calls.inputLevel }} <strong>{{ Math.round(state.inputLevel) }} dBFS</strong></span>
-		<div :class="$style.meter">
-			<meter min="-100" max="0" :value="state.inputLevel" :aria-label="i18n.ts._calls.inputLevel"></meter>
-			<span :class="$style.threshold" :style="{ left: `${state.inputSensitivity + 100}%` }" aria-hidden="true"></span>
-		</div>
-		<small :class="{ [$style.transmitting]: state.transmitting }">{{ state.transmitting ? i18n.ts._calls.inputTransmitting : i18n.ts._calls.inputNotTransmitting }}</small>
-	</div>
+		<MkCallsCameraPreview :deviceId="state.cameraId"/>
+	</section>
 </div>
 </template>
 
@@ -66,38 +70,45 @@ export type CallsGeneralSettingsProps = {
 </script>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, useId } from 'vue';
+import MkCallsMicrophoneTest from '@/components/MkCallsMicrophoneTest.vue';
+import MkCallsCameraPreview from '@/components/MkCallsCameraPreview.vue';
 import { i18n } from '@/i18n.js';
 
 const props = defineProps<CallsGeneralSettingsProps>();
 const state = computed(() => props.getSettings());
-const deviceKinds = ['microphone', 'output', 'camera'] as const;
+const radioName = useId();
+const audioDeviceKinds = ['microphone', 'output'] as const;
+const modes = [
+	{ value: 'rnnoise' as const, label: i18n.ts._calls.rnnoiseMode },
+	{ value: 'webrtc' as const, label: i18n.ts._calls.webrtcMode },
+	{ value: 'none' as const, label: i18n.ts._calls.noNoiseSuppression },
+];
 
-function deviceLabel(kind: typeof deviceKinds[number]): string { return kind === 'microphone' ? i18n.ts._calls.microphone : kind === 'camera' ? i18n.ts._calls.camera : i18n.ts._calls.outputDevice; }
+function deviceLabel(kind: typeof audioDeviceKinds[number]): string { return kind === 'microphone' ? i18n.ts._calls.microphone : i18n.ts._calls.outputDevice; }
 
-function deviceId(kind: typeof deviceKinds[number]): string { return kind === 'microphone' ? state.value.microphoneId : kind === 'camera' ? state.value.cameraId : state.value.outputDeviceId; }
+function deviceId(kind: typeof audioDeviceKinds[number]): string { return kind === 'microphone' ? state.value.microphoneId : state.value.outputDeviceId; }
 
-function devices(kind: typeof deviceKinds[number]): MediaDeviceInfo[] { return kind === 'microphone' ? state.value.microphones : kind === 'camera' ? state.value.cameras : state.value.outputDevices; }
-
-function changeMode(event: Event): void {
-	if (state.value.busy) return;
-	void props.setNoiseSuppression((event.target as HTMLSelectElement).value as CallsNoiseSuppressionMode);
-}
+function devices(kind: typeof audioDeviceKinds[number]): MediaDeviceInfo[] { return kind === 'microphone' ? state.value.microphones : state.value.outputDevices; }
 </script>
 
 <style lang="scss" module>
-.body { padding: 24px; }
-.body h2 { font-size: 1.1em; margin: 0 0 24px; }
-.devices { display: flex; flex-direction: column; gap: 20px; margin-bottom: 28px; }
-.refresh { align-self: flex-start; color: var(--MI_THEME-accent); }
-.field { display: flex; flex-direction: column; gap: 12px; }
-.field > span { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.body { padding: 24px; container-type: inline-size; }
+.section { display: flex; flex-direction: column; gap: 24px; }
+.section + .section { margin-top: 32px; padding-top: 32px; border-top: 1px solid var(--MI_THEME-divider); }
+.section h2 { font-size: 1.1em; margin: 0; }
+.audioGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+@container (max-width: 440px) { .audioGrid { grid-template-columns: minmax(0, 1fr); } }
+.refresh { align-self: flex-start; color: var(--MI_THEME-accent); font-size: 0.85em; text-align: left; }
+.field { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.field > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.field > span:has(> i) { justify-content: flex-start; }
 .field strong { font-size: 0.85em; font-variant-numeric: tabular-nums; }
 .field input { width: 100%; margin: 0; accent-color: var(--MI_THEME-accent); }
-.select { padding: 10px; border: 1px solid var(--MI_THEME-divider); border-radius: 8px; background: var(--MI_THEME-panel); color: var(--MI_THEME-fg); font: inherit; }
-.description { margin: 12px 0 24px; font-size: 0.85em; line-height: 1.5; opacity: 0.7; }
-.meter { position: relative; }
-.meter meter { display: block; width: 100%; height: 16px; }
-.threshold { position: absolute; top: 0; height: 16px; width: 2px; background: var(--MI_THEME-fg); }
-.transmitting { color: var(--MI_THEME-accent); }
+.select { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--MI_THEME-divider); border-radius: 8px; background: var(--MI_THEME-panel); color: var(--MI_THEME-fg); font: inherit; text-overflow: ellipsis; }
+.description { margin: -12px 0 0; font-size: 0.85em; line-height: 1.5; opacity: 0.7; }
+.modes { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 16px; }
+.modes legend { padding: 0; margin-bottom: 20px; font-weight: bold; }
+.mode { display: flex; align-items: center; gap: 12px; }
+.mode input { margin: 0; accent-color: var(--MI_THEME-accent); width: 18px; height: 18px; }
 </style>

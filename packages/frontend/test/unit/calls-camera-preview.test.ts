@@ -3,26 +3,42 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { afterEach, describe, expect, test } from 'vitest';
-import { cleanup, render } from '@testing-library/vue';
-import MkCallsCameraPreviewDialog from '@/components/MkCallsCameraPreviewDialog.vue';
-import { i18n } from '@/i18n.js';
+import { afterEach, expect, test, vi } from 'vitest';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/vue';
+import MkCallsCameraPreview from '@/components/MkCallsCameraPreview.vue';
 
-afterEach(cleanup);
+vi.mock('@/os.js', () => ({ alert: vi.fn() }));
+vi.mock('@/i18n.js', () => ({ i18n: { ts: { close: 'Close', _calls: { previewCamera: 'Preview', camera: 'Camera', videoFailed: 'Failed' } } } }));
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-describe('Calls camera preview dialog', () => {
-	test('shows the local stream and confirms only when the start button is pressed', async () => {
-		const stream = new window.MediaStream();
-		const view = render(MkCallsCameraPreviewDialog, {
-			props: { stream },
-			global: { stubs: {
-				MkModalWindow: { template: '<section><slot name="header"/><slot/></section>', methods: { close() {} } },
-				MkButton: { template: '<button><slot/></button>' },
-			} },
-		});
-		expect(view.container.querySelector('video')?.srcObject).toBe(stream);
-		expect(view.emitted('done')).toBeUndefined();
-		view.getByText(i18n.ts._calls.startCamera).click();
-		expect(view.emitted('done')).toEqual([[true]]);
-	});
+test('opens the selected camera only on request and stops it on close and unmount', async () => {
+	vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+	const track = { stop: vi.fn() };
+	const stream = Object.assign(new MediaStream(), { getTracks: () => [track] }) as unknown as MediaStream;
+	const capture = vi.fn().mockResolvedValue(stream);
+	Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: capture } });
+	const view = render(MkCallsCameraPreview, { props: { deviceId: 'usb-camera' } });
+	expect(capture).not.toHaveBeenCalled();
+	await fireEvent.click(view.getByRole('button', { name: 'Preview' }));
+	await waitFor(() => expect(view.container.querySelector('video')?.srcObject).toBe(stream));
+	expect(capture).toHaveBeenCalledWith({ video: { deviceId: { exact: 'usb-camera' } }, audio: false });
+	await fireEvent.click(view.getByRole('button', { name: 'Close' }));
+	expect(track.stop).toHaveBeenCalledTimes(1);
+	expect(view.container.querySelector('video')).toBeNull();
+	await fireEvent.click(view.getByRole('button', { name: 'Preview' }));
+	await waitFor(() => expect(view.container.querySelector('video')?.srcObject).toBe(stream));
+	view.unmount();
+	expect(track.stop).toHaveBeenCalledTimes(2);
+});
+
+test('releases a camera whose permission request completes after the preview is closed', async () => {
+	let resolve!: (stream: MediaStream) => void;
+	const capture = vi.fn(() => new Promise<MediaStream>(done => { resolve = done; }));
+	Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: capture } });
+	const view = render(MkCallsCameraPreview, { props: { deviceId: '' } });
+	await fireEvent.click(view.getByRole('button', { name: 'Preview' }));
+	view.unmount();
+	const stop = vi.fn();
+	resolve({ getTracks: () => [{ stop }] } as unknown as MediaStream);
+	await waitFor(() => expect(stop).toHaveBeenCalledOnce());
 });

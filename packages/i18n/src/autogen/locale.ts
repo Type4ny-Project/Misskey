@@ -10377,6 +10377,18 @@ export interface Locale extends ILocale {
     };
     "_calls": {
         /**
+         * アクティビティ
+         */
+        "activities": string;
+        /**
+         * アクティビティ一覧に戻る
+         */
+        "backToActivities": string;
+        /**
+         * 利用できるアクティビティはまだありません
+         */
+        "noActivities": string;
+        /**
          * このアカウントではコールへの参加が許可されていません。
          */
         "participationNotAllowed": string;

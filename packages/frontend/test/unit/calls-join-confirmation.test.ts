@@ -16,6 +16,7 @@ import type { MenuButton } from '@/types/menu.js';
 const fixture = vi.hoisted(() => ({ close: vi.fn(), confirm: vi.fn(), inputText: vi.fn(), session: null as any, connection: null as any, policies: { canJoinCalls: true } }));
 vi.mock('@/i.js', () => ({ $i: { id: 'viewer', policies: fixture.policies } }));
 vi.mock('@/components/MkModal.vue', () => ({ default: { emits: ['click', 'closed', 'esc'], template: '<section><slot/></section>', methods: { close() { fixture.close(); } } } }));
+vi.mock('@/components/MkPostForm.vue', () => ({ default: { props: { channel: Object, fixed: Boolean }, template: '<form data-testid="calls-chat-composer" :data-channel="channel.id" :data-fixed="fixed"/>' } }));
 vi.mock('@/components/MkStreamingNotesTimeline.vue', () => ({ default: { props: ['src', 'channel'], template: '<div data-testid="calls-chat-timeline" :data-channel="channel"/>' } }));
 vi.mock('@/components/MkButton.vue', () => ({ default: { template: '<button><slot/></button>' } }));
 vi.mock('@/components/global/MkA.vue', () => ({ default: { props: ['to'], template: '<a :href="to"><slot/></a>' } }));
@@ -55,16 +56,20 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
-	test('opens the Calls channel timeline and composes a post to that channel', async () => {
+	test('opens a closable chat sidebar with a fixed composer while keeping the call stage visible', async () => {
 		const channel = { id: 'calls-channel', name: 'Call chat' };
 		fixture.connection.room.value = { ...fixture.connection.room.value, channelId: channel.id };
 		vi.mocked(misskeyApi).mockImplementation(async endpoint => endpoint === 'channels/show' ? channel : { id: 'host', username: 'host' });
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs: { ...stubs, MkStreamingNotesTimeline: false } } });
 		await fireEvent.click(view.getByRole('button', { name: i18n.ts.chat }));
 		expect(view.getByTestId('calls-chat-timeline').getAttribute('data-channel')).toBe(channel.id);
-		await waitFor(() => expect(view.getByRole('button', { name: i18n.ts.note })).toBeTruthy());
-		await fireEvent.click(view.getByRole('button', { name: i18n.ts.note }));
-		expect(os.post).toHaveBeenCalledWith({ channel });
+		await waitFor(() => expect(view.getByTestId('calls-chat-composer').getAttribute('data-channel')).toBe(channel.id));
+		expect(view.getByTestId('calls-chat-composer').getAttribute('data-fixed')).toBe('true');
+		expect(view.getByRole('region', { name: i18n.ts._calls.title })).toBeTruthy();
+		expect(view.getByRole('complementary', { name: i18n.ts.chat })).toBeTruthy();
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts.close }));
+		expect(view.queryByTestId('calls-chat-timeline')).toBeNull();
+		expect(view.getByRole('complementary', { name: i18n.ts.users })).toBeTruthy();
 	});
 
 	test('keeps an initially ended room open with its final timing and no join prompt', async () => {

@@ -34,12 +34,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkInfo v-if="sessionIsCurrent && session.mediaFailure.value != null" warn>{{ failureText }}</MkInfo>
 				<MkInfo v-if="sessionIsCurrent && session.speakerRequestResult.value === 'rejected'" warn>{{ i18n.ts._calls.speakerRequestRejected }}</MkInfo>
 
-				<section v-if="showChat && room.channelId != null" :class="$style.chat" :aria-label="i18n.ts.chat">
-					<MkInfo v-if="chatLoadFailed" warn>{{ i18n.ts.somethingHappened }}</MkInfo>
-					<MkButton v-if="chatChannel != null && $i != null" primary @click="os.post({ channel: chatChannel })"><i class="ti ti-pencil"></i> {{ i18n.ts.note }}</MkButton>
-					<MkStreamingNotesTimeline :key="room.channelId" src="channel" :channel="room.channelId"/>
-				</section>
-				<div v-else :class="$style.callLayout">
+				<div :class="[$style.callLayout, showChat && room.channelId != null && $style.withChat]">
+					<aside v-if="showChat && room.channelId != null" :class="$style.chat" :aria-label="i18n.ts.chat">
+						<header :class="$style.chatHeader">
+							<strong>{{ i18n.ts.chat }}</strong>
+							<button type="button" class="_button" :class="$style.menuButton" :aria-label="i18n.ts.close" @click="showChat = false"><i class="ti ti-x" aria-hidden="true"></i></button>
+						</header>
+						<MkInfo v-if="chatLoadFailed" warn>{{ i18n.ts.somethingHappened }}</MkInfo>
+						<div :class="$style.chatComposer">
+							<MkPostForm v-if="chatChannel != null && $i != null" :channel="chatChannel" fixed :autofocus="false"/>
+						</div>
+						<div :class="$style.chatTimeline">
+							<MkStreamingNotesTimeline :key="room.channelId" src="channel" :channel="room.channelId"/>
+						</div>
+					</aside>
 					<section ref="stage" :class="$style.stage" :aria-label="i18n.ts._calls.title">
 						<div ref="videoGrid" :class="$style.videoGrid" :style="videoGridStyle">
 							<CallsVideo v-for="video in roomVideos" :key="video.id" :stream="video.stream" :audioVolume="!video.local && session.screenAudioIds.value.has(video.id) ? session.getScreenVolume(video.id) : undefined" screenWindow :screenWindowActive="session.screenWindows.has(video.stream)" :label="videoLabel(video.participantId)" :speaking="speakingParticipantIds.has(video.participantId)" :focused="focusedVideoId === video.id" :class="focusedVideoId === video.id && $style.focusedVideo" @contextmenu.capture.stop.prevent="openParticipantMenu(participants.find(participant => participant.id === video.participantId), $event)" @volume="session.setScreenVolume(video.id, $event)" @select="focusVideo(video.id)" @screenWindow="showScreenWindow(video.stream, video.participantId)"/>
@@ -50,7 +58,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 					</section>
-					<aside :class="$style.participantArea" :aria-label="i18n.ts.users">
+					<aside v-if="!showChat || room.channelId == null" :class="$style.participantArea" :aria-label="i18n.ts.users">
 						<section v-if="speakers.length > 0" :aria-label="i18n.ts._calls.speaker">
 							<div v-if="room.mode === 'stage'" :class="$style.groupLabel">{{ i18n.ts._calls.speaker }}</div>
 							<TransitionGroup tag="div" :class="$style.people" :moveClass="$style.personMove">
@@ -124,6 +132,7 @@ import MkCallsControls from '@/components/MkCallsControls.vue';
 import MkCallsRoomSummary from '@/components/MkCallsRoomSummary.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
+import MkPostForm from '@/components/MkPostForm.vue';
 import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue';
 import { createCallsRoomConnection } from '@/composables/use-calls-room.js';
 import { $i } from '@/i.js';
@@ -559,11 +568,15 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 .elapsedTime { font-variant-numeric: tabular-nums; color: var(--MI_THEME-fgTransparentWeak); }
 .menuButton { width: 36px; height: 36px; border-radius: 50%; font-size: 20px; }
 .body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 16px; padding: 16px; background: var(--MI_THEME-bg); }
-.chat { flex: 1; min-height: 0; overflow: auto; }
+.chat { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
+.chatHeader { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px; border-bottom: 1px solid var(--MI_THEME-divider); }
+.chatComposer { flex-shrink: 0; max-height: 50%; overflow: auto; border-bottom: 1px solid var(--MI_THEME-divider); }
+.chatTimeline { flex: 1; min-height: 0; overflow: auto; }
 .endedBody { overflow: auto; }
 .summary { width: min(100%, 560px); box-sizing: border-box; margin: auto; padding: 24px; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
 .summaryTitle { display: flex; align-items: center; gap: 8px; margin: 0 0 24px; font-size: 1.1rem; }
 .callLayout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0; }
+.withChat { grid-template-columns: min(380px, 50%) minmax(0, 1fr); }
 .stage { grid-column: 2; grid-row: 1; min-width: 0; min-height: 0; overflow: auto; }
 .participantArea { grid-column: 1; grid-row: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 24px; padding: 16px; border-radius: var(--MI-radius); background: var(--MI_THEME-panel); }
 .groupLabel { margin-bottom: 12px; font-size: 0.85rem; font-weight: 600; opacity: 0.65; }
@@ -599,6 +612,7 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 	.header { padding: 12px; }
 	.body { padding: 12px; }
 	.callLayout { grid-template-columns: 120px minmax(0, 1fr); gap: 8px; }
+	.withChat { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 	.participantArea { padding: 8px; }
 	.person { grid-template-columns: minmax(0, 1fr); justify-items: start; }
 	.person > .avatarWrap, .person > .listenerAvatar { grid-row: auto; }

@@ -39,11 +39,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<ol v-else :class="$style.queueList">
 			<li v-for="(video, index) in state.queue" :key="index" :class="$style.queueVideo">
 				<span aria-hidden="true">{{ index + 1 }}</span>
-				<MkCallsWatchTogetherVideoPreview :videoId="video" :class="$style.queueTitle"/>
-				<div v-if="canControl && room.state === 'open'" :class="$style.actions">
-					<MkButton small :disabled="busy" @click="playQueued(index)">{{ i18n.ts._watchTogether.playNow }}</MkButton>
-					<button type="button" class="_button" :class="$style.external" :disabled="busy" :aria-label="i18n.ts._watchTogether.removeFromQueue" @click="update({ queue: state.queue.filter((_, i) => i !== index) })"><i class="ti ti-x" aria-hidden="true"></i></button>
-				</div>
+				<MkCallsWatchTogetherVideoPreview :videoId="video" :canControl="canControl && room.state === 'open' && !busy" :class="$style.queueTitle" @menu="openQueueMenu(index, $event)"/>
 			</li>
 		</ol>
 		<small v-if="state.queue.length >= 50" :class="$style.hint">{{ i18n.ts._watchTogether.queueFull }}</small>
@@ -60,6 +56,7 @@ import type * as Misskey from 'misskey-js';
 import MkCallsWatchTogetherVideoPreview from './MkCallsWatchTogetherVideoPreview.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
+import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { useStream } from '@/stream.js';
@@ -181,6 +178,15 @@ async function addUrlToQueue() {
 	if (error.value == null) inputUrl.value = '';
 }
 
+function openQueueMenu(index: number, event: PointerEvent) {
+	if (!props.canControl || props.room.state !== 'open' || busy.value) return;
+	const items = [
+		{ text: i18n.ts._watchTogether.playNow, icon: 'ti ti-player-play', action: () => playQueued(index) },
+		{ text: i18n.ts._watchTogether.removeFromQueue, icon: 'ti ti-trash', danger: true, action: () => update({ queue: state.value!.queue.filter((_, i) => i !== index) }) },
+	];
+	os.contextMenu(items, event);
+}
+
 async function playQueued(index: number) {
 	const video = state.value?.queue[index];
 	if (video == null) return;
@@ -257,7 +263,7 @@ onUnmounted(() => {
 .queueHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .queueHeader h3 { margin: 0; font-size: 1rem; }
 .queueList { display: flex; flex-direction: column; gap: 8px; padding-left: 24px; }
-.queueVideo { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-.queueTitle { flex: 1; min-width: 240px; }
+.queueVideo { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.queueTitle { flex: 1; min-width: 0; }
 .external:hover { background: var(--MI_THEME-buttonHoverBg); }
 </style>

@@ -11,7 +11,8 @@ import MkCallsWatchTogether from '@/components/calls/MkCallsWatchTogether.vue';
 import { youtubeVideoId } from '@/components/calls/youtube-player.js';
 import { i18n } from '@/i18n.js';
 
-const fixture = vi.hoisted(() => ({ handlers: new Map(), api: vi.fn(), dispose: vi.fn(), destroy: vi.fn(), play: vi.fn(), pause: vi.fn(), seek: vi.fn(), cue: vi.fn(), events: null as any, position: 0, playerState: 2, shared: null as any }));
+const fixture = vi.hoisted(() => ({ handlers: new Map(), api: vi.fn(), dispose: vi.fn(), destroy: vi.fn(), play: vi.fn(), pause: vi.fn(), seek: vi.fn(), cue: vi.fn(), events: null as any, position: 0, playerState: 2, shared: null as any, menu: vi.fn(), popupMenu: vi.fn() }));
+vi.mock('@/os.js', () => ({ contextMenu: fixture.menu, popupMenu: fixture.popupMenu }));
 vi.mock('@/stream.js', () => ({ useStream: () => ({ useChannel: () => ({ on: (key: string, fn: unknown) => fixture.handlers.set(key, fn), dispose: fixture.dispose }), on: vi.fn(), off: vi.fn() }) }));
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: fixture.api }));
 vi.mock('@/components/MkButton.vue', () => ({ default: { props: ['type', 'disabled'], template: '<button :type="type ?? \'button\'" :disabled="disabled"><slot/></button>' } }));
@@ -118,7 +119,9 @@ test('video URLs can be queued, removed and advanced on native playback end', as
 	await waitFor(() => expect(view.getByText('Next video title')).toBeTruthy());
 	expect(view.getByText('Next video description')).toBeTruthy();
 	expect(fixture.shared.videoId).toBe('M7lc1UVf-VE');
-	await fireEvent.click(view.getByRole('button', { name: i18n.ts._watchTogether.removeFromQueue }));
+	await fireEvent.contextMenu(view.getByRole('link', { name: /Next video title/ }));
+	expect(fixture.menu.mock.calls[0][0].map((item: any) => item.text)).toEqual([i18n.ts._watchTogether.playNow, i18n.ts._watchTogether.removeFromQueue]);
+	await fixture.menu.mock.calls[0][0][1].action();
 	await waitFor(() => expect(fixture.shared.queue).toHaveLength(0));
 	await fireEvent.update(view.getByLabelText(i18n.ts._watchTogether.videoUrl), 'https://youtu.be/' + video);
 	await fireEvent.click(view.getAllByRole('button', { name: i18n.ts._watchTogether.addToQueue })[0]);
@@ -129,4 +132,13 @@ test('video URLs can be queued, removed and advanced on native playback end', as
 	fixture.events.onStateChange({ data: 0 });
 	await waitFor(() => expect(fixture.shared).toMatchObject({ videoId: video, position: 0, playing: true, queue: [] }));
 	expect(fixture.cue).toHaveBeenCalledWith(video);
+});
+
+test('a viewer cannot open queue controls', async () => {
+	fixture.shared.queue = ['dQw4w9WgXcQ'];
+	const view = render(MkCallsWatchTogether, { props: { room, canControl: false } });
+	await waitFor(() => expect(view.getByText('Next video title')).toBeTruthy());
+	await fireEvent.contextMenu(view.getByRole('link', { name: /Next video title/ }));
+	expect(fixture.menu).not.toHaveBeenCalled();
+	expect(fixture.popupMenu).not.toHaveBeenCalled();
 });

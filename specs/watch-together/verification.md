@@ -28,6 +28,12 @@ Calls の閲覧権限を持つユーザーが、ルーム内 Activity から You
 - PASS: 実際のYouTube動画のタイトルと説明をローカルサーバーから取得し、デスクトップ・スマホ幅で表示を確認。両スクリーンショットを差し替えた。
 - BASELINE: Storybook登録の生成は完了。事前処理の`.storybook/main.ts`に既存のStorybook/Vite型エラーがあり、Storybook本体の検証は未実施。
 
+2026-10-07、キューのタイトルと説明文をそれぞれ1行の省略表示にし、行内の「今すぐ再生」・削除ボタンを右クリック・長押しのコンテキストメニューへ移した。
+
+- PASS: frontend Calls unit 62件、frontend型チェック・build、変更ファイルlint・SPDX・locale safety。視聴者にはキュー操作メニューを出さないことも確認。
+- PASS: 実YouTubeとローカルAPI・streamingで、右クリックからの即時再生、スマホのタッチ長押しからの削除を確認。長押し後にリンクへ遷移せず、通常のタップではリンクが開く。未処理JavaScriptエラー0件。
+- PASS: 1360×900・390×844で、タイトルと説明文のnowrap・ellipsisとキューの幅を確認。スクリーンショットを更新し、長押しのメニュー表示も追加した。
+
 広告ブロックは含めていない。[YouTube標準の埋め込みパラメーター](https://developers.google.com/youtube/player_parameters)には広告を無効化する機能がなく、親ページからiframe内の通信を制御できない。
 
 YouTubeの埋め込み制限・地域制限・広告・ブラウザーの自動再生制限の影響は受ける。自動再生が止められた場合は「再生を許可」を表示する。実音声のCloudflare接続は試験用認証情報のため未検証。DB entity・migrationの変更はない。
@@ -35,3 +41,5 @@ YouTubeの埋め込み制限・地域制限・広告・ブラウザーの自動�
 ![デスクトップ](screenshots/desktop.png)
 
 ![スマホ幅](screenshots/mobile.png)
+
+![長押しメニュー](screenshots/mobile-menu.png)

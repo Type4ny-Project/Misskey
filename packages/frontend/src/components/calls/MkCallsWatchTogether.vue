@@ -12,38 +12,42 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkButton v-if="state?.videoId != null" :disabled="busy" @click="editingVideo = false">{{ i18n.ts.cancel }}</MkButton>
 	</form>
 	<MkInfo v-if="error != null" warn>{{ error }}</MkInfo>
-	<MkLoading v-if="state == null && error == null"/>
-	<MkButton v-else-if="state == null" :disabled="busy" @click="refresh">{{ i18n.ts.retry }}</MkButton>
-	<template v-else-if="state.videoId != null">
-		<div v-if="!watching" :class="$style.placeholder">
-			<i class="ti ti-brand-youtube" :class="$style.youtubeIcon" aria-hidden="true"></i>
-			<MkButton primary :disabled="loadingPlayer" @click="startWatching">{{ i18n.ts._watchTogether.startWatching }}</MkButton>
-			<small>{{ i18n.ts._watchTogether.startWatchingDescription }}</small>
+	<div :class="$style.layout">
+		<div :class="$style.playback">
+			<MkLoading v-if="state == null && error == null"/>
+			<MkButton v-else-if="state == null" :disabled="busy" @click="refresh">{{ i18n.ts.retry }}</MkButton>
+			<template v-else-if="state.videoId != null">
+				<div v-if="!watching" :class="$style.placeholder">
+					<i class="ti ti-brand-youtube" :class="$style.youtubeIcon" aria-hidden="true"></i>
+					<MkButton primary :disabled="loadingPlayer" @click="startWatching">{{ i18n.ts._watchTogether.startWatching }}</MkButton>
+					<small>{{ i18n.ts._watchTogether.startWatchingDescription }}</small>
+				</div>
+				<div v-show="watching" ref="playerContainer" :class="$style.player"></div>
+				<MkInfo v-if="autoplayBlocked" warn>{{ i18n.ts._watchTogether.autoplayBlocked }}</MkInfo>
+				<MkButton v-if="autoplayBlocked" @click="allowPlayback">{{ i18n.ts._watchTogether.allowPlayback }}</MkButton>
+				<footer :class="$style.footer">
+					<small v-if="room.state === 'open'" :class="$style.hint">{{ canControl ? i18n.ts._watchTogether.sharingControls : i18n.ts._watchTogether.hostControls }}</small>
+					<div :class="$style.actions">
+						<MkButton v-if="canControl && room.state === 'open' && !editingVideo" small :disabled="busy" @click="editVideo">{{ i18n.ts._watchTogether.changeVideo }}</MkButton>
+						<MkButton v-if="canControl && room.state === 'open'" small transparent :disabled="busy" @click="update({ videoId: null })">{{ i18n.ts._watchTogether.clear }}</MkButton>
+						<a :href="`https://www.youtube.com/watch?v=${state.videoId}`" :class="$style.external" :aria-label="i18n.ts._watchTogether.openYouTube" :title="i18n.ts._watchTogether.openYouTube" target="_blank" rel="noopener noreferrer"><i class="ti ti-external-link" aria-hidden="true"></i></a>
+					</div>
+				</footer>
+			</template>
+			<div v-else :class="$style.placeholder"><i class="ti ti-brand-youtube" :class="$style.youtubeIcon" aria-hidden="true"></i><p>{{ i18n.ts._watchTogether.empty }}</p></div>
 		</div>
-		<div v-show="watching" ref="playerContainer" :class="$style.player"></div>
-		<MkInfo v-if="autoplayBlocked" warn>{{ i18n.ts._watchTogether.autoplayBlocked }}</MkInfo>
-		<MkButton v-if="autoplayBlocked" @click="allowPlayback">{{ i18n.ts._watchTogether.allowPlayback }}</MkButton>
-		<footer :class="$style.footer">
-			<small v-if="room.state === 'open'" :class="$style.hint">{{ canControl ? i18n.ts._watchTogether.sharingControls : i18n.ts._watchTogether.hostControls }}</small>
-			<div :class="$style.actions">
-				<MkButton v-if="canControl && room.state === 'open' && !editingVideo" small :disabled="busy" @click="editVideo">{{ i18n.ts._watchTogether.changeVideo }}</MkButton>
-				<MkButton v-if="canControl && room.state === 'open'" small transparent :disabled="busy" @click="update({ videoId: null })">{{ i18n.ts._watchTogether.clear }}</MkButton>
-				<a :href="`https://www.youtube.com/watch?v=${state.videoId}`" :class="$style.external" :aria-label="i18n.ts._watchTogether.openYouTube" :title="i18n.ts._watchTogether.openYouTube" target="_blank" rel="noopener noreferrer"><i class="ti ti-external-link" aria-hidden="true"></i></a>
-			</div>
-		</footer>
-	</template>
-	<div v-else :class="$style.placeholder"><i class="ti ti-brand-youtube" :class="$style.youtubeIcon" aria-hidden="true"></i><p>{{ i18n.ts._watchTogether.empty }}</p></div>
-	<section v-if="state != null" :class="$style.queue" :aria-label="i18n.ts._watchTogether.queue">
-		<header :class="$style.queueHeader"><h3>{{ i18n.ts._watchTogether.queue }}</h3><MkButton v-if="canControl && room.state === 'open' && !editingVideo && state.videoId != null" small @click="editVideo">{{ i18n.ts._watchTogether.addToQueue }}</MkButton></header>
-		<p v-if="state.queue.length === 0" :class="$style.hint">{{ i18n.ts._watchTogether.emptyQueue }}</p>
-		<ol v-else :class="$style.queueList">
-			<li v-for="(video, index) in state.queue" :key="index" :class="$style.queueVideo">
-				<span aria-hidden="true">{{ index + 1 }}</span>
-				<MkCallsWatchTogetherVideoPreview :videoId="video" :canControl="canControl && room.state === 'open' && !busy" :class="$style.queueTitle" @menu="openQueueMenu(index, $event)"/>
-			</li>
-		</ol>
-		<small v-if="state.queue.length >= 50" :class="$style.hint">{{ i18n.ts._watchTogether.queueFull }}</small>
-	</section>
+		<section v-if="state != null" :class="$style.queue" :aria-label="i18n.ts._watchTogether.queue">
+			<header :class="$style.queueHeader"><h3>{{ i18n.ts._watchTogether.queue }}</h3><MkButton v-if="canControl && room.state === 'open' && !editingVideo && state.videoId != null" small @click="editVideo">{{ i18n.ts._watchTogether.addToQueue }}</MkButton></header>
+			<p v-if="state.queue.length === 0" :class="$style.hint">{{ i18n.ts._watchTogether.emptyQueue }}</p>
+			<ol v-else :class="$style.queueList">
+				<li v-for="(video, index) in state.queue" :key="index" :class="$style.queueVideo">
+					<span aria-hidden="true">{{ index + 1 }}</span>
+					<MkCallsWatchTogetherVideoPreview :videoId="video" :canControl="canControl && room.state === 'open' && !busy" :class="$style.queueTitle" @menu="openQueueMenu(index, $event)"/>
+				</li>
+			</ol>
+			<small v-if="state.queue.length >= 50" :class="$style.hint">{{ i18n.ts._watchTogether.queueFull }}</small>
+		</section>
+	</div>
 	<MkInfo v-if="room.state !== 'open'">{{ i18n.ts._watchTogether.ended }}</MkInfo>
 </div>
 </template>
@@ -244,7 +248,9 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" module>
-.root { display: flex; flex-direction: column; gap: 12px; }
+.root { display: flex; flex-direction: column; gap: 12px; container-type: inline-size; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.playback { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .hint { color: var(--MI_THEME-fgTransparentWeak); }
 .form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
 .url { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 180px; }
@@ -259,11 +265,16 @@ onUnmounted(() => {
 .footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .external { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--MI-radius); color: var(--MI_THEME-fgTransparentWeak); }
-.queue { border-top: 1px solid var(--MI_THEME-divider); padding-top: 12px; }
+.queue { min-width: 0; border-top: 1px solid var(--MI_THEME-divider); padding-top: 12px; }
 .queueHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .queueHeader h3 { margin: 0; font-size: 1rem; }
 .queueList { display: flex; flex-direction: column; gap: 8px; padding-left: 24px; }
 .queueVideo { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .queueTitle { flex: 1; min-width: 0; }
 .external:hover { background: var(--MI_THEME-buttonHoverBg); }
+
+@container (min-width: 800px) {
+	.layout { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
+	.queue { border-top: 0; border-left: 1px solid var(--MI_THEME-divider); padding-top: 0; padding-left: 16px; }
+}
 </style>

@@ -15,6 +15,13 @@ Calls の閲覧権限を持つユーザーが、ルーム内 Activity から You
 - PASS: 1360×900と390×844で表示を確認。スマホ幅で動画のはみ出しなし、プレーヤー高さ200px以上。未処理JavaScriptエラー0件。
 - PASS: frontend Calls unit 60件、frontend typecheck・build、変更ファイルlint・SPDX・locale safety。今回backend/APIの変更はないため、その検証とSDK生成は再実行していない。
 
+2026-10-07、検索一覧は追加せず、URL入力から「今すぐ再生」と「キューに追加」を選ぶ形に変更。キューは動画IDの配列を既存のRedis状態に保持し、同じrevision・ロック・streamingで共有する（最大50本）。ホスト・モデレーターが削除・任意の動画への切り替えを行い、再生終了時は操作権限者の開いているプレーヤーが次の動画へ進める。
+
+- PASS: frontend Calls unit 61件、backend Watch Together / channel unit 12件、Calls E2E 6件。キュー追加で再生が変わらないこと、共有・操作権限、選択とキュー削除の同時更新、終了時の自動送りを確認。
+- PASS: backend / frontend typecheck、SDK再生成、i18n build、frontend build、変更ファイルlint・SPDX・locale safety。
+- PASS: 実YouTubeと2ブラウザーで、キューの共有・現在の動画を中断しない追加・モデレーターによるキュー選択と両プレーヤーの切り替え・実際の再生終了による自動送りを確認。1360×900と390×844で表示を確認し、未処理JavaScriptエラーは0件。
+- CI修正: CI用設定ではCallsが無効で、既存のWatch Together E2Eがルーム作成に失敗していた。音声を外部へ接続しないテスト用のCalls設定を`.github/misskey/test.yml`へ追加した。
+
 広告ブロックは含めていない。[YouTube標準の埋め込みパラメーター](https://developers.google.com/youtube/player_parameters)には広告を無効化する機能がなく、親ページからiframe内の通信を制御できない。
 
 YouTubeの埋め込み制限・地域制限・広告・ブラウザーの自動再生制限の影響は受ける。自動再生が止められた場合は「再生を許可」を表示する。実音声のCloudflare接続は試験用認証情報のため未検証。DB entity・migrationの変更はない。

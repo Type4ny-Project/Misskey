@@ -17,3 +17,9 @@ redis:
 id: aidx
 
 proxyRemoteFiles: true
+
+# Calls API tests do not establish real audio connections.
+cloudflareRealtime:
+  enabled: true
+  appId: test-app
+  appSecret: test-secret

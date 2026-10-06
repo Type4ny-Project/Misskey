@@ -80,6 +80,12 @@ describe('Calls', () => {
 			expect((await api('calls/watch-together/update', { roomId, expectedRevision: 1, playing: true }, { token: readOnlyToken })).status).toBe(403);
 			const playing = await api('calls/watch-together/update', { roomId, expectedRevision: 1, playing: true, position: 30 }, alice);
 			expect(playing.body).toMatchObject({ playing: true, position: 30, revision: 2 });
+			const queued = await api('calls/watch-together/update', { roomId, expectedRevision: 2, queue: ['dQw4w9WgXcQ'] }, alice);
+			expect(queued.status).toBe(200);
+			expect(queued.body).toMatchObject({ videoId: 'M7lc1UVf-VE', playing: true, queue: ['dQw4w9WgXcQ'], revision: 3 });
+			expect((await api('calls/watch-together/show', { roomId }, viewer)).body.queue).toEqual(['dQw4w9WgXcQ']);
+			expect(castAsError((await api('calls/watch-together/update', { roomId, expectedRevision: 3, queue: [] }, viewer)).body).error.code).toBe('CALLS_ACCESS_DENIED');
+			expect((await api('calls/watch-together/update', { roomId, expectedRevision: 3, queue: ['invalid'] }, alice)).status).toBe(400);
 			const snapshot = await api('calls/rooms/show', { roomId }, alice);
 			await api('calls/rooms/end', { roomId, expectedRevision: snapshot.body.room.revision }, alice);
 			expect((await api('calls/watch-together/show', { roomId }, viewer)).body.playing).toBe(false);

@@ -15,11 +15,14 @@ export const meta = {
 	errors: callsErrors, res: watchTogetherSchema,
 } as const;
 export const paramDef = {
-	type: 'object', properties: { roomId: { type: 'string', format: 'misskey:id' },
-																															expectedRevision: { type: 'integer', minimum: 0 },
-																															videoId: { type: 'string', nullable: true, pattern: '^[A-Za-z0-9_-]{11}$' },
-																															playing: { type: 'boolean' },
-																															position: { type: 'number', minimum: 0 } },
+	type: 'object', properties: {
+		roomId: { type: 'string', format: 'misskey:id' },
+		queue: { type: 'array', maxItems: 50, items: { type: 'string', pattern: '^[A-Za-z0-9_-]{11}$' } },
+		expectedRevision: { type: 'integer', minimum: 0 },
+		videoId: { type: 'string', nullable: true, pattern: '^[A-Za-z0-9_-]{11}$' },
+		playing: { type: 'boolean' },
+		position: { type: 'number', minimum: 0 },
+	},
 	required: ['roomId', 'expectedRevision'],
 } as const;
 

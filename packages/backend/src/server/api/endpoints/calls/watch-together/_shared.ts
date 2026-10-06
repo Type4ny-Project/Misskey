@@ -6,6 +6,7 @@
 export const watchTogetherSchema = {
 	type: 'object', optional: false, nullable: false,
 	properties: {
+		queue: { type: 'array', optional: false, nullable: false, items: { type: 'string', optional: false, nullable: false } },
 		videoId: { type: 'string', optional: false, nullable: true },
 		playing: { type: 'boolean', optional: false, nullable: false },
 		position: { type: 'number', optional: false, nullable: false },

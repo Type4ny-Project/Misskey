@@ -12,6 +12,7 @@ import { CallsLiveConnectionService } from './CallsLiveConnectionService.js';
 import { CallsEventService } from './CallsEventService.js';
 
 export type WatchTogetherState = {
+	queue: string[];
 	videoId: string | null;
 	playing: boolean;
 	position: number;
@@ -39,7 +40,7 @@ export class CallsWatchTogetherService {
 
 	private async read(roomId: string): Promise<WatchTogetherState> {
 		const raw = await this.redis.get(`calls:watch-together:${roomId}`);
-		return raw == null ? { videoId: null, playing: false, position: 0, updatedAt: Date.now(), revision: 0 } : JSON.parse(raw) as WatchTogetherState;
+		return { queue: [], ...(raw == null ? { videoId: null, playing: false, position: 0, updatedAt: Date.now(), revision: 0 } : JSON.parse(raw) as WatchTogetherState) };
 	}
 
 	public async show(user: MiUser, roomId: string): Promise<WatchTogetherSnapshot> {
@@ -53,7 +54,7 @@ export class CallsWatchTogetherService {
 		return { ...state, serverTime: Date.now() };
 	}
 
-	public async update(user: MiUser, roomId: string, params: { expectedRevision: number; videoId?: string | null; playing?: boolean; position?: number }): Promise<WatchTogetherSnapshot> {
+	public async update(user: MiUser, roomId: string, params: { expectedRevision: number; videoId?: string | null; playing?: boolean; position?: number; queue?: string[] }): Promise<WatchTogetherSnapshot> {
 		return this.connections.withRoomLock(roomId, async assertHeld => {
 			const room = await this.assertAccess(user, roomId);
 			await this.rooms.assertCanModerateParticipants(user, room);
@@ -63,6 +64,7 @@ export class CallsWatchTogetherService {
 			const changingVideo = params.videoId !== undefined;
 			const videoId = changingVideo ? params.videoId! : previous.videoId;
 			const state: WatchTogetherState = {
+				queue: params.queue ?? previous.queue,
 				videoId,
 				playing: videoId != null && (params.playing ?? (changingVideo ? false : previous.playing)),
 				position: videoId == null ? 0 : params.position ?? (changingVideo ? 0 : previous.position + (previous.playing ? (now - previous.updatedAt) / 1000 : 0)),

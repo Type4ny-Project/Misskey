@@ -18,7 +18,7 @@ const room = {
 export const Default = {
 	render(args) { return { components: { MkCallsWatchTogether }, setup: () => ({ args }), template: '<MkCallsWatchTogether v-bind="args" style="max-width: 800px;" />' }; },
 	args: { room, canControl: true },
-	parameters: { msw: { handlers: [http.post('/api/calls/watch-together/show', () => HttpResponse.json({ videoId: null, playing: false, position: 0, updatedAt: Date.now(), revision: 0, serverTime: Date.now() }))] } },
+	parameters: { msw: { handlers: [http.post('/api/calls/watch-together/show', () => HttpResponse.json({ queue: [], videoId: null, playing: false, position: 0, updatedAt: Date.now(), revision: 0, serverTime: Date.now() }))] } },
 } satisfies StoryObj<typeof MkCallsWatchTogether>;
 
 export const Viewer = { ...Default, args: { room, canControl: false } } satisfies StoryObj<typeof MkCallsWatchTogether>;

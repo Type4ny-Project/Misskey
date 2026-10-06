@@ -28,7 +28,7 @@ vi.mock('@/components/calls/youtube-player.js', async importOriginal => ({
 	} }),
 }));
 const room = { id: 'room', state: 'open' } as Misskey.entities.CallsRoom;
-const state = () => ({ videoId: 'M7lc1UVf-VE', playing: true, position: 20, updatedAt: Date.now(), revision: 1, serverTime: Date.now() });
+const state = () => ({ queue: [], videoId: 'M7lc1UVf-VE', playing: true, position: 20, updatedAt: Date.now(), revision: 1, serverTime: Date.now() });
 beforeEach(() => {
 	vi.clearAllMocks(); fixture.handlers.clear(); fixture.events = null;
 	fixture.position = 0; fixture.playerState = 2; fixture.shared = state();
@@ -55,7 +55,7 @@ test.each([
 test('a viewer follows playback and seek events, has no shared controls, and releases the player', async () => {
 	const view = render(MkCallsWatchTogether, { props: { room, canControl: false } });
 	await waitFor(() => expect(view.getByRole('button', { name: i18n.ts._watchTogether.startWatching })).toBeTruthy());
-	expect(view.queryByRole('button', { name: i18n.ts._watchTogether.shareVideo })).toBeNull();
+	expect(view.queryByRole('button', { name: i18n.ts._watchTogether.playNow })).toBeNull();
 	expect(fixture.play).not.toHaveBeenCalled();
 	await fireEvent.click(view.getByRole('button', { name: i18n.ts._watchTogether.startWatching }));
 	await waitFor(() => expect(fixture.play).toHaveBeenCalled());
@@ -83,7 +83,9 @@ test('a controller publishes native YouTube play, pause and seek without echoing
 	await fireEvent.click(view.getByRole('button', { name: i18n.ts._watchTogether.changeVideo }));
 	await fireEvent.update(view.getByLabelText(i18n.ts._watchTogether.videoUrl), 'https://youtu.be/dQw4w9WgXcQ');
 	await fireEvent.submit(view.getByLabelText(i18n.ts._watchTogether.videoUrl).closest('form')!);
-	expect(fixture.api).toHaveBeenCalledWith('calls/watch-together/update', { roomId: 'room', expectedRevision: 1, videoId: 'dQw4w9WgXcQ', playing: false, position: 0 });
+	expect(fixture.api).toHaveBeenCalledWith('calls/watch-together/update', { roomId: 'room', expectedRevision: 1, videoId: 'dQw4w9WgXcQ', playing: true, position: 0 });
+	fixture.shared.playing = false;
+	fixture.handlers.get('watchTogether')({ state: fixture.shared });
 	await fireEvent.click(view.getByRole('button', { name: i18n.ts._watchTogether.startWatching }));
 	await waitFor(() => expect(fixture.events).toBeTruthy());
 	await nextTick();
@@ -101,4 +103,27 @@ test('a controller publishes native YouTube play, pause and seek without echoing
 	expect(fixture.play).toHaveBeenCalled();
 	expect(fixture.api.mock.calls.filter(([endpoint]) => endpoint.endsWith('/update'))).toHaveLength(4);
 	expect(view.queryByLabelText(i18n.ts._watchTogether.videoUrl)).toBeNull();
+});
+
+
+test('video URLs can be queued, removed and advanced on native playback end', async () => {
+	const video = 'dQw4w9WgXcQ';
+	const view = render(MkCallsWatchTogether, { props: { room, canControl: true } });
+	await waitFor(() => expect(view.getByRole('button', { name: i18n.ts._watchTogether.changeVideo })).toBeTruthy());
+	await fireEvent.click(view.getByRole('button', { name: i18n.ts._watchTogether.changeVideo }));
+	await fireEvent.update(view.getByLabelText(i18n.ts._watchTogether.videoUrl), 'https://youtu.be/' + video);
+	await fireEvent.click(view.getAllByRole('button', { name: i18n.ts._watchTogether.addToQueue })[0]);
+	await waitFor(() => expect(fixture.shared.queue).toHaveLength(1));
+	expect(fixture.shared.videoId).toBe('M7lc1UVf-VE');
+	await fireEvent.click(view.getByRole('button', { name: i18n.ts._watchTogether.removeFromQueue }));
+	await waitFor(() => expect(fixture.shared.queue).toHaveLength(0));
+	await fireEvent.update(view.getByLabelText(i18n.ts._watchTogether.videoUrl), 'https://youtu.be/' + video);
+	await fireEvent.click(view.getAllByRole('button', { name: i18n.ts._watchTogether.addToQueue })[0]);
+	await waitFor(() => expect(fixture.shared.queue).toHaveLength(1));
+	await fireEvent.click(view.getByRole('button', { name: i18n.ts._watchTogether.startWatching }));
+	await waitFor(() => expect(fixture.play).toHaveBeenCalled());
+	fixture.playerState = 0; fixture.position = 300;
+	fixture.events.onStateChange({ data: 0 });
+	await waitFor(() => expect(fixture.shared).toMatchObject({ videoId: video, position: 0, playing: true, queue: [] }));
+	expect(fixture.cue).toHaveBeenCalledWith(video);
 });

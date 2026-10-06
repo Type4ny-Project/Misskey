@@ -14856,6 +14856,30 @@ export interface Locale extends ILocale {
          */
         "changeVideo": string;
         /**
+         * 今すぐ再生
+         */
+        "playNow": string;
+        /**
+         * キューに追加
+         */
+        "addToQueue": string;
+        /**
+         * キューから削除
+         */
+        "removeFromQueue": string;
+        /**
+         * 次に再生
+         */
+        "queue": string;
+        /**
+         * キューは空です。動画を追加すると、再生終了後に順番に再生します。
+         */
+        "emptyQueue": string;
+        /**
+         * キューに追加できるのは50本までです
+         */
+        "queueFull": string;
+        /**
          * 視聴を開始
          */
         "startWatching": string;

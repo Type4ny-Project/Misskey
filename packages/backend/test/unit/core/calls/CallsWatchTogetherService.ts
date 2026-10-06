@@ -79,4 +79,16 @@ describe('Calls Watch Together', () => {
 		await service.update(user('host'), 'room', { expectedRevision: 0, videoId: 'M7lc1UVf-VE' });
 		expect(await service.update(user('host'), 'room', { expectedRevision: 1, videoId: null })).toMatchObject({ videoId: null, playing: false, position: 0 });
 	});
+	test('shares the queue without changing playback and consumes a selection atomically', async () => {
+		const { service } = fixture();
+		const queue = ['dQw4w9WgXcQ'];
+		await service.update(user('host'), 'room', { expectedRevision: 0, videoId: 'M7lc1UVf-VE', playing: true });
+		const queued = await service.update(user('moderator'), 'room', { expectedRevision: 1, queue });
+		expect(queued).toMatchObject({ videoId: 'M7lc1UVf-VE', playing: true, queue });
+		expect((await service.show(user('viewer'), 'room')).queue).toEqual(queue);
+		await expect(service.update(user('viewer'), 'room', { expectedRevision: 2, queue: [] })).rejects.toMatchObject({ code: 'access-denied' });
+		const selected = await service.update(user('host'), 'room', { expectedRevision: 2, queue: [], videoId: queue[0], playing: true, position: 0 });
+		expect(selected).toMatchObject({ queue: [], videoId: queue[0], playing: true, position: 0 });
+	});
+
 });

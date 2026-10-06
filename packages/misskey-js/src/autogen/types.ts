@@ -18963,6 +18963,7 @@ export interface operations {
                 };
                 content: {
                     'application/json': {
+                        queue: string[];
                         videoId: string | null;
                         playing: boolean;
                         position: number;
@@ -19025,6 +19026,7 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     roomId: string;
+                    queue?: string[];
                     expectedRevision: number;
                     videoId?: string | null;
                     playing?: boolean;
@@ -19040,6 +19042,7 @@ export interface operations {
                 };
                 content: {
                     'application/json': {
+                        queue: string[];
                         videoId: string | null;
                         playing: boolean;
                         position: number;

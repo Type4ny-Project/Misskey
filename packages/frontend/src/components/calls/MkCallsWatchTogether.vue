@@ -7,7 +7,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div :class="$style.root">
 	<form v-if="canControl && room.state === 'open' && (state?.videoId == null || editingVideo)" :class="$style.form" @submit.prevent="shareVideo">
 		<label :class="$style.url">{{ i18n.ts._watchTogether.videoUrl }}<input v-model="inputUrl" type="url" :class="$style.input" required placeholder="https://www.youtube.com/watch?v=..." :disabled="busy"></label>
-		<MkButton type="submit" primary :disabled="busy || state == null">{{ i18n.ts._watchTogether.shareVideo }}</MkButton>
+		<MkButton type="submit" primary :disabled="busy || state == null">{{ i18n.ts._watchTogether.playNow }}</MkButton>
+		<MkButton :disabled="busy || state == null || state.queue.length >= 50 || !inputUrl.trim()" @click="addUrlToQueue">{{ i18n.ts._watchTogether.addToQueue }}</MkButton>
 		<MkButton v-if="state?.videoId != null" :disabled="busy" @click="editingVideo = false">{{ i18n.ts.cancel }}</MkButton>
 	</form>
 	<MkInfo v-if="error != null" warn>{{ error }}</MkInfo>
@@ -32,6 +33,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</footer>
 	</template>
 	<div v-else :class="$style.placeholder"><i class="ti ti-brand-youtube" :class="$style.youtubeIcon" aria-hidden="true"></i><p>{{ i18n.ts._watchTogether.empty }}</p></div>
+	<section v-if="state != null" :class="$style.queue" :aria-label="i18n.ts._watchTogether.queue">
+		<header :class="$style.queueHeader"><h3>{{ i18n.ts._watchTogether.queue }}</h3><MkButton v-if="canControl && room.state === 'open' && !editingVideo && state.videoId != null" small @click="editVideo">{{ i18n.ts._watchTogether.addToQueue }}</MkButton></header>
+		<p v-if="state.queue.length === 0" :class="$style.hint">{{ i18n.ts._watchTogether.emptyQueue }}</p>
+		<ol v-else :class="$style.queueList">
+			<li v-for="(video, index) in state.queue" :key="index" :class="$style.queueVideo">
+				<span aria-hidden="true">{{ index + 1 }}</span>
+				<img :src="`https://i.ytimg.com/vi/${video}/mqdefault.jpg`" alt="" loading="lazy" referrerpolicy="no-referrer">
+				<div :class="$style.queueTitle"><a :href="`https://www.youtube.com/watch?v=${video}`" target="_blank" rel="noopener noreferrer">{{ `youtu.be/${video}` }}</a></div>
+				<div v-if="canControl && room.state === 'open'" :class="$style.actions">
+					<MkButton small :disabled="busy" @click="playQueued(index)">{{ i18n.ts._watchTogether.playNow }}</MkButton>
+					<button type="button" class="_button" :class="$style.external" :disabled="busy" :aria-label="i18n.ts._watchTogether.removeFromQueue" @click="update({ queue: state.queue.filter((_, i) => i !== index) })"><i class="ti ti-x" aria-hidden="true"></i></button>
+				</div>
+			</li>
+		</ol>
+		<small v-if="state.queue.length >= 50" :class="$style.hint">{{ i18n.ts._watchTogether.queueFull }}</small>
+	</section>
 	<MkInfo v-if="room.state !== 'open'">{{ i18n.ts._watchTogether.ended }}</MkInfo>
 </div>
 </template>
@@ -50,8 +67,8 @@ import { useStream } from '@/stream.js';
 type State = Misskey.entities.CallsWatchTogetherShowResponse;
 const props = defineProps<{ room: Misskey.entities.CallsRoom; canControl: boolean }>();
 const state = shallowRef<State | null>(null);
-const inputUrl = ref('');
 const editingVideo = ref(false);
+const inputUrl = ref('');
 const busy = ref(false);
 const error = ref<string | null>(null);
 const watching = ref(false);
@@ -86,6 +103,10 @@ function syncPlayer() {
 	const shouldPlay = state.value.playing && props.room.state === 'open';
 	if (props.canControl && props.room.state === 'open' && !syncingPlayer) {
 		// IFrame API has no seek event, so sample the native timeline as well as state changes.
+		if (!busy.value && currentState === 0 && shouldPlay && state.value.queue.length > 0) {
+			void playQueued(0);
+			return;
+		}
 		if (!busy.value && [0, 1, 2, 5].includes(currentState) && (shouldPlay !== (currentState === 1) || Math.abs(currentPosition - target) > 2)) {
 			void update({ playing: currentState === 1, position: currentPosition });
 		}
@@ -122,7 +143,7 @@ async function refresh() {
 	} catch { if (!disposed) { error.value = i18n.ts._watchTogether.apiError; stopPlayer(); } }
 }
 
-async function update(params: { videoId?: string | null; playing?: boolean; position?: number }) {
+async function update(params: { videoId?: string | null; playing?: boolean; position?: number; queue?: string[] }) {
 	if (busy.value || !props.canControl || props.room.state !== 'open' || state.value == null) return;
 	busy.value = true;
 	try {
@@ -135,15 +156,36 @@ async function update(params: { videoId?: string | null; playing?: boolean; posi
 }
 
 function editVideo() {
-	inputUrl.value = `https://www.youtube.com/watch?v=${state.value!.videoId}`;
+	inputUrl.value = '';
 	editingVideo.value = true;
 }
 
-async function shareVideo() {
+function inputVideo(): string | null {
 	const videoId = youtubeVideoId(inputUrl.value);
-	if (videoId == null) { error.value = i18n.ts._watchTogether.invalidUrl; return; }
-	await update({ videoId, playing: false, position: 0 });
-	if (state.value?.videoId === videoId) editingVideo.value = false;
+	if (videoId == null) { error.value = i18n.ts._watchTogether.invalidUrl; return null; }
+	return videoId;
+}
+
+async function shareVideo() {
+	const video = inputVideo();
+	if (video == null) return;
+	await update({ videoId: video, playing: true, position: 0 });
+	if (state.value?.videoId === video) editingVideo.value = false;
+}
+
+async function addUrlToQueue() {
+	const video = inputVideo();
+	if (video == null) return;
+	if (state.value == null || state.value.queue.length >= 50) return;
+	await update({ queue: [...state.value.queue, video] });
+	if (error.value == null) inputUrl.value = '';
+}
+
+async function playQueued(index: number) {
+	const video = state.value?.queue[index];
+	if (video == null) return;
+	await update({ videoId: video, playing: true, position: 0, queue: state.value!.queue.filter((_, i) => i !== index) });
+	if (state.value?.videoId === video) editingVideo.value = false;
 }
 
 async function startWatching() {
@@ -202,7 +244,7 @@ onUnmounted(() => {
 .url { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 180px; }
 .input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--MI_THEME-divider); border-radius: var(--MI-radius); background: var(--MI_THEME-panel); color: var(--MI_THEME-fg); font: inherit; }
 .input:focus { outline: 2px solid var(--MI_THEME-accent); }
-.player, .placeholder { width: min(100%, calc(50dvh * 16 / 9)); align-self: center; aspect-ratio: 16 / 9; min-height: 200px; border-radius: var(--MI-radius); overflow: hidden; background: var(--MI_THEME-bg); }
+.player, .placeholder { width: min(100%, calc(40dvh * 16 / 9)); align-self: center; aspect-ratio: 16 / 9; min-height: 200px; border-radius: var(--MI-radius); overflow: hidden; background: var(--MI_THEME-bg); }
 .player iframe { width: 100%; height: 100%; border: 0; }
 .placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; box-sizing: border-box; text-align: center; }
 .placeholder p { margin: 0; }
@@ -211,5 +253,13 @@ onUnmounted(() => {
 .footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .external { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--MI-radius); color: var(--MI_THEME-fgTransparentWeak); }
+.queue { border-top: 1px solid var(--MI_THEME-divider); padding-top: 12px; }
+.queueHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.queueHeader h3 { margin: 0; font-size: 1rem; }
+.queueList { display: flex; flex-direction: column; gap: 8px; padding-left: 24px; }
+.queueVideo { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.queueVideo img { width: 80px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; }
+.queueTitle { flex: 1; min-width: 120px; overflow-wrap: anywhere; }
+.queueTitle a { color: var(--MI_THEME-link); }
 .external:hover { background: var(--MI_THEME-buttonHoverBg); }
 </style>

@@ -49,7 +49,7 @@ beforeEach(() => {
 		speakerRequestResult: ref(null), replacedRoomId: ref(null), needsAudioResume: ref(false), controls: ref({}),
 		leave: vi.fn().mockResolvedValue(undefined), refresh: vi.fn().mockResolvedValue(undefined), prepareMicrophones: vi.fn(), join: vi.fn().mockResolvedValue(undefined),
 		getParticipantVolume: vi.fn().mockReturnValue(100), setParticipantVolume: vi.fn(),
-		screenAudioIds: ref(new Set()), getScreenVolume: vi.fn().mockReturnValue(100), setScreenVolume: vi.fn(),
+		getScreenVolume: vi.fn().mockReturnValue(100), setScreenVolume: vi.fn(),
 	};
 });
 afterEach(cleanup);

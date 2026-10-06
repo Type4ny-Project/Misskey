@@ -45,7 +45,7 @@ beforeEach(() => {
 	fixture.connection = { room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()), refresh: vi.fn().mockResolvedValue(undefined), dispose: vi.fn() };
 	fixture.session = {
 		currentRoomId: ref(null), room: ref(room), participants: ref(participants), connected: ref(true), speakingParticipantIds: ref(new Set()),
-		elapsedTime: ref(null), isActive: ref(false), joining: ref(false), videos: ref([]), screenWindows: new Map(), mediaState: ref('idle'), mediaFailure: ref(null),
+		elapsedTime: ref(null), isActive: ref(false), joining: ref(false), videos: ref([]), screenWindows: new Map(), screenAudioIds: ref(new Set()), mediaState: ref('idle'), mediaFailure: ref(null),
 		speakerRequestResult: ref(null), replacedRoomId: ref(null), needsAudioResume: ref(false), controls: ref({}),
 		leave: vi.fn().mockResolvedValue(undefined), refresh: vi.fn().mockResolvedValue(undefined), prepareMicrophones: vi.fn(), join: vi.fn().mockResolvedValue(undefined),
 		getParticipantVolume: vi.fn().mockReturnValue(100), setParticipantVolume: vi.fn(),
@@ -54,6 +54,34 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Calls room window', () => {
+	test('opens and closes the activity list inside the current call without leaving the session', async () => {
+		fixture.session.currentRoomId.value = 'room';
+		fixture.session.isActive.value = true;
+		const open = vi.spyOn(window, 'open');
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		const activityButton = view.getByRole('button', { name: i18n.ts._calls.activities });
+		await fireEvent.click(activityButton);
+		expect(activityButton.getAttribute('aria-expanded')).toBe('true');
+		expect(view.getByText(i18n.ts._calls.noActivities)).toBeTruthy();
+		expect(view.container.querySelector('mk-calls-controls-stub')).toBeTruthy();
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts.close }));
+		expect(activityButton.getAttribute('aria-expanded')).toBe('false');
+		expect(fixture.session.leave).not.toHaveBeenCalled();
+		expect(fixture.session.join).not.toHaveBeenCalled();
+		expect(open).not.toHaveBeenCalled();
+		open.mockRestore();
+	});
+
+	test('keeps an opened activity mounted while the room changes to its end summary', async () => {
+		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
+		await fireEvent.click(view.getByRole('button', { name: i18n.ts._calls.activities }));
+		const activities = view.getByText(i18n.ts._calls.noActivities);
+		fixture.connection.room.value = { ...fixture.connection.room.value, state: 'ended' };
+		await nextTick();
+		expect(view.getByRole('heading', { name: i18n.ts._calls.ended })).toBeTruthy();
+		expect(view.getByText(i18n.ts._calls.noActivities)).toBe(activities);
+	});
+
 	test('keeps an initially ended room open with its final timing and no join prompt', async () => {
 		fixture.connection.room.value = null;
 		fixture.connection.refresh.mockImplementation(async () => {

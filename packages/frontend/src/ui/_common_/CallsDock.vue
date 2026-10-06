@@ -116,7 +116,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import MkCallsConnectionInfo from '@/components/MkCallsConnectionInfo.vue';
 import MkCallsControls from '@/components/MkCallsControls.vue';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
@@ -200,7 +199,7 @@ onMounted(() => window.addEventListener('pointerdown', onWindowPointerDown));
 onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerDown));
 
 function openConnectionInfo(): void {
-	const { dispose } = os.popup(MkCallsConnectionInfo, { getInfo: session.getConnectionInfo }, { closed: () => dispose() });
+	void session.openAudioSettings('statistics');
 }
 
 </script>

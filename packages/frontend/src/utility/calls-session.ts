@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import type { CallsNoiseSuppressionMode } from '@/utility/calls-noise-suppression.js';
+import { prefer } from '@/preferences.js';
 import { computed, ref, shallowRef, watch } from 'vue';
 import type { CallsMediaFailure, CallsMediaState, CallsRemotePublication, CallsVideoQuality, CallsVideoSource } from '@/utility/calls-media.js';
 import type { MenuItem } from '@/types/menu.js';
@@ -54,7 +56,11 @@ const mediaFailure = ref<CallsMediaFailure | null>(null);
 const muted = ref(false);
 const joining = ref(false);
 const replacedRoomId = ref<string | null>(null);
-const noiseSuppression = ref(true);
+const noiseSuppression = ref<CallsNoiseSuppressionMode>(prefer.s.callsNoiseSuppression);
+const inputSensitivity = ref(prefer.s.callsInputSensitivity);
+const inputLevel = ref(-100);
+const inputTransmitting = ref(false);
+const audioSettingsBusy = ref(false);
 const selectedMicrophone = ref('');
 const selectedCamera = ref('');
 const cameras = ref<MediaDeviceInfo[]>([]);
@@ -282,8 +288,11 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 		previousConnection,
 		replaceExisting,
 		{
-			noiseSuppressionChanged(enabled) {
-				if (generation === sessionGeneration && media.value === controller) noiseSuppression.value = enabled;
+			noiseSuppressionChanged(mode) {
+				if (generation === sessionGeneration && media.value === controller) noiseSuppression.value = mode;
+			},
+			inputLevel(level, transmitting) {
+				if (generation === sessionGeneration && media.value === controller) { inputLevel.value = level; inputTransmitting.value = transmitting; }
 			},
 			localTrack(_source, track, id) {
 				if (generation !== sessionGeneration || media.value !== controller) return;
@@ -302,7 +311,8 @@ async function connectMedia(generation: number, previousConnection?: { connectio
 	);
 	media.value = controller;
 	controller.setMuted(muted.value);
-	controller.setNoiseSuppression(noiseSuppression.value);
+	await controller.setNoiseSuppression(noiseSuppression.value);
+	controller.setInputSensitivity(inputSensitivity.value);
 	await controller.connect(selectedMicrophone.value || undefined);
 	if (generation !== sessionGeneration || media.value !== controller) {
 		await controller.close().catch(() => undefined);
@@ -329,6 +339,8 @@ async function clearSession(): Promise<void> {
 	disposeConnection();
 	currentRoomId.value = null;
 	mediaState.value = 'idle';
+	inputLevel.value = -100;
+	inputTransmitting.value = false;
 	mediaFailure.value = null;
 	muted.value = false;
 	videoBusy.value = false;
@@ -610,16 +622,43 @@ async function openDeviceMenu(kind: 'microphone' | 'camera', event: MouseEvent):
 				}
 			},
 		})),
-		...(kind === 'camera' ? [null, ...videoQualityMenu('camera')] : [null, { type: 'switch' as const, text: i18n.ts._calls.noiseSuppression, ref: computed({ get: () => noiseSuppression.value, set: value => { setNoiseSuppression(value); } }) }]),
+		...(kind === 'camera' ? [null, ...videoQualityMenu('camera')] : [null, { text: i18n.ts._calls.audioSettings, icon: 'ti ti-adjustments', action: () => openAudioSettings() }]),
 	], target);
 }
 
-function setNoiseSuppression(enabled: boolean): void {
+async function openAudioSettings(initialPage: 'general' | 'statistics' = 'general'): Promise<void> {
+	const { default: MkCallsSettings } = await import('@/components/MkCallsSettings.vue');
+	const { dispose } = popup(MkCallsSettings, {
+		initialPage,
+		getInfo: () => media.value?.getConnectionInfo() ?? Promise.resolve(null),
+		getSettings: () => ({ noiseSuppression: noiseSuppression.value, inputSensitivity: inputSensitivity.value, inputLevel: inputLevel.value, transmitting: inputTransmitting.value && !muted.value, busy: audioSettingsBusy.value }),
+		setNoiseSuppression,
+		setInputSensitivity,
+	}, { closed: () => dispose() });
+}
+
+async function setNoiseSuppression(mode: CallsNoiseSuppressionMode): Promise<void> {
+	if (audioSettingsBusy.value) return;
+	audioSettingsBusy.value = true;
 	try {
-		media.value?.setNoiseSuppression(enabled);
-		noiseSuppression.value = enabled;
+		await media.value?.setNoiseSuppression(mode);
+		noiseSuppression.value = mode;
+		prefer.commit('callsNoiseSuppression', mode);
 	} catch (error) {
 		console.error('[Calls] Noise suppression change failed', error);
+		await alert({ type: 'error', text: i18n.ts.somethingHappened });
+	} finally {
+		audioSettingsBusy.value = false;
+	}
+}
+
+function setInputSensitivity(threshold: number): void {
+	try {
+		media.value?.setInputSensitivity(threshold);
+		inputSensitivity.value = threshold;
+		prefer.commit('callsInputSensitivity', threshold);
+	} catch (error) {
+		console.error('[Calls] Input sensitivity change failed', error);
 		void alert({ type: 'error', text: i18n.ts.somethingHappened });
 	}
 }
@@ -754,6 +793,8 @@ export function useCallsSession() {
 		openScreenSettings,
 		videoQuality,
 		noiseSuppression,
+		inputSensitivity,
+		openAudioSettings,
 		localVideos,
 		videos,
 		screenWindows: callsScreenWindows,

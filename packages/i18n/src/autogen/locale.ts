@@ -10377,6 +10377,66 @@ export interface Locale extends ILocale {
     };
     "_calls": {
         /**
+         * 通話設定
+         */
+        "audioSettings": string;
+        /**
+         * 通話設定
+         */
+        "settings": string;
+        /**
+         * 一般
+         */
+        "generalSettings": string;
+        /**
+         * 統計表示
+         */
+        "statisticsSettings": string;
+        /**
+         * ノイズキャンセル
+         */
+        "noiseSuppressionMode": string;
+        /**
+         * RNNoise
+         */
+        "rnnoiseMode": string;
+        /**
+         * WebRTC 標準
+         */
+        "webrtcMode": string;
+        /**
+         * なし
+         */
+        "noNoiseSuppression": string;
+        /**
+         * RNNoise は音声処理で環境音を抑えます。WebRTC 標準はブラウザのノイズキャンセルを使います。エコーキャンセルはどのモードでも有効です。
+         */
+        "noiseSuppressionDescription": string;
+        /**
+         * 送信開始のしきい値
+         */
+        "inputSensitivity": string;
+        /**
+         * この音量より小さな音は送信しません。右に動かすほど小さな環境音を送りにくくなります。
+         */
+        "inputSensitivityDescription": string;
+        /**
+         * しきい値なし（すべて送信）
+         */
+        "inputGateDisabled": string;
+        /**
+         * 入力音量
+         */
+        "inputLevel": string;
+        /**
+         * 送信中
+         */
+        "inputTransmitting": string;
+        /**
+         * しきい値未満・ミュート
+         */
+        "inputNotTransmitting": string;
+        /**
          * 接続情報
          */
         "connectionInfo": string;
@@ -10384,6 +10444,22 @@ export interface Locale extends ILocale {
          * 状態
          */
         "connectionStatus": string;
+        /**
+         * 接続品質の推移
+         */
+        "connectionHistory": string;
+        /**
+         * この画面を開いている間、直近3分の測定値を表示します。パケットロスは接続開始からの累積値です。
+         */
+        "connectionHistoryDescription": string;
+        /**
+         * 送信
+         */
+        "sending": string;
+        /**
+         * 受信
+         */
+        "receiving": string;
         /**
          * 通話サーバー
          */

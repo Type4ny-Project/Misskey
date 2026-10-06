@@ -10,13 +10,13 @@ import type { CallsConnectionInfo } from '@/utility/calls-connection-info.js';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
-test('renders live connection information and stops polling when closed', async () => {
+test('renders live connection information and stops polling when unmounted', async () => {
 	vi.useFakeTimers();
 	const info: CallsConnectionInfo = { state: 'connected', turnServers: [{ host: 'turn.example.com', udp: ['3478'], tcp: [], tls: ['443'] }], relay: false, protocol: 'udp', roundTripTime: 0.021, sendLoss: 0.1, receiveLoss: null };
 	const getInfo = vi.fn().mockResolvedValue(info);
 	const view = render(MkCallsConnectionInfo, {
 		props: { getInfo },
-		global: { stubs: { MkModalWindow: { template: '<section><slot name="header"/><slot/><button @click="$emit(\'close\')">Close</button></section>', methods: { close() {} } } } },
+		global: { stubs: { MkCallsConnectionChart: { props: ['samples'], template: '<div data-testid="history" :data-count="samples.length" :data-latency="samples.at(-1)?.info?.roundTripTime"/>' }, MkModalWindow: { template: '<section><slot name="header"/><slot/><button @click="$emit(\'close\')">Close</button></section>', methods: { close() {} } } } },
 	});
 	await vi.advanceTimersByTimeAsync(0);
 	expect(view.getByText('turn.example.com')).toBeTruthy();
@@ -25,7 +25,14 @@ test('renders live connection information and stops polling when closed', async 
 	getInfo.mockResolvedValue({ ...info, roundTripTime: 0.042 });
 	await vi.advanceTimersByTimeAsync(2000);
 	expect(view.getByText('42 ms')).toBeTruthy();
-	view.getByRole('button', { name: 'Close' }).click();
+	expect(view.getByTestId('history').getAttribute('data-count')).toBe('2');
+	expect(view.getByTestId('history').getAttribute('data-latency')).toBe('0.042');
+	getInfo.mockRejectedValueOnce(new Error('Stats unavailable'));
+	await vi.advanceTimersByTimeAsync(2000);
+	expect(view.getByTestId('history').getAttribute('data-latency')).toBeNull();
+	await vi.advanceTimersByTimeAsync(180_000);
+	expect(view.getByTestId('history').getAttribute('data-count')).toBe('90');
+	view.unmount();
 	await vi.advanceTimersByTimeAsync(4000);
-	expect(getInfo).toHaveBeenCalledTimes(2);
+	expect(getInfo).toHaveBeenCalledTimes(93);
 });

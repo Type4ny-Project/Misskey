@@ -29,10 +29,11 @@ const fixture = vi.hoisted(() => ({
 	revocationListenerRemovals: [] as Array<ReturnType<typeof vi.fn>>,
 	connections: [] as Array<{ room: { value: { id: string; title: string; state: string; revision: number } }; endReason: { value: 'host-timeout' | null }; participants: { value: Array<{ id: string; userId: string; role: string; isMuted: boolean; joinedAt?: string }> }; refresh: ReturnType<typeof vi.fn> }>,
 	remoteTrackCallbacks: [] as Array<(track: MediaStreamTrack, publication: CallsRemotePublication) => void>,
-	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; stopVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn> }>,
+	controllers: [] as Array<{ connectionIdentity: { connectionId: string; generation: number }; replaceExisting: boolean; localTrack: { enabled: boolean } | null; setMuted: ReturnType<typeof vi.fn>; switchMicrophone: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; startVideo: ReturnType<typeof vi.fn>; stopVideo: ReturnType<typeof vi.fn>; setVideoQuality: ReturnType<typeof vi.fn>; setNoiseSuppression: ReturnType<typeof vi.fn>; setInputSensitivity: ReturnType<typeof vi.fn> }>,
 }));
 
 vi.mock('@/utility/sound.js', () => ({ playMisskeySfx: fixture.playSound }));
+vi.mock('@/preferences.js', () => ({ prefer: { s: { callsNoiseSuppression: 'rnnoise', callsInputSensitivity: -100 }, commit: vi.fn() } }));
 vi.mock('@/i.js', () => ({ $i: { id: 'user-a', policies: fixture.policies } }));
 vi.mock('@/i18n.js', () => ({ i18n: {
 	ts: { somethingHappened: 'Something went wrong', _calls: { videoFailed: 'Video failed', videoResolution: 'Resolution', videoSourceQuality: 'Source quality', videoFrameRate: 'Frame rate', connectedOnAnotherDevice: 'Connected on another device', switchDeviceConfirm: 'Disconnect the other device?', hostLeftRoomEnded: 'Host left; room ended' } },
@@ -61,6 +62,7 @@ vi.mock('@/composables/use-calls-room.js', async () => {
 		},
 	};
 });
+vi.mock('@/components/MkCallsSettings.vue', () => ({ default: {} }));
 vi.mock('@/components/MkCallsScreenWindow.vue', () => ({ default: {} }));
 vi.mock('@/components/MkCallsCameraPreviewDialog.vue', () => ({ default: {} }));
 vi.mock('@/utility/calls-media.js', () => ({
@@ -74,6 +76,7 @@ vi.mock('@/utility/calls-media.js', () => ({
 		public close = vi.fn().mockResolvedValue(undefined);
 		public setVideoQuality = vi.fn().mockResolvedValue(undefined);
 		public setNoiseSuppression = vi.fn();
+		public setInputSensitivity = vi.fn();
 		public reconcile = vi.fn().mockResolvedValue(undefined);
 		public connect = vi.fn(async () => {
 			if (fixture.connectionExists && !this.replaceExisting) throw Object.assign(new Error('Connection exists'), { code: 'CALLS_CONNECTION_EXISTS' });
@@ -468,36 +471,37 @@ describe('Calls session device handoff', () => {
 		expect(session.controls.value.busy).toBe(false);
 	});
 
-	test('microphone settings toggle noise suppression and keep the old choice on failure', async () => {
+	test('microphone settings select suppression modes and retain the previous mode on failure', async () => {
 		fixture.role = 'host';
 		await session.join('room-a', true);
 		await session.openDeviceMenu('microphone', new MouseEvent('click'));
-		const toggle = fixture.popupMenu.mock.calls[0][0].at(-1);
-		expect(toggle.type).toBe('switch');
-		expect(toggle.ref.value).toBe(true);
-		toggle.ref.value = false;
-		await vi.waitFor(() => expect(session.noiseSuppression.value).toBe(false));
-		expect(fixture.controllers[0].setNoiseSuppression).toHaveBeenLastCalledWith(false);
+		await fixture.popupMenu.mock.calls[0][0].at(-1).action();
+		const settings = fixture.popup.mock.calls[0][1];
+		expect(settings.getSettings().noiseSuppression).toBe('rnnoise');
+		await settings.setNoiseSuppression('webrtc');
+		expect(fixture.controllers[0].setNoiseSuppression).toHaveBeenLastCalledWith('webrtc');
+		expect(settings.getSettings().noiseSuppression).toBe('webrtc');
 		const error = new Error('Unsupported audio constraint');
 		const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		fixture.controllers[0].setNoiseSuppression.mockImplementationOnce(() => { throw error; });
-		toggle.ref.value = true;
-		await vi.waitFor(() => expect(fixture.alert).toHaveBeenCalledWith({ type: 'error', text: 'Something went wrong' }));
-		expect(toggle.ref.value).toBe(false);
+		fixture.controllers[0].setNoiseSuppression.mockRejectedValueOnce(error);
+		await settings.setNoiseSuppression('rnnoise');
+		expect(settings.getSettings().noiseSuppression).toBe('webrtc');
+		expect(fixture.alert).toHaveBeenCalledWith({ type: 'error', text: 'Something went wrong' });
 		expect(log).toHaveBeenCalledWith('[Calls] Noise suppression change failed', error);
 		log.mockRestore();
 	});
 
-	test('microphone suppression switch reflects rapid toggles immediately', async () => {
+	test('input sensitivity is applied immediately and reused on reconnection', async () => {
 		fixture.role = 'host';
 		await session.join('room-a', true);
-		await session.openDeviceMenu('microphone', new MouseEvent('click'));
-		const toggle = fixture.popupMenu.mock.calls[0][0].at(-1);
-		for (const enabled of [false, true, false, true]) {
-			toggle.ref.value = enabled;
-			expect(toggle.ref.value).toBe(enabled);
-			expect(fixture.controllers[0].setNoiseSuppression).toHaveBeenLastCalledWith(enabled);
-		}
+		await session.openAudioSettings();
+		const settings = fixture.popup.mock.calls[0][1];
+		settings.setInputSensitivity(-45);
+		expect(fixture.controllers[0].setInputSensitivity).toHaveBeenLastCalledWith(-45);
+		expect(settings.getSettings().inputSensitivity).toBe(-45);
+		fixture.revoked[0]({ reason: 'stale-generation', ...fixture.controllers[0].connectionIdentity });
+		await vi.waitFor(() => expect(fixture.controllers).toHaveLength(2));
+		expect(fixture.controllers[1].setInputSensitivity).toHaveBeenCalledWith(-45);
 	});
 
 	test('screen quality menu updates the sender and retains the previous selection on failure', async () => {

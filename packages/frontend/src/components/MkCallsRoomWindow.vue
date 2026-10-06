@@ -114,7 +114,6 @@ import type * as Misskey from 'misskey-js';
 import { url } from '@@/js/config.js';
 import CallsVideo from '@/components/MkCallsVideo.vue';
 import MkModal from '@/components/MkModal.vue';
-import MkCallsConnectionInfo from '@/components/MkCallsConnectionInfo.vue';
 import MkCallsControls from '@/components/MkCallsControls.vue';
 import MkCallsRoomSummary from '@/components/MkCallsRoomSummary.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -530,7 +529,7 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 
 function openConnectionInfo(): void {
 	if (popoutWindow != null) window.focus();
-	const { dispose } = os.popup(MkCallsConnectionInfo, { getInfo: session.getConnectionInfo }, { closed: () => dispose() });
+	void session.openAudioSettings('statistics');
 }
 
 </script>

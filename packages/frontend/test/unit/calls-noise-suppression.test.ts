@@ -15,6 +15,7 @@ vi.mock('@sapphi-red/web-noise-suppressor', () => ({
 	RnnoiseWorkletNode: class { constructor() { return fixture.processor; } },
 }));
 
+const gate = { connect: vi.fn(), disconnect: vi.fn(), port: { onmessage: null }, parameters: new Map([['threshold', { value: -100 }]]) };
 const source = { connect: vi.fn(), disconnect: vi.fn() };
 const track = { stop: vi.fn(), contentHint: '' } as unknown as MediaStreamTrack;
 const destination = { channelCount: 2, stream: { getAudioTracks: () => [track] } };
@@ -41,7 +42,7 @@ beforeEach(() => {
 	vi.stubGlobal('AudioContext', vi.fn(class {
 		constructor() { return context; }
 	}));
-	vi.stubGlobal('AudioWorkletNode', class {});
+	vi.stubGlobal('AudioWorkletNode', class { constructor() { return gate; } });
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -54,13 +55,14 @@ describe('Calls RNNoise audio graph', () => {
 		expect(fixture.load).toHaveBeenCalledWith({ url: expect.stringContaining('rnnoise.wasm'), simdUrl: expect.stringContaining('rnnoise_simd.wasm') }, { signal: abort.signal });
 		expect(context.audioWorklet.addModule).toHaveBeenCalledWith(expect.stringContaining('workletProcessor.js'));
 		expect(context.resume).toHaveBeenCalledOnce();
-		expect(fixture.processor.connect).toHaveBeenCalledWith(destination);
+		expect(fixture.processor.connect).toHaveBeenCalledWith(gate);
+		expect(gate.connect).toHaveBeenCalledWith(destination);
 		expect(destination.channelCount).toBe(1);
-		processing.setEnabled(true);
+		await processing.setEnabled(true);
 		expect(source.connect).toHaveBeenLastCalledWith(fixture.processor);
-		processing.setEnabled(false);
-		expect(source.connect).toHaveBeenLastCalledWith(destination);
-		processing.setEnabled(true);
+		await processing.setEnabled(false);
+		expect(source.connect).toHaveBeenLastCalledWith(gate);
+		await processing.setEnabled(true);
 		expect(processing.track).toBe(track);
 		expect(track.stop).not.toHaveBeenCalled();
 		expect(fixture.processor.connect).toHaveBeenCalledTimes(2);
@@ -97,13 +99,24 @@ describe('Calls RNNoise audio graph', () => {
 	test('a processor error bypasses RNNoise without replacing the output or interrupting the call', async () => {
 		const onError = vi.fn();
 		const processing = await createCallsNoiseSuppression(input, onError, new AbortController().signal);
-		processing.setEnabled(true);
+		await processing.setEnabled(true);
 		fixture.processor.onprocessorerror?.();
 		expect(onError).toHaveBeenCalledWith(expect.any(Error));
-		expect(source.connect).toHaveBeenLastCalledWith(destination);
+		expect(source.connect).toHaveBeenLastCalledWith(gate);
 		expect(processing.track).toBe(track);
 		expect(track.stop).not.toHaveBeenCalled();
-		expect(() => processing.setEnabled(true)).toThrow('RNNoise processor is unavailable');
+		await expect(processing.setEnabled(true)).rejects.toThrow('RNNoise processor is unavailable');
+		processing.close();
+	});
+
+	test('bypass mode loads RNNoise only when enabled and adjusts the gate in place', async () => {
+		const processing = await createCallsNoiseSuppression(input, vi.fn(), new AbortController().signal, { rnnoise: false, inputSensitivity: -45 });
+		expect(fixture.load).not.toHaveBeenCalled();
+		processing.setInputSensitivity(-35);
+		expect(gate.parameters.get('threshold')?.value).toBe(-35);
+		await processing.setEnabled(true);
+		expect(fixture.load).toHaveBeenCalledOnce();
+		expect(processing.track).toBe(track);
 		processing.close();
 	});
 

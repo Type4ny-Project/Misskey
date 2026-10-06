@@ -73,7 +73,7 @@ describe('CallsMediaController', () => {
 	beforeEach(() => {
 		FakePeerConnection.instances = [];
 		noiseSuppressionMock.mockReset();
-		noiseSuppressionMock.mockImplementation(async (stream: MediaStream) => ({ track: stream.getAudioTracks()[0], setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() }));
+		noiseSuppressionMock.mockImplementation(async (stream: MediaStream) => ({ track: stream.getAudioTracks()[0], setInputSensitivity: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() }));
 		apiMock.mockReset();
 		apiMock.mockImplementation(async (endpoint: string) => {
 			if (endpoint === 'calls/media/turn-credentials') return null;
@@ -321,7 +321,7 @@ describe('CallsMediaController', () => {
 	test('rapid noise suppression toggles preserve the sender, mute and recording track without recapturing', async () => {
 		const tracks = Array.from({ length: 2 }, () => makeTrack('audio'));
 		const output = makeTrack('audio');
-		const processing = { track: output, setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
+		const processing = { track: output, setInputSensitivity: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
 		noiseSuppressionMock.mockResolvedValueOnce(processing);
 		const getUserMedia = vi.fn();
 		for (const track of tracks) getUserMedia.mockResolvedValueOnce(stream(track));
@@ -333,10 +333,15 @@ describe('CallsMediaController', () => {
 		const sender = FakePeerConnection.instances[0].sender;
 		sender.replaceTrack.mockClear();
 		controller.setMuted(true);
-		controller.setNoiseSuppression(false);
-		controller.setNoiseSuppression(true);
-		controller.setNoiseSuppression(false);
-		expect(processing.setEnabled.mock.calls.map(([enabled]) => enabled)).toEqual([true, false, true, false]);
+		await controller.setNoiseSuppression('none');
+		await controller.setNoiseSuppression('rnnoise');
+		await controller.setNoiseSuppression('none');
+		await controller.setNoiseSuppression('webrtc');
+		expect(tracks[0].applyConstraints).toHaveBeenLastCalledWith({ noiseSuppression: true });
+		await controller.setNoiseSuppression('none');
+		controller.setInputSensitivity(-45);
+		expect(processing.setInputSensitivity).toHaveBeenLastCalledWith(-45);
+		expect(processing.setEnabled.mock.calls.map(([enabled]) => enabled)).toEqual([true, false, true, false, false, false]);
 		expect(getUserMedia).toHaveBeenCalledTimes(1);
 		expect(sender.replaceTrack).not.toHaveBeenCalled();
 		expect(sender.track).toBe(output);
@@ -350,7 +355,7 @@ describe('CallsMediaController', () => {
 		expect(replacement.setEnabled).toHaveBeenLastCalledWith(false);
 		expect(processing.close).toHaveBeenCalledOnce();
 		expect(tracks[0].stop).toHaveBeenCalledOnce();
-		controller.setNoiseSuppression(true);
+		await controller.setNoiseSuppression('rnnoise');
 		expect(getUserMedia).toHaveBeenCalledTimes(2);
 		expect(tracks[1].enabled).toBe(false);
 		expect(apiMock.mock.calls.filter(([endpoint]) => endpoint === 'calls/media/session/create')).toHaveLength(sessionCalls);
@@ -361,14 +366,14 @@ describe('CallsMediaController', () => {
 
 	test('uses the latest suppression and mute settings when RNNoise finishes loading', async () => {
 		const raw = makeTrack('audio');
-		const processing = { track: makeTrack('audio'), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
+		const processing = { track: makeTrack('audio'), setInputSensitivity: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
 		let finishLoading!: (value: typeof processing) => void;
 		noiseSuppressionMock.mockImplementationOnce(() => new Promise(resolve => { finishLoading = resolve; }));
 		installBrowserMedia(vi.fn().mockResolvedValue(stream(raw)));
 		const controller = new CallsMediaController('room-a', 'speaker');
 		const connecting = controller.connect();
 		await vi.waitFor(() => expect(finishLoading).toBeTypeOf('function'));
-		controller.setNoiseSuppression(false);
+		await controller.setNoiseSuppression('none');
 		controller.setMuted(true);
 		finishLoading(processing);
 		await connecting;
@@ -380,7 +385,7 @@ describe('CallsMediaController', () => {
 
 	test('leaving during RNNoise loading releases capture and never publishes it', async () => {
 		const raw = makeTrack('audio');
-		const processing = { track: makeTrack('audio'), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
+		const processing = { track: makeTrack('audio'), setInputSensitivity: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
 		let finishLoading!: (value: typeof processing) => void;
 		noiseSuppressionMock.mockImplementationOnce(() => new Promise(resolve => { finishLoading = resolve; }));
 		installBrowserMedia(vi.fn().mockResolvedValue(stream(raw)));
@@ -406,8 +411,8 @@ describe('CallsMediaController', () => {
 		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, undefined, undefined, false, { localTrack: vi.fn(), noiseSuppressionChanged: changed, remoteRemoved: vi.fn(), error: vi.fn() });
 		await controller.connect();
 		expect(FakePeerConnection.instances[0].sender.track).toBe(raw);
-		expect(changed).toHaveBeenCalledWith(false);
-		expect(() => controller.setNoiseSuppression(true)).toThrow('RNNoise is unavailable');
+		expect(changed).toHaveBeenCalledWith('none');
+		await expect(controller.setNoiseSuppression('rnnoise')).rejects.toThrow('RNNoise is unavailable');
 		expect(raw.stop).not.toHaveBeenCalled();
 		await controller.close();
 		warning.mockRestore();
@@ -415,14 +420,14 @@ describe('CallsMediaController', () => {
 
 	test('failed microphone replacement releases the new processor and preserves the old muted audio', async () => {
 		const tracks = [makeTrack('audio'), makeTrack('audio')];
-		const processors = tracks.map(() => ({ track: makeTrack('audio'), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() }));
+		const processors = tracks.map(() => ({ track: makeTrack('audio'), setInputSensitivity: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() }));
 		noiseSuppressionMock.mockResolvedValueOnce(processors[0]).mockResolvedValueOnce(processors[1]);
 		installBrowserMedia(vi.fn().mockResolvedValueOnce(stream(tracks[0])).mockResolvedValueOnce(stream(tracks[1])));
 		const microphoneTrack = vi.fn();
 		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, undefined, undefined, false, { localTrack: vi.fn(), microphoneTrack, remoteRemoved: vi.fn(), error: vi.fn() });
 		await controller.connect();
 		controller.setMuted(true);
-		controller.setNoiseSuppression(false);
+		await controller.setNoiseSuppression('none');
 		FakePeerConnection.instances[0].sender.replaceTrack.mockRejectedValueOnce(new Error('Replacement failed'));
 		await expect(controller.switchMicrophone('other-mic')).rejects.toThrow('Replacement failed');
 		expect(processors[1].close).toHaveBeenCalledOnce();
@@ -432,7 +437,7 @@ describe('CallsMediaController', () => {
 		expect(controller.localTrack).toBe(processors[0].track);
 		expect(controller.localTrack?.enabled).toBe(false);
 		expect(microphoneTrack).toHaveBeenLastCalledWith(processors[0].track);
-		controller.setNoiseSuppression(true);
+		await controller.setNoiseSuppression('rnnoise');
 		expect(processors[0].setEnabled).toHaveBeenLastCalledWith(true);
 		await controller.close();
 	});

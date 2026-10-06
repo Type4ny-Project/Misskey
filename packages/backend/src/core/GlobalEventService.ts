@@ -21,6 +21,7 @@ import type { MiWebhook } from '@/models/Webhook.js';
 import type { MiSystemWebhook } from '@/models/SystemWebhook.js';
 import type { MiMeta } from '@/models/Meta.js';
 import { MiAvatarDecoration, MiChatMessage, MiChatRoom, MiReversiGame, MiRole, MiRoleAssignment } from '@/models/_.js';
+import type { WatchTogetherSnapshot } from '@/core/calls/CallsWatchTogetherService.js';
 import type { MiCallsRoom } from '@/models/CallsRoom.js';
 import type { Packed } from '@/misc/json-schema.js';
 import { DI } from '@/di-symbols.js';
@@ -36,6 +37,7 @@ type CallsParticipantWithUser = Packed<'CallsParticipant'> & {
 	user: (Packed<'UserLite'> & { isFollowing: boolean; isFollowed: boolean }) | null;
 };
 export interface CallsRoomEventTypes {
+	watchTogether: CallsRoomEventBase & { state: WatchTogetherSnapshot };
 	title: CallsRoomEventBase & { title: string };
 	lifecycle: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled'; reason?: 'host-timeout' };
 	participant: CallsRoomEventBase & { participantId: string; action: 'joined' | 'left' | 'removed' | 'updated'; participant?: CallsParticipantWithUser; moderatorUserIds?: string[] };

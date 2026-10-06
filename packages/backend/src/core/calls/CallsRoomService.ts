@@ -745,7 +745,7 @@ export class CallsRoomService implements OnModuleInit, OnApplicationShutdown {
 		this.callsTelemetryService.lifecycle({ action: 'participant-removed', roomId, participantId: participant.id, reason: 'moderation' });
 	}
 
-	private async assertCanModerateParticipants(actor: MiUser, room: MiCallsRoom): Promise<void> {
+	public async assertCanModerateParticipants(actor: MiUser, room: MiCallsRoom): Promise<void> {
 		if (room.state !== 'open') throw new CallsRoomError('invalid-state');
 		if (room.ownerUserId === actor.id || await this.roleService.isModerator(actor)) return;
 		if (!room.moderatorUserIds.includes(actor.id) || !(await this.callsParticipantsRepository.existsBy({ roomId: room.id, userId: actor.id, state: 'active' }))) throw new CallsRoomError('access-denied');

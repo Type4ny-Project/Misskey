@@ -90,6 +90,7 @@ import { LoginBonusService } from './LoginBonusService.js';
 import { EventService } from './EventService.js';
 import { CallsLiveConnectionService } from './calls/CallsLiveConnectionService.js';
 import { CallsRoomService } from './calls/CallsRoomService.js';
+import { CallsWatchTogetherService } from './calls/CallsWatchTogetherService.js';
 import { CloudflareRealtimeClient } from './calls/CloudflareRealtimeClient.js';
 import { CallsMediaBindingService } from './calls/CallsMediaBindingService.js';
 import { CallsMediaService } from './calls/CallsMediaService.js';
@@ -427,6 +428,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		LoginBonusService,
 		EventService,
 		CallsRoomService,
+		CallsWatchTogetherService,
 		CallsLiveConnectionService,
 		CloudflareRealtimeClient,
 		CallsMediaBindingService,
@@ -762,6 +764,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 
 		EventService,
 		CallsRoomService,
+		CallsWatchTogetherService,
 		CallsLiveConnectionService,
 		CloudflareRealtimeClient,
 		CallsMediaBindingService,

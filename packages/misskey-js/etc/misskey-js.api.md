@@ -901,6 +901,18 @@ type CallsUsersActiveRoomsRequest = operations['calls___users___active-rooms']['
 type CallsUsersActiveRoomsResponse = operations['calls___users___active-rooms']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type CallsWatchTogetherShowRequest = operations['calls___watch-together___show']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsWatchTogetherShowResponse = operations['calls___watch-together___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type CallsWatchTogetherUpdateRequest = operations['calls___watch-together___update']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type CallsWatchTogetherUpdateResponse = operations['calls___watch-together___update']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type Channel = components['schemas']['Channel'];
 
 // Warning: (ae-forgotten-export) The symbol "AnyOf" needs to be exported by the entry point index.d.ts
@@ -1221,6 +1233,9 @@ export type Channels = {
             roomId: string;
         };
         events: {
+            watchTogether: (payload: CallsRoomEventBase & {
+                state: CallsWatchTogetherShowResponse;
+            }) => void;
             title: (payload: CallsRoomEventBase & {
                 title: string;
             }) => void;
@@ -2234,6 +2249,10 @@ declare namespace entities {
         CallsRoomsUpdateTitleResponse,
         CallsUsersActiveRoomsRequest,
         CallsUsersActiveRoomsResponse,
+        CallsWatchTogetherShowRequest,
+        CallsWatchTogetherShowResponse,
+        CallsWatchTogetherUpdateRequest,
+        CallsWatchTogetherUpdateResponse,
         ChannelsCreateRequest,
         ChannelsCreateResponse,
         ChannelsFavoriteRequest,

@@ -8,6 +8,7 @@ import { REQUEST } from '@nestjs/core';
 import { bindThis } from '@/decorators.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
 import { CallsFeatureDisabledError, CallsRoomError, CallsRoomService } from '@/core/calls/CallsRoomService.js';
+import { CallsWatchTogetherService } from '@/core/calls/CallsWatchTogetherService.js';
 import { CallsMediaService } from '@/core/calls/CallsMediaService.js';
 import { CallsEntityService } from '@/core/entities/CallsEntityService.js';
 import { DI } from '@/di-symbols.js';
@@ -26,6 +27,7 @@ export class CallsRoomChannel extends Channel {
 	constructor(
 		@Inject(REQUEST) request: ChannelRequest,
 		private callsRoomService: CallsRoomService,
+		private watchTogetherService: CallsWatchTogetherService,
 		private callsMediaService: CallsMediaService,
 		@Inject(DI.callsParticipantsRepository)
 		private callsParticipantsRepository: CallsParticipantsRepository,
@@ -51,6 +53,7 @@ export class CallsRoomChannel extends Channel {
 		try {
 			room = await this.callsRoomService.getRoom(this.roomId);
 			await this.callsRoomService.assertCanAccess(this.user, room);
+			if (data.type === 'watchTogether') await this.watchTogetherService.assertAccess(this.user, this.roomId);
 		} catch (error) {
 			this.dispose();
 			if (error instanceof CallsFeatureDisabledError || (error instanceof CallsRoomError && error.code === 'access-denied')) {

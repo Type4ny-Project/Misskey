@@ -7,12 +7,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div :class="$style.root">
 	<div :class="$style.row">
 		<button class="_button" :class="$style.button" :disabled="state.busy && !testing" @click="testing ? stop() : start()">{{ testing ? i18n.ts._calls.stopMicrophoneTest : i18n.ts._calls.microphoneTest }}</button>
-		<div :class="$style.meter" role="meter" :aria-label="i18n.ts._calls.inputLevel" aria-valuemin="-100" aria-valuemax="0" :aria-valuenow="Math.round(level)">
-			<div :class="$style.fill" :style="{ width: `${Math.min(100, Math.max(0, level + 100))}%` }"></div>
+		<div v-if="testing" :class="$style.meter" role="meter" :aria-label="i18n.ts._calls.inputLevel" aria-valuemin="-100" aria-valuemax="0" :aria-valuenow="Math.round(testLevel)">
+			<div :class="$style.fill" :style="{ width: `${Math.min(100, Math.max(0, testLevel + 100))}%` }"></div>
 		</div>
 	</div>
 	<p :class="$style.description">{{ i18n.ts._calls.microphoneTestDescription }}</p>
-	<small>{{ Math.round(level) }} dBFS · {{ transmitting ? i18n.ts._calls.inputTransmitting : i18n.ts._calls.inputNotTransmitting }}</small>
+	<small v-if="testing">{{ testTransmitting ? i18n.ts._calls.inputTransmitting : i18n.ts._calls.inputNotTransmitting }}</small>
 </div>
 </template>
 
@@ -29,8 +29,6 @@ const state = computed(() => props.getSettings());
 const testing = ref(false);
 const testLevel = ref(-100);
 const testTransmitting = ref(false);
-const level = computed(() => testing.value ? testLevel.value : state.value.inputLevel);
-const transmitting = computed(() => testing.value ? testTransmitting.value : state.value.transmitting);
 let abort: AbortController | null = null;
 let stream: MediaStream | null = null;
 let processing: CallsNoiseSuppression | null = null;

@@ -26,6 +26,7 @@ test('loops the selected microphone through processing, adjusts volumes, and sto
 	const state = reactive({ autoGainControl: true, noiseSuppression: 'none' as const, inputSensitivity: -45, inputLevel: -100, transmitting: false, busy: false, microphones: [], cameras: [], outputDevices: [], microphoneId: 'usb-microphone', cameraId: '', outputDeviceId: '', inputVolume: 100, outputVolume: 50, supportsOutputDevice: false });
 	const view = render(MkCallsMicrophoneTest, { props: { getSettings: () => state } });
 	expect(capture).not.toHaveBeenCalled();
+	expect(view.queryByRole('meter')).toBeNull();
 	await fireEvent.click(view.getByRole('button', { name: 'Test microphone' }));
 	await waitFor(() => expect(play).toHaveBeenCalledOnce());
 	expect(capture).toHaveBeenCalledWith({ audio: { deviceId: { exact: 'usb-microphone' }, echoCancellation: true, autoGainControl: true, noiseSuppression: false }, video: false });
@@ -33,8 +34,11 @@ test('loops the selected microphone through processing, adjusts volumes, and sto
 	expect(options).toMatchObject({ rnnoise: false, inputSensitivity: -45, inputVolume: 100 });
 	options.onLevel?.(-30, true);
 	await waitFor(() => expect(view.getByLabelText('Input level').getAttribute('aria-valuenow')).toBe('-30'));
+	expect(view.queryByText(/dBFS/)).toBeNull();
 	state.inputVolume = 150;
 	await waitFor(() => expect(processor.setInputVolume).toHaveBeenCalledWith(150));
+	await fireEvent.click(view.getByRole('button', { name: 'Stop' }));
+	expect(view.queryByRole('meter')).toBeNull();
 	view.unmount();
 	expect(processor.close).toHaveBeenCalledOnce();
 	expect(track.stop).toHaveBeenCalledOnce();

@@ -529,7 +529,7 @@ watch(roomVideos, videos => { if (!videos.some(video => video.id === focusedVide
 
 function openConnectionInfo(): void {
 	if (popoutWindow != null) window.focus();
-	void session.openAudioSettings('statistics');
+	void session.openAudioSettings('general');
 }
 
 </script>

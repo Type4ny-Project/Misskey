@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <MkModalWindow ref="dialog" :width="800" :height="780" @close="close" @esc="close" @closed="emit('closed')">
-	<template #header><i class="ti ti-adjustments" aria-hidden="true"></i> {{ i18n.ts._calls.settings }}</template>
+	<template #header><i class="ti ti-settings" aria-hidden="true"></i> {{ i18n.ts._calls.settings }}</template>
 	<div :class="$style.layout">
 		<nav :class="$style.sidebar" :aria-label="i18n.ts._calls.settings">
 			<button class="_button" :class="{ [$style.active]: page === 'general' }" :aria-current="page === 'general' ? 'page' : undefined" @click="page = 'general'"><i class="ti ti-adjustments" aria-hidden="true"></i> {{ i18n.ts._calls.generalSettings }}</button>

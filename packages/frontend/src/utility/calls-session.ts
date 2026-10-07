@@ -17,6 +17,7 @@ import { miLocalStorage } from '@/local-storage.js';
 import { i18n } from '@/i18n.js';
 import { alert, confirm, popup, popupMenu, toast } from '@/os.js';
 import { misskeyApi, misskeyApiKeepalive } from '@/utility/misskey-api.js';
+import { CallsAudioOutput } from '@/utility/calls-audio-output.js';
 import { playMisskeySfx } from '@/utility/sound.js';
 import { callsScreenWindows, clearCallsScreenWindow, clearCallsScreenWindows, showCallsScreenWindow } from '@/utility/calls-screen-window.js';
 
@@ -79,7 +80,9 @@ const reconnectCandidate = ref<CallsReconnectCandidate | null>(null);
 const reconnectRoomState = ref<'checking' | 'open' | 'unavailable'>('checking');
 const reconnectSecondsRemaining = ref(0);
 const speakerRequestResult = ref<'rejected' | null>(null);
-const remoteAudio = new Map<string, { participantId: string; element: HTMLAudioElement; playback: Promise<void>; screenPublicationId?: string }>();
+let audioOutput: CallsAudioOutput | null = null;
+let audioPlayback = Promise.resolve();
+const remoteAudio = new Map<string, { participantId: string; track: MediaStreamTrack; screenPublicationId?: string }>();
 const participantVolumes = shallowRef(new Map<string, number>());
 const localVideos = shallowRef(new Map<string, MediaStream>());
 const screenVolumes = shallowRef(new Map<string, number>());
@@ -210,8 +213,7 @@ function disposeConnection(): void {
 }
 
 function removeRemoteTrack(publicationId: string): void {
-	const audio = remoteAudio.get(publicationId)?.element;
-	if (audio != null) { audio.pause(); audio.srcObject = null; audio.remove(); }
+	audioOutput?.remove(publicationId);
 	remoteAudio.delete(publicationId);
 	screenAudioIds.value = new Set([...remoteAudio.values()].flatMap(item => item.screenPublicationId == null ? [] : [item.screenPublicationId]));
 	const next = new Map(remoteVideos.value);
@@ -224,9 +226,9 @@ function getParticipantVolume(userId: string): number {
 }
 
 function applyParticipantVolumes(): void {
-	for (const { participantId, element, screenPublicationId } of remoteAudio.values()) {
+	for (const [id, { participantId, screenPublicationId }] of remoteAudio) {
 		const participant = participants.value.find(item => item.id === participantId);
-		element.volume = (outputVolume.value / 100) * (screenPublicationId != null ? getScreenVolume(screenPublicationId) / 100 : participant == null ? 1 : getParticipantVolume(participant.userId) / 100);
+		audioOutput?.setVolume(id, (outputVolume.value / 100) * (screenPublicationId != null ? getScreenVolume(screenPublicationId) / 100 : participant == null ? 1 : getParticipantVolume(participant.userId) / 100));
 	}
 }
 
@@ -248,23 +250,30 @@ function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublica
 	removeRemoteTrack(publication.id);
 	if (track.kind === 'video' && publication.mediaSource !== 'microphone') {
 		remoteVideos.value = new Map(remoteVideos.value).set(publication.id, { participantId: publication.participantId, source: publication.mediaSource, stream: new MediaStream([track]) });
-		track.addEventListener('ended', () => removeRemoteTrack(publication.id), { once: true });
+		track.addEventListener('ended', () => {
+			if (remoteVideos.value.get(publication.id)?.stream.getVideoTracks()[0] === track) removeRemoteTrack(publication.id);
+		}, { once: true });
 		return;
 	}
 	if (track.kind !== 'audio') return;
-	const audio = new Audio();
-	audio.hidden = true;
-	audio.srcObject = new MediaStream([track]);
-	const playback = (async () => {
-		if (supportsOutputDevice) await audio.setSinkId(selectedOutputDevice.value);
-		await audio.play();
-	})().catch(error => { console.warn('[Calls] Audio playback failed', error); needsAudioResume.value = true; });
-	remoteAudio.set(publication.id, { participantId: publication.participantId, element: audio, playback, screenPublicationId: publication.screenPublicationId });
+	if (audioOutput == null) {
+		const output = new CallsAudioOutput(suspended => { needsAudioResume.value = suspended; });
+		audioOutput = output;
+		audioPlayback = (async () => {
+			if (supportsOutputDevice) await output.setSinkId(selectedOutputDevice.value);
+			await output.play();
+		})().catch(error => {
+			if (audioOutput !== output) return;
+			console.warn('[Calls] Audio playback failed', error);
+			needsAudioResume.value = true;
+		});
+	}
+	audioOutput.add(publication.id, track);
+	remoteAudio.set(publication.id, { participantId: publication.participantId, track, screenPublicationId: publication.screenPublicationId });
 	if (publication.screenPublicationId != null) screenAudioIds.value = new Set(screenAudioIds.value).add(publication.screenPublicationId);
 	applyParticipantVolumes();
-	window.document.body.append(audio);
 	track.addEventListener('ended', () => {
-		removeRemoteTrack(publication.id);
+		if (remoteAudio.get(publication.id)?.track === track) removeRemoteTrack(publication.id);
 	}, { once: true });
 }
 
@@ -371,11 +380,15 @@ async function clearSession(): Promise<void> {
 	videoBusy.value = false;
 	for (const id of remoteAudio.keys()) removeRemoteTrack(id);
 	remoteAudio.clear();
+	const output = audioOutput;
+	audioOutput = null;
+	audioPlayback = Promise.resolve();
+	const closingOutput = output?.close();
 	participantVolumes.value = new Map();
 	localVideos.value = new Map();
 	remoteVideos.value = new Map();
 	needsAudioResume.value = false;
-	await controller?.close().catch(() => undefined);
+	await Promise.all([controller?.close().catch(() => undefined), closingOutput]);
 }
 
 function attachConnection(roomId: string): CallsRoomConnection {
@@ -469,7 +482,6 @@ async function reconnectMedia(): Promise<void> {
 	localVideos.value = new Map();
 	for (const id of remoteAudio.keys()) removeRemoteTrack(id);
 	remoteVideos.value = new Map();
-	needsAudioResume.value = false;
 	videoBusy.value = false;
 	await controller?.close().catch(() => undefined);
 	if (generation !== sessionGeneration) return;
@@ -695,7 +707,7 @@ async function setDevice(kind: 'microphone' | 'camera' | 'output', deviceId: str
 			prefer.commit('callsCamera', deviceId);
 		} else {
 			if (!supportsOutputDevice) throw new Error('Audio output selection is unavailable');
-			await Promise.all([...remoteAudio.values()].map(({ element }) => element.setSinkId(deviceId)));
+			await audioOutput?.setSinkId(deviceId);
 			selectedOutputDevice.value = deviceId;
 			prefer.commit('callsOutputDevice', deviceId);
 		}
@@ -808,14 +820,14 @@ function openScreenSettings(event: MouseEvent): void {
 }
 
 async function resumeAudio(): Promise<void> {
-	await Promise.all([...remoteAudio.values()].map(({ element }) => element.play()));
+	await audioOutput?.play();
 	needsAudioResume.value = false;
 	if (media.value != null) await announceMediaReady(media.value, sessionGeneration);
 }
 
 async function announceMediaReady(controller: CallsMediaController, generation: number): Promise<void> {
 	const identity = controller.connectionIdentity;
-	await Promise.all([...remoteAudio.values()].map(({ playback }) => playback));
+	await audioPlayback;
 	if (generation !== sessionGeneration || media.value !== controller || !mediaReady.value || needsAudioResume.value || identity == null) return;
 	if (controller.connectionIdentity?.generation !== identity.generation) return;
 	connection.value?.ready(identity.connectionId, identity.generation);

@@ -628,6 +628,44 @@ describe('CallsMediaController', () => {
 		description.mockRestore();
 	});
 
+	test('keeps a receiver reusable when a speaker leaves and another joins on the same mid', async () => {
+		installBrowserMedia(vi.fn());
+		const remote = makeTrack('audio');
+		vi.mocked(remote.stop).mockImplementation(() => { Object.assign(remote, { readyState: 'ended' }); });
+		const first = { id: 'first', participantId: 'participant-b', mediaKind: 'audio', mediaSource: 'microphone' };
+		const second = { ...first, id: 'second', participantId: 'participant-c' };
+		let publications = [first];
+		const fallback = apiMock.getMockImplementation()!;
+		apiMock.mockImplementation(async (endpoint, input) => {
+			if (endpoint === 'calls/media/reconcile') return { publications };
+			if (endpoint === 'calls/media/tracks/subscribe') return { subscriptions: [{ publicationId: publications[0].id, mid: '0' }], sessionDescription: null, requiresImmediateRenegotiation: false };
+			return fallback(endpoint, input);
+		});
+		const original = FakePeerConnection.prototype.addTransceiver;
+		const add = vi.spyOn(FakePeerConnection.prototype, 'addTransceiver').mockImplementation(function (this: FakePeerConnection, kind) {
+			const transceiver = original.call(this, kind);
+			Object.assign(transceiver.receiver, { track: remote });
+			return transceiver;
+		});
+		const received = vi.fn();
+		const removed = vi.fn();
+		const controller = new CallsMediaController('room-a', 'listener', undefined, received, undefined, undefined, false, { localTrack: vi.fn(), remoteRemoved: removed, error: vi.fn() });
+		try {
+			await controller.connect();
+			publications = [];
+			await controller.reconcile();
+			expect(removed).toHaveBeenCalledWith('first');
+			expect(remote.stop).not.toHaveBeenCalled();
+			publications = [second];
+			await controller.reconcile();
+			expect(remote.readyState).toBe('live');
+			expect(received).toHaveBeenLastCalledWith(remote, second);
+		} finally {
+			await controller.close();
+			add.mockRestore();
+		}
+	});
+
 	test('listener connects without requesting microphone permission', async () => {
 		const getUserMedia = vi.fn();
 		installBrowserMedia(getUserMedia);

@@ -10,6 +10,9 @@ import type { CallsRemotePublication } from '@/utility/calls-media.js';
 const fixture = vi.hoisted(() => ({
 	policies: { canJoinCalls: true, canSpeakInCalls: true, canPublishCallsVideo: true, canShareCallsScreen: true },
 	api: vi.fn(),
+	audioGains: [] as Array<{ gain: { value: number }; connect: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }>,
+	audioSources: [] as Array<{ connect: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }>,
+	closeAudio: vi.fn(),
 	toast: vi.fn(),
 	playSound: vi.fn(),
 	alert: vi.fn(),
@@ -131,6 +134,26 @@ describe('Calls session device handoff', () => {
 		fixture.controllers.length = 0;
 		fixture.connections.length = 0;
 		fixture.remoteTrackCallbacks.length = 0;
+		fixture.audioGains.length = 0;
+		fixture.audioSources.length = 0;
+		fixture.closeAudio.mockReset().mockResolvedValue(undefined);
+		vi.stubGlobal('AudioContext', class {
+			state = 'running';
+			onstatechange: (() => void) | null = null;
+			resume = vi.fn().mockResolvedValue(undefined);
+			close = fixture.closeAudio;
+			createMediaStreamDestination() { return { stream: new MediaStream() }; }
+			createMediaStreamSource() {
+				const source = { connect: vi.fn(), disconnect: vi.fn() };
+				fixture.audioSources.push(source);
+				return source;
+			}
+			createGain() {
+				const gain = { gain: { value: 1 }, connect: vi.fn(), disconnect: vi.fn() };
+				fixture.audioGains.push(gain);
+				return gain;
+			}
+		});
 		Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { enumerateDevices: async () => [] } });
 		session = (await import('@/utility/calls-session.js')).useCallsSession();
 	});
@@ -176,7 +199,7 @@ describe('Calls session device handoff', () => {
 			await session.join('room-a', false);
 			expect(fixture.ready).not.toHaveBeenCalled();
 			if (blocked) {
-				expect(session.needsAudioResume.value).toBe(true);
+				await vi.waitFor(() => expect(session.needsAudioResume.value).toBe(true));
 				play.mockResolvedValue();
 				await session.resumeAudio();
 			} else {
@@ -373,28 +396,28 @@ describe('Calls session device handoff', () => {
 			const receive = (id: string, participantId: string) => {
 				const track = Object.assign(new EventTarget(), { kind: 'audio' }) as MediaStreamTrack;
 				fixture.remoteTrackCallbacks[0](track, { id, participantId, mediaKind: 'audio', mediaSource: 'microphone' });
-				return document.querySelectorAll('audio')[document.querySelectorAll('audio').length - 1];
+				return fixture.audioGains.at(-1)!;
 			};
 			const audioB = receive('publication-b', 'participant-b');
 			const audioC = receive('publication-c', 'participant-c');
 			session.setOutputVolume(50);
-			expect(audioB.volume).toBe(0.5);
+			expect(audioB.gain.value).toBe(0.5);
 			session.setOutputVolume(100);
-			expect(audioB.volume).toBe(1);
+			expect(audioB.gain.value).toBe(1);
 			session.setParticipantVolume('user-b', 25);
-			expect(audioB.volume).toBe(0.25);
-			expect(audioC.volume).toBe(1);
+			expect(audioB.gain.value).toBe(0.25);
+			expect(audioC.gain.value).toBe(1);
 			const replacementB = receive('publication-b', 'participant-b');
-			expect(replacementB.volume).toBe(0.25);
-			expect(audioB.isConnected).toBe(false);
+			expect(replacementB.gain.value).toBe(0.25);
+			expect(audioB.disconnect).toHaveBeenCalledOnce();
 			session.setParticipantVolume('user-b', 0);
-			expect(audioC.volume).toBe(1);
+			expect(audioC.gain.value).toBe(1);
 			expect(session.getParticipantVolume('user-b')).toBe(0);
-			expect(replacementB.volume).toBe(0);
+			expect(replacementB.gain.value).toBe(0);
 			await session.resumeAudio();
-			expect(replacementB.volume).toBe(0);
+			expect(replacementB.gain.value).toBe(0);
 			session.setParticipantVolume('user-b', 100);
-			expect(replacementB.volume).toBe(1);
+			expect(replacementB.gain.value).toBe(1);
 			await session.leave();
 			expect(document.querySelector('audio')).toBeNull();
 			expect(session.getParticipantVolume('user-b')).toBe(100);
@@ -413,7 +436,7 @@ describe('Calls session device handoff', () => {
 			const receive = (id: string, screenPublicationId?: string) => {
 				const track = Object.assign(new EventTarget(), { kind: 'audio' }) as MediaStreamTrack;
 				fixture.remoteTrackCallbacks[0](track, { id, participantId: 'participant-b', mediaKind: 'audio', mediaSource: screenPublicationId == null ? 'microphone' : 'screen', screenPublicationId });
-				return { track, audio: document.querySelectorAll('audio')[document.querySelectorAll('audio').length - 1] };
+				return { track, gain: fixture.audioGains.at(-1)! };
 			};
 			const microphone = receive('microphone');
 			const first = receive('audio-a', 'screen-a');
@@ -422,14 +445,14 @@ describe('Calls session device handoff', () => {
 			session.setScreenVolume('screen-a', 25);
 			session.setScreenVolume('screen-b', 75);
 			session.setParticipantVolume('user-b', 50);
-			expect(first.audio.volume).toBe(0.25);
-			expect(second.audio.volume).toBe(0.75);
-			expect(microphone.audio.volume).toBe(0.5);
+			expect(first.gain.gain.value).toBe(0.25);
+			expect(second.gain.gain.value).toBe(0.75);
+			expect(microphone.gain.gain.value).toBe(0.5);
 			const replacement = receive('audio-a', 'screen-a');
-			expect(replacement.audio.volume).toBe(0.25);
+			expect(replacement.gain.gain.value).toBe(0.25);
 			replacement.track.dispatchEvent(new Event('ended'));
 			expect(session.screenAudioIds.value).toEqual(new Set(['screen-b']));
-			expect(second.audio.isConnected).toBe(true);
+			expect(second.gain.disconnect).not.toHaveBeenCalled();
 			await session.leave();
 			expect(document.querySelector('audio')).toBeNull();
 			expect(session.getScreenVolume('screen-a')).toBe(100);
@@ -543,6 +566,46 @@ describe('Calls session device handoff', () => {
 		expect(fixture.controllers[0].switchMicrophone).toHaveBeenLastCalledWith('headset');
 		await session.leave();
 		expect(session.getAudioSettings()).toMatchObject({ microphoneId: 'headset', cameraId: 'usb-camera' });
+	});
+
+	test('reuses the unlocked mixed output when additional speakers arrive', async () => {
+		const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockRejectedValueOnce(new DOMException('Autoplay blocked', 'NotAllowedError')).mockResolvedValue(undefined);
+		vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+		await session.join('room-a', false);
+		const receive = (id: string) => fixture.remoteTrackCallbacks[0](Object.assign(new EventTarget(), { kind: 'audio' }) as MediaStreamTrack,
+			{ id, participantId: id, mediaKind: 'audio', mediaSource: 'microphone' });
+		receive('first');
+		await vi.waitFor(() => expect(session.needsAudioResume.value).toBe(true));
+		await session.resumeAudio();
+		const element = document.querySelector('audio');
+		const stream = element?.srcObject;
+		play.mockRejectedValue(new DOMException('A new playback would be blocked', 'NotAllowedError'));
+		receive('second');
+		receive('third');
+		await Promise.resolve();
+		expect(document.querySelectorAll('audio')).toHaveLength(1);
+		expect(element?.srcObject).toBe(stream);
+		expect(fixture.audioSources).toHaveLength(3);
+		for (const source of fixture.audioSources) expect(source.disconnect).not.toHaveBeenCalled();
+		expect(play).toHaveBeenCalledTimes(2);
+		expect(session.needsAudioResume.value).toBe(false);
+		await session.leave();
+		expect(fixture.closeAudio).toHaveBeenCalledOnce();
+	});
+
+	test('an old track ending does not remove the replacement publication', async () => {
+		vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+		vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+		await session.join('room-a', false);
+		const publication = { id: 'screen-audio', participantId: 'participant-b', mediaKind: 'audio', mediaSource: 'screen', screenPublicationId: 'screen' } as const;
+		const old = Object.assign(new EventTarget(), { kind: 'audio' }) as MediaStreamTrack;
+		const replacement = Object.assign(new EventTarget(), { kind: 'audio' }) as MediaStreamTrack;
+		fixture.remoteTrackCallbacks[0](old, publication);
+		fixture.remoteTrackCallbacks[0](replacement, publication);
+		old.dispatchEvent(new Event('ended'));
+		expect(session.screenAudioIds.value.has('screen')).toBe(true);
+		expect(document.querySelector('audio')).not.toBeNull();
+		await session.leave();
 	});
 
 	test('routes existing and new remote audio to the selected output device', async () => {

@@ -335,7 +335,7 @@ export class CallsMediaController {
 				this.receivedRemoteTracks.delete(publicationId);
 				for (const [mid, publication] of this.remotePublications) {
 					if (publication.id !== publicationId) continue;
-					this.peer.getTransceivers().find(transceiver => transceiver.mid === mid)?.receiver.track.stop();
+					// The SFU can reuse this receiver for the next publication; stop() is permanent.
 					this.remotePublications.delete(mid);
 				}
 				this.videoCallbacks?.remoteRemoved(publicationId);

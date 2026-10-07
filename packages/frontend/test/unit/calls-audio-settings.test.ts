@@ -15,7 +15,7 @@ vi.mock('@/components/MkModalWindow.vue', () => ({ default: { template: '<sectio
 vi.mock('@/i18n.js', () => ({ i18n: { ts: { _calls: { autoGainControl: 'Automatic gain control', autoGainControlDescription: 'Adjust loudness', settings: 'Call settings', audioSection: 'Audio', microphoneTest: 'Microphone test', stopMicrophoneTest: 'Stop test', microphoneTestDescription: 'Loopback', previewCamera: 'Preview camera', selectCamera: 'Select camera', generalSettings: 'General', statisticsSettings: 'Statistics', microphone: 'Microphone', camera: 'Camera', outputDevice: 'Speaker', systemDefaultDevice: 'Default', inputVolume: 'Input volume', outputVolume: 'Output volume', refreshDevices: 'Refresh devices', noiseSuppressionMode: 'Noise cancellation', rnnoiseMode: 'RNNoise', webrtcMode: 'WebRTC', noNoiseSuppression: 'None', noiseSuppressionDescription: 'Choose processing', inputSensitivity: 'Threshold', inputGateDisabled: 'All input', inputSensitivityDescription: 'Minimum volume', inputLevel: 'Input level', inputTransmitting: 'Transmitting', inputNotTransmitting: 'Below threshold or muted' } } } }));
 afterEach(cleanup);
 
-test('selects processing and threshold, shows the input meter, and disables changes while switching', async () => {
+test('selects processing and a static threshold, and disables changes while switching', async () => {
 	const state = reactive({ autoGainControl: true, noiseSuppression: 'rnnoise' as CallsNoiseSuppressionMode, inputSensitivity: -45, inputLevel: -32, transmitting: true, busy: false, microphones: [{ deviceId: 'mic-1', label: 'USB microphone' } as MediaDeviceInfo], cameras: [], outputDevices: [], microphoneId: '', cameraId: '', outputDeviceId: '', inputVolume: 100, outputVolume: 100, supportsOutputDevice: true });
 	const setNoiseSuppression = vi.fn(async (mode: CallsNoiseSuppressionMode) => { state.noiseSuppression = mode; });
 	const setInputSensitivity = vi.fn((value: number) => { state.inputSensitivity = value; });
@@ -37,7 +37,12 @@ test('selects processing and threshold, shows the input meter, and disables chan
 	await fireEvent.update(view.getByRole('slider', { name: /Threshold/ }), '-35');
 	expect(setInputSensitivity).toHaveBeenCalledWith(-35);
 	expect(view.getByText('-35 dBFS')).toBeTruthy();
-	expect(view.getByLabelText('Input level').getAttribute('aria-valuenow')).toBe('-32');
+	expect(view.queryByRole('meter')).toBeNull();
+	state.inputLevel = -14;
+	state.transmitting = false;
+	await nextTick();
+	expect(view.getByText('-35 dBFS')).toBeTruthy();
+	expect(view.queryByText('-14 dBFS')).toBeNull();
 	state.busy = true;
 	await nextTick();
 	expect((view.getByRole('combobox', { name: 'Noise cancellation' }) as HTMLSelectElement).disabled).toBe(true);

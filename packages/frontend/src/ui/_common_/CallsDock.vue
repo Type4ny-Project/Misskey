@@ -199,7 +199,7 @@ onMounted(() => window.addEventListener('pointerdown', onWindowPointerDown));
 onBeforeUnmount(() => window.removeEventListener('pointerdown', onWindowPointerDown));
 
 function openConnectionInfo(): void {
-	void session.openAudioSettings('statistics');
+	void session.openAudioSettings('general');
 }
 
 </script>

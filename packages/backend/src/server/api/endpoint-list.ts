@@ -428,6 +428,8 @@ export * as 'calls/media/tracks/close' from './endpoints/calls/media/close.js';
 export * as 'calls/media/reconcile' from './endpoints/calls/media/reconcile.js';
 export * as 'calls/media/turn-credentials' from './endpoints/calls/media/turn-credentials.js';
 export * as 'calls/media/credential/refresh' from './endpoints/calls/media/credential-refresh.js';
+export * as 'calls/watch-together/show' from './endpoints/calls/watch-together/show.js';
+export * as 'calls/watch-together/update' from './endpoints/calls/watch-together/update.js';
 export * as 'point/send' from './endpoints/point/send.js';
 export * as 'pinned-users' from './endpoints/pinned-users.js';
 export * as 'promo/read' from './endpoints/promo/read.js';

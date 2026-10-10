@@ -306,6 +306,7 @@ export type Channels = {
 			roomId: string;
 		};
 		events: {
+			watchTogether: (payload: CallsRoomEventBase & { state: import('./autogen/entities.js').CallsWatchTogetherShowResponse }) => void;
 			title: (payload: CallsRoomEventBase & { title: string }) => void;
 			lifecycle: (payload: CallsRoomEventBase & { state: 'scheduled' | 'open' | 'ended' | 'cancelled'; reason?: 'host-timeout' }) => void;
 			participant: (payload: CallsRoomEventBase & {

@@ -254,6 +254,10 @@ import type {
 	CallsRoomsUpdateTitleResponse,
 	CallsUsersActiveRoomsRequest,
 	CallsUsersActiveRoomsResponse,
+	CallsWatchTogetherShowRequest,
+	CallsWatchTogetherShowResponse,
+	CallsWatchTogetherUpdateRequest,
+	CallsWatchTogetherUpdateResponse,
 	ChannelsCreateRequest,
 	ChannelsCreateResponse,
 	ChannelsFavoriteRequest,
@@ -963,6 +967,8 @@ export type Endpoints = {
 	'calls/rooms/transfer-host': { req: CallsRoomsTransferHostRequest; res: CallsRoomsTransferHostResponse };
 	'calls/rooms/update-title': { req: CallsRoomsUpdateTitleRequest; res: CallsRoomsUpdateTitleResponse };
 	'calls/users/active-rooms': { req: CallsUsersActiveRoomsRequest; res: CallsUsersActiveRoomsResponse };
+	'calls/watch-together/show': { req: CallsWatchTogetherShowRequest; res: CallsWatchTogetherShowResponse };
+	'calls/watch-together/update': { req: CallsWatchTogetherUpdateRequest; res: CallsWatchTogetherUpdateResponse };
 	'channels/create': { req: ChannelsCreateRequest; res: ChannelsCreateResponse };
 	'channels/favorite': { req: ChannelsFavoriteRequest; res: EmptyResponse };
 	'channels/featured': { req: EmptyRequest; res: ChannelsFeaturedResponse };

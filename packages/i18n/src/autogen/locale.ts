@@ -15014,4 +15014,102 @@ export interface Locale extends ILocale {
          */
         "unknownError": string;
     };
+    "_watchTogether": {
+        /**
+         * Watch Together
+         */
+        "title": string;
+        /**
+         * YouTubeの動画を一緒に見る
+         */
+        "description": string;
+        /**
+         * YouTubeの動画URL
+         */
+        "videoUrl": string;
+        /**
+         * この動画を見る
+         */
+        "shareVideo": string;
+        /**
+         * YouTubeの動画URLを入力してください
+         */
+        "invalidUrl": string;
+        /**
+         * ホスト・モデレーターが動画を選ぶと、ここに表示されます
+         */
+        "empty": string;
+        /**
+         * ホスト・モデレーターの操作に同期します
+         */
+        "hostControls": string;
+        /**
+         * YouTubeの操作を共有中
+         */
+        "sharingControls": string;
+        /**
+         * 動画を変更
+         */
+        "changeVideo": string;
+        /**
+         * 今すぐ再生
+         */
+        "playNow": string;
+        /**
+         * キューに追加
+         */
+        "addToQueue": string;
+        /**
+         * キューから削除
+         */
+        "removeFromQueue": string;
+        /**
+         * 次に再生
+         */
+        "queue": string;
+        /**
+         * キューは空です。動画を追加すると、再生終了後に順番に再生します。
+         */
+        "emptyQueue": string;
+        /**
+         * キューに追加できるのは50本までです
+         */
+        "queueFull": string;
+        /**
+         * 視聴を開始
+         */
+        "startWatching": string;
+        /**
+         * YouTubeのプレーヤーに接続します。再生位置はルームに合わせます。
+         */
+        "startWatchingDescription": string;
+        /**
+         * 動画を閉じる
+         */
+        "clear": string;
+        /**
+         * 動画を再生できません。動画が非公開・削除済み、または埋め込みが許可されていない可能性があります。
+         */
+        "playerError": string;
+        /**
+         * 視聴状態を取得・更新できませんでした
+         */
+        "apiError": string;
+        /**
+         * ブラウザーが自動再生を止めました。「再生を許可」を押してください。
+         */
+        "autoplayBlocked": string;
+        /**
+         * 再生を許可
+         */
+        "allowPlayback": string;
+        /**
+         * YouTubeで開く
+         */
+        "openYouTube": string;
+        /**
+         * ルームが終了しました
+         */
+        "ended": string;
+    };
 }

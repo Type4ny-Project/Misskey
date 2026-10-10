@@ -7,6 +7,64 @@ export interface Locale extends ILocale {
      * 日本語
      */
     "_lang_": string;
+    "_accountShortcuts": {
+        /**
+         * キーボードショートカット
+         */
+        "title": string;
+        /**
+         * このアカウント専用の設定です。初期状態では未設定です。変更はすぐに保存され、反映されます。
+         */
+        "description": string;
+        /**
+         * タイムラインの切り替えは文字入力中には動作しません。公開範囲の選択は投稿フォームにフォーカスがあるときだけ動作し、通常の選択画面を開きます。利用できないタイムラインやチャンネル投稿では動作しません。
+         */
+        "instructions": string;
+        /**
+         * ホームタイムラインに切り替え
+         */
+        "timelineHome": string;
+        /**
+         * ローカルタイムラインに切り替え
+         */
+        "timelineLocal": string;
+        /**
+         * ソーシャルタイムラインに切り替え
+         */
+        "timelineSocial": string;
+        /**
+         * 投稿の公開範囲を選択
+         */
+        "postVisibility": string;
+        /**
+         * 未設定（押して設定）
+         */
+        "unassigned": string;
+        /**
+         * キーの組み合わせを押してください
+         */
+        "recording": string;
+        /**
+         * ボタンを押してから、Ctrl・Alt・Metaのいずれかと英字または数字を組み合わせて押してください（Shiftも併用できます）。キーは物理的な位置で識別します。Escape、Tab、またはフォーカスを移すとキャンセルします。一般的な編集・ブラウザー操作やAltGrと競合する組み合わせは使えません。OSやブラウザーが優先する組み合わせは動作しない場合があります。
+         */
+        "captureHelp": string;
+        /**
+         * この組み合わせは使用できません。別のキーの組み合わせを押してください。
+         */
+        "invalid": string;
+        /**
+         * 「{action}」で使用中です。別の組み合わせを選ぶか、先にその設定を解除してください。
+         */
+        "conflict": ParameterizedString<"action">;
+        /**
+         * 「{action}」のショートカットを解除
+         */
+        "clearBinding": ParameterizedString<"action">;
+        /**
+         * ショートカットを保存しました
+         */
+        "saved": string;
+    };
     /**
      * ノートでつながるネットワーク
      */

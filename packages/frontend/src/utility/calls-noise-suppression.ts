@@ -76,7 +76,15 @@ export async function createCallsNoiseSuppression(stream: MediaStream, onError: 
 				source.connect(gate);
 			}
 		};
-		await setEnabled(options.rnnoise);
+		try {
+			await setEnabled(options.rnnoise);
+		} catch (error) {
+			signal.throwIfAborted();
+			// Keep the input gate and volume when only RNNoise fails to load.
+			failed = true;
+			await setEnabled(false);
+			onError(error);
+		}
 		const setMuted = (nextMuted: boolean) => {
 			if (closed || muted === nextMuted) return;
 			muted = nextMuted;

@@ -452,6 +452,27 @@ describe('CallsMediaController', () => {
 		warning.mockRestore();
 	});
 
+	test('keeps configured input processing when RNNoise fails during initialization', async () => {
+		const raw = makeTrack('audio');
+		const processing = { track: makeTrack('audio'), setInputSensitivity: vi.fn(), setInputVolume: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() };
+		noiseSuppressionMock.mockImplementationOnce(async (_stream, onError) => {
+			onError(new Error('RNNoise download failed'));
+			return processing;
+		});
+		installBrowserMedia(vi.fn().mockResolvedValue(stream(raw)));
+		const changed = vi.fn();
+		const controller = new CallsMediaController('room-a', 'speaker', undefined, undefined, undefined, undefined, false, { localTrack: vi.fn(), noiseSuppressionChanged: changed, remoteRemoved: vi.fn(), error: vi.fn() });
+		controller.setInputSensitivity(-45);
+		controller.setInputVolume(50);
+		await controller.connect();
+		expect(changed).toHaveBeenCalledWith('none');
+		expect(processing.setEnabled).toHaveBeenLastCalledWith(false);
+		expect(processing.setInputSensitivity).toHaveBeenCalledWith(-45);
+		expect(processing.setInputVolume).toHaveBeenCalledWith(50);
+		expect(controller.localTrack).toBe(processing.track);
+		await controller.close();
+	});
+
 	test('failed microphone replacement releases the new processor and preserves the old muted audio', async () => {
 		const tracks = [makeTrack('audio'), makeTrack('audio')];
 		const processors = tracks.map(() => ({ track: makeTrack('audio'), setInputSensitivity: vi.fn(), setInputVolume: vi.fn(), setEnabled: vi.fn(), setMuted: vi.fn(), close: vi.fn() }));
@@ -882,6 +903,55 @@ describe('CallsMediaController', () => {
 		expect(controller.state).toBe('connected');
 		expect(controller.localTrack).toBeNull();
 		expect(apiMock).toHaveBeenCalledWith('calls/media/session/create', expect.objectContaining({ roomId: 'room-a' }));
+		await controller.close();
+	});
+
+	test('retries the default microphone when a saved device is unavailable', async () => {
+		const microphone = makeTrack('audio');
+		const error = Object.assign(new DOMException('Saved device is missing', 'OverconstrainedError'), { constraint: 'deviceId' });
+		const getUserMedia = vi.fn().mockRejectedValueOnce(error).mockResolvedValue(stream(microphone));
+		installBrowserMedia(getUserMedia);
+		const controller = new CallsMediaController('room-a', 'host');
+		await controller.connect('missing-microphone');
+		expect(getUserMedia).toHaveBeenCalledTimes(2);
+		expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: expect.not.objectContaining({ deviceId: expect.anything() }) }));
+		expect(controller.localTrack).toBe(microphone);
+		await controller.close();
+	});
+
+	test('does not retry a missing device after capture was cancelled', async () => {
+		let failCapture!: (error: DOMException) => void;
+		const getUserMedia = vi.fn(() => new Promise<MediaStream>((_resolve, reject) => { failCapture = reject; }));
+		installBrowserMedia(getUserMedia);
+		const controller = new CallsMediaController('room-a', 'host');
+		const connecting = controller.connect('missing-microphone');
+		controller.cancelMicrophoneRequest();
+		await connecting;
+		failCapture(Object.assign(new DOMException('Missing device', 'OverconstrainedError'), { constraint: 'deviceId' }));
+		await new Promise(resolve => window.setTimeout(resolve, 0));
+		expect(getUserMedia).toHaveBeenCalledOnce();
+		await controller.close();
+	});
+
+	test('a cancelled capture cannot consume the next microphone request', async () => {
+		const oldTrack = makeTrack('audio');
+		const newTrack = makeTrack('audio');
+		let finishOld!: (value: MediaStream) => void;
+		let finishNew!: (value: MediaStream) => void;
+		installBrowserMedia(vi.fn()
+			.mockImplementationOnce(() => new Promise<MediaStream>(resolve => { finishOld = resolve; }))
+			.mockImplementationOnce(() => new Promise<MediaStream>(resolve => { finishNew = resolve; })));
+		const controller = new CallsMediaController('room-a', 'host');
+		const first = controller.connect();
+		controller.cancelMicrophoneRequest();
+		await first;
+		const second = controller.connect();
+		finishOld(stream(oldTrack));
+		await vi.waitFor(() => expect(oldTrack.stop).toHaveBeenCalledOnce());
+		finishNew(stream(newTrack));
+		await second;
+		expect(controller.localTrack).toBe(newTrack);
+		expect(newTrack.stop).not.toHaveBeenCalled();
 		await controller.close();
 	});
 

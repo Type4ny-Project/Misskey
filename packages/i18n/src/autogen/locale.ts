@@ -10685,6 +10685,10 @@ export interface Locale extends ILocale {
          */
         "screenAudioVolume": string;
         /**
+         * 画面共有の拡大率
+         */
+        "screenZoom": string;
+        /**
          * 共有を停止
          */
         "stopScreenSharing": string;

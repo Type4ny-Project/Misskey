@@ -3,13 +3,14 @@
 	* SPDX-License-Identifier: AGPL-3.0-only
 	*/
 
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 
 (async () => {
 	const bundle = await build({ entryPoints: [fileURLToPath(new URL('../src/utility/calls-audio-output.ts', import.meta.url))], bundle: true, format: 'iife', globalName: 'CallsOutput', write: false });
-	const browser = await chromium.launch({headless: true, executablePath: process.env.CALLS_CHROMIUM_EXECUTABLE});
+	const browserType = process.env.CALLS_BROWSER === 'webkit' ? webkit : chromium;
+	const browser = await browserType.launch({ headless: true, ignoreDefaultArgs: ['--mute-audio'], executablePath: process.env.CALLS_CHROMIUM_EXECUTABLE });
 	try {
 		const page = await browser.newPage();
 		await page.setContent('<button id="start">Start audio</button>');
@@ -46,7 +47,7 @@ import { fileURLToPath } from 'node:url';
 					const index = Math.round(frequency * probe.fftSize / input.sampleRate);
 					return Math.max(...data.slice(index-2,index+3));
 				};
-				return { hz440: level(440), hz880: level(880), hz1320: level(1320), elements: document.querySelectorAll('audio').length, sameStream: audio.srcObject === stream, paused: audio.paused, suspended, errors };
+				return { hz440: level(440), hz880: level(880), hz1320: level(1320), elements: [...document.querySelectorAll('audio')].filter(element => !element.muted).length, sameStream: audio.srcObject === stream, paused: audio.paused, suspended, errors };
 			});
 		};
 		const first = await sample();
@@ -61,10 +62,28 @@ import { fileURLToPath } from 'node:url';
 		await page.evaluate(() => addTone('third',1320));
 		const returned = await sample();
 		if (!(returned.hz1320 > -30 && returned.sameStream && !returned.paused && !returned.suspended && returned.errors.length === 0)) throw new Error('Return after empty failed: '+JSON.stringify(returned));
+		await page.evaluate(async () => {
+			output.remove('third');
+			window.sender = new RTCPeerConnection(); window.receiver = new RTCPeerConnection();
+			sender.onicecandidate = event => { if (event.candidate) receiver.addIceCandidate(event.candidate); };
+			receiver.onicecandidate = event => { if (event.candidate) sender.addIceCandidate(event.candidate); };
+			receiver.ontrack = event => output.add('rtc', event.track);
+			const oscillator = input.createOscillator(); oscillator.frequency.value = 440;
+			const destination = input.createMediaStreamDestination(); oscillator.connect(destination); oscillator.start();
+			sender.addTrack(destination.stream.getAudioTracks()[0]);
+			await sender.setLocalDescription(await sender.createOffer());
+			await receiver.setRemoteDescription(sender.localDescription);
+			await receiver.setLocalDescription(await receiver.createAnswer());
+			await sender.setRemoteDescription(receiver.localDescription);
+		});
+		await page.waitForFunction(() => receiver.connectionState === 'connected');
+		const rtc = await sample();
+		if (!(rtc.hz440 > -30 && rtc.sameStream && rtc.elements === 1)) throw new Error('Received WebRTC audio did not decode: '+JSON.stringify(rtc));
+		await page.evaluate(() => { sender.close(); receiver.close(); });
 		await page.evaluate(async () => { await output.close(); await input.close(); });
 		const elementsAfterClose = await page.locator('audio').count();
 		if (elementsAfterClose !== 0) throw new Error('Cleanup failed');
-		const result = { browser: browser.version(), first, both, muted, empty, returned, elementsAfterClose };
+		const result = { browser: browser.version(), first, both, muted, empty, returned, rtc, elementsAfterClose };
 		console.log(JSON.stringify(result,null,2));
 	} finally { await browser.close(); }
 })().catch(e=>{ console.error(e); process.exitCode=1; });

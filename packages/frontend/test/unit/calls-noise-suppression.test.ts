@@ -120,9 +120,19 @@ describe('Calls RNNoise audio graph', () => {
 		processing.close();
 	});
 
-	test('WASM load failure closes the AudioContext', async () => {
+	test('WASM load failure preserves the input gate and volume without RNNoise', async () => {
 		fixture.load.mockRejectedValueOnce(new Error('Download failed'));
-		await expect(createCallsNoiseSuppression(input, vi.fn(), new AbortController().signal)).rejects.toThrow('Download failed');
+		const onError = vi.fn();
+		const processing = await createCallsNoiseSuppression(input, onError, new AbortController().signal, { rnnoise: true, inputSensitivity: -45, inputVolume: 50 });
+		expect(onError).toHaveBeenCalledWith(expect.any(Error));
+		expect(context.close).not.toHaveBeenCalled();
+		expect(source.connect).toHaveBeenLastCalledWith(gate);
+		expect(processing.track).toBe(track);
+		processing.setInputSensitivity(-35);
+		processing.setInputVolume(75);
+		expect(gate.parameters.get('threshold')?.value).toBe(-35);
+		expect(gate.parameters.get('inputGain')?.value).toBe(0.75);
+		processing.close();
 		expect(context.close).toHaveBeenCalledOnce();
 	});
 

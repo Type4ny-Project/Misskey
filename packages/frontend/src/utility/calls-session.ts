@@ -260,7 +260,13 @@ function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublica
 		const output = new CallsAudioOutput(suspended => { needsAudioResume.value = suspended; });
 		audioOutput = output;
 		audioPlayback = (async () => {
-			if (supportsOutputDevice) await output.setSinkId(selectedOutputDevice.value);
+			if (supportsOutputDevice) {
+				try {
+					await output.setSinkId(selectedOutputDevice.value);
+				} catch (error) {
+					console.warn('[Calls] Saved output device unavailable; using default output', error);
+				}
+			}
 			await output.play();
 		})().catch(error => {
 			if (audioOutput !== output) return;

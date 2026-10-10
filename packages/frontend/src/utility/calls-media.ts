@@ -133,31 +133,44 @@ export class CallsMediaController {
 	}
 
 	private async acquireMicrophone(deviceId?: string): Promise<CallsMicrophone> {
-		const mediaRequest = navigator.mediaDevices.getUserMedia({
-			audio: {
-				deviceId: deviceId == null ? undefined : { exact: deviceId },
-				channelCount: { ideal: 1 }, echoCancellation: { ideal: true },
-				// Apply browser suppression only in WebRTC mode; echo cancellation stays enabled.
-				noiseSuppression: this.noiseSuppression === 'webrtc', autoGainControl: this.autoGainControl,
-			},
+		const audio = {
+			deviceId: deviceId == null ? undefined : { exact: deviceId },
+			channelCount: { ideal: 1 }, echoCancellation: { ideal: true },
+			// Apply browser suppression only in WebRTC mode; echo cancellation stays enabled.
+			noiseSuppression: this.noiseSuppression === 'webrtc', autoGainControl: this.autoGainControl,
+		};
+		let pending = true;
+		const mediaRequest = navigator.mediaDevices.getUserMedia({ audio }).catch(error => {
+			if (pending && deviceId != null && error instanceof DOMException && error.name === 'OverconstrainedError' && (!('constraint' in error) || error.constraint === 'deviceId')) {
+				return navigator.mediaDevices.getUserMedia({ audio: { ...audio, deviceId: undefined } });
+			}
+			throw error;
 		});
 		const stream = await new Promise<MediaStream>((resolve, reject) => {
+			const finish = () => {
+				pending = false;
+				window.clearTimeout(timeout);
+				if (this.cancelAcquisition === cancel) this.cancelAcquisition = null;
+			};
+			const cancel = () => {
+				finish();
+				reject(new DOMException('Microphone acquisition cancelled', 'AbortError'));
+			};
 			const timeout = window.setTimeout(() => {
-				this.cancelAcquisition = null;
+				finish();
 				reject(new DOMException('Microphone permission is still pending', 'TimeoutError'));
 			}, 30_000);
-			this.cancelAcquisition = () => reject(new DOMException('Microphone acquisition cancelled', 'AbortError'));
+			this.cancelAcquisition = cancel;
 			void mediaRequest.then(value => {
-				window.clearTimeout(timeout);
-				if (this.cancelAcquisition == null) {
+				if (!pending) {
 					for (const track of value.getTracks()) track.stop();
 					return;
 				}
-				this.cancelAcquisition = null;
+				finish();
 				resolve(value);
 			}, error => {
-				window.clearTimeout(timeout);
-				this.cancelAcquisition = null;
+				if (!pending) return;
+				finish();
 				reject(error);
 			});
 		});
@@ -166,11 +179,12 @@ export class CallsMediaController {
 		if (this.isClosed()) { track.stop(); throw new DOMException('Call ended', 'AbortError'); }
 		track.enabled = !this.muted;
 		const abort = new AbortController();
-		this.cancelAcquisition = () => { track.stop(); abort.abort(); };
+		const cancelProcessing = () => { track.stop(); abort.abort(); };
+		this.cancelAcquisition = cancelProcessing;
 		let processing: CallsNoiseSuppression | null = null;
 		try {
 			processing = await createCallsNoiseSuppression(stream, error => {
-				if (this.microphone?.track !== track) return;
+				if (this.microphone?.track !== track && this.cancelAcquisition !== cancelProcessing) return;
 				console.warn('[Calls] Noise suppression failed', error);
 				this.noiseSuppression = 'none';
 				this.videoCallbacks?.noiseSuppressionChanged?.('none');
@@ -189,7 +203,7 @@ export class CallsMediaController {
 			this.noiseSuppression = 'none';
 			this.videoCallbacks?.noiseSuppressionChanged?.('none');
 		} finally {
-			this.cancelAcquisition = null;
+			if (this.cancelAcquisition === cancelProcessing) this.cancelAcquisition = null;
 		}
 		return { track, processing };
 	}

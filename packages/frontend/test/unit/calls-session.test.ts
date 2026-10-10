@@ -579,18 +579,22 @@ describe('Calls session device handoff', () => {
 		await session.resumeAudio();
 		const element = document.querySelector('audio');
 		const stream = element?.srcObject;
-		play.mockRejectedValue(new DOMException('A new playback would be blocked', 'NotAllowedError'));
+		play.mockImplementation(function (this: HTMLMediaElement) {
+			return this.muted ? Promise.resolve() : Promise.reject(new DOMException('A new playback would be blocked', 'NotAllowedError'));
+		});
 		receive('second');
 		receive('third');
 		await Promise.resolve();
-		expect(document.querySelectorAll('audio')).toHaveLength(1);
+		expect([...document.querySelectorAll('audio')].filter(audio => !audio.muted)).toHaveLength(1);
+		expect([...document.querySelectorAll('audio')].filter(audio => audio.muted)).toHaveLength(3);
 		expect(element?.srcObject).toBe(stream);
 		expect(fixture.audioSources).toHaveLength(3);
 		for (const source of fixture.audioSources) expect(source.disconnect).not.toHaveBeenCalled();
-		expect(play).toHaveBeenCalledTimes(2);
+		expect(play.mock.contexts.filter(element => element instanceof HTMLMediaElement && !element.muted)).toHaveLength(2);
 		expect(session.needsAudioResume.value).toBe(false);
 		await session.leave();
 		expect(fixture.closeAudio).toHaveBeenCalledOnce();
+		expect(document.querySelectorAll('audio')).toHaveLength(0);
 	});
 
 	test('an old track ending does not remove the replacement publication', async () => {
@@ -606,6 +610,27 @@ describe('Calls session device handoff', () => {
 		expect(session.screenAudioIds.value.has('screen')).toBe(true);
 		expect(document.querySelector('audio')).not.toBeNull();
 		await session.leave();
+	});
+
+	test('starts playback even when restoring the output device fails', async () => {
+		const original = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'setSinkId');
+		const setSinkId = vi.fn().mockRejectedValueOnce(new DOMException('Output unavailable', 'NotFoundError')).mockResolvedValue(undefined);
+		Object.defineProperty(HTMLMediaElement.prototype, 'setSinkId', { configurable: true, value: setSinkId });
+		const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+		vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+		try {
+			vi.resetModules();
+			session = (await import('@/utility/calls-session.js')).useCallsSession();
+			await session.join('room-a', true);
+			play.mockClear();
+			fixture.remoteTrackCallbacks[0](Object.assign(new EventTarget(), { kind: 'audio' }) as MediaStreamTrack, { id: 'audio', participantId: 'participant-a', mediaKind: 'audio', mediaSource: 'microphone' });
+			await vi.waitFor(() => expect(play).toHaveBeenCalledOnce());
+			expect(session.needsAudioResume.value).toBe(false);
+			await session.leave();
+		} finally {
+			if (original) Object.defineProperty(HTMLMediaElement.prototype, 'setSinkId', original);
+			else delete (HTMLMediaElement.prototype as Partial<HTMLMediaElement>).setSinkId;
+		}
 	});
 
 	test('routes existing and new remote audio to the selected output device', async () => {

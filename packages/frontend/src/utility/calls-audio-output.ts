@@ -9,9 +9,9 @@ export class CallsAudioOutput {
 	private context = new AudioContext();
 	private destination = this.context.createMediaStreamDestination();
 	private element = new Audio();
-	private inputs = new Map<string, { source: MediaStreamAudioSourceNode; gain: GainNode }>();
+	private inputs = new Map<string, { source: MediaStreamAudioSourceNode; gain: GainNode; receiver: HTMLAudioElement }>();
 
-	constructor(onSuspended: (suspended: boolean) => void) {
+	constructor(private onSuspended: (suspended: boolean) => void) {
 		this.element.hidden = true;
 		this.element.srcObject = this.destination.stream;
 		window.document.body.append(this.element);
@@ -23,17 +23,32 @@ export class CallsAudioOutput {
 
 	public add(id: string, track: MediaStreamTrack): void {
 		this.remove(id);
-		const source = this.context.createMediaStreamSource(new MediaStream([track]));
+		const stream = new MediaStream([track]);
+		// Chromium needs a media element to start decoding received WebRTC audio.
+		const receiver = new Audio();
+		receiver.hidden = true;
+		receiver.muted = true;
+		receiver.srcObject = stream;
+		window.document.body.append(receiver);
+		void receiver.play().catch(() => {
+			if (this.inputs.get(id)?.receiver === receiver) this.onSuspended(true);
+		});
+		const source = this.context.createMediaStreamSource(stream);
 		const gain = this.context.createGain();
 		source.connect(gain);
 		gain.connect(this.destination);
-		this.inputs.set(id, { source, gain });
+		this.inputs.set(id, { source, gain, receiver });
 	}
 
 	public remove(id: string): void {
 		const input = this.inputs.get(id);
 		input?.source.disconnect();
 		input?.gain.disconnect();
+		if (input != null) {
+			input.receiver.pause();
+			input.receiver.srcObject = null;
+			input.receiver.remove();
+		}
 		this.inputs.delete(id);
 	}
 
@@ -47,8 +62,8 @@ export class CallsAudioOutput {
 	}
 
 	public async play(): Promise<void> {
-		// Both calls must start in the resume button's user gesture.
-		await Promise.all([this.context.resume(), this.element.play()]);
+		// Playback must start in the resume button's user gesture.
+		await Promise.all([this.context.resume(), this.element.play(), ...[...this.inputs.values()].map(input => input.receiver.play())]);
 	}
 
 	public async close(): Promise<void> {

@@ -3993,3 +3993,8 @@ _events:
   tagsCaption: "カンマ区切りで入力"
   rateLimitReached: "本日のイベント作成上限に達しました"
   unknownError: "エラーが発生しました"
+
+_userStats:
+  averageNotesPerDay: "平均ノート数"
+  notesPerDay: "{count} ノート/日"
+  sinceRegistration: "登録以来のノート数を経過日数（切り上げ）で割った平均です。"

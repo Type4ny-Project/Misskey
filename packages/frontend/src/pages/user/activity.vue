@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkFoldableSection v-if="$i && $i.id === user.id" class="item">
 			<template #header><i class="ti ti-chart-bar"></i> Weekly Stats</template>
 			<MkLazy>
-				<XWeeklyStats/>
+				<XWeeklyStats :user="user"/>
 			</MkLazy>
 		</MkFoldableSection>
 		<MkFoldableSection class="item">
@@ -43,7 +43,7 @@ import MkHeatmap from '@/components/MkHeatmap.vue';
 import { $i } from '@/i.js';
 
 const props = defineProps<{
-	user: Misskey.entities.User;
+	user: Misskey.entities.UserDetailed;
 }>();
 
 </script>

@@ -15002,4 +15002,18 @@ export interface Locale extends ILocale {
          */
         "unknownError": string;
     };
+    "_userStats": {
+        /**
+         * 平均ノート数
+         */
+        "averageNotesPerDay": string;
+        /**
+         * {count} ノート/日
+         */
+        "notesPerDay": ParameterizedString<"count">;
+        /**
+         * 登録以来のノート数を経過日数（切り上げ）で割った平均です。
+         */
+        "sinceRegistration": string;
+    };
 }

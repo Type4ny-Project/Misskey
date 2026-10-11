@@ -5,6 +5,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="$style.root">
+	<section :class="$style.card">
+		<div :class="$style.label">{{ i18n.ts._userStats.averageNotesPerDay }}</div>
+		<div :class="$style.value">{{ averageNotesPerDay == null ? '—' : i18n.tsx._userStats.notesPerDay({ count: averageNotesPerDay.toFixed(1) }) }}</div>
+		<div :class="$style.help">{{ i18n.ts._userStats.sinceRegistration }}</div>
+	</section>
 	<div :class="$style.card">
 		<div :class="$style.cardHeader">
 			<div>
@@ -85,6 +90,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, ref } from 'vue';
+import type { entities } from 'misskey-js';
 import { url } from '@@/js/config.js';
 import { char2fluentEmojiFilePath, char2twemojiFilePath } from '@@/js/emoji-base.js';
 import MkButton from '@/components/MkButton.vue';
@@ -97,6 +103,14 @@ import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { uploadFile } from '@/utility/drive.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { prefer } from '@/preferences.js';
+import { i18n } from '@/i18n.js';
+import { getAverageNotesPerDay } from '@/utility/average-notes-per-day.js';
+
+const props = defineProps<{
+	user: Pick<entities.UserDetailed, 'notesCount' | 'createdAt'>;
+}>();
+
+const averageNotesPerDay = computed(() => getAverageNotesPerDay(props.user.notesCount, props.user.createdAt));
 
 type ReactionRankingItem = {
 	reaction: string;

@@ -70,7 +70,7 @@ afterEach(() => {
 });
 
 async function openStats() {
-	const view = render(WeeklyStats, { global: { stubs } });
+	const view = render(WeeklyStats, { props: { user: { notesCount: 65, createdAt: new Date(Date.now() - 4 * 86400000).toISOString() } }, global: { stubs } });
 	await waitFor(() => expect((view.getByRole('button', { name: /ノートで共有/ }) as HTMLButtonElement).disabled).toBe(false));
 	return view;
 }
@@ -130,4 +130,15 @@ test('includes the channel only when shown and handles empty rankings', async ()
 	await fireEvent.click(view.getByRole('button', { name: /ノートで共有/ }));
 	await waitFor(() => expect(fixture.post).toHaveBeenCalledOnce());
 	expect(fixture.post.mock.calls[0][0].initialText).toContain('\n\nよく使った絵文字 TOP 3\nなし\n\nもらった絵文字 TOP 3\nなし\n\n今週一番投稿したチャンネル\nMy channel（8件）\n\n');
+});
+
+test('shows the registration average separately from weekly counts and omits invalid data', async () => {
+	const view = await openStats();
+	await view.rerender({ user: { notesCount: 65, createdAt: new Date(Date.now() - 3.5 * 86400000).toISOString() } });
+	expect(view.getByText('16.3 ノート/日')).toBeTruthy();
+	expect(view.getByText('1234')).toBeTruthy();
+	expect(fixture.api).toHaveBeenCalledTimes(1);
+	await view.rerender({ user: { notesCount: -1, createdAt: 'invalid' } });
+	expect(view.getByText('—')).toBeTruthy();
+	expect(view.queryByText('16.3 ノート/日')).toBeNull();
 });

@@ -10,7 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<XNotes v-else-if="tab === 'notes'" :user="user"/>
 		<XFiles v-else-if="tab === 'files'" :user="user"/>
 		<XActivity v-else-if="tab === 'activity'" :user="user"/>
-		<XWeeklyStats v-else-if="tab === 'stats' && $i && $i.id === user.id"/>
+		<XWeeklyStats v-else-if="tab === 'stats' && $i && $i.id === user.id" :user="user"/>
 		<XAchievements v-else-if="tab === 'achievements'" :user="user"/>
 		<XReactions v-else-if="tab === 'reactions'" :user="user"/>
 		<XClips v-else-if="tab === 'clips'" :user="user"/>

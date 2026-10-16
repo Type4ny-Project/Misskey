@@ -33767,9 +33767,10 @@ export interface operations {
                     autoAcceptFollowed?: boolean;
                     noCrawle?: boolean;
                     preventAiLearning?: boolean;
-                    requireSigninToViewContents?: boolean;
-                    makeNotesFollowersOnlyBefore?: number | null;
-                    makeNotesHiddenBefore?: number | null;
+                    /** @constant */
+                    requireSigninToViewContents?: false;
+                    makeNotesFollowersOnlyBefore?: null;
+                    makeNotesHiddenBefore?: null;
                     isBot?: boolean;
                     isCat?: boolean;
                     injectFeaturedNote?: boolean;

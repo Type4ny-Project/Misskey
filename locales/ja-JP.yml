@@ -1663,6 +1663,7 @@ _preferencesBackup:
   forceBackup: "設定の強制バックアップ"
 
 _accountSettings:
+  lockdownDisableOnly: "このサーバーでは、設定済みの制限を無効にすることだけができます。一度無効にすると、再び有効にはできません。制限を解除すると、これまで見られなかった人にも投稿が表示される場合があります。"
   requireSigninToViewContents: "コンテンツの表示にログインを必須にする"
   requireSigninToViewContentsDescription1: "あなたが作成した全てのノートなどのコンテンツを表示するのにログインを必須にします。クローラーに情報が収集されるのを防ぐ効果が期待できます。"
   requireSigninToViewContentsDescription2: "URLプレビュー(OGP)、Webページへの埋め込み、ノートの引用に対応していないサーバーからの表示も不可になります。"

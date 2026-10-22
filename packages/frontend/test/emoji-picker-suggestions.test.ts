@@ -433,14 +433,13 @@ describe('MkEmojiPicker emoji suggestions QA flows', () => {
 	test.each([
 		{ visibility: 'followers' },
 		{ visibility: 'specified' },
-	] satisfies Partial<Misskey.entities.Note>[])('does not request suggestions for ineligible note fixture %#', async (overrides) => {
-		const result = await renderPicker({
+	] satisfies Partial<Misskey.entities.Note>[])('requests suggestions for restricted visibility fixture %#', async (overrides) => {
+		await renderPicker({
 			targetNote: createNote(overrides),
 			pinnedEmojis: [':fallback_ok:'],
 		});
 
-		await waitFor(() => expect(result.queryByText('Suggested')).toEqual(null));
-		expect(mockedMisskeyApi).not.toHaveBeenCalled();
+		await waitFor(() => expect(mockedMisskeyApi).toHaveBeenCalledWith('notes/reactions/suggestions', { noteId: createNote(overrides).id }, undefined, expect.any(AbortSignal)));
 	});
 
 	test('keeps pinned, recent, and search behavior usable after suggestion failure fallback', async () => {

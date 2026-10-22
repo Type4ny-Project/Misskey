@@ -94,7 +94,6 @@ export class EmojiSuggestionService {
 
 	@bindThis
 	public async suggestForNote(note: MiNote): Promise<EmojiSuggestionResponse> {
-		if (!this.isEligible(note)) return this.createFallback('ineligible');
 		const key = `emoji-suggestion:v2:${note.id}:${note.updatedAt?.getTime() ?? 0}`;
 		const existing = this.pending.get(key);
 		if (existing) return existing;
@@ -133,7 +132,6 @@ export class EmojiSuggestionService {
 
 			if (!meta.emojiSuggestionEnabled) return response = fallback('disabled');
 			if (!meta.emojiSuggestionEndpoint || !meta.emojiSuggestionApiKey) return response = fallback('unconfigured');
-			if (!this.isEligible(note)) return response = fallback('ineligible');
 
 			const normalizedText = normalizeEmojiSuggestionNoteText(note);
 
@@ -249,10 +247,6 @@ export class EmojiSuggestionService {
 			// Keep emoji management available; operators can retry using the catalog import.
 			this.logger.warn('emoji_suggestion_sync_failed', { emojiId: emoji.id });
 		}
-	}
-
-	private isEligible(note: MiNote): boolean {
-		return note.visibility === 'public' || note.visibility === 'home';
 	}
 
 	private createFallback(reason: string): EmojiSuggestionResponse {

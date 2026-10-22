@@ -29,8 +29,9 @@ function setup() {
 }
 
 describe('emoji suggestion authorization before cache access', () => {
-	test('checks each caller even when the same note already has suggestions', async () => {
+	test.each(['public', 'home', 'followers', 'specified'] as const)('checks each caller before suggestions for %s notes', async visibility => {
 		const h = setup();
+		h.getter.getNoteWithRelations.mockResolvedValue({ id: 'note1', visibility, userHost: null } as MiNote);
 		await expect(h.endpoint.exec({ noteId: 'note1' }, { id: 'allowed' } as MiLocalUser, null)).resolves.toMatchObject({ items: [{ name: 'hello' }] });
 		expect(h.suggestions.suggestForNote).toHaveBeenCalledWith(await h.getter.getNoteWithRelations('note1'));
 		h.notes.isVisibleForMe.mockResolvedValue(false);

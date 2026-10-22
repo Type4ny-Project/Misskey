@@ -302,7 +302,7 @@ describe('EmojiSuggestionService', () => {
 		const { service } = createService(createMeta(), send);
 		const emoji = { id: 'emoji', name: 'hello', aliases: [], category: null, publicUrl: 'https://files.prismisskey.space/hello.png', host: null };
 		await service.syncEmoji(emoji as never);
-		expect((send.mock.calls[0] as unknown as [string])[0]).toBe('https://suggest.example.invalid/v1/emojis');
+		expect(send).toHaveBeenCalledWith('https://suggest.example.invalid/v1/emojis', expect.objectContaining({ timeout: 1000 }));
 		await service.syncEmoji({ ...emoji, host: 'remote.test' } as never);
 		expect(send).toHaveBeenCalledTimes(1);
 		const disabled = createService(createMeta({ emojiSuggestionEnabled: false }), send);

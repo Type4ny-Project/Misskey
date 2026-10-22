@@ -236,7 +236,7 @@ export class EmojiSuggestionService {
 			if (!meta.emojiSuggestionEnabled || !meta.emojiSuggestionEndpoint || !meta.emojiSuggestionApiKey) return;
 			const endpoint = new URL('/v1/emojis', meta.emojiSuggestionEndpoint);
 			await this.httpRequestService.send(endpoint.href, {
-				method: 'POST', redirect: 'error', timeout: 5000, size: 4096,
+				method: 'POST', redirect: 'error', timeout: 1000, size: 4096,
 				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${meta.emojiSuggestionApiKey}` },
 				body: JSON.stringify({
 					schemaVersion: 'emoji-suggest-sync-v1',

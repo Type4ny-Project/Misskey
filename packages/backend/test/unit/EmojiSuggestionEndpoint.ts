@@ -32,6 +32,7 @@ describe('emoji suggestion authorization before cache access', () => {
 	test('checks each caller even when the same note already has suggestions', async () => {
 		const h = setup();
 		await expect(h.endpoint.exec({ noteId: 'note1' }, { id: 'allowed' } as MiLocalUser, null)).resolves.toMatchObject({ items: [{ name: 'hello' }] });
+		expect(h.suggestions.suggestForNote).toHaveBeenCalledWith(await h.getter.getNoteWithRelations('note1'));
 		h.notes.isVisibleForMe.mockResolvedValue(false);
 		await expect(h.endpoint.exec({ noteId: 'note1' }, { id: 'denied' } as MiLocalUser, null)).rejects.toMatchObject({ code: 'NO_SUCH_NOTE' });
 		expect(h.suggestions.suggestForNote).toHaveBeenCalledTimes(1);

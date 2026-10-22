@@ -13,6 +13,7 @@ import type { MiNote } from '@/models/Note.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
 import type Logger from '@/logger.js';
 import { LoggerService } from '@/core/LoggerService.js';
+import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { bindThis } from '@/decorators.js';
 
@@ -86,22 +87,23 @@ export class EmojiSuggestionService {
 		private httpRequestService: HttpRequestService,
 		private loggerService: LoggerService,
 		@Inject(DI.redis) private redisClient: Redis.Redis,
+		private driveFileEntityService: DriveFileEntityService,
 	) {
 		this.logger = this.loggerService.getLogger('emoji-suggestion');
 	}
 
 	@bindThis
-	public async suggestForNote(note: MiNote, locale = 'ja-JP', language = 'ja', attachment?: { url: string; type: string; isSensitive: boolean }): Promise<EmojiSuggestionResponse> {
+	public async suggestForNote(note: MiNote): Promise<EmojiSuggestionResponse> {
 		if (!this.isEligible(note)) return this.createFallback('ineligible');
 		const key = `emoji-suggestion:v2:${note.id}:${note.updatedAt?.getTime() ?? 0}`;
 		const existing = this.pending.get(key);
 		if (existing) return existing;
-		const request = this.suggestForNoteUncached(note, key, locale, language, attachment);
+		const request = this.suggestForNoteUncached(note, key);
 		this.pending.set(key, request);
 		try { return await request; } finally { this.pending.delete(key); }
 	}
 
-	private async suggestForNoteUncached(note: MiNote, cacheKey: string, locale: string, language: string, attachment?: { url: string; type: string; isSensitive: boolean }): Promise<EmojiSuggestionResponse> {
+	private async suggestForNoteUncached(note: MiNote, cacheKey: string): Promise<EmojiSuggestionResponse> {
 		const startedAt = Date.now();
 		const requestId = randomUUID();
 		const event: EmojiSuggestionLogEvent = {
@@ -134,7 +136,6 @@ export class EmojiSuggestionService {
 			if (!this.isEligible(note)) return response = fallback('ineligible');
 
 			const normalizedText = normalizeEmojiSuggestionNoteText(note);
-			if (normalizedText.length === 0 && !attachment) return response = fallback('emptyText');
 
 			try {
 				const cached = await this.redisClient.get(cacheKey);
@@ -148,8 +149,10 @@ export class EmojiSuggestionService {
 					}
 				}
 			} catch { /* Cache failure must not prevent live suggestions. */ }
+			const files = note.cw == null ? await this.driveFileEntityService.packManyByIds(note.fileIds) : [];
+			const attachment = files.find(file => !file.isSensitive && /^image\/(png|jpeg|webp)$/.test(file.type));
 			let image = '';
-			if (note.cw == null && attachment && !attachment.isSensitive && /^image\/(png|jpeg|webp)$/.test(attachment.type)) {
+			if (attachment) {
 				try {
 					const media = await this.httpRequestService.send(attachment.url, { timeout: 10000, size: 4 * 1024 * 1024 });
 					image = `data:${attachment.type};base64,${Buffer.from(await media.arrayBuffer()).toString('base64')}`;
@@ -175,8 +178,8 @@ export class EmojiSuggestionService {
 				image,
 				normalizedTextHmac,
 				normalizationSchema: NORMALIZATION_SCHEMA_VERSION,
-				locale,
-				language,
+				locale: 'ja-JP',
+				language: 'ja',
 				maxResults,
 				deadlineMs: meta.emojiSuggestionTimeoutMs,
 			};

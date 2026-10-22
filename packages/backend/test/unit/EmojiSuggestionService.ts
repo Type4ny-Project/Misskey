@@ -11,6 +11,7 @@ import type { MiNote } from '@/models/Note.js';
 import { EmojiSuggestionService, normalizeEmojiSuggestionNoteText } from '@/core/EmojiSuggestionService.js';
 import type { HttpRequestService } from '@/core/HttpRequestService.js';
 import type { LoggerService } from '@/core/LoggerService.js';
+import type { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import type { MetaService } from '@/core/MetaService.js';
 
 describe('EmojiSuggestionService', () => {
@@ -28,6 +29,7 @@ describe('EmojiSuggestionService', () => {
 	function createNote(overrides: Partial<MiNote> = {}): MiNote {
 		return {
 			id: 'note-fixture',
+			fileIds: [],
 			text: 'fixture public text @alice https://example.invalid :ablobcat:',
 			cw: null,
 			tags: [],
@@ -53,8 +55,10 @@ describe('EmojiSuggestionService', () => {
 			host: 'misskey.example.test',
 		} as Config;
 
+		const files = { packManyByIds: vi.fn(async (_ids: string[]): Promise<Array<{ url: string; type: string; isSensitive: boolean }>> => []) };
 		return {
-			service: new EmojiSuggestionService(config, metaService, httpRequestService, loggerService, { get: vi.fn(async () => null), set: vi.fn() } as never),
+			files,
+			service: new EmojiSuggestionService(config, metaService, httpRequestService, loggerService, { get: vi.fn(async () => null), set: vi.fn() } as never, files as unknown as DriveFileEntityService),
 			send,
 			logInfo,
 		};
@@ -250,7 +254,7 @@ describe('EmojiSuggestionService', () => {
 
 	test('reuses cached results but invalidates them for changed text and never serves private posts', async () => {
 		const send = vi.fn(async () => jsonResponse(workerResponse()));
-		const { service } = createService(createMeta(), send);
+		const { service, files } = createService(createMeta(), send);
 		const cache = new Map<string, string>();
 		Object.assign(service, { redisClient: {
 			get: vi.fn(async (key: string) => cache.get(key) ?? null),
@@ -260,6 +264,7 @@ describe('EmojiSuggestionService', () => {
 		await service.suggestForNote(createNote());
 		expect(send).toHaveBeenCalledTimes(1);
 		expect([...cache.keys()]).toEqual(['emoji-suggestion:v2:note-fixture:0']);
+		expect(files.packManyByIds).toHaveBeenCalledTimes(1);
 		await service.suggestForNote(createNote({ text: 'changed 🤯', updatedAt: new Date('2026-10-22T00:00:00Z') }));
 		expect(send).toHaveBeenCalledTimes(2);
 		await expect(service.suggestForNote(createNote({ visibility: 'specified' }))).resolves.toEqual({ items: [], reason: 'ineligible' });
@@ -268,17 +273,22 @@ describe('EmojiSuggestionService', () => {
 
 	test('forwards one eligible image and excludes sensitive images and CW attachments', async () => {
 		const send = vi.fn(async (url: string) => url.includes('/media.png') ? new Response(Buffer.from([1, 2, 3])) : jsonResponse(workerResponse()));
-		const { service } = createService(createMeta(), send);
+		const { service, files } = createService(createMeta(), send);
 		const image = { url: 'https://files.example/media.png', type: 'image/png', isSensitive: false };
-		await service.suggestForNote(createNote({ text: null }), 'ja-JP', 'ja', image);
+		files.packManyByIds.mockResolvedValue([image]);
+		await service.suggestForNote(createNote({ text: null, fileIds: ['image1'] }));
+		expect(files.packManyByIds).toHaveBeenCalledWith(['image1']);
 		const request = JSON.parse((send.mock.calls[1] as unknown as [string, { body: string }])[1].body);
 		expect(request.image).toBe('data:image/png;base64,AQID');
 		send.mockClear();
-		await service.suggestForNote(createNote({ cw: 'summary' }), 'ja-JP', 'ja', image);
+		files.packManyByIds.mockClear();
+		await service.suggestForNote(createNote({ cw: 'summary', fileIds: ['image1'] }));
+		expect(files.packManyByIds).not.toHaveBeenCalled();
 		expect(send).toHaveBeenCalledTimes(1);
 		expect(send.mock.calls[0]?.[0]).not.toBe(image.url);
 		send.mockClear();
-		await service.suggestForNote(createNote(), 'ja-JP', 'ja', { ...image, isSensitive: true });
+		files.packManyByIds.mockResolvedValue([{ ...image, isSensitive: true }]);
+		await service.suggestForNote(createNote({ fileIds: ['image1'] }));
 		expect(send).toHaveBeenCalledTimes(1);
 		expect(send.mock.calls[0]?.[0]).not.toBe(image.url);
 	});

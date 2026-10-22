@@ -85,7 +85,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (packed.isHidden) throw new ApiError(meta.errors.noSuchNote);
 			if (note.reactionAcceptance === 'likeOnly') return { items: [], reason: 'likeOnly' };
 
-			const result = await this.emojiSuggestionService.suggestForNote(note, 'ja-JP', 'ja', packed.files?.find(file => /^image\/(png|jpeg|webp)$/.test(file.type)));
+			const result = await this.emojiSuggestionService.suggestForNote(note);
 			if (!result.items.length) return result;
 			const emojis = await this.emojisRepository.findBy({ name: In(result.items.map(item => item.name)), host: IsNull() });
 			const roles = await this.roleService.getUserRoles(me.id);

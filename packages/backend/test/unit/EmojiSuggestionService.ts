@@ -86,7 +86,7 @@ describe('EmojiSuggestionService', () => {
 		};
 	}
 
-	test('calls Worker for all note visibilities regardless of localOnly', async () => {
+	test('calls Worker for public and home notes regardless of localOnly', async () => {
 		const send = vi.fn(async () => jsonResponse(workerResponse()));
 		const { service, logInfo } = createService(createMeta(), send);
 
@@ -143,11 +143,12 @@ describe('EmojiSuggestionService', () => {
 			createNote({ visibility: 'specified' }),
 		]) {
 			await expect(service.suggestForNote(note)).resolves.toMatchObject({
-				items: [{ name: 'ablobgoodnightreverse' }],
+				items: [],
+				reason: 'ineligible',
 			});
 		}
 
-		expect(send).toHaveBeenCalledTimes(5);
+		expect(send).toHaveBeenCalledTimes(3);
 	});
 
 	test('emits redacted backend observability for cache hit, auth failure, and timeout', async () => {
@@ -251,7 +252,7 @@ describe('EmojiSuggestionService', () => {
 		expect(readLastLogEvent(logInfo)).toMatchObject({ resultCount: 1 });
 	});
 
-	test('reuses cached results but invalidates them for edited notes', async () => {
+	test('reuses cached results but invalidates them for changed text and never serves private posts', async () => {
 		const send = vi.fn(async () => jsonResponse(workerResponse()));
 		const { service, files } = createService(createMeta(), send);
 		const cache = new Map<string, string>();
@@ -265,6 +266,8 @@ describe('EmojiSuggestionService', () => {
 		expect([...cache.keys()]).toEqual(['emoji-suggestion:v2:note-fixture:0']);
 		expect(files.packManyByIds).toHaveBeenCalledTimes(1);
 		await service.suggestForNote(createNote({ text: 'changed 🤯', updatedAt: new Date('2026-10-22T00:00:00Z') }));
+		expect(send).toHaveBeenCalledTimes(2);
+		await expect(service.suggestForNote(createNote({ visibility: 'specified' }))).resolves.toEqual({ items: [], reason: 'ineligible' });
 		expect(send).toHaveBeenCalledTimes(2);
 	});
 

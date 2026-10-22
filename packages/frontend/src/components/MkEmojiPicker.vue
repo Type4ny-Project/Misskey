@@ -552,7 +552,8 @@ function canRequestSuggestions(): boolean {
 
 	return props.asReactionPicker === true &&
 		instance.emojiSuggestion?.enabled === true &&
-		note != null;
+		note != null &&
+		(note.visibility === 'public' || note.visibility === 'home');
 }
 
 function clearSuggestionRequest(): void {

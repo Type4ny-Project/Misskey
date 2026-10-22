@@ -316,6 +316,7 @@ export class HttpRequestService {
 			timeout?: number,
 			size?: number,
 			isLocalAddressAllowed?: boolean,
+			redirect?: 'error' | 'follow' | 'manual',
 		} = {},
 		extra: HttpRequestSendOptions = {
 			throwErrorWhenResponseNotOk: true,
@@ -333,6 +334,7 @@ export class HttpRequestService {
 
 		const res = await fetch(url, {
 			method: args.method ?? 'GET',
+			redirect: args.redirect,
 			headers: {
 				'User-Agent': this.config.userAgent,
 				...(args.headers ?? {}),

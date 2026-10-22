@@ -15002,4 +15002,16 @@ export interface Locale extends ILocale {
          */
         "unknownError": string;
     };
+    /**
+     * リアクション候補
+     */
+    "emojiSuggestions": string;
+    /**
+     * 公開・ホーム投稿の本文と添付画像を外部の推薦サービスへ送ります。CW本文・センシティブ画像・限定公開投稿は送りません。有効な場合、絵文字の追加・更新・削除も同期します。
+     */
+    "emojiSuggestionsDescription": string;
+    /**
+     * Workersの /v1/suggest を指定します。現在のAI処理には数十秒かかるため、タイムアウトは120000msを目安に設定してください。
+     */
+    "emojiSuggestionsEndpointHelp": string;
 }

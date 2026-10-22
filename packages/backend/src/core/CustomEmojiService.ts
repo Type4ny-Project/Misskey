@@ -6,6 +6,7 @@
 import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import * as Redis from 'ioredis';
 import { In, IsNull } from 'typeorm';
+import { EmojiSuggestionService } from '@/core/EmojiSuggestionService.js';
 import { EmojiEntityService } from '@/core/entities/EmojiEntityService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { IdService } from '@/core/IdService.js';
@@ -72,6 +73,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 		private emojiEntityService: EmojiEntityService,
 		private moderationLogService: ModerationLogService,
 		private globalEventService: GlobalEventService,
+		private emojiSuggestionService: EmojiSuggestionService,
 	) {
 		this.emojisCache = new MemoryKVCache<MiEmoji | null>(1000 * 60 * 60 * 12); // 12h
 
@@ -120,6 +122,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 		});
 
 		if (data.host == null) {
+			await this.emojiSuggestionService.syncEmoji(emoji);
 			this.localEmojisCache.refresh();
 
 			this.globalEventService.publishBroadcastStream('emojiAdded', {
@@ -183,6 +186,8 @@ export class CustomEmojiService implements OnApplicationShutdown {
 		});
 
 		this.localEmojisCache.refresh();
+
+		await this.emojiSuggestionService.syncEmoji(await this.emojisRepository.findOneByOrFail({ id }), false, doNameUpdate ? emoji.name : undefined);
 
 		const packed = await this.emojiEntityService.packDetailed(emoji.id);
 
@@ -304,6 +309,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 		const emoji = await this.emojisRepository.findOneByOrFail({ id: id });
 
 		await this.emojisRepository.delete(emoji.id);
+		await this.emojiSuggestionService.syncEmoji(emoji, true);
 
 		this.localEmojisCache.refresh();
 
@@ -327,6 +333,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 
 		for (const emoji of emojis) {
 			await this.emojisRepository.delete(emoji.id);
+		await this.emojiSuggestionService.syncEmoji(emoji, true);
 
 			if (moderator) {
 				this.moderationLogService.log(moderator, 'deleteCustomEmoji', {

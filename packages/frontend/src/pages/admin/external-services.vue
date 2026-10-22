@@ -58,7 +58,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</template>
 
 						<div class="_gaps_m">
-							<MkInfo>Suggestions are enforced for public, non-local-only notes only. The Worker API key is write-only and is never exposed in public meta.</MkInfo>
+							<MkInfo>{{ i18n.ts.emojiSuggestionsDescription }}</MkInfo>
 
 							<SearchMarker>
 								<MkSwitch v-model="emojiSuggestionForm.state.emojiSuggestionEnabled">
@@ -69,6 +69,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 							<SearchMarker>
 								<MkInput v-model="emojiSuggestionForm.state.emojiSuggestionEndpoint">
+									<template #caption>{{ i18n.ts.emojiSuggestionsEndpointHelp }}</template>
 									<template #prefix><i class="ti ti-link"></i></template>
 									<template #label><SearchLabel>Worker endpoint</SearchLabel><span v-if="emojiSuggestionForm.modifiedStates.emojiSuggestionEndpoint" class="_modified">{{ i18n.ts.modified }}</span></template>
 								</MkInput>

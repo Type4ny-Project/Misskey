@@ -60,7 +60,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<section v-if="q === '' && (suggestedEmojis.length > 0 || suggestionLoading)" class="suggested">
 			<header class="_acrylic"><i class="ti ti-sparkles ti-fw"></i> {{ i18n.ts.emojiSuggestions }}</header>
-			<div v-if="suggestionLoading" role="status"><i class="ti ti-loader ti-spin"></i> {{ i18n.ts.loading }}</div>
+			<MkLoading v-if="suggestionLoading" :mini="true" role="status" :aria-label="i18n.ts.loading"/>
 			<div class="body">
 				<button
 					v-for="emoji in suggestedEmojis"

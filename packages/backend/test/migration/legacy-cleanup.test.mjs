@@ -9,6 +9,7 @@ import { Client } from 'pg';
 import { DataSource } from 'typeorm';
 import { AlignSchema1791103688453 } from '../../migration/1791103688453-align-schema.js';
 import { DropLegacyEmojiRequest1792642930323 } from '../../migration/1792642930323-drop-legacy-emoji-request.js';
+import { DropLegacyTables1792643998126 } from '../../migration/1792643998126-drop-legacy-tables.js';
 
 class EmojiAlignment extends AlignSchema1791103688453 {
 	async up(queryRunner) {
@@ -116,5 +117,40 @@ test('cleanup refuses to cascade into tables that still reference legacy request
 		await client.query('CREATE TABLE "legacy_reference" ("requestId" varchar(32) REFERENCES "legacy_emoji_request"("id"))');
 		await assert.rejects(new DropLegacyEmojiRequest1792642930323().up(client), error => error.code === '2BP01');
 		assert.equal((await client.query('SELECT count(*)::int AS count FROM "legacy_emoji_request"')).rows[0].count, 1);
+	});
+});
+
+async function createAllLegacy(client) {
+	await createLegacy(client);
+	for (const table of ['legacy_note_schedule', 'legacy_note_unread', 'legacy_inbox_rule']) {
+		await client.query(`CREATE TABLE "${table}" ("id" varchar(32) PRIMARY KEY)`);
+		await client.query(`INSERT INTO "${table}" VALUES ('obsolete-request')`);
+	}
+}
+
+test('final cleanup removes every retired table and preserves current requests', async () => {
+	await withDatabase(async (client) => {
+		await createRequests(client);
+		await createAllLegacy(client);
+		await client.query('ALTER TABLE "legacy_inbox_rule" ADD FOREIGN KEY ("id") REFERENCES "legacy_note_unread"("id")');
+		const migration = new DropLegacyTables1792643998126();
+		await migration.up(client);
+		await migration.up(client);
+		for (const table of ['legacy_emoji_request', 'legacy_note_schedule', 'legacy_note_unread', 'legacy_inbox_rule']) {
+			assert.equal((await client.query('SELECT to_regclass($1) AS relation', [table])).rows[0].relation, null);
+		}
+		assert.deepEqual((await client.query('SELECT "id", "name" FROM "emoji_request"')).rows, [{ id: 'current-request', name: 'keep' }]);
+		await assert.rejects(migration.down(), /cannot be restored/);
+	});
+});
+
+test('final cleanup keeps all retired tables if a current table still references one', async () => {
+	await withDatabase(async (client) => {
+		await createAllLegacy(client);
+		await client.query('CREATE TABLE "current_reference" ("id" varchar(32) REFERENCES "legacy_note_unread"("id"))');
+		await assert.rejects(new DropLegacyTables1792643998126().up(client), error => error.code === '2BP01');
+		for (const table of ['legacy_emoji_request', 'legacy_note_schedule', 'legacy_note_unread', 'legacy_inbox_rule']) {
+			assert.equal((await client.query(`SELECT count(*)::int AS count FROM "${table}"`)).rows[0].count, 1);
+		}
 	});
 });

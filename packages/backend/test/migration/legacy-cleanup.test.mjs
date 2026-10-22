@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import { Client } from 'pg';
 import { DataSource } from 'typeorm';
 import { AlignSchema1791103688453 } from '../../migration/1791103688453-align-schema.js';
-import { DropLegacyEmojiRequest1792642930323 } from '../../migration/1792642930323-drop-legacy-emoji-request.js';
+import { DropLegacyEmojiRequest1791103688452 } from '../../migration/1791103688452-drop-legacy-emoji-request.js';
 import { DropLegacyTables1792643998126 } from '../../migration/1792643998126-drop-legacy-tables.js';
 
 class EmojiAlignment extends AlignSchema1791103688453 {
@@ -72,51 +72,50 @@ async function createLegacy(client) {
 	`);
 }
 
-test('cleanup releases the legacy primary key before the pending alignment', async () => {
+test('one normal migration run repairs the legacy collision before alignment', async () => {
 	await withDatabase(async (client, options) => {
 		await createRequests(client);
 		await createLegacy(client);
-		const normal = new DataSource({ ...options, migrations: [EmojiAlignment, DropLegacyEmojiRequest1792642930323] });
-		const cleanup = new DataSource({ ...options, migrations: [DropLegacyEmojiRequest1792642930323] });
+		const historical = new DataSource({ ...options, migrations: [EmojiAlignment] });
+		const normal = new DataSource({ ...options, migrations: [EmojiAlignment, DropLegacyTables1792643998126, DropLegacyEmojiRequest1791103688452] });
 		try {
+			await historical.initialize();
+			await assert.rejects(historical.runMigrations(), error => error.code === '42P07');
 			await normal.initialize();
-			await assert.rejects(normal.runMigrations(), error => error.code === '42P07');
-			assert.equal((await client.query('SELECT count(*)::int AS count FROM "legacy_emoji_request"')).rows[0].count, 1);
-
-			await cleanup.initialize();
-			assert.equal((await cleanup.runMigrations()).length, 1);
-			assert.equal((await normal.runMigrations()).length, 1);
-			assert.equal((await client.query("SELECT to_regclass('public.legacy_emoji_request') AS legacy")).rows[0].legacy, null);
+			assert.equal((await normal.runMigrations()).length, 3);
 			assert.deepEqual((await client.query('SELECT "id", "name" FROM "emoji_request"')).rows, [{ id: 'current-request', name: 'keep' }]);
 			assert.deepEqual((await client.query('SELECT "name" FROM "migrations" ORDER BY "id"')).rows.map(row => row.name), [
-				'DropLegacyEmojiRequest1792642930323',
+				'DropLegacyEmojiRequest1791103688452',
 				'AlignSchema1791103688453',
+				'DropLegacyTables1792643998126',
 			]);
 			assert.deepEqual(await normal.runMigrations(), []);
+			await assert.rejects(new DropLegacyEmojiRequest1791103688452().down(), /cannot be restored/);
 		} finally {
-			if (cleanup.isInitialized) await cleanup.destroy();
 			if (normal.isInitialized) await normal.destroy();
+			if (historical.isInitialized) await historical.destroy();
 		}
 	});
 });
 
-test('cleanup is repeatable when the legacy table is absent and cannot pretend to restore deleted data', async () => {
-	await withDatabase(async (client) => {
+test('an already aligned database still executes the newly inserted repair', async () => {
+	await withDatabase(async (client, options) => {
 		await createRequests(client);
-		const migration = new DropLegacyEmojiRequest1792642930323();
-		await migration.up(client);
-		await migration.up(client);
-		assert.equal((await client.query('SELECT count(*)::int AS count FROM "emoji_request"')).rows[0].count, 1);
-		await assert.rejects(migration.down(), /cannot be restored/);
-	});
-});
-
-test('cleanup refuses to cascade into tables that still reference legacy requests', async () => {
-	await withDatabase(async (client) => {
-		await createLegacy(client);
-		await client.query('CREATE TABLE "legacy_reference" ("requestId" varchar(32) REFERENCES "legacy_emoji_request"("id"))');
-		await assert.rejects(new DropLegacyEmojiRequest1792642930323().up(client), error => error.code === '2BP01');
-		assert.equal((await client.query('SELECT count(*)::int AS count FROM "legacy_emoji_request"')).rows[0].count, 1);
+		const historical = new DataSource({ ...options, migrations: [EmojiAlignment] });
+		const normal = new DataSource({ ...options, migrations: [EmojiAlignment, DropLegacyTables1792643998126, DropLegacyEmojiRequest1791103688452] });
+		try {
+			await historical.initialize();
+			assert.equal((await historical.runMigrations()).length, 1);
+			await client.query('CREATE TABLE "legacy_note_unread" ("id" varchar(32) PRIMARY KEY)');
+			await normal.initialize();
+			assert.equal((await normal.runMigrations()).length, 2);
+			assert.equal((await client.query("SELECT to_regclass('public.legacy_note_unread') AS legacy")).rows[0].legacy, null);
+			assert.equal((await client.query('SELECT count(*)::int AS count FROM "emoji_request"')).rows[0].count, 1);
+			assert.deepEqual(await normal.runMigrations(), []);
+		} finally {
+			if (normal.isInitialized) await normal.destroy();
+			if (historical.isInitialized) await historical.destroy();
+		}
 	});
 });
 

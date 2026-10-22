@@ -58,8 +58,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</section>
 
-		<section v-if="q === '' && suggestedEmojis.length > 0" class="suggested">
-			<header class="_acrylic"><i class="ti ti-sparkles ti-fw"></i> Suggested</header>
+		<section v-if="q === '' && (suggestedEmojis.length > 0 || suggestionLoading)" class="suggested">
+			<header class="_acrylic"><i class="ti ti-sparkles ti-fw"></i> {{ i18n.ts.emojiSuggestions }}</header>
+			<div v-if="suggestionLoading" role="status"><i class="ti ti-loader ti-spin"></i> {{ i18n.ts.loading }}</div>
 			<div class="body">
 				<button
 					v-for="emoji in suggestedEmojis"
@@ -195,21 +196,9 @@ const router = useRouter();
 const PREVIEW_DELAY = 500;
 const FALLBACK_SUGGESTION_LIMIT = 8;
 
-type EmojiSuggestionItem = {
-	name: string;
-	score: number;
-	aliases?: string[];
-	category?: string | null;
-};
-
-type EmojiSuggestionResponse = {
-	items: EmojiSuggestionItem[];
-	reason?: string | null;
-};
-
-type EmojiSuggestionRequest = {
-	noteId: Misskey.entities.Note['id'];
-};
+type EmojiSuggestionResponse = Misskey.Endpoints['notes/reactions/suggestions']['res'];
+type EmojiSuggestionItem = EmojiSuggestionResponse['items'][number];
+type EmojiSuggestionRequest = Misskey.Endpoints['notes/reactions/suggestions']['req'];
 
 const props = withDefaults(defineProps<{
 	showPinned?: boolean;
@@ -352,6 +341,7 @@ const q = ref<string>('');
 const searchResultCustom = ref<Misskey.entities.EmojiSimple[]>([]);
 const searchResultUnicode = ref<UnicodeEmojiDef[]>([]);
 const suggestedEmojis = ref<Misskey.entities.EmojiSimple[]>([]);
+const suggestionLoading = ref(false);
 const tab = ref<'index' | 'custom' | 'unicode' | 'tags'>('index');
 
 let suggestionAbortController: AbortController | null = null;
@@ -567,6 +557,7 @@ function canRequestSuggestions(): boolean {
 }
 
 function clearSuggestionRequest(): void {
+	suggestionLoading.value = false;
 	if (suggestionAbortController !== null) {
 		suggestionAbortController.abort();
 		suggestionAbortController = null;
@@ -634,6 +625,7 @@ async function loadSuggestedEmojis(): Promise<void> {
 	const noteId = props.targetNote!.id;
 	const abortController = new AbortController();
 	suggestionAbortController = abortController;
+	suggestionLoading.value = true;
 
 	try {
 		const response: unknown = await misskeyApi('notes/reactions/suggestions', {
@@ -649,6 +641,7 @@ async function loadSuggestedEmojis(): Promise<void> {
 		}
 	} finally {
 		if (suggestionAbortController === abortController) {
+			suggestionLoading.value = false;
 			suggestionAbortController = null;
 		}
 	}

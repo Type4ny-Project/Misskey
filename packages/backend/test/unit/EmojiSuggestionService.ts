@@ -11,6 +11,7 @@ import type { MiNote } from '@/models/Note.js';
 import { EmojiSuggestionService, normalizeEmojiSuggestionNoteText } from '@/core/EmojiSuggestionService.js';
 import type { HttpRequestService } from '@/core/HttpRequestService.js';
 import type { LoggerService } from '@/core/LoggerService.js';
+import type { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import type { MetaService } from '@/core/MetaService.js';
 
 describe('EmojiSuggestionService', () => {
@@ -28,6 +29,7 @@ describe('EmojiSuggestionService', () => {
 	function createNote(overrides: Partial<MiNote> = {}): MiNote {
 		return {
 			id: 'note-fixture',
+			fileIds: [],
 			text: 'fixture public text @alice https://example.invalid :ablobcat:',
 			cw: null,
 			tags: [],
@@ -46,15 +48,17 @@ describe('EmojiSuggestionService', () => {
 			send,
 		} as unknown as HttpRequestService;
 		const loggerService = {
-			getLogger: vi.fn(() => ({ info: logInfo })),
+			getLogger: vi.fn(() => ({ info: logInfo, warn: vi.fn() })),
 		} as unknown as LoggerService;
 		const config = {
 			url: 'https://misskey.example.test',
 			host: 'misskey.example.test',
 		} as Config;
 
+		const files = { packManyByIds: vi.fn(async (_ids: string[]): Promise<Array<{ url: string; type: string; isSensitive: boolean }>> => []) };
 		return {
-			service: new EmojiSuggestionService(config, metaService, httpRequestService, loggerService),
+			files,
+			service: new EmojiSuggestionService(config, metaService, httpRequestService, loggerService, { get: vi.fn(async () => null), set: vi.fn() } as never, files as unknown as DriveFileEntityService),
 			send,
 			logInfo,
 		};
@@ -223,6 +227,15 @@ describe('EmojiSuggestionService', () => {
 		}
 	});
 
+	test('uses the configured HTTP endpoint for suggestions and emoji sync', async () => {
+		const send = vi.fn(async (_url: string) => jsonResponse(workerResponse()));
+		const { service } = createService(createMeta({ emojiSuggestionEndpoint: 'http://suggest.example.invalid/v1/suggest' }), send);
+		await service.suggestForNote(createNote());
+		expect(send.mock.calls[0]?.[0]).toBe('http://suggest.example.invalid/v1/suggest');
+		await service.syncEmoji({ host: null, name: 'hello', aliases: [], category: null, publicUrl: 'https://files.example/hello.png' } as never);
+		expect(send.mock.calls[1]?.[0]).toBe('http://suggest.example.invalid/v1/emojis');
+	});
+
 	test('filters proxied Worker suggestions below the minimum score', async () => {
 		const send = vi.fn(async () => jsonResponse(workerResponse({
 			items: [
@@ -237,6 +250,66 @@ describe('EmojiSuggestionService', () => {
 		});
 		expect(send).toHaveBeenCalledTimes(1);
 		expect(readLastLogEvent(logInfo)).toMatchObject({ resultCount: 1 });
+	});
+
+	test('reuses cached results but invalidates them for changed text and never serves private posts', async () => {
+		const send = vi.fn(async () => jsonResponse(workerResponse()));
+		const { service, files } = createService(createMeta(), send);
+		const cache = new Map<string, string>();
+		Object.assign(service, { redisClient: {
+			get: vi.fn(async (key: string) => cache.get(key) ?? null),
+			set: vi.fn(async (key: string, value: string) => cache.set(key, value)),
+		} });
+		await Promise.all([service.suggestForNote(createNote()), service.suggestForNote(createNote())]);
+		await service.suggestForNote(createNote());
+		expect(send).toHaveBeenCalledTimes(1);
+		expect([...cache.keys()]).toEqual(['emoji-suggestion:v2:note-fixture:0']);
+		expect(files.packManyByIds).toHaveBeenCalledTimes(1);
+		await service.suggestForNote(createNote({ text: 'changed 🤯', updatedAt: new Date('2026-10-22T00:00:00Z') }));
+		expect(send).toHaveBeenCalledTimes(2);
+		await expect(service.suggestForNote(createNote({ visibility: 'specified' }))).resolves.toEqual({ items: [], reason: 'ineligible' });
+		expect(send).toHaveBeenCalledTimes(2);
+	});
+
+	test('forwards one eligible image and excludes sensitive images and CW attachments', async () => {
+		const send = vi.fn(async (url: string) => url.includes('/media.png') ? new Response(Buffer.from([1, 2, 3])) : jsonResponse(workerResponse()));
+		const { service, files } = createService(createMeta(), send);
+		const image = { url: 'https://files.example/media.png', type: 'image/png', isSensitive: false };
+		files.packManyByIds.mockResolvedValue([image]);
+		await service.suggestForNote(createNote({ text: null, fileIds: ['image1'] }));
+		expect(files.packManyByIds).toHaveBeenCalledWith(['image1']);
+		const request = JSON.parse((send.mock.calls[1] as unknown as [string, { body: string }])[1].body);
+		expect(request.image).toBe('data:image/png;base64,AQID');
+		send.mockClear();
+		files.packManyByIds.mockClear();
+		await service.suggestForNote(createNote({ cw: 'summary', fileIds: ['image1'] }));
+		expect(files.packManyByIds).not.toHaveBeenCalled();
+		expect(send).toHaveBeenCalledTimes(1);
+		expect(send.mock.calls[0]?.[0]).not.toBe(image.url);
+		send.mockClear();
+		files.packManyByIds.mockResolvedValue([{ ...image, isSensitive: true }]);
+		await service.suggestForNote(createNote({ fileIds: ['image1'] }));
+		expect(send).toHaveBeenCalledTimes(1);
+		expect(send.mock.calls[0]?.[0]).not.toBe(image.url);
+	});
+
+	test('preserves inline emoji tokens for image interpretation', () => {
+		expect(normalizeEmojiSuggestionNoteText(createNote({ text: ':mi_kke: :hieltu: 🤯' }))).toBe(':mi_kke: :hieltu: 🤯');
+	});
+
+	test('syncs local emojis only when enabled and does not break creation on upstream failure', async () => {
+		const send = vi.fn(async () => jsonResponse({ accepted: true }));
+		const { service } = createService(createMeta(), send);
+		const emoji = { id: 'emoji', name: 'hello', aliases: [], category: null, publicUrl: 'https://files.prismisskey.space/hello.png', host: null };
+		await service.syncEmoji(emoji as never);
+		expect(send).toHaveBeenCalledWith('https://suggest.example.invalid/v1/emojis', expect.objectContaining({ timeout: 1000 }));
+		await service.syncEmoji({ ...emoji, host: 'remote.test' } as never);
+		expect(send).toHaveBeenCalledTimes(1);
+		const disabled = createService(createMeta({ emojiSuggestionEnabled: false }), send);
+		await disabled.service.syncEmoji(emoji as never);
+		expect(send).toHaveBeenCalledTimes(1);
+		send.mockRejectedValueOnce(new Error('offline'));
+		await expect(service.syncEmoji(emoji as never)).resolves.toBeUndefined();
 	});
 
 	test('normalizes cw notes without exposing hidden body text', () => {

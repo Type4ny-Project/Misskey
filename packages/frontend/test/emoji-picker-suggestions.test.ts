@@ -21,6 +21,7 @@ vi.mock('@/i18n.js', () => ({
 	i18n: {
 		ts: {
 			search: 'Search',
+			emojiSuggestions: 'Suggested',
 			recentUsed: 'Recently used',
 			customEmojis: 'Custom emojis',
 			emoji: 'Emoji',
@@ -320,7 +321,7 @@ describe('MkEmojiPicker emoji suggestions QA flows', () => {
 		await waitFor(() => expect(mockedMisskeyApi).toHaveBeenCalledTimes(2));
 		expect(mockedMisskeyApi.mock.calls[0][0]).toBe('notes/reactions/suggestions');
 		expect(mockedMisskeyApi.mock.calls[1][0]).toBe('emojis');
-		expect(result.container.querySelector('[data-emoji=":suggest_smile:"]')).not.toBeNull();
+		await waitFor(() => expect(result.container.querySelector('[data-emoji=":suggest_smile:"]')).not.toBeNull());
 	});
 
 	test('does not request suggestions when disabled and pinned picker behavior still works', async () => {

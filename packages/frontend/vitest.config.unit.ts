@@ -3,7 +3,7 @@ import { getConfig } from './vite.config.js';
 
 export default mergeConfig(getConfig(), defineConfig({
 	test: {
-		include: ['./test/unit/**/*.test.ts'],
+		include: ['./test/unit/**/*.test.ts', './test/emoji-picker-suggestions.test.ts'],
 		environment: 'happy-dom',
 		setupFiles: ['./test/setup.unit.ts'],
 		deps: {

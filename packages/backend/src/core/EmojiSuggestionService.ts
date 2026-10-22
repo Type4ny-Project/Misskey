@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { createHash, createHmac, randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import * as Redis from 'ioredis';
 import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
@@ -92,19 +92,16 @@ export class EmojiSuggestionService {
 
 	@bindThis
 	public async suggestForNote(note: MiNote, locale = 'ja-JP', language = 'ja', attachment?: { url: string; type: string; isSensitive: boolean }): Promise<EmojiSuggestionResponse> {
-		const settings = await this.metaService.fetch();
-		const key = createHash('sha256').update(JSON.stringify([
-			note.id, normalizeEmojiSuggestionNoteText(note), note.visibility, note.localOnly, note.cw, attachment,
-			settings.emojiSuggestionEnabled, settings.emojiSuggestionEndpoint, settings.emojiSuggestionApiKey, settings.emojiSuggestionMaxSuggestions,
-		])).digest('hex');
+		if (!this.isEligible(note)) return this.createFallback('ineligible');
+		const key = `emoji-suggestion:v2:${note.id}:${note.updatedAt?.getTime() ?? 0}`;
 		const existing = this.pending.get(key);
 		if (existing) return existing;
-		const request = this.suggestForNoteUncached(note, locale, language, attachment);
+		const request = this.suggestForNoteUncached(note, key, locale, language, attachment);
 		this.pending.set(key, request);
 		try { return await request; } finally { this.pending.delete(key); }
 	}
 
-	private async suggestForNoteUncached(note: MiNote, locale: string, language: string, attachment?: { url: string; type: string; isSensitive: boolean }): Promise<EmojiSuggestionResponse> {
+	private async suggestForNoteUncached(note: MiNote, cacheKey: string, locale: string, language: string, attachment?: { url: string; type: string; isSensitive: boolean }): Promise<EmojiSuggestionResponse> {
 		const startedAt = Date.now();
 		const requestId = randomUUID();
 		const event: EmojiSuggestionLogEvent = {
@@ -134,15 +131,11 @@ export class EmojiSuggestionService {
 
 			if (!meta.emojiSuggestionEnabled) return response = fallback('disabled');
 			if (!meta.emojiSuggestionEndpoint || !meta.emojiSuggestionApiKey) return response = fallback('unconfigured');
-			if (!/^https:\/\//.test(meta.emojiSuggestionEndpoint)) return response = fallback('unconfigured');
 			if (!this.isEligible(note)) return response = fallback('ineligible');
 
 			const normalizedText = normalizeEmojiSuggestionNoteText(note);
 			if (normalizedText.length === 0 && !attachment) return response = fallback('emptyText');
-			const cacheKey = `emoji-suggestion:v1:${createHash('sha256').update(JSON.stringify([
-				note.id, normalizedText, note.visibility, note.localOnly, note.cw, attachment,
-				meta.emojiSuggestionEndpoint, meta.emojiSuggestionApiKey, meta.emojiSuggestionMaxSuggestions,
-			])).digest('hex')}`;
+
 			try {
 				const cached = await this.redisClient.get(cacheKey);
 				if (cached) {
@@ -239,7 +232,6 @@ export class EmojiSuggestionService {
 			const meta = await this.metaService.fetch();
 			if (!meta.emojiSuggestionEnabled || !meta.emojiSuggestionEndpoint || !meta.emojiSuggestionApiKey) return;
 			const endpoint = new URL('/v1/emojis', meta.emojiSuggestionEndpoint);
-			if (endpoint.protocol !== 'https:') throw new Error('HTTPS required');
 			await this.httpRequestService.send(endpoint.href, {
 				method: 'POST', redirect: 'error', timeout: 5000, size: 4096,
 				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${meta.emojiSuggestionApiKey}` },

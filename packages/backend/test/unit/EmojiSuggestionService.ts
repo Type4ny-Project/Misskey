@@ -223,6 +223,15 @@ describe('EmojiSuggestionService', () => {
 		}
 	});
 
+	test('uses the configured HTTP endpoint for suggestions and emoji sync', async () => {
+		const send = vi.fn(async (_url: string) => jsonResponse(workerResponse()));
+		const { service } = createService(createMeta({ emojiSuggestionEndpoint: 'http://suggest.example.invalid/v1/suggest' }), send);
+		await service.suggestForNote(createNote());
+		expect(send.mock.calls[0]?.[0]).toBe('http://suggest.example.invalid/v1/suggest');
+		await service.syncEmoji({ host: null, name: 'hello', aliases: [], category: null, publicUrl: 'https://files.example/hello.png' } as never);
+		expect(send.mock.calls[1]?.[0]).toBe('http://suggest.example.invalid/v1/emojis');
+	});
+
 	test('filters proxied Worker suggestions below the minimum score', async () => {
 		const send = vi.fn(async () => jsonResponse(workerResponse({
 			items: [
@@ -250,7 +259,8 @@ describe('EmojiSuggestionService', () => {
 		await Promise.all([service.suggestForNote(createNote()), service.suggestForNote(createNote())]);
 		await service.suggestForNote(createNote());
 		expect(send).toHaveBeenCalledTimes(1);
-		await service.suggestForNote(createNote({ text: 'changed 🤯' }));
+		expect([...cache.keys()]).toEqual(['emoji-suggestion:v2:note-fixture:0']);
+		await service.suggestForNote(createNote({ text: 'changed 🤯', updatedAt: new Date('2026-10-22T00:00:00Z') }));
 		expect(send).toHaveBeenCalledTimes(2);
 		await expect(service.suggestForNote(createNote({ visibility: 'specified' }))).resolves.toEqual({ items: [], reason: 'ineligible' });
 		expect(send).toHaveBeenCalledTimes(2);

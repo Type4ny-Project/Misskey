@@ -21,6 +21,11 @@ export const meta = {
 	kind: 'write:admin:meta',
 
 	errors: {
+		invalidEmojiSuggestionEndpoint: {
+			message: 'Emoji suggestion endpoint must be a valid HTTP or HTTPS URL.',
+			code: 'INVALID_EMOJI_SUGGESTION_ENDPOINT',
+			id: '92f74984-c5c6-430a-a1ce-399eea985ea2',
+		},
 		invalidLoginBonusPointsRange: {
 			message: 'Minimum login bonus points must not exceed maximum points.',
 			code: 'INVALID_LOGIN_BONUS_POINTS_RANGE',
@@ -761,6 +766,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.emojiSuggestionEndpoint !== undefined) {
 				const value = (ps.emojiSuggestionEndpoint ?? '').trim();
+				if (value && (!URL.canParse(value) || !['http:', 'https:'].includes(new URL(value).protocol))) {
+					throw new ApiError(meta.errors.invalidEmojiSuggestionEndpoint);
+				}
 				set.emojiSuggestionEndpoint = value === '' ? null : value;
 			}
 

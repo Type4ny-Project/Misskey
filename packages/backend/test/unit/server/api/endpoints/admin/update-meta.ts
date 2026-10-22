@@ -29,6 +29,21 @@ describe('admin/update-meta login bonus settings', () => {
 		metaService.fetch.mockResolvedValue(settings);
 	});
 
+	test.each(['https://suggest.example/v1/suggest', 'http://suggest.example/v1/suggest'])('saves a valid suggestion endpoint: %s', async url => {
+		await endpoint.exec({ emojiSuggestionEndpoint: ` ${url} ` }, admin, null);
+		expect(metaService.update).toHaveBeenCalledWith({ emojiSuggestionEndpoint: url });
+	});
+
+	test.each(['not a URL', '/v1/suggest', 'https://', 'ftp://example.com/suggest', 'javascript:alert(1)'])('rejects an invalid suggestion endpoint before saving: %s', async url => {
+		await expect(endpoint.exec({ emojiSuggestionEndpoint: url }, admin, null)).rejects.toMatchObject({ code: 'INVALID_EMOJI_SUGGESTION_ENDPOINT' });
+		expect(metaService.update).not.toHaveBeenCalled();
+	});
+
+	test.each([null, '', '   '])('allows clearing the suggestion endpoint: %s', async url => {
+		await endpoint.exec({ emojiSuggestionEndpoint: url }, admin, null);
+		expect(metaService.update).toHaveBeenCalledWith({ emojiSuggestionEndpoint: null });
+	});
+
 	test('saves enablement, reset time and a fixed points amount', async () => {
 		const params = { enableLoginBonus: true, loginBonusResetTime: '07:30', loginBonusMinPoints: 10, loginBonusMaxPoints: 10 };
 		await endpoint.exec(params, admin, null);

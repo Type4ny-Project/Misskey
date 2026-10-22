@@ -22,6 +22,7 @@ cd -- "$root_dir/packages/backend"
 # Keep the production process tree lean: pnpm is useful to resolve development
 # scripts, but it must not remain as a Node process after Misskey has started.
 node ./scripts/compile_config.js
+pnpm typeorm migration:run -d ormconfig.legacy-emoji-cleanup.js
 pnpm typeorm migration:run -d ormconfig.js
 node ./scripts/compile_config.js
 

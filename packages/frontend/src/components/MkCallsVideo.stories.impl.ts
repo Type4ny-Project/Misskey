@@ -31,6 +31,6 @@ export const Default = {
 
 export const Speaking = { ...Default, args: { ...Default.args, speaking: true } } satisfies StoryObj<typeof MkCallsVideo>;
 
-export const Screen = { ...Default, args: { ...Default.args, screenWindow: true } } satisfies StoryObj<typeof MkCallsVideo>;
+export const Screen = { ...Default, args: { ...Default.args, screenWindow: true, screen: true } } satisfies StoryObj<typeof MkCallsVideo>;
 
 export const ScreenWithAudio = { ...Screen, args: { ...Screen.args, audioVolume: 75 } } satisfies StoryObj<typeof MkCallsVideo>;

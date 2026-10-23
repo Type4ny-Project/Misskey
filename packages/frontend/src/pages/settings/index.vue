@@ -141,6 +141,11 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		to: '/settings/plugin',
 		active: currentPage.value?.route.name === 'plugin',
 	}, {
+		icon: 'ti ti-keyboard',
+		text: i18n.ts._accountShortcuts.title,
+		to: '/settings/keyboard-shortcuts',
+		active: currentPage.value?.route.name === 'keyboard-shortcuts',
+	}, {
 		icon: 'ti ti-columns',
 		text: i18n.ts._timelineHeader.timelineHeader,
 		to: '/settings/timelineHeader',

@@ -23,6 +23,8 @@ import { claimAchievement, claimedAchievements } from '@/utility/achievements.js
 import { initializeSw } from '@/utility/initialize-sw.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
 import { mainRouter } from '@/router.js';
+import { matchAccountShortcut } from '@/utility/account-shortcuts.js';
+import { isAvailableBasicTimeline } from '@/timelines.js';
 import { makeHotkey } from '@/utility/hotkey.js';
 import { addCustomEmoji, removeCustomEmojis, updateCustomEmojis, fetchCustomEmojis } from '@/custom-emojis.js';
 import { prefer } from '@/preferences.js';
@@ -379,6 +381,19 @@ export async function mainBoot() {
 			main.on('announcementCreated', onAnnouncementCreated);
 		}
 	}
+
+	// Account shortcuts are opt-in and read on every event so settings apply without reloading.
+	window.document.addEventListener('keydown', (ev) => {
+		if ($i == null) return;
+		const action = matchAccountShortcut(ev, prefer.s.accountShortcuts, ['timelineHome', 'timelineLocal', 'timelineSocial']);
+		if (action == null) return;
+		const src = action === 'timelineHome' ? 'home' : action === 'timelineLocal' ? 'local' : 'social';
+		if (!isAvailableBasicTimeline(src)) return;
+		ev.preventDefault();
+		ev.stopPropagation();
+		store.set('tl', { ...store.s.tl, src });
+		mainRouter.push('/timeline');
+	}, { passive: false });
 
 	// shortcut
 	let safemodeRequestCount = 0;

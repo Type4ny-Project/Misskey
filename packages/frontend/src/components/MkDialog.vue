@@ -34,6 +34,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkButton v-if="showOkButton" data-testid="modal-dialog-ok" inline primary rounded :autofocus="!input && !select" :disabled="okButtonDisabledReason != null" @click="ok">{{ okText ?? ((showCancelButton || input || select) ? i18n.ts.ok : i18n.ts.gotIt) }}</MkButton>
 			<MkButton v-if="showCancelButton || input || select" data-testid="modal-dialog-cancel" inline rounded @click="cancel">{{ cancelText ?? i18n.ts.cancel }}</MkButton>
 		</div>
+		<div v-if="type === 'error' && errorInfo" :class="$style.buttons">
+			<MkButton inline rounded @click="copyToClipboard(errorInfo)">{{ i18n.ts.copyErrorInfo }}</MkButton>
+		</div>
 		<div v-if="actions" :class="$style.buttons">
 			<MkButton v-for="action in actions" :key="action.text" inline rounded :primary="action.primary" :danger="action.danger" @click="() => { action.callback(); modal?.close(); }">{{ action.text }}</MkButton>
 		</div>
@@ -55,6 +58,7 @@ import MkSelect from '@/components/MkSelect.vue';
 import type { MkSelectItem } from '@/components/MkSelect.vue';
 import type { OptionValue } from '@/types/option-value.js';
 import { useMkSelect } from '@/composables/use-mkselect.js';
+import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { i18n } from '@/i18n.js';
 
 type Input = {
@@ -75,6 +79,7 @@ const props = withDefaults(defineProps<{
 	type?: 'success' | 'error' | 'warning' | 'info' | 'question' | 'waiting';
 	title?: string;
 	text?: string;
+	errorInfo?: string;
 	input?: Input;
 	select?: Select;
 	icon?: string;

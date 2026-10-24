@@ -64,7 +64,7 @@ export function misskeyApi<
 			} else if (res.status === 204) {
 				resolve(undefined as _ResT); // void -> undefined
 			} else {
-				reject(body.error);
+				reject({ ...body.error, endpoint });
 			}
 		}).catch(reject);
 	});
@@ -106,7 +106,7 @@ export function misskeyApiGet<
 			} else if (res.status === 204) {
 				resolve(undefined as _ResT); // void -> undefined
 			} else {
-				reject(body.error);
+				reject({ ...body.error, endpoint });
 			}
 		}).catch(reject);
 	});

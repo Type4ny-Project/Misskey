@@ -56,6 +56,13 @@ export const Error = {
 		type: 'error',
 	},
 } satisfies StoryObj<typeof MkDialog>;
+export const ErrorWithCopy = {
+	...Error,
+	args: {
+		...Error.args,
+		errorInfo: 'Code: CALLS_ACCESS_DENIED\nMessage: Access denied',
+	},
+} satisfies StoryObj<typeof MkDialog>;
 export const Warning = {
 	...Base,
 	args: {

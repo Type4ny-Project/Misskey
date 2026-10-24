@@ -29,6 +29,7 @@ import MkToast from '@/components/MkToast.vue';
 import MkDialog from '@/components/MkDialog.vue';
 import MkPopupMenu from '@/components/MkPopupMenu.vue';
 import MkContextMenu from '@/components/MkContextMenu.vue';
+import { formatErrorInfo } from '@/utility/error-info.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { pleaseLogin } from '@/utility/please-login.js';
 import { showMovedDialog } from '@/utility/show-moved-dialog.js';
@@ -45,30 +46,13 @@ export const apiWithDialog = (<E extends keyof Misskey.Endpoints>(
 	customErrors?: ApiWithDialogCustomErrors,
 ) => {
 	const promise = misskeyApi(endpoint, data, token);
-	promiseDialog(promise, null, async (err) => {
+	promiseDialog(promise, null, (err) => {
 		let title: string | undefined;
-		let text = err.message + '\n' + err.id;
+		let text = err.message ?? i18n.ts.somethingHappened;
+		if (err.id != null) text += '\n' + err.id;
 		if (err.code === 'INTERNAL_ERROR') {
 			title = i18n.ts.internalServerError;
 			text = i18n.ts.internalServerErrorDescription;
-			const date = new Date().toISOString();
-			const { result } = await actions({
-				type: 'error',
-				title,
-				text,
-				actions: [{
-					value: 'ok',
-					text: i18n.ts.gotIt,
-					primary: true,
-				}, {
-					value: 'copy',
-					text: i18n.ts.copyErrorInfo,
-				}],
-			});
-			if (result === 'copy') {
-				copyToClipboard(`Endpoint: ${endpoint}\nInfo: ${JSON.stringify(err.info)}\nDate: ${date}`);
-			}
-			return;
 		} else if (err.code === 'RATE_LIMIT_EXCEEDED') {
 			title = i18n.ts.cannotPerformTemporary;
 			text = i18n.ts.cannotPerformTemporaryDescription;
@@ -78,10 +62,10 @@ export const apiWithDialog = (<E extends keyof Misskey.Endpoints>(
 		} else if (err.code === 'ROLE_PERMISSION_DENIED') {
 			title = i18n.ts.permissionDeniedError;
 			text = i18n.ts.permissionDeniedErrorDescription;
-		} else if (err.code.startsWith('TOO_MANY')) { // TODO: バックエンドに kind: client/contentsLimitExceeded みたいな感じで送るように統一してもらってそれで判定する
+		} else if (err.code?.startsWith('TOO_MANY')) { // TODO: バックエンドに kind: client/contentsLimitExceeded みたいな感じで送るように統一してもらってそれで判定する
 			title = i18n.ts.youCannotCreateAnymore;
 			text = `${i18n.ts.error}: ${err.id}`;
-		} else if (err.message.startsWith('Unexpected token')) {
+		} else if (err.message?.startsWith('Unexpected token')) {
 			title = i18n.ts.gotInvalidResponseError;
 			text = i18n.ts.gotInvalidResponseErrorDescription;
 		} else if (customErrors && customErrors[err.id] != null) {
@@ -92,6 +76,8 @@ export const apiWithDialog = (<E extends keyof Misskey.Endpoints>(
 			type: 'error',
 			title,
 			text,
+			error: err,
+			endpoint,
 		});
 	});
 
@@ -124,7 +110,8 @@ export function promiseDialog<T extends Promise<any>>(
 		} else {
 			alert({
 				type: 'error',
-				text: err,
+				text: String(err),
+				error: err,
 			});
 		}
 	});
@@ -263,9 +250,15 @@ export function alert(props: {
 	type?: 'error' | 'info' | 'success' | 'warning' | 'waiting' | 'question';
 	title?: string;
 	text?: string;
+	error?: unknown;
+	endpoint?: string;
 }): Promise<void> {
+	const { error, endpoint, ...dialogProps } = props;
 	return new Promise(resolve => {
-		const { dispose } = popup(MkDialog, props, {
+		const { dispose } = popup(MkDialog, {
+			...dialogProps,
+			errorInfo: props.type === 'error' ? formatErrorInfo({ ...dialogProps, error, endpoint }) : undefined,
+		}, {
 			done: () => {
 				resolve();
 			},

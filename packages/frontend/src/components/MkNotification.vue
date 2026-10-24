@@ -26,7 +26,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				[$style.t_scheduledNotePosted]: notification.type === 'scheduledNotePosted',
 				[$style.t_scheduledNotePostFailed]: notification.type === 'scheduledNotePostFailed',
 				[$style.t_achievementEarned]: notification.type === 'achievementEarned',
-				[$style.t_loginBonus]: notification.type === 'loginBonus',
+				[$style.t_loginBonus]: notification.type === 'loginBonus' || notification.type === 'pointReceived',
 				[$style.t_exportCompleted]: notification.type === 'exportCompleted',
 				[$style.t_login]: notification.type === 'login',
 				[$style.t_createToken]: notification.type === 'createToken',
@@ -45,7 +45,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<i v-else-if="notification.type === 'scheduledNotePosted'" class="ti ti-send"></i>
 			<i v-else-if="notification.type === 'scheduledNotePostFailed'" class="ti ti-alert-triangle"></i>
 			<i v-else-if="notification.type === 'achievementEarned'" class="ti ti-medal"></i>
-			<i v-else-if="notification.type === 'loginBonus'" class="ti ti-gift"></i>
+			<i v-else-if="notification.type === 'loginBonus' || notification.type === 'pointReceived'" class="ti ti-gift"></i>
 			<i v-else-if="notification.type === 'exportCompleted'" class="ti ti-archive"></i>
 			<i v-else-if="notification.type === 'login'" class="ti ti-login-2"></i>
 			<i v-else-if="notification.type === 'createToken'" class="ti ti-key"></i>
@@ -77,7 +77,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span v-else-if="notification.type === 'createToken'">{{ i18n.ts._notification.createToken }}</span>
 			<span v-else-if="notification.type === 'test'">{{ i18n.ts._notification.testNotification }}</span>
 			<span v-else-if="notification.type === 'exportCompleted'">{{ i18n.tsx._notification.exportOfXCompleted({ x: exportEntityName[notification.exportedEntity] }) }}</span>
-			<MkA v-else-if="notification.type === 'follow' || notification.type === 'mention' || notification.type === 'reply' || notification.type === 'renote' || notification.type === 'quote' || notification.type === 'reaction' || notification.type === 'receiveFollowRequest' || notification.type === 'followRequestAccepted'" v-user-preview="notification.user.id" :class="$style.headerName" :to="userPage(notification.user)"><MkUserName :user="notification.user"/></MkA>
+			<MkA v-else-if="notification.type === 'pointReceived' || notification.type === 'follow' || notification.type === 'mention' || notification.type === 'reply' || notification.type === 'renote' || notification.type === 'quote' || notification.type === 'reaction' || notification.type === 'receiveFollowRequest' || notification.type === 'followRequestAccepted'" v-user-preview="notification.user.id" :class="$style.headerName" :to="userPage(notification.user)"><MkUserName :user="notification.user"/></MkA>
 			<span v-else-if="notification.type === 'reaction:grouped' && notification.note.reactionAcceptance === 'likeOnly'">{{ i18n.tsx._notification.likedBySomeUsers({ n: getActualReactedUsersCount(notification) }) }}</span>
 			<span v-else-if="notification.type === 'reaction:grouped'">{{ i18n.tsx._notification.reactedBySomeUsers({ n: getActualReactedUsersCount(notification) }) }}</span>
 			<span v-else-if="notification.type === 'renote:grouped'">{{ i18n.tsx._notification.renotedBySomeUsers({ n: notification.users.length }) }}</span>
@@ -126,6 +126,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkA v-else-if="notification.type === 'achievementEarned'" :class="$style.text" to="/my/achievements">
 				{{ i18n.ts._achievements._types[`_${notification.achievement}`].title }}
 			</MkA>
+			<div v-else-if="notification.type === 'pointReceived'" :class="$style.text">
+				{{ i18n.tsx._notification.pointReceived({ points: notification.points, pointName: instance.pointName ?? i18n.ts.point }) }}
+			</div>
 			<div v-else-if="notification.type === 'loginBonus'" :class="$style.text">
 				+{{ notification.points }} {{ instance.pointName ?? i18n.ts.point }}
 			</div>

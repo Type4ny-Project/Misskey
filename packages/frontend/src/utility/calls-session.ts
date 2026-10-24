@@ -246,6 +246,25 @@ function setParticipantVolume(userId: string, volume: number): void {
 	applyParticipantVolumes();
 }
 
+function startAudioPlayback(): void {
+	if (audioOutput != null) return;
+	const output = new CallsAudioOutput(suspended => { needsAudioResume.value = suspended; });
+	audioOutput = output;
+	// Safari needs both play() and resume() within the join gesture, before network awaits.
+	audioPlayback = Promise.all([
+		output.play(),
+		supportsOutputDevice ? output.setSinkId(selectedOutputDevice.value).catch(error => {
+			console.warn('[Calls] Saved output device unavailable; using default output', error);
+		}) : undefined,
+	]).then(() => {
+		if (audioOutput === output) needsAudioResume.value = false;
+	}).catch(error => {
+		if (audioOutput !== output) return;
+		console.warn('[Calls] Audio playback failed', error);
+		needsAudioResume.value = true;
+	});
+}
+
 function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublication): void {
 	removeRemoteTrack(publication.id);
 	if (track.kind === 'video' && publication.mediaSource !== 'microphone') {
@@ -256,25 +275,7 @@ function addRemoteTrack(track: MediaStreamTrack, publication: CallsRemotePublica
 		return;
 	}
 	if (track.kind !== 'audio') return;
-	if (audioOutput == null) {
-		const output = new CallsAudioOutput(suspended => { needsAudioResume.value = suspended; });
-		audioOutput = output;
-		audioPlayback = (async () => {
-			if (supportsOutputDevice) {
-				try {
-					await output.setSinkId(selectedOutputDevice.value);
-				} catch (error) {
-					console.warn('[Calls] Saved output device unavailable; using default output', error);
-				}
-			}
-			await output.play();
-		})().catch(error => {
-			if (audioOutput !== output) return;
-			console.warn('[Calls] Audio playback failed', error);
-			needsAudioResume.value = true;
-		});
-	}
-	audioOutput.add(publication.id, track);
+	audioOutput?.add(publication.id, track);
 	remoteAudio.set(publication.id, { participantId: publication.participantId, track, screenPublicationId: publication.screenPublicationId });
 	if (publication.screenPublicationId != null) screenAudioIds.value = new Set(screenAudioIds.value).add(publication.screenPublicationId);
 	applyParticipantVolumes();
@@ -434,7 +435,9 @@ async function join(roomId: string, alreadyParticipant: boolean, reconnectToken?
 	let joinedNow = false;
 	let generation = sessionGeneration;
 	try {
-		if (currentRoomId.value != null && currentRoomId.value !== roomId) await leave();
+		const leaving = currentRoomId.value != null && currentRoomId.value !== roomId ? leave() : null;
+		startAudioPlayback();
+		if (leaving != null) await leaving;
 		generation = ++sessionGeneration;
 		currentRoomId.value = roomId;
 		const next = attachConnection(roomId);

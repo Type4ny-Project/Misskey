@@ -13,6 +13,7 @@ const fixture = vi.hoisted(() => ({
 	audioGains: [] as Array<{ gain: { value: number }; connect: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }>,
 	audioSources: [] as Array<{ connect: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }>,
 	closeAudio: vi.fn(),
+	resumeOutput: vi.fn(),
 	toast: vi.fn(),
 	playSound: vi.fn(),
 	alert: vi.fn(),
@@ -137,10 +138,11 @@ describe('Calls session device handoff', () => {
 		fixture.audioGains.length = 0;
 		fixture.audioSources.length = 0;
 		fixture.closeAudio.mockReset().mockResolvedValue(undefined);
+		fixture.resumeOutput.mockReset().mockResolvedValue(undefined);
 		vi.stubGlobal('AudioContext', class {
 			state = 'running';
 			onstatechange: (() => void) | null = null;
-			resume = vi.fn().mockResolvedValue(undefined);
+			resume = fixture.resumeOutput;
 			close = fixture.closeAudio;
 			createMediaStreamDestination() { return { stream: new MediaStream() }; }
 			createMediaStreamSource() {
@@ -566,6 +568,45 @@ describe('Calls session device handoff', () => {
 		expect(fixture.controllers[0].switchMicrophone).toHaveBeenLastCalledWith('headset');
 		await session.leave();
 		expect(session.getAudioSettings()).toMatchObject({ microphoneId: 'headset', cameraId: 'usb-camera' });
+	});
+
+	test.each([false, true])('starts audio within the join gesture before awaiting a saved output device (switching rooms: %s)', async switchingRooms => {
+		const original = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'setSinkId');
+		const setSinkId = vi.fn().mockResolvedValue(undefined);
+		Object.defineProperty(HTMLMediaElement.prototype, 'setSinkId', { configurable: true, value: setSinkId });
+		const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+		vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+		try {
+			vi.resetModules();
+			session = (await import('@/utility/calls-session.js')).useCallsSession();
+			if (switchingRooms) await session.join('room-a', false);
+			play.mockClear();
+			fixture.resumeOutput.mockClear();
+			let restoreOutput!: () => void;
+			setSinkId.mockImplementationOnce(() => new Promise<void>(resolve => { restoreOutput = resolve; }));
+			let inGesture = true;
+			play.mockImplementation(function (this: HTMLMediaElement) {
+				return this.muted || inGesture ? Promise.resolve() : Promise.reject(new DOMException('Autoplay blocked', 'NotAllowedError'));
+			});
+			const joining = session.join(switchingRooms ? 'room-b' : 'room-a', false);
+			inGesture = false;
+			expect(play).toHaveBeenCalledOnce();
+			expect(fixture.resumeOutput).toHaveBeenCalledOnce();
+			restoreOutput();
+			await joining;
+			for (const id of ['first', 'second']) {
+				fixture.remoteTrackCallbacks.at(-1)!(Object.assign(new EventTarget(), { kind: 'audio' }) as MediaStreamTrack,
+					{ id, participantId: id, mediaKind: 'audio', mediaSource: 'microphone' });
+			}
+			await Promise.resolve();
+			expect(session.needsAudioResume.value).toBe(false);
+			expect(play.mock.contexts.filter(element => element instanceof HTMLMediaElement && !element.muted)).toHaveLength(1);
+		} finally {
+			await session.leave();
+			play.mockRestore();
+			if (original) Object.defineProperty(HTMLMediaElement.prototype, 'setSinkId', original);
+			else delete (HTMLMediaElement.prototype as Partial<HTMLMediaElement>).setSinkId;
+		}
 	});
 
 	test('reuses the unlocked mixed output when additional speakers arrive', async () => {

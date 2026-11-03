@@ -178,9 +178,9 @@ export const paramDef = {
 		autoAcceptFollowed: { type: 'boolean' },
 		noCrawle: { type: 'boolean' },
 		preventAiLearning: { type: 'boolean' },
-		requireSigninToViewContents: { type: 'boolean' },
-		makeNotesFollowersOnlyBefore: { type: 'integer', nullable: true },
-		makeNotesHiddenBefore: { type: 'integer', nullable: true },
+		requireSigninToViewContents: { type: 'boolean', const: false },
+		makeNotesFollowersOnlyBefore: { type: 'null' },
+		makeNotesHiddenBefore: { type: 'null' },
 		isBot: { type: 'boolean' },
 		isCat: { type: 'boolean' },
 		injectFeaturedNote: { type: 'boolean' },
@@ -356,9 +356,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (typeof ps.noCrawle === 'boolean') profileUpdates.noCrawle = ps.noCrawle;
 			if (typeof ps.preventAiLearning === 'boolean') profileUpdates.preventAiLearning = ps.preventAiLearning;
 			if (typeof ps.requireSigninToViewContents === 'boolean') updates.requireSigninToViewContents = ps.requireSigninToViewContents;
-			// FIXME https://github.com/Type4ny-Project/Misskey/issues/1
-			if ((typeof ps.makeNotesFollowersOnlyBefore === 'number') || (ps.makeNotesFollowersOnlyBefore === null)) updates.makeNotesFollowersOnlyBefore = ps.makeNotesFollowersOnlyBefore;
-			if ((typeof ps.makeNotesHiddenBefore === 'number') || (ps.makeNotesHiddenBefore === null)) updates.makeNotesHiddenBefore = ps.makeNotesHiddenBefore;
+			// Lockdown settings can only be cleared on this fork (see issue #1).
+			if (ps.makeNotesFollowersOnlyBefore === null) updates.makeNotesFollowersOnlyBefore = null;
+			if (ps.makeNotesHiddenBefore === null) updates.makeNotesHiddenBefore = null;
 			if (typeof ps.isCat === 'boolean') updates.isCat = ps.isCat;
 			if (typeof ps.injectFeaturedNote === 'boolean') profileUpdates.injectFeaturedNote = ps.injectFeaturedNote;
 			if (typeof ps.receiveAnnouncementEmail === 'boolean') profileUpdates.receiveAnnouncementEmail = ps.receiveAnnouncementEmail;

@@ -6586,6 +6586,10 @@ export interface Locale extends ILocale {
     };
     "_accountSettings": {
         /**
+         * このサーバーでは、設定済みの制限を無効にすることだけができます。一度無効にすると、再び有効にはできません。制限を解除すると、これまで見られなかった人にも投稿が表示される場合があります。
+         */
+        "lockdownDisableOnly": string;
+        /**
          * コンテンツの表示にログインを必須にする
          */
         "requireSigninToViewContents": string;

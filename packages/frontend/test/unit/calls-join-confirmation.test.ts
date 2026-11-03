@@ -275,7 +275,7 @@ describe('Calls room window', () => {
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
 		await fireEvent.click(view.getByRole('button', { name: i18n.ts.details }));
 		await (vi.mocked(os.popupMenu).mock.calls[0][0][0] as MenuButton).action(new PointerEvent('click'));
-		expect(os.alert).toHaveBeenCalledWith({ type: 'error', text: i18n.ts.somethingHappened });
+		expect(os.alert).toHaveBeenCalledWith({ type: 'error', text: i18n.ts.somethingHappened, error: { code: 'CALLS_STALE_REVISION' } });
 		expect(view.getByRole('heading', { name: 'Another user’s room' })).toBeTruthy();
 	});
 
@@ -448,7 +448,7 @@ describe('Calls room window', () => {
 		const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new DOMException('Clipboard denied', 'NotAllowedError'));
 		const view = render(MkCallsRoomWindow, { props: { roomId: 'room' }, global: { stubs } });
 		await fireEvent.click(view.getByRole('button', { name: i18n.ts.copyLink }));
-		await waitFor(() => expect(os.alert).toHaveBeenCalledWith({ type: 'error', text: i18n.ts.somethingHappened }));
+		await waitFor(() => expect(os.alert).toHaveBeenCalledWith({ type: 'error', text: i18n.ts.somethingHappened, error: expect.objectContaining({ name: 'NotAllowedError' }) }));
 		expect(os.toast).not.toHaveBeenCalled();
 		writeText.mockRestore();
 	});

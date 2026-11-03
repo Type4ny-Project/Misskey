@@ -48,7 +48,7 @@ async function createCall(): Promise<void> {
 		dialog.value?.close();
 	} catch (error) {
 		console.error('[Calls] Room creation failed', error);
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 	} finally {
 		creating.value = false;
 	}

@@ -265,8 +265,8 @@ async function copyRoomLink(): Promise<void> {
 	if (popoutWindow != null) window.focus();
 	try {
 		await copyToClipboard(`${url}/calls/${props.roomId}`);
-	} catch {
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	} catch (error) {
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 	}
 }
 
@@ -316,7 +316,7 @@ async function changeTitle(): Promise<void> {
 		await refreshRoom();
 	} catch (error) {
 		console.error('[Calls] Title change failed', error);
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 	}
 }
 
@@ -329,7 +329,7 @@ async function openParticipantMenu(participant: (typeof participants.value)[numb
 		({ publications } = await misskeyApi('calls/media/reconcile', { roomId: props.roomId }));
 	} catch (error) {
 		console.error('[Calls] Participant menu failed', error);
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 		return;
 	}
 	if (disposed || !canModerateParticipants.value || room.value == null) return;
@@ -359,7 +359,7 @@ async function showScreenWindow(stream: MediaStream, participantId: string): Pro
 	} catch (error) {
 		console.error('[Calls] Room operation failed', error);
 		if (popoutWindow != null) window.focus();
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 	}
 }
 
@@ -393,7 +393,7 @@ async function joinRoom(startMuted = false, requestConfirmation = false): Promis
 		os.toast(i18n.ts._calls.joinedCall);
 	} catch (error) {
 		console.error('[Calls] Room operation failed', error);
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 	}
 }
 
@@ -408,7 +408,7 @@ async function leaveCurrentRoom(): Promise<void> {
 		if (!endingRoom) closeWindow();
 	} catch (error) {
 		console.error('[Calls] Room operation failed', error);
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 	}
 }
 
@@ -434,7 +434,7 @@ async function transferHost(participantId: string): Promise<void> {
 		await refreshRoom();
 	} catch (error) {
 		console.error('[Calls] Host transfer failed', error);
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 	}
 }
 
@@ -445,7 +445,7 @@ async function setModerator(participantId: string, isModerator: boolean): Promis
 		await refreshRoom();
 	} catch (error) {
 		console.error('[Calls] Moderator change failed', error);
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 	}
 }
 
@@ -458,7 +458,7 @@ async function muteParticipant(participantId: string): Promise<void> {
 		await refreshRoom();
 	} catch (error) {
 		console.error('[Calls] Participant mute failed', error);
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 	}
 }
 
@@ -471,7 +471,7 @@ async function stopParticipantVideo(participantId: string, mediaSource: 'camera'
 		await refreshRoom();
 	} catch (error) {
 		console.error('[Calls] Participant video stop failed', error);
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 	}
 }
 
@@ -484,7 +484,7 @@ async function removeParticipant(participantId: string): Promise<void> {
 		await refreshRoom();
 	} catch (error) {
 		console.error('[Calls] Participant kick failed', error);
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 	}
 }
 

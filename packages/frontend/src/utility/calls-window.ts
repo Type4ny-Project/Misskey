@@ -59,6 +59,6 @@ export async function openCallsCreation(): Promise<void> {
 	} catch (error) {
 		creationOpen = false;
 		console.error('[Calls] Room creation opening failed', error);
-		await os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: i18n.ts.somethingHappened, error });
 	}
 }

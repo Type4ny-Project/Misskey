@@ -12402,6 +12402,14 @@ export interface Locale extends ILocale {
          */
         "login": string;
         /**
+         * {points}{pointName}を受け取りました
+         */
+        "pointReceived": ParameterizedString<"points" | "pointName">;
+        /**
+         * {name}さんから{points}{pointName}を受け取りました
+         */
+        "pointReceivedFrom": ParameterizedString<"name" | "points" | "pointName">;
+        /**
          * ログインボーナス
          */
         "loginBonus": string;
@@ -12486,6 +12494,10 @@ export interface Locale extends ILocale {
              * ログイン
              */
             "login": string;
+            /**
+             * ポイントを受け取った
+             */
+            "pointReceived": string;
             /**
              * ログインボーナス
              */

@@ -6,6 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div
 	:class="[$style.root]"
+	@keydown="onAccountShortcut"
 	@dragover.stop="onDragover"
 	@dragenter="onDragenter"
 	@dragleave="onDragleave"
@@ -20,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 		<div :class="$style.headerRight">
 			<template v-if="!(targetChannel != null && fixed)">
-				<button v-if="targetChannel == null" ref="visibilityButton" v-tooltip="i18n.ts.visibility" :class="['_button', $style.headerRightItem, $style.visibility]" @click="setVisibility">
+				<button v-if="targetChannel == null" ref="visibilityButton" v-tooltip="i18n.ts.visibility" :class="['_button', $style.headerRightItem, $style.visibility]" @click="setVisibility()">
 					<span v-if="visibility === 'public'"><i class="ti ti-world"></i></span>
 					<span v-if="visibility === 'home'"><i class="ti ti-home"></i></span>
 					<span v-if="visibility === 'followers'"><i class="ti ti-lock"></i></span>
@@ -151,6 +152,7 @@ import { claimAchievement } from '@/utility/achievements.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
 import { mfmFunctionPicker } from '@/utility/mfm-function-picker.js';
 import { prefer } from '@/preferences.js';
+import { matchAccountShortcut } from '@/utility/account-shortcuts.js';
 import { getPluginHandlers } from '@/plugin.js';
 import { DI } from '@/di.js';
 import { globalEvents } from '@/events.js';
@@ -543,7 +545,7 @@ function updateFileName(file: Misskey.entities.DriveFile, name: Misskey.entities
 	files.value[files.value.findIndex(x => x.id === file.id)].name = name;
 }
 
-function setVisibility() {
+function setVisibility(returnFocusTo?: HTMLElement) {
 	if (targetChannel.value) {
 		visibility.value = 'public';
 		if (isChannelLocalOnly.value)	localOnly.value = true;
@@ -554,6 +556,7 @@ function setVisibility() {
 		currentVisibility: visibility.value,
 		isSilenced: $i.isSilenced,
 		anchorElement: visibilityButton.value,
+		returnFocusTo,
 		...(replyTargetNote.value ? { isReplyVisibilitySpecified: replyTargetNote.value.visibility === 'specified' } : {}),
 	}, {
 		changeVisibility: v => {
@@ -744,6 +747,15 @@ function clear() {
 	quoteId.value = null;
 	scheduledAt.value = null;
 	uploader.reset();
+}
+
+function onAccountShortcut(ev: KeyboardEvent) {
+	if (targetChannel.value || posting.value || posted.value || justEndedComposition.value) return;
+	if (matchAccountShortcut(ev, prefer.s.accountShortcuts, ['postVisibility'], true) !== 'postVisibility') return;
+	ev.preventDefault();
+	ev.stopPropagation();
+	const activeElement = window.document.activeElement;
+	setVisibility(activeElement instanceof HTMLElement ? activeElement : undefined);
 }
 
 function onKeydown(ev: KeyboardEvent) {

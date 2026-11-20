@@ -3,10 +3,35 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * 同名の制約が同じテーブルに既にある場合は何もしない。
+ * PostgreSQL には ADD CONSTRAINT IF NOT EXISTS が無いため pg_constraint で確認する。
+ */
+async function addConstraintIfNotExists(queryRunner, table, name, definition) {
+	await queryRunner.query(`
+		DO $$
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM pg_constraint
+				WHERE conname = '${name}' AND conrelid = to_regclass('public."${table}"')
+			) THEN
+				ALTER TABLE "${table}" ADD CONSTRAINT "${name}" ${definition};
+			END IF;
+		END $$;
+	`);
+}
+
 export class AlignSchema1791103688453 {
 	name = 'AlignSchema1791103688453';
 
 	async up(queryRunner) {
+		// 旧 migration が RENAME で退避した legacy テーブルは制約名・インデックス名を引き継いでおり、
+		// 下の PK_* と衝突する(relation already exists)ため先に削除する。
+		await queryRunner.query(`DROP TABLE IF EXISTS "legacy_inbox_rule"`);
+		await queryRunner.query(`DROP TABLE IF EXISTS "legacy_note_schedule"`);
+		await queryRunner.query(`DROP TABLE IF EXISTS "legacy_note_unread"`);
+		await queryRunner.query(`DROP TABLE IF EXISTS "legacy_emoji_request"`);
+
 		// Preserve existing IDs: TypeORM generates destructive DROP/ADD for varchar length changes.
 		await queryRunner.query(`ALTER TABLE "event" DROP CONSTRAINT IF EXISTS "FK_event_createdById"`);
 		await queryRunner.query(`ALTER TABLE "event" DROP CONSTRAINT IF EXISTS "FK_1d5a6b5f38273d74f192ae552a6"`);
@@ -42,7 +67,7 @@ export class AlignSchema1791103688453 {
 		await queryRunner.query(`ALTER TABLE "emoji_request" DROP CONSTRAINT IF EXISTS "PK_emoji_request_id"`);
 		await queryRunner.query(`ALTER TABLE "emoji_request" DROP CONSTRAINT IF EXISTS "PK_3c74521e048dc744f0c7eb65f4a"`);
 		await queryRunner.query(`ALTER TABLE "emoji_request" ALTER COLUMN "id" TYPE character varying(32)`);
-		await queryRunner.query(`ALTER TABLE "emoji_request" ADD CONSTRAINT "PK_3c74521e048dc744f0c7eb65f4a" PRIMARY KEY ("id")`);
+		await addConstraintIfNotExists(queryRunner, 'emoji_request', 'PK_3c74521e048dc744f0c7eb65f4a', `PRIMARY KEY ("id")`);
 		await queryRunner.query(`ALTER TABLE "emoji_request" ALTER COLUMN "createdAt" SET DEFAULT now()`);
 		await queryRunner.query(`ALTER TABLE "emoji_request" ALTER COLUMN "userId" TYPE character varying(32)`);
 		await queryRunner.query(`UPDATE "emoji_request" SET "aliases" = '{}' WHERE "aliases" IS NULL`);
@@ -67,7 +92,7 @@ export class AlignSchema1791103688453 {
 		await queryRunner.query(`ALTER TABLE "inbox_rule" DROP CONSTRAINT IF EXISTS "PK_inbox_rule_id"`);
 		await queryRunner.query(`ALTER TABLE "inbox_rule" DROP CONSTRAINT IF EXISTS "PK_cb50481ac6e8176c51f004c9456"`);
 		await queryRunner.query(`ALTER TABLE "inbox_rule" ALTER COLUMN "id" TYPE character varying(32)`);
-		await queryRunner.query(`ALTER TABLE "inbox_rule" ADD CONSTRAINT "PK_cb50481ac6e8176c51f004c9456" PRIMARY KEY ("id")`);
+		await addConstraintIfNotExists(queryRunner, 'inbox_rule', 'PK_cb50481ac6e8176c51f004c9456', `PRIMARY KEY ("id")`);
 		await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_6eba9b135837cec1859b42e7da" ON "emoji_request"  ("createdAt") `);
 		await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_5e4674e4958377354d27ac8215" ON "emoji_request"  ("updatedAt") `);
 		await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_a4091f9755eb7d8f7a0f44ae28" ON "emoji_request"  ("userId") `);
@@ -83,11 +108,11 @@ export class AlignSchema1791103688453 {
 		// Deleted accounts could leave requests behind before this foreign key existed.
 		await queryRunner.query(`DELETE FROM "emoji_request" WHERE NOT EXISTS (SELECT 1 FROM "user" WHERE "user"."id" = "emoji_request"."userId")`);
 		await queryRunner.query(`ALTER TABLE "emoji_request" DROP CONSTRAINT IF EXISTS "FK_a4091f9755eb7d8f7a0f44ae284"`);
-		await queryRunner.query(`ALTER TABLE "emoji_request" ADD CONSTRAINT "FK_a4091f9755eb7d8f7a0f44ae284" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-		await queryRunner.query(`ALTER TABLE "event" ADD CONSTRAINT "FK_1d5a6b5f38273d74f192ae552a6" FOREIGN KEY ("createdById") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-		await queryRunner.query(`ALTER TABLE "event" ADD CONSTRAINT "FK_8cf65e2ee25ec8d492b4e860092" FOREIGN KEY ("approvedById") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
-		await queryRunner.query(`ALTER TABLE "event" ADD CONSTRAINT "FK_e6675b3a60d4e049d32469e0a3c" FOREIGN KEY ("channelId") REFERENCES "channel"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
-		await queryRunner.query(`ALTER TABLE "hashtag_following" ADD CONSTRAINT "FK_97cb763f7776150908f12c2edc4" FOREIGN KEY ("followerId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+		await addConstraintIfNotExists(queryRunner, 'emoji_request', 'FK_a4091f9755eb7d8f7a0f44ae284', `FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+		await addConstraintIfNotExists(queryRunner, 'event', 'FK_1d5a6b5f38273d74f192ae552a6', `FOREIGN KEY ("createdById") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+		await addConstraintIfNotExists(queryRunner, 'event', 'FK_8cf65e2ee25ec8d492b4e860092', `FOREIGN KEY ("approvedById") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+		await addConstraintIfNotExists(queryRunner, 'event', 'FK_e6675b3a60d4e049d32469e0a3c', `FOREIGN KEY ("channelId") REFERENCES "channel"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+		await addConstraintIfNotExists(queryRunner, 'hashtag_following', 'FK_97cb763f7776150908f12c2edc4', `FOREIGN KEY ("followerId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
 	}
 
 	async down(queryRunner) {
@@ -115,7 +140,7 @@ export class AlignSchema1791103688453 {
 		await queryRunner.query(`ALTER TABLE "inbox_rule" DROP CONSTRAINT IF EXISTS "PK_cb50481ac6e8176c51f004c9456"`);
 		await queryRunner.query(`ALTER TABLE "inbox_rule" DROP CONSTRAINT IF EXISTS "PK_inbox_rule_id"`);
 		await queryRunner.query(`ALTER TABLE "inbox_rule" ALTER COLUMN "id" TYPE character varying(64)`);
-		await queryRunner.query(`ALTER TABLE "inbox_rule" ADD CONSTRAINT "PK_inbox_rule_id" PRIMARY KEY ("id")`);
+		await addConstraintIfNotExists(queryRunner, 'inbox_rule', 'PK_inbox_rule_id', `PRIMARY KEY ("id")`);
 		await queryRunner.query(`COMMENT ON COLUMN "event"."updatedAt" IS NULL`);
 		await queryRunner.query(`COMMENT ON COLUMN "event"."createdAt" IS NULL`);
 		await queryRunner.query(`COMMENT ON COLUMN "event"."channelId" IS NULL`);
@@ -137,7 +162,7 @@ export class AlignSchema1791103688453 {
 		await queryRunner.query(`ALTER TABLE "emoji_request" DROP CONSTRAINT IF EXISTS "PK_3c74521e048dc744f0c7eb65f4a"`);
 		await queryRunner.query(`ALTER TABLE "emoji_request" DROP CONSTRAINT IF EXISTS "PK_emoji_request_id"`);
 		await queryRunner.query(`ALTER TABLE "emoji_request" ALTER COLUMN "id" TYPE character varying(64)`);
-		await queryRunner.query(`ALTER TABLE "emoji_request" ADD CONSTRAINT "PK_emoji_request_id" PRIMARY KEY ("id")`);
+		await addConstraintIfNotExists(queryRunner, 'emoji_request', 'PK_emoji_request_id', `PRIMARY KEY ("id")`);
 		await queryRunner.query(`COMMENT ON COLUMN "note"."noteEditHistory" IS NULL`);
 		await queryRunner.query(`ALTER TABLE "note" ALTER COLUMN "noteEditHistory" DROP NOT NULL`);
 		await queryRunner.query(`COMMENT ON COLUMN "note"."updatedAtHistory" IS NULL`);
@@ -161,9 +186,9 @@ export class AlignSchema1791103688453 {
 		await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_EMOJI_REQUEST_CREATED_AT" ON "emoji_request" USING btree ("createdAt") `);
 		await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_EMOJI_REQUEST_STATUS" ON "emoji_request" USING btree ("status") `);
 		await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_EMOJI_REQUEST_USER_ID" ON "emoji_request" USING btree ("userId") `);
-		await queryRunner.query(`ALTER TABLE "hashtag_following" ADD CONSTRAINT "FK_hashtag_following_followerId" FOREIGN KEY ("followerId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-		await queryRunner.query(`ALTER TABLE "event" ADD CONSTRAINT "FK_event_channelId" FOREIGN KEY ("channelId") REFERENCES "channel"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
-		await queryRunner.query(`ALTER TABLE "event" ADD CONSTRAINT "FK_event_approvedById" FOREIGN KEY ("approvedById") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
-		await queryRunner.query(`ALTER TABLE "event" ADD CONSTRAINT "FK_event_createdById" FOREIGN KEY ("createdById") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+		await addConstraintIfNotExists(queryRunner, 'hashtag_following', 'FK_hashtag_following_followerId', `FOREIGN KEY ("followerId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+		await addConstraintIfNotExists(queryRunner, 'event', 'FK_event_channelId', `FOREIGN KEY ("channelId") REFERENCES "channel"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+		await addConstraintIfNotExists(queryRunner, 'event', 'FK_event_approvedById', `FOREIGN KEY ("approvedById") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
+		await addConstraintIfNotExists(queryRunner, 'event', 'FK_event_createdById', `FOREIGN KEY ("createdById") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
 	}
 }

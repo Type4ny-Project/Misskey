@@ -80,6 +80,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.ltlDisabled);
 			}
 
+			if (me == null && this.serverSettings.ugcVisibilityForVisitor === 'none') return [];
+
 			if (!this.serverSettings.enableFanoutTimeline) {
 				const timeline = await this.getFromDb({
 					untilId,

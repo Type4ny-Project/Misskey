@@ -13,7 +13,7 @@ import MkAnnouncementReactionUsers from '@/components/MkAnnouncementReactionUser
 
 const mocks = vi.hoisted(() => ({ api: vi.fn(), picker: vi.fn(), confirm: vi.fn(), account: vi.fn(), fetch: vi.fn() }));
 vi.mock('@/i.js', () => ({ $i: { id: 'viewer', unreadAnnouncements: [{ id: 'announcement' }, { id: 'other' }] } }));
-vi.mock('@/accounts.js', () => ({ updateCurrentAccountPartial: mocks.account }));
+vi.mock('@/accounts.js', () => ({ updateCurrentAccount: mocks.account }));
 vi.mock('@/i18n.js', () => ({ i18n: {
 	ts: { doReaction: 'Add reaction', _announcement: { readConfirmTitle: 'Read?', reactionReadDescription: 'Reacting marks this as read.' } },
 	tsx: { _announcement: { reactionReadConfirmText: ({ title }: { title: string }) => `Reacting to ${title} marks it as read.` } },

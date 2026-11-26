@@ -9,31 +9,31 @@ import { prefer } from '@/preferences.js';
 
 export const isEnabledUrlPreview = computed(() => (instance.enableUrlPreview && !prefer.r.dataSaver.value.disableUrlPreview));
 
-const LOCAL_EVENT_PATH_RE = /^\/events\/([^/?#]+)\/?$/;
 const LOCAL_URL = new URL(local);
 
-export function getLocalEventId(url: string): string | null {
+export function getLocalUrlCard(url: string): { kind: 'event' | 'calls'; id: string } | null {
 	try {
 		const requestUrl = new URL(url, local);
 		if (!['http:', 'https:'].includes(requestUrl.protocol)) return null;
 		if (requestUrl.origin !== LOCAL_URL.origin) return null;
-		return requestUrl.pathname.match(LOCAL_EVENT_PATH_RE)?.[1] ?? null;
+		const match = /^\/(events|calls)\/([^/?#]+)\/?$/.exec(requestUrl.pathname);
+		return match == null ? null : { kind: match[1] === 'events' ? 'event' : 'calls', id: match[2] };
 	} catch {
 		return null;
 	}
+}
+
+export function getLocalEventId(url: string): string | null {
+	const card = getLocalUrlCard(url);
+	return card?.kind === 'event' ? card.id : null;
 }
 
 export function getLocalCallsRoomId(url: string): string | null {
-	try {
-		const requestUrl = new URL(url, local);
-		if (!['http:', 'https:'].includes(requestUrl.protocol) || requestUrl.origin !== LOCAL_URL.origin) return null;
-		return requestUrl.pathname.match(/^\/calls\/([^/?#]+)\/?$/)?.[1] ?? null;
-	} catch {
-		return null;
-	}
+	const card = getLocalUrlCard(url);
+	return card?.kind === 'calls' ? card.id : null;
 }
 
-export function transformPlayerUrl(url: string): string {
+export function transformPlayerUrl(url: string, autoplay = false): string {
 	const urlObj = new URL(url);
 	if (!['https:', 'http:'].includes(urlObj.protocol)) throw new Error('Invalid protocol');
 
@@ -44,8 +44,11 @@ export function transformPlayerUrl(url: string): string {
 		// https://dev.twitch.tv/docs/embed/video-and-clips/
 		urlParams.set('parent', hostname);
 		urlParams.set('allowfullscreen', '');
-		urlParams.delete('autoplay');
+		urlParams.set('autoplay', autoplay ? 'true' : 'false');
 		urlParams.delete('auto_play');
+	} else if (autoplay) {
+		urlParams.set('autoplay', '1');
+		urlParams.set('auto_play', '1');
 	} else {
 		urlParams.delete('autoplay');
 		urlParams.delete('auto_play');

@@ -45,7 +45,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { ref, useTemplateRef } from 'vue';
 import type * as Misskey from 'misskey-js';
 import MkReactionIcon from '@/components/MkReactionIcon.vue';
-import { updateCurrentAccountPartial } from '@/accounts.js';
+import { updateCurrentAccount } from '@/accounts.js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
@@ -83,7 +83,7 @@ async function react(reaction: string | null) {
 		});
 		emit('update', { reactions: updated.reactions, myReaction: updated.myReaction, isRead: updated.isRead });
 		if (updated.isRead) {
-			updateCurrentAccountPartial({
+			updateCurrentAccount({
 				unreadAnnouncements: $i.unreadAnnouncements.filter(a => a.id !== props.announcement.id),
 			});
 		}

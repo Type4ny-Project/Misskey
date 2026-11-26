@@ -16,6 +16,7 @@ import { bindThis } from '@/decorators.js';
 import { DebounceLoader } from '@/misc/loader.js';
 import { IdService } from '@/core/IdService.js';
 import { shouldHideNoteByTime } from '@/misc/should-hide-note-by-time.js';
+import { isQuotePacked, isRenotePacked } from '@/misc/is-renote.js';
 import { ReactionsBufferingService } from '@/core/ReactionsBufferingService.js';
 import { CacheService } from '@/core/CacheService.js';
 import type { OnModuleInit } from '@nestjs/common';
@@ -195,7 +196,7 @@ export class NoteEntityService implements OnModuleInit {
 	}
 
 	@bindThis
-	private async populatePoll(note: MiNote, meId: MiUser['id'] | null) {
+	private async populatePoll(note: Pick<MiNote, 'id'>, meId: MiUser['id'] | null) {
 		const poll = await this.pollsRepository.findOneByOrFail({ noteId: note.id });
 		const choices = poll.choices.map(c => ({
 			text: c,
@@ -231,6 +232,19 @@ export class NoteEntityService implements OnModuleInit {
 			expiresAt: poll.expiresAt?.toISOString() ?? null,
 			choices,
 		};
+	}
+
+	@bindThis
+	public async withMyPollVotes(note: Packed<'Note'>, meId: MiUser['id'] | null): Promise<Packed<'Note'>> {
+		const [poll, renote, reply] = await Promise.all([
+			note.poll ? this.populatePoll(note, meId) : note.poll,
+			note.renote ? this.withMyPollVotes(note.renote, meId) : note.renote,
+			note.reply ? this.withMyPollVotes(note.reply, meId) : note.reply,
+		]);
+
+		if (poll === note.poll && renote === note.renote && reply === note.reply) return note;
+
+		return { ...note, poll, renote, reply };
 	}
 
 	@bindThis
@@ -275,7 +289,13 @@ export class NoteEntityService implements OnModuleInit {
 	}
 
 	@bindThis
-	public async populateMyReactions(note: { id: MiNote['id'] }, meId: MiUser['id']) {
+	public async populateMyReactions(note: { id: MiNote['id']; reactionCount?: number; reactionAndUserPairCache?: MiNote['reactionAndUserPairCache']; }, meId: MiUser['id']) {
+		// バッファリング中は、保存済みのペアに削除前のリアクションが残っている場合がある
+		if (!this.meta.enableReactionsBuffering && note.reactionAndUserPairCache != null && note.reactionCount === note.reactionAndUserPairCache.length) {
+			const pairs = note.reactionAndUserPairCache.filter(pair => pair.startsWith(`${meId}/`));
+			return pairs.length > 0 ? pairs.map(pair => this.reactionService.convertLegacyReaction(pair.split('/')[1])) : undefined;
+		}
+
 		const reactions = await this.noteReactionsRepository.findBy({
 			userId: meId,
 			noteId: note.id,
@@ -286,6 +306,17 @@ export class NoteEntityService implements OnModuleInit {
 		}
 
 		return undefined;
+	}
+
+	@bindThis
+	public async withMyRenoteReaction(note: Packed<'Note'>, meId: MiUser['id'] | null): Promise<Packed<'Note'>> {
+		if (meId == null) return note;
+		if (!isRenotePacked(note) || isQuotePacked(note)) return note;
+		if (note.renote == null || Object.keys(note.renote.reactions).length === 0) return note;
+
+		const myReactions = await this.populateMyReactions(note.renote, meId);
+		const renote = { ...note.renote, myReaction: myReactions?.[0], myReactions };
+		return { ...note, renote };
 	}
 
 	@bindThis

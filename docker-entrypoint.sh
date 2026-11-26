@@ -17,12 +17,4 @@ while [[ -L "$script_path" ]]; do
 done
 
 root_dir="$(cd -P -- "$(dirname -- "$script_path")" && pwd)"
-cd -- "$root_dir/packages/backend"
-
-# Keep the production process tree lean: pnpm is useful to resolve development
-# scripts, but it must not remain as a Node process after Misskey has started.
-node ./scripts/compile_config.js
-pnpm typeorm migration:run -d ormconfig.js
-node ./scripts/compile_config.js
-
-exec node ./built/entry.js
+exec node "$root_dir/scripts/start.mjs" --migrate

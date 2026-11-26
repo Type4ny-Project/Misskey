@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { ref } from 'vue';
+import { computed, shallowReactive, ref } from 'vue';
 import type { Ref } from 'vue';
 import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
@@ -18,6 +18,7 @@ import * as sound from '@/utility/sound.js';
 import * as os from '@/os.js';
 import { reactionPicker } from '@/utility/reaction-picker.js';
 import { extractUrlFromMfm } from '@/utility/extract-url-from-mfm.js';
+import { getLocalUrlCard } from '@/utility/url-preview.js';
 import { getNoteClipMenu, getNoteMenu, getRenoteMenu, getAbuseNoteMenu, getCopyNoteLinkMenu } from '@/utility/get-note-menu.js';
 import { noteEvents, useNoteCapture } from '@/composables/use-note-capture.js';
 import { deepClone } from '@/utility/clone.js';
@@ -33,7 +34,7 @@ import { globalEvents, useGlobalEvent } from '@/events.js';
 import MkUsersTooltip from '@/components/MkUsersTooltip.vue';
 import MkReactionsViewerDetails from '@/components/MkReactionsViewer.details.vue';
 import MkRippleEffect from '@/components/MkRippleEffect.vue';
-import { notePage } from '@/filters/note.js';
+import { notePage } from '@@/js/note.js';
 import type { DI as DIType } from '@/di.js';
 import type { ExtractInjectedType } from '@/types/misc.js';
 import type { MenuItem } from '@/types/menu.js';
@@ -132,13 +133,14 @@ export function useNote(
 	}
 
 	// 基本状態
-	const isRenote = Misskey.note.isPureRenote(rawNote);
-	const appearNote = getAppearNote(rawNote) ?? rawNote;
+	const note = shallowReactive(rawNote);
+	const isRenote = Misskey.note.isPureRenote(note);
+	const appearNote = shallowReactive(getAppearNote(note) ?? note);
 
 	// キャプチャ（ストリーム購読）
 	const { $note: $appearNote, subscribe: subscribeManuallyToNoteCapture } = useNoteCapture({
 		note: appearNote,
-		parentNote: rawNote,
+		parentNote: note,
 		mock: props.mock,
 	});
 
@@ -154,15 +156,16 @@ export function useNote(
 	const hardMuted = props.withHardMute && $i ? checkNoteWordMute(appearNote, $i, $i.hardMutedWords) : false;
 
 	// 導出値
-	// rawNote / appearNote / $i.id / prefer.s は変化しないので一度だけ計算する
-	const isMyRenote = $i != null && ($i.id === rawNote.userId);
-	const parsed = appearNote.text ? mfm.parse(appearNote.text) : null;
-	const urls = parsed ? extractUrlFromMfm(parsed).filter((url) => appearNote.renote?.url !== url && appearNote.renote?.uri !== url) : null;
-	const isLong = shouldCollapsed(appearNote, urls ?? []);
-	const collapsed = ref(appearNote.cw == null && isLong);
+	const isMyRenote = $i != null && ($i.id === note.userId);
+	const parsed = computed(() => appearNote.text ? mfm.parse(appearNote.text) : null);
+	const urls = computed(() => parsed.value ? extractUrlFromMfm(parsed.value).filter(url =>
+		getLocalUrlCard(url) == null && appearNote.renote?.url !== url && appearNote.renote?.uri !== url,
+	) : null);
+	const isLong = computed(() => shouldCollapsed(appearNote, urls.value ?? []));
+	const collapsed = ref(appearNote.cw == null && isLong.value);
 	const canRenote = ['public', 'home'].includes(appearNote.visibility) || (appearNote.visibility === 'followers' && appearNote.userId === $i?.id);
 	const showTicker = (prefer.s.instanceTicker === 'always') || (prefer.s.instanceTicker === 'remote' && appearNote.user.instance);
-	const renoteCollapsed = ref(prefer.s.collapseRenotes && isRenote && (($i && ($i.id === rawNote.userId || $i.id === appearNote.userId)) || ($appearNote.myReaction != null)));
+	const renoteCollapsed = ref(prefer.s.collapseRenotes && isRenote && (($i && ($i.id === note.userId || $i.id === appearNote.userId)) || ($appearNote.myReaction != null)));
 
 	const pleaseLoginContext: OpenOnRemoteOptions = {
 		type: 'lookup',
@@ -170,8 +173,16 @@ export function useNote(
 	};
 
 	// グローバルイベントの監視
+	useGlobalEvent('noteUpdated', (updatedNote) => {
+		if (updatedNote.id === appearNote.id) {
+			Object.assign(appearNote, deepClone(updatedNote));
+		} else if (updatedNote.id === note.id) {
+			Object.assign(note, deepClone(updatedNote));
+		}
+	});
+
 	useGlobalEvent('noteDeleted', (noteId) => {
-		if (noteId === rawNote.id || noteId === appearNote.id) {
+		if (noteId === note.id || noteId === appearNote.id) {
 			isDeleted.value = true;
 		}
 	});
@@ -226,7 +237,7 @@ export function useNote(
 		showMovedDialog();
 		if (els.renoteButton == null) return;
 		const { menu } = getRenoteMenu({
-			note: rawNote,
+			note,
 			renoteButton: els.renoteButton,
 			mock: props.mock,
 		});
@@ -240,7 +251,7 @@ export function useNote(
 		if (!isLoggedIn) return;
 		os.post({
 			reply: appearNote,
-				channel: appearNote.channel == null ? appearNote.channel : { ...appearNote.channel, isLocalOnly: false },
+			channel: appearNote.channel == null ? appearNote.channel : { ...appearNote.channel, isLocalOnly: false },
 		}).then(() => {
 			focus();
 		});
@@ -253,7 +264,10 @@ export function useNote(
 
 		if (appearNote.reactionAcceptance === 'likeOnly') {
 			sound.playMisskeySfx('reaction');
-			if (props.mock) return;
+			if (props.mock) {
+				createReactionMock?.('❤️');
+				return;
+			}
 			misskeyApi('notes/reactions/create', {
 				noteId: appearNote.id,
 				reaction: '❤️',
@@ -271,7 +285,7 @@ export function useNote(
 			}
 		} else {
 			blur();
-			reactionPicker.show(els.reactButton?.value ?? null, rawNote, async (reaction) => {
+			reactionPicker.show(els.reactButton?.value ?? null, note, async (reaction) => {
 				if (prefer.s.confirmOnReact) {
 					const confirm = await os.confirm({
 						type: 'question',
@@ -318,13 +332,13 @@ export function useNote(
 		const oldReaction = $appearNote.myReaction;
 		if (!oldReaction) return;
 		if (props.mock) return;
-		misskeyApi('notes/reactions/delete', { noteId: appearNote.id }).then(() => {
+		misskeyApi('notes/reactions/delete', { noteId: appearNote.id, reaction: oldReaction }).then(() => {
 			noteEvents.emit(`unreacted:${appearNote.id}`, { userId: $i!.id, reaction: oldReaction });
 		});
 	}
 
 	function toggleReact(customMockCallback?: (reaction: string) => void) {
-		if ($appearNote.myReaction == null) {
+		if (appearNote.reactionAcceptance !== 'likeOnly' || $appearNote.myReaction == null) {
 			react(customMockCallback);
 		} else {
 			if (props.mock && customMockCallback) {
@@ -345,7 +359,7 @@ export function useNote(
 			react();
 		} else {
 			const { menu, cleanup } = getNoteMenu({
-				note: rawNote,
+				note,
 				translating,
 				translation,
 				currentClip: currentClip?.value,
@@ -358,7 +372,7 @@ export function useNote(
 	function showMenu(): void {
 		if (props.mock || els.menuButton == null) return;
 		const { menu, cleanup } = getNoteMenu({
-			note: rawNote,
+			note,
 			translating,
 			translation,
 			currentClip: currentClip?.value,
@@ -370,7 +384,7 @@ export function useNote(
 	async function clip(): Promise<void> {
 		if (props.mock) return;
 		os.popupMenu(await getNoteClipMenu({
-			note: rawNote,
+			note,
 			currentClip: currentClip?.value,
 		}), els.clipButton?.value).then(focus);
 	}
@@ -385,7 +399,7 @@ export function useNote(
 			icon: 'ti ti-trash',
 			danger: true,
 			action: () => {
-				misskeyApi('notes/delete', { noteId: rawNote.id }).then(() => { globalEvents.emit('noteDeleted', rawNote.id); });
+				misskeyApi('notes/delete', { noteId: note.id }).then(() => { globalEvents.emit('noteDeleted', note.id); });
 			},
 		});
 
@@ -393,7 +407,7 @@ export function useNote(
 			type: 'link',
 			text: i18n.ts.renoteDetails,
 			icon: 'ti ti-info-circle',
-			to: notePage(rawNote),
+			to: notePage(note),
 		}];
 
 		if (props.note.channelId != null && (inChannel == null || props.note.channelId !== inChannel.value)) {
@@ -405,14 +419,14 @@ export function useNote(
 			});
 		}
 
-		menuItems.push(getCopyNoteLinkMenu(rawNote, i18n.ts.copyLinkRenote));
+		menuItems.push(getCopyNoteLinkMenu(note, i18n.ts.copyLinkRenote));
 		menuItems.push({ type: 'divider' });
 
 		if (isMyRenote) {
 			menuItems.push(getUnrenote());
 			os.popupMenu(menuItems, els.renoteTime?.value);
 		} else {
-			menuItems.push(getAbuseNoteMenu(rawNote, i18n.ts.reportAbuseRenote));
+			menuItems.push(getAbuseNoteMenu(note, i18n.ts.reportAbuseRenote));
 			if ($i?.isModerator || $i?.isAdmin) {
 				menuItems.push(getUnrenote());
 			}
@@ -428,7 +442,7 @@ export function useNote(
 
 	return {
 		// 状態・データ
-		note: rawNote,
+		note,
 		appearNote,
 		$appearNote,
 		hideByPlugin,

@@ -33,6 +33,7 @@ const UPLOAD_ERROR_IDS = {
 	noFreeSpace: 'd08dbc37-a6a9-463a-8c47-96c32ab5f064',
 	maxFileSizeExceeded: 'b9d8c348-33f0-4673-b9a9-5d4da058977a',
 	unallowedFileType: '4becd248-7f2c-48c4-a9f0-75edc4f9a1ea',
+	noSuchFolder: 'b9adda75-abe9-4c6d-bf12-b5575833960d',
 } as const;
 
 type UploadOptions = {
@@ -119,6 +120,15 @@ function showUploadError(error: UploadRequestError): void {
 			type: 'error',
 			title: i18n.ts.failedToUpload,
 			text: i18n.ts.cannotUploadBecauseUnallowedFileType,
+		});
+		return;
+	}
+
+	if (errorId === UPLOAD_ERROR_IDS.noSuchFolder) {
+		os.alert({
+			type: 'error',
+			title: i18n.ts.failedToUpload,
+			text: i18n.ts.cannotUploadBecauseNoSuchFolder,
 		});
 		return;
 	}
@@ -467,11 +477,13 @@ export function chooseFileFromPcAndUpload(
 
 export function chooseDriveFile(options: {
 	multiple?: boolean;
+	excludeSensitive?: boolean;
 } = {}): Promise<Misskey.entities.DriveFile[]> {
 	return new Promise((resolve, rej) => {
 		let dispose: () => void;
 		os.popupAsyncWithDialog(import('@/components/MkDriveFileSelectDialog.vue').then(x => x.default), {
 			multiple: options.multiple ?? false,
+			excludeSensitive: options.excludeSensitive ?? false,
 		}, {
 			done: files => {
 				if (files) {

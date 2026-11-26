@@ -126,7 +126,7 @@ import { useCallsSession } from '@/utility/calls-session.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import MkA from '@/components/global/MkA.vue';
-import { acct, userPage } from '@/filters/user.js';
+import { acct, userPage } from '@@/js/user.js';
 import type { MenuItem } from '@/types/menu.js';
 
 const props = defineProps<{

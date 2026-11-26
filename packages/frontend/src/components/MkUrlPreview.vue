@@ -13,9 +13,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			v-if="player.url.startsWith('http://') || player.url.startsWith('https://')"
 			sandbox="allow-popups allow-popups-to-escape-sandbox allow-scripts allow-storage-access-by-user-activation allow-same-origin"
 			scrolling="no"
-			:allow="player.allow == null ? 'encrypted-media;fullscreen' : player.allow.filter(x => ['clipboard-write', 'fullscreen', 'encrypted-media', 'picture-in-picture', 'web-share'].includes(x)).join(';')"
+			:allow="playerPermissions"
 			:class="$style.playerIframe"
-			:src="transformPlayerUrl(player.url)"
+			:src="transformPlayerUrl(player.url, autoplay)"
 			:style="{ border: 0 }"
 		></iframe>
 		<span v-else>invalid url</span>
@@ -38,17 +38,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 		></iframe>
 	</div>
 	<div :class="$style.action">
-		<MkButton :small="true" inline @click="tweetExpanded = false">
+		<MkButton :small="true" inline @click="setTweetExpanded(false)">
 			<i class="ti ti-x"></i> {{ i18n.ts.close }}
 		</MkButton>
 	</div>
 </template>
-<template v-else-if="localCallsRoomId !== null">
-	<MkUrlCallsCard :roomId="localCallsRoomId"/>
-</template>
-<template v-else-if="localEventId !== null">
-	<MkUrlEventCard :eventId="localEventId"/>
-</template>
+<MkUrlCallsCard v-else-if="localCard?.kind === 'calls'" :roomId="localCard.id"/>
+<MkUrlEventCard v-else-if="localCard?.kind === 'event'" :eventId="localCard.id"/>
 <div v-else>
 	<component :is="self ? 'MkA' : 'a'" :class="[$style.link, { [$style.compact]: compact }]" :[attr]="maybeRelativeUrl" rel="nofollow noopener" :target="target" :title="url">
 		<div v-if="thumbnail && !sensitive" :class="$style.thumbnail" :style="prefer.s.dataSaver.urlPreviewThumbnail ? '' : { backgroundImage: `url('${thumbnail}')` }">
@@ -72,12 +68,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</component>
 	<template v-if="showActions">
 		<div v-if="tweetId" :class="$style.action">
-			<MkButton :small="true" inline @click="tweetExpanded = true">
+			<MkButton :small="true" inline @click="setTweetExpanded(true)">
 				<i class="ti ti-brand-x"></i> {{ i18n.ts.expandTweet }}
 			</MkButton>
 		</div>
 		<div v-if="!playerEnabled && player.url" :class="$style.action">
-			<MkButton :small="true" inline @click="playerEnabled = true">
+			<MkButton :small="true" inline @click="enablePlayer">
 				<i class="ti ti-player-play"></i> {{ i18n.ts.enablePlayer }}
 			</MkButton>
 			<MkButton v-if="!isMobile" :small="true" inline @click="openPlayer()">
@@ -89,7 +85,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { defineAsyncComponent, onDeactivated, onMounted, onUnmounted, ref } from 'vue';
+import { computed, defineAsyncComponent, onActivated, onDeactivated, onUnmounted, ref } from 'vue';
 import { url as local } from '@@/js/config.js';
 import { versatileLang } from '@@/js/intl-const.js';
 import { maybeMakeRelative } from '@@/js/url.js';
@@ -98,9 +94,9 @@ import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { deviceKind } from '@/utility/device-kind.js';
 import MkButton from '@/components/MkButton.vue';
-import MkUrlEventCard from '@/components/MkUrlEventCard.vue';
 import MkUrlCallsCard from '@/components/MkUrlCallsCard.vue';
-import { getLocalCallsRoomId, getLocalEventId, transformPlayerUrl } from '@/utility/url-preview.js';
+import MkUrlEventCard from '@/components/MkUrlEventCard.vue';
+import { getLocalUrlCard, transformPlayerUrl } from '@/utility/url-preview.js';
 import { store } from '@/store.js';
 import { prefer } from '@/preferences.js';
 
@@ -123,41 +119,42 @@ const self = maybeRelativeUrl !== props.url;
 const attr = self ? 'to' : 'href';
 const target = self ? null : '_blank';
 const fetching = ref(true);
-const title = ref<string | null>(null);
-const description = ref<string | null>(null);
-const thumbnail = ref<string | null>(null);
-const icon = ref<string | null>(null);
-const sitename = ref<string | null>(null);
-const sensitive = ref<boolean>(false);
-const player = ref({
-	url: null,
-	width: null,
-	height: null,
-} as SummalyResult['player']);
-const playerEnabled = ref(false);
+const summalyResult = ref<SummalyResult | null>(null);
+const title = computed(() => summalyResult.value?.title ?? null);
+const description = computed(() => summalyResult.value?.description ?? null);
+const thumbnail = computed(() => summalyResult.value?.thumbnail ?? null);
+const icon = computed(() => summalyResult.value?.icon ?? null);
+const sitename = computed(() => summalyResult.value?.sitename ?? null);
+const sensitive = computed(() => summalyResult.value?.sensitive ?? false);
+const player = computed(() => summalyResult.value?.player ?? { url: null, width: null, height: null });
+const playerEnabled = ref(false); // 初期値はsummaly取り終わったあとに設定
+const autoplay = ref(false);
+const playerPermissions = computed(() => {
+	const allowed = ['clipboard-write', 'fullscreen', 'encrypted-media', 'picture-in-picture', 'web-share'];
+	if (autoplay.value) allowed.push('autoplay');
+	const requested = summalyResult.value?.player?.allow ?? ['autoplay', 'encrypted-media', 'fullscreen'];
+	return requested.filter(x => allowed.includes(x)).join(';');
+});
 const tweetId = ref<string | null>(null);
-const tweetExpanded = ref(props.detail);
+const tweetExpanded = ref(false); // 初期値はsummaly取り終わったあとに設定
+let tweetExpandedByUser = false;
 const embedId = `embed${Math.random().toString().replace(/\D/, '')}`;
 const tweetHeight = ref(150);
 const unknownUrl = ref(false);
+let isDeactivated = false;
 
-onDeactivated(() => {
-	playerEnabled.value = false;
+onActivated(() => {
+	isDeactivated = false;
 });
 
-onMounted(() => {
-	if (prefer.s.alwaysShowPlayer) {
-		playerEnabled.value = true;
-	}
-	if (prefer.s.alwaysExpandTweet) {
-		tweetExpanded.value = true;
-	}
+onDeactivated(() => {
+	isDeactivated = true;
+	playerEnabled.value = false;
 });
 
 const requestUrl = new URL(props.url, local);
 if (!['http:', 'https:'].includes(requestUrl.protocol)) throw new Error('invalid url');
-const localEventId = getLocalEventId(requestUrl.href);
-const localCallsRoomId = getLocalCallsRoomId(requestUrl.href);
+const localCard = getLocalUrlCard(requestUrl.href);
 
 if (requestUrl.hostname === 'twitter.com' || requestUrl.hostname === 'mobile.twitter.com' || requestUrl.hostname === 'x.com' || requestUrl.hostname === 'mobile.x.com') {
 	const m = requestUrl.pathname.match(/^\/.+\/status(?:es)?\/(\d+)/);
@@ -170,7 +167,7 @@ if (requestUrl.hostname === 'music.youtube.com' && requestUrl.pathname.match('^/
 
 requestUrl.hash = '';
 
-if (localEventId == null && localCallsRoomId == null) {
+if (localCard == null) {
 	window.fetch(`/url?url=${encodeURIComponent(requestUrl.href)}&lang=${versatileLang}`)
 		.then(res => {
 			if (!res.ok) {
@@ -179,27 +176,45 @@ if (localEventId == null && localCallsRoomId == null) {
 				}
 				return null;
 			}
-
 			return res.json();
 		})
+		.catch(err => {
+			if (_DEV_) {
+				console.warn('Failed to fetch url preview', err);
+			}
+			return null;
+		})
 		.then((info: SummalyResult | null) => {
+			fetching.value = false;
 			if (!info || info.url == null) {
-				fetching.value = false;
 				unknownUrl.value = true;
+				autoExpandTweet();
 				return;
 			}
-
-			fetching.value = false;
-			unknownUrl.value = false;
-
-			title.value = info.title;
-			description.value = info.description;
-			thumbnail.value = info.thumbnail;
-			icon.value = info.icon;
-			sitename.value = info.sitename;
-			player.value = info.player;
-			sensitive.value = info.sensitive ?? false;
+			summalyResult.value = info;
+			if (!info.sensitive) {
+				autoExpandTweet();
+				if (!isDeactivated && props.showActions) {
+					// Type4ny のプレイヤー自動表示は再生せず、上流の自動展開を選んだ場合だけ再生設定に従う。
+					autoplay.value = prefer.s.expandUrlPreviewAutomatically && prefer.s.autoplayEmbededPlayerOfUrlPreview;
+					playerEnabled.value = prefer.s.alwaysShowPlayer || prefer.s.expandUrlPreviewAutomatically;
+				}
+			}
 		});
+}
+
+function enablePlayer() {
+	autoplay.value = prefer.s.autoplayEmbededPlayerOfUrlPreview;
+	playerEnabled.value = true;
+}
+
+function setTweetExpanded(expanded: boolean) {
+	tweetExpandedByUser = true;
+	tweetExpanded.value = expanded;
+}
+
+function autoExpandTweet() {
+	if ((props.detail || prefer.s.alwaysExpandTweet) && !tweetExpandedByUser) tweetExpanded.value = true;
 }
 
 function adjustTweetHeight(message: MessageEvent) {

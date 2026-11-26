@@ -6,7 +6,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { HashtagFollowingsRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
-import { normalizeForSearch } from '@/misc/normalize-for-search.js';
+import { normalizeTag } from '@/misc/normalize-tag.js';
 import { DI } from '@/di-symbols.js';
 
 export const meta = {
@@ -34,7 +34,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private hashtagFollowingsRepository: HashtagFollowingsRepository,
 	) {
 		super(meta, paramDef, async (ps, me) => {
-			const tag = normalizeForSearch(ps.tag.replace(/^#/, ''));
+			const tag = normalizeTag(ps.tag.replace(/^#/, ''));
 
 			await this.hashtagFollowingsRepository.delete({
 				followerId: me.id,

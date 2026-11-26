@@ -31,7 +31,7 @@ import { markRaw } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkPagination from '@/components/MkPagination.vue';
-import { acct, userPage } from '@/filters/user.js';
+import { acct, userPage } from '@@/js/user.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { Paginator } from '@/utility/paginator.js';

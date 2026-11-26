@@ -378,6 +378,12 @@ export const PREF_DEF = definePreferences({
 			code: false,
 		} as DataSaverStore,
 	},
+	autoplayEmbededPlayerOfUrlPreview: {
+		default: false,
+	},
+	expandUrlPreviewAutomatically: {
+		default: false,
+	},
 	hemisphere: {
 		default: hemisphere as 'N' | 'S',
 	},

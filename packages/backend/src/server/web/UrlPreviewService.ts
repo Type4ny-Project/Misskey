@@ -125,7 +125,8 @@ export class UrlPreviewService implements OnApplicationShutdown {
 			this.logger.warn(`Failed to get preview of ${url}: ${err}`);
 
 			reply.code(422);
-			reply.header('Cache-Control', 'max-age=86400, immutable');
+			// 相手サイトの一時的な障害を長く残さないよう、失敗は5分だけキャッシュする
+			reply.header('Cache-Control', 'max-age=300');
 			return {
 				error: new ApiError({
 					message: 'Failed to get preview',

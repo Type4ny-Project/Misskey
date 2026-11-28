@@ -267,6 +267,8 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 								userId: user.id,
 							}).then(() => {
 								list.userIds?.push(user.id);
+								// 保存されているキャッシュにも反映されるよう、破棄して次回取得し直す
+								userListsCache.delete();
 							});
 						} else {
 							os.apiWithDialog('users/lists/pull', {
@@ -274,6 +276,7 @@ export function getUserMenu(user: Misskey.entities.UserDetailed, router: Router 
 								userId: user.id,
 							}).then(() => {
 								list.userIds?.splice(list.userIds.indexOf(user.id), 1);
+								userListsCache.delete();
 							});
 						}
 					}));

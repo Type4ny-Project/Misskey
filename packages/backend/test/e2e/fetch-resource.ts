@@ -134,6 +134,16 @@ describe('Webリソース', () => {
 		test('はGETできない。', async () => await notFound({ path }));
 	});
 
+	describe('/robots.txt', () => {
+		test('は /files, /proxy, /url をクロール対象から外す。', async () => {
+			const res = await simpleGet('/robots.txt', '*/*', undefined, res => res.text());
+			const lines = (res.body as string).split('\n');
+			for (const path of ['/files', '/proxy', '/url']) {
+				assert.ok(lines.includes(`Disallow: ${path}`), `Disallow: ${path} is missing`);
+			}
+		});
+	});
+
 	describe.each([
 		{ ext: 'rss', type: 'application/rss+xml; charset=utf-8' },
 		{ ext: 'atom', type: 'application/atom+xml; charset=utf-8' },

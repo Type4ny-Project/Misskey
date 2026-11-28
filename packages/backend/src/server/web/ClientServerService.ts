@@ -485,6 +485,7 @@ export class ClientServerService {
 				'/oauth',
 				'/proxy',
 				'/url',
+				'/files',
 			];
 
 			if (this.meta.ugcVisibilityForVisitor === 'none') {

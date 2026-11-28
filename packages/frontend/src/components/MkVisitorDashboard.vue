@@ -60,7 +60,7 @@ import MkButton from '@/components/MkButton.vue';
 import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import * as os from '@/os.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
+import { misskeyApiGet } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
 import MkNumber from '@/components/MkNumber.vue';
@@ -71,7 +71,7 @@ const XActiveUsersChart = defineAsyncComponent(() => import('@/components/MkVisi
 const stats = ref<Misskey.entities.StatsResponse | null>(null);
 
 if (instance.clientOptions.showActivitiesForVisitor !== false) {
-	misskeyApi('stats', {}).then((res) => {
+	misskeyApiGet('stats').then((res) => {
 		stats.value = res;
 	});
 }

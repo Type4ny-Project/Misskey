@@ -42,15 +42,33 @@ export class LoginBonusService {
    * Award login bonus points to a user if they haven't received today's bonus
    */
   async awardLoginBonus(userId: string): Promise<LoginBonusAward | null> {
+    return (await this.claimLoginBonus(userId)).award;
+  }
+
+  /**
+   * Award today's login bonus if possible and return the balance afterwards.
+   * The caller passes the profile and user it has just loaded, so they are not read again.
+   * The balance is read again only when another request claimed the bonus first.
+   */
+  async awardLoginBonusAndGetBalance(userProfile: MiUserProfile, user: MiUser): Promise<number> {
+    const { award, lostRace } = await this.claimLoginBonus(user.id, userProfile);
+    if (award != null) return award.balance;
+    if (lostRace) return await this.getUserPoints(user.id);
+    return user.points;
+  }
+
+  private async claimLoginBonus(userId: string, preloadedProfile?: MiUserProfile): Promise<{ award: LoginBonusAward | null; lostRace: boolean }> {
+    const none = { award: null, lostRace: false };
+
     const meta = await this.metaService.fetch();
-    if (!meta.enableLoginBonus) return null;
+    if (!meta.enableLoginBonus) return none;
 
     const [resetHour, resetMinute] = meta.loginBonusResetTime.split(':').map(Number);
     // Shift the clock so the configured time in Japan starts a new bonus day.
     const bonusDate = new Date(Date.now() + (9 * 60 - resetHour * 60 - resetMinute) * 60_000);
     const today = `${bonusDate.getUTCFullYear()}/${bonusDate.getUTCMonth() + 1}/${bonusDate.getUTCDate()}`;
 
-    const userProfile = await this.userProfilesRepository.findOne({
+    const userProfile = preloadedProfile ?? await this.userProfilesRepository.findOne({
       where: { userId },
     });
 
@@ -59,13 +77,13 @@ export class LoginBonusService {
     }
 
     if (userProfile.lastLoginBonusDate === today) {
-      return null;
+      return none;
     }
 
     // Check if user has permission to receive login bonus
     const policies = await this.roleService.getUserPolicies(userId);
     if (!policies.loginBonusGrantEnabled) {
-      return null;
+      return none;
     }
 
     const bonusPoints = randomInt(meta.loginBonusMinPoints, meta.loginBonusMaxPoints + 1);
@@ -84,7 +102,7 @@ export class LoginBonusService {
       return (await manager.findOneByOrFail(MiUser, { id: userId })).points;
     });
 
-    if (balance == null) return null;
+    if (balance == null) return { award: null, lostRace: true };
 
     // Create login bonus notification
     await this.notificationService.createNotification(userId, 'loginBonus', {
@@ -92,9 +110,12 @@ export class LoginBonusService {
     } as any);
 
     return {
-      points: bonusPoints,
-      balance,
-      notificationId: '',
+      award: {
+        points: bonusPoints,
+        balance,
+        notificationId: '',
+      },
+      lostRace: false,
     };
   }
 

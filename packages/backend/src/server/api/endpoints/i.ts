@@ -71,8 +71,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.userIsDeleted);
 			}
 
-			const bonus = await this.loginBonusService.awardLoginBonus(user.id);
-			packedUser.points = bonus?.balance ?? await this.loginBonusService.getUserPoints(user.id);
+			// 読み込み済みの profile(user つき) を渡して、profile と points の再取得を避ける
+			packedUser.points = await this.loginBonusService.awardLoginBonusAndGetBalance(userProfile, packedUser);
 
 			if (!userProfile.loggedInDates.includes(today)) {
 				await this.userProfilesRepository.update({ userId: user.id }, {

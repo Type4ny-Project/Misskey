@@ -8,6 +8,7 @@ import * as Redis from 'ioredis';
 import type { BlockingsRepository, FollowingsRepository, MutingsRepository, RenoteMutingsRepository, MiUserProfile, UserProfilesRepository, UsersRepository, MiFollowing } from '@/models/_.js';
 import { MemoryKVCache, RedisKVCache } from '@/misc/cache.js';
 import type { MiLocalUser, MiUser } from '@/models/User.js';
+import type { MiAccessToken } from '@/models/AccessToken.js';
 import { DI } from '@/di-symbols.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { bindThis } from '@/decorators.js';
@@ -19,6 +20,13 @@ export class CacheService implements OnApplicationShutdown {
 	public userByIdCache: MemoryKVCache<MiUser>;
 	public localUserByNativeTokenCache: MemoryKVCache<MiLocalUser | null>;
 	public localUserByIdCache: MemoryKVCache<MiLocalUser>;
+	/**
+	 * アクセストークン (アプリ・miauth) の行のキャッシュ。キーは受け取ったトークン文字列。
+	 * 失効は accessTokensRevoked イベントで全プロセスから即座に消す。
+	 * イベントを取りこぼしても使われ続ける時間を抑えるため、寿命は短くしている。
+	 */
+	public accessTokenCache: MemoryKVCache<MiAccessToken>;
+	private accessTokenInvalidationCount = 0;
 	public uriPersonCache: MemoryKVCache<MiUser | null>;
 	public userProfileCache: RedisKVCache<MiUserProfile>;
 	public userMutingsCache: RedisKVCache<Set<string>>;
@@ -59,6 +67,7 @@ export class CacheService implements OnApplicationShutdown {
 		this.userByIdCache = new MemoryKVCache<MiUser>(1000 * 60 * 5); // 5m
 		this.localUserByNativeTokenCache = new MemoryKVCache<MiLocalUser | null>(1000 * 60 * 5); // 5m
 		this.localUserByIdCache = new MemoryKVCache<MiLocalUser>(1000 * 60 * 5); // 5m
+		this.accessTokenCache = new MemoryKVCache<MiAccessToken>(1000 * 60); // 1m
 		this.uriPersonCache = new MemoryKVCache<MiUser | null>(1000 * 60 * 5); // 5m
 
 		this.userProfileCache = new RedisKVCache<MiUserProfile>(this.redisClient, 'userProfile', {
@@ -142,10 +151,17 @@ export class CacheService implements OnApplicationShutdown {
 		if (obj.channel === 'internal') {
 			const { type, body } = obj.message as GlobalEvents['internal']['payload'];
 			switch (type) {
+				case 'accessTokensRevoked': {
+					this.invalidateAccessTokensOfUser(body.userId);
+					break;
+				}
 				case 'userChangeSuspendedState':
 				case 'userChangeDeletedState':
 				case 'remoteUserUpdated':
 				case 'localUserUpdated': {
+					if (type === 'userChangeDeletedState' && 'isDeleted' in body && body.isDeleted) {
+						this.invalidateAccessTokensOfUser(body.id);
+					}
 					const user = await this.usersRepository.findOneBy({ id: body.id });
 					if (user == null) {
 						this.userByIdCache.delete(body.id);
@@ -189,6 +205,38 @@ export class CacheService implements OnApplicationShutdown {
 		}
 	}
 
+	/**
+	 * アクセストークンの行をキャッシュ経由で取得する。見つからない場合はキャッシュしない。
+	 * 取得中に失効が起きた場合は、古い行を保存しない。
+	 */
+	@bindThis
+	public async fetchAccessToken(token: string, fetcher: () => Promise<MiAccessToken | null>): Promise<MiAccessToken | null> {
+		const cached = this.accessTokenCache.get(token);
+		if (cached !== undefined) return cached;
+
+		const countBefore = this.accessTokenInvalidationCount;
+		const accessToken = await fetcher();
+		if (accessToken != null && countBefore === this.accessTokenInvalidationCount) {
+			this.accessTokenCache.set(token, accessToken);
+		}
+		return accessToken;
+	}
+
+	/**
+	 * 利用者のアクセストークンのキャッシュをこのプロセスから消す。
+	 * 他のプロセスには accessTokensRevoked イベントで伝える。
+	 * DBから行を消したあとに呼ぶこと。
+	 */
+	@bindThis
+	public invalidateAccessTokensOfUser(userId: MiUser['id']): void {
+		this.accessTokenInvalidationCount++;
+		for (const [key, entry] of this.accessTokenCache.entries) {
+			if (entry.value.userId === userId) {
+				this.accessTokenCache.delete(key);
+			}
+		}
+	}
+
 	@bindThis
 	public findUserById(userId: MiUser['id']) {
 		return this.userByIdCache.fetch(userId, () => this.usersRepository.findOneByOrFail({ id: userId }));
@@ -200,6 +248,7 @@ export class CacheService implements OnApplicationShutdown {
 		this.userByIdCache.dispose();
 		this.localUserByNativeTokenCache.dispose();
 		this.localUserByIdCache.dispose();
+		this.accessTokenCache.dispose();
 		this.uriPersonCache.dispose();
 		this.userProfileCache.dispose();
 		this.userMutingsCache.dispose();

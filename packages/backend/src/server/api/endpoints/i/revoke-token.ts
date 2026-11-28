@@ -9,6 +9,8 @@ import type { AccessTokensRepository } from '@/models/_.js';
 import type { MiAccessToken } from '@/models/AccessToken.js';
 import { DI } from '@/di-symbols.js';
 import { CallsMediaRevocationService } from '@/core/calls/CallsMediaRevocationService.js';
+import { CacheService } from '@/core/CacheService.js';
+import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -59,6 +61,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.accessTokensRepository)
 		private accessTokensRepository: AccessTokensRepository,
 		private callsMediaRevocationService: CallsMediaRevocationService,
+		private cacheService: CacheService,
+		private globalEventService: GlobalEventService,
 	) {
 		super(meta, paramDef, async (ps, me, token) => {
 			if (me == null) {
@@ -81,6 +85,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			await this.accessTokensRepository.delete({ id: target.id });
+			// 認証側のキャッシュを、このプロセスでは今すぐ、ほかのプロセスにはイベントで消す
+			this.cacheService.invalidateAccessTokensOfUser(me.id);
+			this.globalEventService.publishInternalEvent('accessTokensRevoked', { userId: me.id });
 			await this.callsMediaRevocationService.revokeUser(me.id, 'logout');
 		});
 	}

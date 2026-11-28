@@ -29,7 +29,8 @@ import type { AccessTokensRepository, UsersRepository } from '@/models/_.js';
 import { IdService } from '@/core/IdService.js';
 import { CacheService } from '@/core/CacheService.js';
 import { CallsMediaRevocationService } from '@/core/calls/CallsMediaRevocationService.js';
-import type { MiLocalUser } from '@/models/User.js';
+import type { MiLocalUser, MiUser } from '@/models/User.js';
+import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { MemoryKVCache } from '@/misc/cache.js';
 import { LoggerService } from '@/core/LoggerService.js';
 import Logger from '@/logger.js';
@@ -417,6 +418,7 @@ export class OAuth2ProviderService implements OnApplicationShutdown {
 		private cacheService: CacheService,
 		private callsMediaRevocationService: CallsMediaRevocationService,
 		private htmlTemplateService: HtmlTemplateService,
+		private globalEventService: GlobalEventService,
 		loggerService: LoggerService,
 	) {
 		this.#authorizationTransactionCache = new MemoryKVCache<AuthorizationTransaction>(1000 * 60 * 5);
@@ -512,12 +514,18 @@ export class OAuth2ProviderService implements OnApplicationShutdown {
 		return user;
 	}
 
+	#invalidateAccessTokenCache(userId: MiUser['id']): void {
+		this.cacheService.invalidateAccessTokensOfUser(userId);
+		this.globalEventService.publishInternalEvent('accessTokensRevoked', { userId });
+	}
+
 	async #revokeGrantCode(granted: AuthorizationCodeGrant, code: string): Promise<void> {
 		this.#logger.info(`Detected multiple code use from ${granted.clientId} for user ${granted.userId}. Revoking the code.`);
 		this.#grantCodeCache.delete(code);
 		granted.revoked = true;
 		if (granted.grantedToken) {
 			await this.accessTokensRepository.delete({ token: granted.grantedToken });
+			this.#invalidateAccessTokenCache(granted.userId);
 			await this.callsMediaRevocationService.revokeUser(granted.userId, 'logout');
 		}
 	}
@@ -730,6 +738,7 @@ export class OAuth2ProviderService implements OnApplicationShutdown {
 				if (granted.revoked) {
 					this.#logger.info('Canceling the token as the authorization code was revoked in parallel during the process.');
 					await this.accessTokensRepository.delete({ token: accessToken });
+					this.#invalidateAccessTokenCache(granted.userId);
 					await this.callsMediaRevocationService.revokeUser(granted.userId, 'logout');
 					throw new InvalidGrantError('grant request is invalid');
 				}

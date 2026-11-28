@@ -442,28 +442,28 @@ export class UserEntityService implements OnModuleInit {
 			}
 		}
 
-		let memo: string | null = null;
-		if (isDetailed && meId) {
-			if (opts.userMemos) {
-				memo = opts.userMemos.get(user.id) ?? null;
-			} else {
-				memo = await this.userMemosRepository.findOneBy({ userId: meId, targetUserId: user.id })
+		// 互いに依存しない取得は直列にせず並べて待つ (DBが遠いと往復数がそのまま応答時間になる)
+		const [memo, pins, unreadAnnouncements, notificationsInfo] = await Promise.all([
+			(async (): Promise<string | null> => {
+				if (!(isDetailed && meId)) return null;
+				if (opts.userMemos) return opts.userMemos.get(user.id) ?? null;
+				return await this.userMemosRepository.findOneBy({ userId: meId, targetUserId: user.id })
 					.then(row => row?.memo ?? null);
-			}
-		}
-
-		let pins: MiUserNotePining[] = [];
-		if (isDetailed) {
-			if (opts.pinNotes) {
-				pins = opts.pinNotes.get(user.id) ?? [];
-			} else {
-				pins = await this.userNotePiningsRepository.createQueryBuilder('pin')
+			})(),
+			(async (): Promise<MiUserNotePining[]> => {
+				if (!isDetailed) return [];
+				if (opts.pinNotes) return opts.pinNotes.get(user.id) ?? [];
+				return await this.userNotePiningsRepository.createQueryBuilder('pin')
 					.where('pin.userId = :userId', { userId: user.id })
 					.innerJoinAndSelect('pin.note', 'note')
 					.orderBy('pin.id', 'DESC')
 					.getMany();
-			}
-		}
+			})(),
+			isMe && isDetailed
+				? this.announcementService.getUnreadAnnouncements(user).then(announcements => this.announcementEntityService.packMany(announcements, user))
+				: null,
+			isMe && isDetailed ? this.getNotificationsInfo(user.id) : null,
+		]);
 
 		const followingCount = profile == null ? null :
 			(profile.followingVisibility === 'public') || isMe || iAmModerator ? user.followingCount :
@@ -482,10 +482,6 @@ export class UserEntityService implements OnModuleInit {
 
 		const isModerator = isMe && isDetailed ? this.roleService.isModerator(user) : undefined;
 		const isAdmin = isMe && isDetailed ? this.roleService.isAdministrator(user) : undefined;
-		const unreadAnnouncements = isMe && isDetailed ?
-			await this.announcementEntityService.packMany(await this.announcementService.getUnreadAnnouncements(user), user) : null;
-
-		const notificationsInfo = isMe && isDetailed ? await this.getNotificationsInfo(user.id) : null;
 
 		// TODO: 例えば avatarUrl: true など間違った型を設定しても型エラーにならないのをどうにかする(ジェネリクス使わない方法で実装するしかなさそう？)
 		const packed = {

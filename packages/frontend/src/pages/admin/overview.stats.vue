@@ -109,7 +109,7 @@ const fetching = ref(true);
 
 onMounted(async () => {
 	const [_stats, _onlineUsersCount, _meta] = await Promise.all([
-		misskeyApi('stats', {}),
+		misskeyApiGet('stats'),
 		misskeyApiGet('get-online-users-count').then(res => res.count),
 		misskeyApi('admin/meta', {}),
 	]);

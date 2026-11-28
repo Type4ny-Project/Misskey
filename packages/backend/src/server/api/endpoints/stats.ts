@@ -13,6 +13,8 @@ import UsersChart from '@/core/chart/charts/users.js';
 
 export const meta = {
 	requireCredential: false,
+	allowGet: true,
+	cacheSec: 60 * 10,
 
 	tags: ['meta'],
 

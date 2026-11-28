@@ -16,9 +16,19 @@ import { genId } from '@/utility/id.js';
 const EVENT_NOTIFICATION_STORAGE_KEY = 'event-timing-notifier:notified';
 const UPCOMING_EVENTS_WINDOW_MS = 24 * 60 * 60 * 1000;
 const FETCH_INTERVAL_MS = 5 * 60 * 1000;
+// 別のタブが取得した結果を使い回してよい新しさ。タイマーの誤差で取り損ねないよう、取得間隔より少し短くする
+const SHARED_EVENTS_FRESH_MS = FETCH_INTERVAL_MS - 10 * 1000;
+const MAX_CLOCK_SKEW_MS = 60 * 1000;
+const UPCOMING_EVENTS_STORAGE_KEY_PREFIX = 'event-timing-notifier:upcoming:';
+const FETCH_LOCK_NAME_PREFIX = 'event-timing-notifier:fetch:';
 const CHECK_INTERVAL_MS = 30 * 1000;
 const NOTIFICATION_GRACE_PERIOD_MS = 10 * 60 * 1000;
 const NOTIFIED_EVENTS_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+type SharedUpcomingEvents = {
+	fetchedAt: number;
+	events: Misskey.entities.Event[];
+};
 
 type RelevantEventsRequest = {
 	limit: number;
@@ -28,6 +38,10 @@ type RelevantEventsRequest = {
 
 export function useEventTimingNotifier(): void {
 	if (!$i) return;
+
+	const accountId = $i.id;
+	const sharedEventsStorageKey = `${UPCOMING_EVENTS_STORAGE_KEY_PREFIX}${accountId}`;
+	const fetchLockName = `${FETCH_LOCK_NAME_PREFIX}${accountId}`;
 
 	let upcomingEvents: Misskey.entities.Event[] = [];
 	let notifiedEvents: Record<string, number> = {};
@@ -129,22 +143,67 @@ export function useEventTimingNotifier(): void {
 			.sort((a, b) => getEventStartAt(a) - getEventStartAt(b));
 	}
 
+	/**
+	 * 同じブラウザーの別のタブが最近取得した一覧があれば返す。無い・古い・壊れている・読めないときはnull
+	 */
+	async function readFreshSharedEvents(): Promise<SharedUpcomingEvents | null> {
+		try {
+			const stored: unknown = await get(sharedEventsStorageKey);
+			if (stored == null || typeof stored !== 'object') return null;
+
+			const { fetchedAt, events } = stored as Partial<SharedUpcomingEvents>;
+			if (typeof fetchedAt !== 'number' || !Number.isFinite(fetchedAt) || !Array.isArray(events)) return null;
+
+			const age = Date.now() - fetchedAt;
+			if (age < -MAX_CLOCK_SKEW_MS || age >= SHARED_EVENTS_FRESH_MS) return null;
+
+			return { fetchedAt, events };
+		} catch {
+			return null;
+		}
+	}
+
+	async function writeSharedEvents(shared: SharedUpcomingEvents): Promise<void> {
+		try {
+			await set(sharedEventsStorageKey, shared);
+		} catch {
+			// 共有できなくても、このタブの通知には影響しない
+		}
+	}
+
+	/**
+	 * 複数のタブが同時に取得しようとしても、1つずつ実行して、後から来たタブが先のタブの結果を使えるようにする
+	 */
+	function runExclusively<T>(task: () => Promise<T>): Promise<T> {
+		if (typeof navigator === 'undefined' || navigator.locks == null) return task();
+		return navigator.locks.request(fetchLockName, task);
+	}
+
 	async function fetchUpcomingEvents(): Promise<void> {
 		if (isFetchingUpcomingEvents) return;
 
 		isFetchingUpcomingEvents = true;
 
 		try {
-			const now = Date.now();
-			const events = await misskeyApi<Misskey.entities.Event[], keyof Misskey.Endpoints, RelevantEventsRequest>(
-				'events/relevant' as keyof Misskey.Endpoints,
-				{
-					limit: 100,
-					sinceDate: now - NOTIFICATION_GRACE_PERIOD_MS,
-					untilDate: now + UPCOMING_EVENTS_WINDOW_MS,
-				},
-			);
-			upcomingEvents = sortAndFilterUpcomingEvents(events, now);
+			await runExclusively(async () => {
+				const shared = await readFreshSharedEvents();
+				if (shared != null) {
+					upcomingEvents = sortAndFilterUpcomingEvents(shared.events, Date.now());
+					return;
+				}
+
+				const now = Date.now();
+				const events = await misskeyApi<Misskey.entities.Event[], keyof Misskey.Endpoints, RelevantEventsRequest>(
+					'events/relevant' as keyof Misskey.Endpoints,
+					{
+						limit: 100,
+						sinceDate: now - NOTIFICATION_GRACE_PERIOD_MS,
+						untilDate: now + UPCOMING_EVENTS_WINDOW_MS,
+					},
+				);
+				upcomingEvents = sortAndFilterUpcomingEvents(events, now);
+				await writeSharedEvents({ fetchedAt: now, events });
+			});
 		} catch (error) {
 			console.error('Failed to fetch upcoming events for notifications.', error);
 		} finally {

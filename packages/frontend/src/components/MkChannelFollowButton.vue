@@ -35,6 +35,7 @@ import { ref, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import { useInterval } from '@@/js/use-interval.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { userChannelFollowingsCache } from '@/cache.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 
@@ -91,6 +92,7 @@ async function onClick() {
 			await misskeyApi('channels/unfollow', {
 				channelId: props.channel.id,
 			});
+			userChannelFollowingsCache.delete();
 			isFollowing.value = false;
 			hasPendingFollowRequest.value = false;
 			if (wasFollowing) {
@@ -101,6 +103,7 @@ async function onClick() {
 			const result = await misskeyApi('channels/follow', {
 				channelId: props.channel.id,
 			});
+			userChannelFollowingsCache.delete();
 			isFollowing.value = result.state === 'following';
 			hasPendingFollowRequest.value = result.state === 'pending';
 			if (isFollowing.value) {

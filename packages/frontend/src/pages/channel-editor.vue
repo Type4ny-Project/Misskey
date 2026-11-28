@@ -116,6 +116,7 @@ import MkColorInput from '@/components/MkColorInput.vue';
 import { selectFile } from '@/utility/drive.js';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { userChannelFollowingsCache, userChannelsCache } from '@/cache.js';
 import { definePage } from '@/page.js';
 import { i18n } from '@/i18n.js';
 import MkFolder from '@/components/MkFolder.vue';
@@ -251,6 +252,11 @@ function collaboratorUserDelete(i: number) {
 	save();
 }
 
+function deleteChannelListCaches() {
+	userChannelsCache.delete();
+	userChannelFollowingsCache.delete();
+}
+
 function save() {
 	const params = {
 		name: name.value,
@@ -270,9 +276,10 @@ function save() {
 			channelId: props.channelId,
 			pinnedNoteIds: pinnedNoteIds.value,
 			...(isRoot.value ? { collaboratorIds: collaboratorUsers.value.map(x => x.id) } : {}),
-		});
+		}).then(deleteChannelListCaches);
 	} else {
 		os.apiWithDialog('channels/create', params).then(created => {
+			deleteChannelListCaches();
 			router.push('/channels/:channelId', {
 				params: {
 					channelId: created.id,
@@ -296,6 +303,7 @@ async function archive() {
 		channelId: props.channelId,
 		isArchived: true,
 	}).then(() => {
+		deleteChannelListCaches();
 		os.success();
 	});
 }

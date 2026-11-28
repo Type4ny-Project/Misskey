@@ -31,6 +31,7 @@ import { watch, computed, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { userFavoriteListsCache, userListsCache } from '@/cache.js';
 import { userPage } from '@@/js/user.js';
 import { i18n } from '@/i18n.js';
 import MkUserCardMini from '@/components/MkUserCardMini.vue';
@@ -67,6 +68,7 @@ function like() {
 	os.apiWithDialog('users/lists/favorite', {
 		listId: list.value.id,
 	}).then(() => {
+		userFavoriteListsCache.delete();
 		if (list.value == null) return;
 		list.value.isLiked = true;
 		list.value.likedCount = (list.value.likedCount != null ? list.value.likedCount + 1 : 1);
@@ -78,6 +80,7 @@ function unlike() {
 	os.apiWithDialog('users/lists/unfavorite', {
 		listId: list.value.id,
 	}).then(() => {
+		userFavoriteListsCache.delete();
 		if (list.value == null) return;
 		list.value.isLiked = false;
 		list.value.likedCount = (list.value.likedCount != null ? Math.max(0, list.value.likedCount - 1) : 0);
@@ -91,6 +94,7 @@ async function create() {
 	});
 	if (canceled || name == null) return;
 	await os.apiWithDialog('users/lists/create-from-public', { name: name, listId: list.value.id });
+	userListsCache.delete();
 }
 
 watch(() => props.listId, fetchList, { immediate: true });
